@@ -20,7 +20,6 @@
     --text-light: #666;
     --text-lighter: #999;
     --text-heading: #444;
-    --hairline: #e0e0e0;
     --bg: #ffffff;
     --surface: #f5f5f5;
     --rule-accent: rgba(192, 57, 43, 0.3);
@@ -32,6 +31,7 @@
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
   }
 
   body {
@@ -75,14 +75,71 @@
   .nav-links a:hover { color: var(--text-heading); text-decoration: none; }
   .nav-links a.active { color: var(--text-heading); }
 
+  /* ---- LAYOUT: SIDEBAR + CONTENT ---- */
+
+  .cv-layout {
+    flex: 1;
+    display: flex;
+    max-width: 1060px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* ---- SIDEBAR TOC ---- */
+
+  .cv-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    padding: 40px 0 40px 36px;
+    position: sticky;
+    top: 60px;
+    align-self: flex-start;
+    height: fit-content;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+
+  .toc {
+    list-style: none;
+    border-left: 1px solid var(--border);
+    padding-left: 0;
+  }
+
+  .toc li {
+    margin-bottom: 2px;
+  }
+
+  .toc a {
+    display: block;
+    padding: 4px 0 4px 16px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-lighter);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    margin-left: -1px;
+    transition: color 0.15s, border-color 0.15s;
+    letter-spacing: 0.2px;
+  }
+
+  .toc a:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .toc a.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 500;
+  }
+
   /* ---- CV CONTENT ---- */
 
   .cv-content {
     flex: 1;
     max-width: 800px;
-    margin: 0 auto;
     padding: 40px 36px 50px;
-    width: 100%;
+    min-width: 0;
   }
 
   /* ---- HEADER / NAME ---- */
@@ -128,6 +185,7 @@
 
   .section {
     margin-bottom: 24px;
+    scroll-margin-top: 80px;
   }
 
   .section-title {
@@ -181,32 +239,6 @@
 
   .usmle span {
     font-weight: 300;
-  }
-
-  /* ---- HONORS (columns) ---- */
-
-  .honors-grid {
-    columns: 2;
-    column-gap: 36px;
-    font-size: 13px;
-    line-height: 1.65;
-  }
-
-  .honor-item {
-    break-inside: avoid;
-    margin-bottom: 6px;
-    padding-left: 0;
-  }
-
-  .honor-item .honor-name {
-    font-weight: 400;
-    color: var(--text);
-  }
-
-  .honor-item .honor-meta {
-    font-weight: 300;
-    color: var(--text-lighter);
-    font-size: 12px;
   }
 
   /* ---- RESEARCH ---- */
@@ -325,6 +357,32 @@
     color: var(--text-heading);
   }
 
+  /* ---- HONORS (columns) ---- */
+
+  .honors-grid {
+    columns: 2;
+    column-gap: 36px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .honor-item {
+    break-inside: avoid;
+    margin-bottom: 6px;
+    padding-left: 0;
+  }
+
+  .honor-item .honor-name {
+    font-weight: 400;
+    color: var(--text);
+  }
+
+  .honor-item .honor-meta {
+    font-weight: 300;
+    color: var(--text-lighter);
+    font-size: 12px;
+  }
+
   /* ---- WORK / VOLUNTEER ---- */
 
   .experience-entry {
@@ -397,12 +455,16 @@
   /* ---- PRINT ---- */
 
   @media print {
-    .site-nav, .site-footer { display: none; }
+    .site-nav, .site-footer, .cv-sidebar { display: none; }
 
     body {
       font-size: 10pt;
       orphans: 3;
       widows: 3;
+    }
+
+    .cv-layout {
+      display: block;
     }
 
     .cv-content {
@@ -474,13 +536,17 @@
 
   /* ---- RESPONSIVE ---- */
 
-  @media (max-width: 600px) {
-    .honors-grid {
-      columns: 1;
+  @media (max-width: 768px) {
+    .cv-sidebar {
+      display: none;
     }
 
     .cv-content {
       padding: 24px 20px 40px;
+    }
+
+    .honors-grid {
+      columns: 1;
     }
 
     h1 {
@@ -500,6 +566,22 @@
   </div>
 </nav>
 
+<div class="cv-layout">
+
+<!-- SIDEBAR TOC -->
+<aside class="cv-sidebar">
+  <ul class="toc">
+    <li><a href="#education" data-section="education">Education</a></li>
+    <li><a href="#research" data-section="research">Research</a></li>
+    <li><a href="#publications" data-section="publications">Publications</a></li>
+    <li><a href="#presentations" data-section="presentations">Presentations</a></li>
+    <li><a href="#honors" data-section="honors">Honors & Awards</a></li>
+    <li><a href="#work" data-section="work">Work</a></li>
+    <li><a href="#volunteer" data-section="volunteer">Volunteer</a></li>
+    <li><a href="#memberships" data-section="memberships">Memberships</a></li>
+  </ul>
+</aside>
+
 <div class="cv-content">
 
 <!-- HEADER -->
@@ -514,7 +596,7 @@
 </header>
 
 <!-- EDUCATION -->
-<div class="section">
+<div class="section" id="education">
   <div class="section-title">Education</div>
 
   <div class="edu-entry">
@@ -536,51 +618,8 @@
   <div class="usmle">USMLE &nbsp;&mdash;&nbsp; <span>Step 1: Pass &nbsp;&middot;&nbsp; Step 2 CK: Score Pending</span></div>
 </div>
 
-<!-- HONORS AND AWARDS -->
-<div class="section">
-  <div class="section-title">Honors &amp; Awards</div>
-  <div class="honors-grid">
-    <div class="honor-item">
-      <div class="honor-name">Best Medical Student Project</div>
-      <div class="honor-meta">First Annual Radiology Research Day, Duke University, 2026</div>
-    </div>
-    <div class="honor-item">
-      <div class="honor-name">Elizabeth B. Bressler Scholarship</div>
-      <div class="honor-meta">Duke University School of Medicine, 2024</div>
-    </div>
-    <div class="honor-item">
-      <div class="honor-name">Phi Beta Kappa</div>
-      <div class="honor-meta">Duke University, 2022</div>
-    </div>
-    <div class="honor-item">
-      <div class="honor-name">Summa Cum Laude</div>
-      <div class="honor-meta">Duke University, 2022</div>
-    </div>
-    <div class="honor-item">
-      <div class="honor-name">Best AMES Honors Thesis Award</div>
-      <div class="honor-meta">Duke Asian &amp; Middle Eastern Studies, 2022</div>
-    </div>
-    <div class="honor-item">
-      <div class="honor-name">Graduation with Distinction in Neuroscience</div>
-      <div class="honor-meta">Duke University, 2022</div>
-    </div>
-    <div class="honor-item">
-      <div class="honor-name">Graduation with Distinction in Asian &amp; Middle Eastern Studies</div>
-      <div class="honor-meta">Duke University, 2022</div>
-    </div>
-    <div class="honor-item">
-      <div class="honor-name">1st Place, Japanese Speech Contest</div>
-      <div class="honor-meta">NC Research Triangle, 2022</div>
-    </div>
-    <div class="honor-item">
-      <div class="honor-name">Charles Lafitte Foundation Research Grant</div>
-      <div class="honor-meta">Duke Psychology &amp; Neuroscience, 2020</div>
-    </div>
-  </div>
-</div>
-
 <!-- RESEARCH EXPERIENCE -->
-<div class="section">
+<div class="section" id="research">
   <div class="section-title">Research Experience</div>
 
   <div class="research-entry">
@@ -624,7 +663,7 @@
 </div>
 
 <!-- PUBLICATIONS -->
-<div class="section">
+<div class="section" id="publications">
   <div class="section-title">Publications</div>
 
   <div class="pub-subsection">Peer-Reviewed Original Research</div>
@@ -677,7 +716,7 @@
 </div>
 
 <!-- PRESENTATIONS -->
-<div class="section">
+<div class="section" id="presentations">
   <div class="section-title">Presentations</div>
 
   <div class="presentation">
@@ -697,8 +736,51 @@
   </div>
 </div>
 
+<!-- HONORS AND AWARDS -->
+<div class="section" id="honors">
+  <div class="section-title">Honors &amp; Awards</div>
+  <div class="honors-grid">
+    <div class="honor-item">
+      <div class="honor-name">Best Medical Student Project</div>
+      <div class="honor-meta">First Annual Radiology Research Day, Duke University, 2026</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Elizabeth B. Bressler Scholarship</div>
+      <div class="honor-meta">Duke University School of Medicine, 2024</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Phi Beta Kappa</div>
+      <div class="honor-meta">Duke University, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Summa Cum Laude</div>
+      <div class="honor-meta">Duke University, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Best AMES Honors Thesis Award</div>
+      <div class="honor-meta">Duke Asian &amp; Middle Eastern Studies, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Graduation with Distinction in Neuroscience</div>
+      <div class="honor-meta">Duke University, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Graduation with Distinction in Asian &amp; Middle Eastern Studies</div>
+      <div class="honor-meta">Duke University, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">1st Place, Japanese Speech Contest</div>
+      <div class="honor-meta">NC Research Triangle, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Charles Lafitte Foundation Research Grant</div>
+      <div class="honor-meta">Duke Psychology &amp; Neuroscience, 2020</div>
+    </div>
+  </div>
+</div>
+
 <!-- WORK EXPERIENCE -->
-<div class="section">
+<div class="section" id="work">
   <div class="section-title">Work Experience</div>
 
   <div class="experience-entry">
@@ -710,7 +792,7 @@
 </div>
 
 <!-- VOLUNTEER EXPERIENCE -->
-<div class="section">
+<div class="section" id="volunteer">
   <div class="section-title">Volunteer Experience</div>
 
   <div class="experience-entry">
@@ -734,7 +816,7 @@
 </div>
 
 <!-- PROFESSIONAL MEMBERSHIPS -->
-<div class="section">
+<div class="section" id="memberships">
   <div class="section-title">Professional Memberships</div>
 
   <div class="membership">
@@ -744,8 +826,33 @@
 </div>
 
 </div><!-- end cv-content -->
+</div><!-- end cv-layout -->
 
 <footer class="site-footer">Built with HTML and GitHub Pages</footer>
+
+<script>
+  // Sidebar TOC scroll tracking
+  const sections = document.querySelectorAll('.section[id]');
+  const tocLinks = document.querySelectorAll('.toc a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        tocLinks.forEach(link => link.classList.remove('active'));
+        const active = document.querySelector(`.toc a[data-section="${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, {
+    rootMargin: '-80px 0px -60% 0px',
+    threshold: 0
+  });
+
+  sections.forEach(section => observer.observe(section));
+
+  // Set initial active state
+  if (tocLinks.length > 0) tocLinks[0].classList.add('active');
+</script>
 
 </body>
 </html>

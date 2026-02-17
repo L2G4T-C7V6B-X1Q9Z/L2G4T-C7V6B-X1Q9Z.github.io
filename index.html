@@ -48,7 +48,16 @@
 
     main { flex: 1; max-width: 760px; margin: 0 auto; padding: 4rem 2rem; width: 100%; }
 
-    .hero { margin-bottom: 4rem; }
+    .hero { margin-bottom: 4rem; display: flex; gap: 2rem; align-items: flex-start; }
+    .hero-photo {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 2px solid var(--border);
+    }
+    .hero-text { flex: 1; }
     .hero h1 {
       font-size: clamp(2rem, 5vw, 3rem);
       font-weight: 700;
@@ -119,6 +128,11 @@
       color: var(--muted);
       border-top: 1px solid var(--border);
     }
+
+    @media (max-width: 500px) {
+      .hero { flex-direction: column; gap: 1.25rem; }
+      .hero-photo { width: 72px; height: 72px; }
+    }
   </style>
 </head>
 <body>
@@ -126,17 +140,32 @@
     <span class="nav-logo">Soren Christensen</span>
     <div class="nav-links">
       <a href="#projects">Projects</a>
-      <a href="cv.html">CV</a>
       <a href="#contact">Contact</a>
     </div>
   </nav>
   <main>
     <div class="hero">
-      <h1>Hey, I'm <span>Soren</span>.</h1>
-      <p>I build things for the web. This is my personal corner of the internet &mdash; projects, experiments, and whatever I'm working on next.</p>
+      <!-- To add your photo: save as photo.jpg in this folder, then uncomment the line below -->
+      <!-- <img class="hero-photo" src="photo.jpg" alt="Soren Christensen"> -->
+      <div class="hero-text">
+        <h1>Hey, I'm <span>Soren</span>.</h1>
+        <p>MS3 at Duke. I build things on the side &mdash; this is where I keep them.</p>
+      </div>
     </div>
     <section id="projects">
       <h2>Projects</h2>
+      <a class="card-link" href="cv.html">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">Curriculum Vitae</div>
+            <div class="card-desc">My full academic CV &mdash; education, research, publications, and presentations.</div>
+            <div class="card-tags">
+              <span class="tag">Academic</span>
+            </div>
+          </div>
+          <span class="card-arrow">&#8599;</span>
+        </div>
+      </a>
       <a class="card-link" href="https://l2g4t-c7v6b-x1q9z.github.io/sorvidpomo/" target="_blank" rel="noopener">
         <div class="card">
           <div class="card-body">
