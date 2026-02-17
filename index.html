@@ -80,17 +80,27 @@
     }
 
     .card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 0.75rem;
+      overflow: hidden;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .card:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .card-thumb {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      display: block;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-content {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       gap: 1rem;
       padding: 1.25rem;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      margin-bottom: 0.75rem;
-      transition: border-color 0.2s, background 0.2s;
     }
-    .card:hover { border-color: var(--accent); background: var(--accent-dim); }
     .card-body { flex: 1; }
     .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem; color: var(--heading); }
     .card-desc { font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
@@ -158,111 +168,140 @@
 
       <a class="card-link" href="cv.html">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">Curriculum Vitae</div>
-            <div class="card-desc">Full academic CV &mdash; education, research, publications, and presentations.</div>
-            <div class="card-tags"><span class="tag">Academic</span></div>
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">Curriculum Vitae</div>
+              <div class="card-desc">Full academic CV &mdash; education, research, publications, and presentations.</div>
+              <div class="card-tags"><span class="tag">Academic</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
       <a class="card-link" href="sanguine-drift.html">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">Sanguine Drift</div>
-            <div class="card-desc">Generative flow field visualization. Thousands of particles trace invisible currents through a seeded noise field, rendered in warm grays and crimson.</div>
-            <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+          <img class="card-thumb" src="thumbnails/sanguine-drift.jpg" alt="Sanguine Drift preview" loading="lazy">
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">Sanguine Drift</div>
+              <div class="card-desc">Generative flow field visualization. Thousands of particles trace invisible currents through a seeded noise field, rendered in warm grays and crimson.</div>
+              <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
       <a class="card-link" href="strange-resonance.html">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">Strange Resonance</div>
-            <div class="card-desc">Attractor visualization using layered trigonometric equations. Depth-sorted lines with glow passes and a vignette overlay create a sense of dimensional space.</div>
-            <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+          <img class="card-thumb" src="thumbnails/strange-resonance.jpg" alt="Strange Resonance preview" loading="lazy">
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">Strange Resonance</div>
+              <div class="card-desc">Attractor visualization using layered trigonometric equations. Depth-sorted lines with glow passes and a vignette overlay.</div>
+              <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
       <a class="card-link" href="sky-simulator.html">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">Sky View Simulator</div>
-            <div class="card-desc">Real-time sky map rendering stars, constellations, satellites, planets, and aircraft based on observer coordinates and current time.</div>
-            <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Astronomy</span><span class="tag">JavaScript</span></div>
+          <img class="card-thumb" src="thumbnails/sky-simulator.jpg" alt="Sky View Simulator preview" loading="lazy">
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">Sky View Simulator</div>
+              <div class="card-desc">Real-time sky map rendering stars, constellations, satellites, planets, and aircraft based on observer coordinates and current time.</div>
+              <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Astronomy</span><span class="tag">JavaScript</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
       <a class="card-link" href="eye-trainer.html">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">Eye Trainer</div>
-            <div class="card-desc">Precision eye training tool with four exercise modes &mdash; smooth tracking, flash reaction, saccade jumps, and snap locks &mdash; using procedurally generated paths.</div>
-            <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Simplex Noise</span><span class="tag">JavaScript</span></div>
+          <img class="card-thumb" src="thumbnails/eye-trainer.jpg" alt="Eye Trainer preview" loading="lazy">
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">Eye Trainer</div>
+              <div class="card-desc">Precision eye training with four modes &mdash; smooth tracking, flash reaction, saccade jumps, and snap locks &mdash; using procedurally generated paths.</div>
+              <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Simplex Noise</span><span class="tag">JavaScript</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
       <a class="card-link" href="speed-reader/">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">Speed Reader</div>
-            <div class="card-desc">RSVP speed reading tool with anchor-centric display, adaptive pacing from 250&ndash;1200 WPM, and a marker system for important sections.</div>
-            <div class="card-tags"><span class="tag">JavaScript</span><span class="tag">IBM Plex Mono</span></div>
+          <img class="card-thumb" src="thumbnails/speed-reader.jpg" alt="Speed Reader preview" loading="lazy">
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">Speed Reader</div>
+              <div class="card-desc">RSVP speed reading tool with anchor-centric display, adaptive pacing from 250&ndash;1200 WPM, and a marker system for important sections.</div>
+              <div class="card-tags"><span class="tag">JavaScript</span><span class="tag">IBM Plex Mono</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
       <a class="card-link" href="breathe.html">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">Breathe</div>
-            <div class="card-desc">Meditative breathing guide that shifts background color in sync with your breath cycle. Adjustable rate, six color themes, and a clock overlay.</div>
-            <div class="card-tags"><span class="tag">Animation</span><span class="tag">JavaScript</span></div>
+          <img class="card-thumb" src="thumbnails/breathe.jpg" alt="Breathe preview" loading="lazy">
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">Breathe</div>
+              <div class="card-desc">Meditative breathing guide that shifts background color in sync with your breath cycle. Adjustable rate, six color themes, and a clock overlay.</div>
+              <div class="card-tags"><span class="tag">Animation</span><span class="tag">JavaScript</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
       <a class="card-link" href="https://l2g4t-c7v6b-x1q9z.github.io/sorvidpomo/" target="_blank" rel="noopener">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">sorvidpomo</div>
-            <div class="card-desc">Pomodoro focus timer with synthesized ambient audio, animated circular progress, and customizable durations.</div>
-            <div class="card-tags"><span class="tag">React</span><span class="tag">Framer Motion</span><span class="tag">Web Audio API</span></div>
+          <img class="card-thumb" src="thumbnails/sorvidpomo.jpg" alt="sorvidpomo preview" loading="lazy">
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">sorvidpomo</div>
+              <div class="card-desc">Pomodoro focus timer with synthesized ambient audio, animated circular progress, and customizable durations.</div>
+              <div class="card-tags"><span class="tag">React</span><span class="tag">Framer Motion</span><span class="tag">Web Audio API</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
       <a class="card-link" href="ankivoice.html">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">AnkiVoice</div>
-            <div class="card-desc">Hands-free Anki review via voice commands and pocket tap detection. Sensor fusion filters walking motion from intentional taps. In development.</div>
-            <div class="card-tags"><span class="tag">React Native</span><span class="tag">TypeScript</span><span class="tag">Expo</span></div>
+          <img class="card-thumb" src="thumbnails/ankivoice.jpg" alt="AnkiVoice preview" loading="lazy">
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">AnkiVoice</div>
+              <div class="card-desc">Hands-free Anki review via voice commands and pocket tap detection. Sensor fusion filters walking motion from intentional taps.</div>
+              <div class="card-tags"><span class="tag">React Native</span><span class="tag">TypeScript</span><span class="tag">Expo</span><span class="tag">In Development</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
       <a class="card-link" href="blobscape.html">
         <div class="card">
-          <div class="card-body">
-            <div class="card-title">Blobscape</div>
-            <div class="card-desc">Immersive particle visualization with 2000+ particles drifting through wind patterns. Multiple themed palettes and cursor tracking.</div>
-            <div class="card-tags"><span class="tag">Canvas</span><span class="tag">JavaScript</span><span class="tag">Work in Progress</span></div>
+          <img class="card-thumb" src="thumbnails/blobscape.jpg" alt="Blobscape preview" loading="lazy">
+          <div class="card-content">
+            <div class="card-body">
+              <div class="card-title">Blobscape</div>
+              <div class="card-desc">Immersive particle visualization with 2000+ particles drifting through wind patterns. Multiple themed palettes and cursor tracking.</div>
+              <div class="card-tags"><span class="tag">Canvas</span><span class="tag">JavaScript</span><span class="tag">Work in Progress</span></div>
+            </div>
+            <span class="card-arrow">&#8599;</span>
           </div>
-          <span class="card-arrow">&#8599;</span>
         </div>
       </a>
 
