@@ -15,7 +15,7 @@
       --heading: #444;
       --muted: #888;
       --accent: #c0392b;
-      --accent-dim: rgba(192, 57, 43, 0.05);
+      --accent-dim: rgba(192, 57, 43, 0.04);
     }
 
     body {
@@ -25,39 +25,67 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
     a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
 
+    /* ---- NAV ---- */
     nav {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1.25rem 2rem;
-      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
       position: sticky;
       top: 0;
-      background: var(--bg);
-      z-index: 10;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
-    .nav-logo { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; color: var(--heading); }
-    .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; }
-    .nav-links a { color: var(--muted); }
-    .nav-links a:hover { color: var(--heading); text-decoration: none; }
-
-    main { flex: 1; max-width: 760px; margin: 0 auto; padding: 4rem 2rem; width: 100%; }
-
-    .hero { margin-bottom: 4rem; display: flex; gap: 2rem; align-items: flex-start; }
-    .hero-photo {
-      width: 90px;
-      height: 90px;
-      border-radius: 50%;
-      object-fit: cover;
-      flex-shrink: 0;
-      border: 2px solid var(--border);
+    .nav-logo {
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: -0.02em;
+      color: var(--heading);
     }
-    .hero-text { flex: 1; }
+    .nav-links { display: flex; gap: 1.75rem; font-size: 0.9rem; }
+    .nav-links a {
+      color: var(--muted);
+      position: relative;
+      padding-bottom: 2px;
+      transition: color 0.25s ease;
+    }
+    .nav-links a:hover { color: var(--heading); }
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 100%;
+      height: 1.5px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    .nav-links a:hover::after { transform: scaleX(1); }
+
+    /* ---- MAIN ---- */
+    main {
+      flex: 1;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+      width: 100%;
+    }
+
+    /* ---- HERO ---- */
+    .hero {
+      padding: 4rem 0 3.5rem;
+    }
     .hero h1 {
       font-size: clamp(2rem, 5vw, 3rem);
       font-weight: 700;
@@ -65,46 +93,133 @@
       line-height: 1.1;
       margin-bottom: 1rem;
       color: var(--heading);
+      opacity: 0;
+      animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
     .hero h1 span { color: var(--accent); }
-    .hero p { font-size: 1.1rem; color: var(--muted); line-height: 1.7; max-width: 560px; }
+    .hero p {
+      font-size: 1.1rem;
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 560px;
+      opacity: 0;
+      animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+    }
 
-    section { margin-bottom: 3.5rem; }
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ---- SECTIONS ---- */
+    section { margin-bottom: 4rem; }
     section h2 {
       font-size: 0.75rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: var(--muted);
-      margin-bottom: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ---- SCROLL ANIMATION ---- */
+    .animate-on-scroll {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .animate-on-scroll.revealed {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ---- PROJECT GRID ---- */
+    .project-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1.25rem;
+    }
+
+    /* ---- CARDS ---- */
+    .card-link {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      border-radius: 12px;
+    }
+    .card-link:hover { text-decoration: none; }
+    .card-link:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 12px;
     }
 
     .card {
       border: 1px solid var(--border);
-      border-radius: 10px;
-      margin-bottom: 0.75rem;
+      border-radius: 12px;
       overflow: hidden;
-      transition: border-color 0.2s, background 0.2s;
+      background: var(--bg);
+      transition: transform 0.3s ease,
+                  box-shadow 0.3s ease,
+                  border-color 0.3s ease;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
     }
-    .card:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+      border-color: var(--accent);
+    }
+
+    .card-thumb-wrap {
+      overflow: hidden;
+      border-bottom: 1px solid var(--border);
+    }
     .card-thumb {
       width: 100%;
       aspect-ratio: 16 / 9;
       object-fit: cover;
       display: block;
-      border-bottom: 1px solid var(--border);
+      transition: transform 0.3s ease;
     }
+    .card:hover .card-thumb {
+      transform: scale(1.03);
+    }
+
     .card-content {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       gap: 1rem;
       padding: 1.25rem;
+      flex: 1;
     }
-    .card-body { flex: 1; }
-    .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem; color: var(--heading); }
-    .card-desc { font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
-    .card-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+    .card-body { flex: 1; min-width: 0; }
+    .card-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-bottom: 0.3rem;
+      color: var(--heading);
+    }
+    .card-desc {
+      font-size: 0.855rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.65rem;
+    }
     .tag {
       font-size: 0.7rem;
       padding: 0.2rem 0.55rem;
@@ -113,24 +228,41 @@
       color: var(--muted);
       border: 1px solid var(--border);
     }
-    .card-arrow { color: var(--muted); font-size: 1.1rem; padding-top: 0.1rem; flex-shrink: 0; }
-    .card-link { display: block; text-decoration: none; color: inherit; }
-    .card-link:hover { text-decoration: none; }
+    .card-arrow {
+      color: var(--muted);
+      font-size: 1.1rem;
+      flex-shrink: 0;
+      padding-top: 0.1rem;
+      transition: transform 0.3s ease;
+      display: inline-block;
+    }
+    .card:hover .card-arrow {
+      transform: translateX(3px);
+    }
 
+    /* ---- CONTACT ---- */
     .contact-links { display: flex; gap: 1rem; flex-wrap: wrap; }
     .contact-links a {
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
-      padding: 0.5rem 1rem;
+      padding: 0.55rem 1.1rem;
       border: 1px solid var(--border);
       border-radius: 8px;
       font-size: 0.875rem;
       color: var(--text);
-      transition: border-color 0.2s;
+      transition: border-color 0.3s ease, transform 0.3s ease;
     }
-    .contact-links a:hover { border-color: var(--accent); text-decoration: none; }
+    .contact-links a:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+    .contact-links a:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
 
+    /* ---- FOOTER ---- */
     footer {
       text-align: center;
       padding: 1.5rem;
@@ -139,9 +271,28 @@
       border-top: 1px solid var(--border);
     }
 
+    /* ---- RESPONSIVE ---- */
     @media (max-width: 500px) {
-      .hero { flex-direction: column; gap: 1.25rem; }
-      .hero-photo { width: 72px; height: 72px; }
+      nav { padding: 1rem 1.25rem; }
+      main { padding: 0 1.25rem 3rem; }
+      .hero { padding: 3rem 0 2.5rem; }
+      .project-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ---- ACCESSIBILITY ---- */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    *:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
   </style>
 </head>
@@ -154,166 +305,211 @@
       <a href="#contact">Contact</a>
     </div>
   </nav>
+
   <main>
     <div class="hero">
-      <!-- To add your photo: save as photo.jpg in this folder, then uncomment the line below -->
-      <!-- <img class="hero-photo" src="photo.jpg" alt="Soren Christensen"> -->
-      <div class="hero-text">
-        <h1><span>Soren</span> Christensen</h1>
-        <p>Third-year medical student at Duke University School of Medicine.</p>
-      </div>
+      <h1><span>Soren</span> Christensen</h1>
+      <p>Third-year medical student at Duke University School of Medicine.</p>
     </div>
+
     <section id="projects">
-      <h2>Projects</h2>
+      <h2 class="animate-on-scroll">Projects</h2>
 
-      <a class="card-link" href="cv.html">
-        <div class="card">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">Curriculum Vitae</div>
-              <div class="card-desc">Full academic CV &mdash; education, research, publications, and presentations.</div>
-              <div class="card-tags"><span class="tag">Academic</span></div>
+      <div class="project-grid">
+
+        <a class="card-link animate-on-scroll" href="cv.html">
+          <div class="card">
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">Curriculum Vitae</div>
+                <div class="card-desc">Full academic CV &mdash; education, research, publications, and presentations.</div>
+                <div class="card-tags"><span class="tag">Academic</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
             </div>
-            <span class="card-arrow">&#8599;</span>
           </div>
-        </div>
-      </a>
+        </a>
 
-      <a class="card-link" href="sanguine-drift.html">
-        <div class="card">
-          <img class="card-thumb" src="thumbnails/sanguine-drift.jpg" alt="Sanguine Drift preview" loading="lazy">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">Sanguine Drift</div>
-              <div class="card-desc">Generative flow field visualization. Thousands of particles trace invisible currents through a seeded noise field, rendered in warm grays and crimson.</div>
-              <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+        <a class="card-link animate-on-scroll" href="sanguine-drift.html">
+          <div class="card">
+            <div class="card-thumb-wrap">
+              <img class="card-thumb" src="thumbnails/sanguine-drift.jpg" alt="Sanguine Drift preview" loading="lazy">
             </div>
-            <span class="card-arrow">&#8599;</span>
-          </div>
-        </div>
-      </a>
-
-      <a class="card-link" href="strange-resonance.html">
-        <div class="card">
-          <img class="card-thumb" src="thumbnails/strange-resonance.jpg" alt="Strange Resonance preview" loading="lazy">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">Strange Resonance</div>
-              <div class="card-desc">Attractor visualization using layered trigonometric equations. Depth-sorted lines with glow passes and a vignette overlay.</div>
-              <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">Sanguine Drift</div>
+                <div class="card-desc">Generative flow field visualization. Thousands of particles trace invisible currents through a seeded noise field, rendered in warm grays and crimson.</div>
+                <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
             </div>
-            <span class="card-arrow">&#8599;</span>
           </div>
-        </div>
-      </a>
+        </a>
 
-      <a class="card-link" href="sky-simulator.html">
-        <div class="card">
-          <img class="card-thumb" src="thumbnails/sky-simulator.jpg" alt="Sky View Simulator preview" loading="lazy">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">Sky View Simulator</div>
-              <div class="card-desc">Real-time sky map rendering stars, constellations, satellites, planets, and aircraft based on observer coordinates and current time.</div>
-              <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Astronomy</span><span class="tag">JavaScript</span></div>
+        <a class="card-link animate-on-scroll" href="strange-resonance.html">
+          <div class="card">
+            <div class="card-thumb-wrap">
+              <img class="card-thumb" src="thumbnails/strange-resonance.jpg" alt="Strange Resonance preview" loading="lazy">
             </div>
-            <span class="card-arrow">&#8599;</span>
-          </div>
-        </div>
-      </a>
-
-      <a class="card-link" href="eye-trainer.html">
-        <div class="card">
-          <img class="card-thumb" src="thumbnails/eye-trainer.jpg" alt="Eye Trainer preview" loading="lazy">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">Eye Trainer</div>
-              <div class="card-desc">Precision eye training with four modes &mdash; smooth tracking, flash reaction, saccade jumps, and snap locks &mdash; using procedurally generated paths.</div>
-              <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Simplex Noise</span><span class="tag">JavaScript</span></div>
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">Strange Resonance</div>
+                <div class="card-desc">Attractor visualization using layered trigonometric equations. Depth-sorted lines with glow passes and a vignette overlay.</div>
+                <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
             </div>
-            <span class="card-arrow">&#8599;</span>
           </div>
-        </div>
-      </a>
+        </a>
 
-      <a class="card-link" href="speed-reader/">
-        <div class="card">
-          <img class="card-thumb" src="thumbnails/speed-reader.jpg" alt="Speed Reader preview" loading="lazy">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">Speed Reader</div>
-              <div class="card-desc">RSVP speed reading tool with anchor-centric display, adaptive pacing from 250&ndash;1200 WPM, and a marker system for important sections.</div>
-              <div class="card-tags"><span class="tag">JavaScript</span><span class="tag">IBM Plex Mono</span></div>
+        <a class="card-link animate-on-scroll" href="sky-simulator.html">
+          <div class="card">
+            <div class="card-thumb-wrap">
+              <img class="card-thumb" src="thumbnails/sky-simulator.jpg" alt="Sky View Simulator preview" loading="lazy">
             </div>
-            <span class="card-arrow">&#8599;</span>
-          </div>
-        </div>
-      </a>
-
-      <a class="card-link" href="breathe.html">
-        <div class="card">
-          <img class="card-thumb" src="thumbnails/breathe.jpg" alt="Breathe preview" loading="lazy">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">Breathe</div>
-              <div class="card-desc">Meditative breathing guide that shifts background color in sync with your breath cycle. Adjustable rate, six color themes, and a clock overlay.</div>
-              <div class="card-tags"><span class="tag">Animation</span><span class="tag">JavaScript</span></div>
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">Sky View Simulator</div>
+                <div class="card-desc">Real-time sky map rendering stars, constellations, satellites, planets, and aircraft based on observer coordinates and current time.</div>
+                <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Astronomy</span><span class="tag">JavaScript</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
             </div>
-            <span class="card-arrow">&#8599;</span>
           </div>
-        </div>
-      </a>
+        </a>
 
-      <a class="card-link" href="https://l2g4t-c7v6b-x1q9z.github.io/sorvidpomo/" target="_blank" rel="noopener">
-        <div class="card">
-          <img class="card-thumb" src="thumbnails/sorvidpomo.jpg" alt="sorvidpomo preview" loading="lazy">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">sorvidpomo</div>
-              <div class="card-desc">Pomodoro focus timer with synthesized ambient audio, animated circular progress, and customizable durations.</div>
-              <div class="card-tags"><span class="tag">React</span><span class="tag">Framer Motion</span><span class="tag">Web Audio API</span></div>
+        <a class="card-link animate-on-scroll" href="eye-trainer.html">
+          <div class="card">
+            <div class="card-thumb-wrap">
+              <img class="card-thumb" src="thumbnails/eye-trainer.jpg" alt="Eye Trainer preview" loading="lazy">
             </div>
-            <span class="card-arrow">&#8599;</span>
-          </div>
-        </div>
-      </a>
-
-      <a class="card-link" href="ankivoice.html">
-        <div class="card">
-          <img class="card-thumb" src="thumbnails/ankivoice.jpg" alt="AnkiVoice preview" loading="lazy">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">AnkiVoice</div>
-              <div class="card-desc">Hands-free Anki review via voice commands and pocket tap detection. Sensor fusion filters walking motion from intentional taps.</div>
-              <div class="card-tags"><span class="tag">React Native</span><span class="tag">TypeScript</span><span class="tag">Expo</span><span class="tag">In Development</span></div>
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">Eye Trainer</div>
+                <div class="card-desc">Precision eye training with four modes &mdash; smooth tracking, flash reaction, saccade jumps, and snap locks &mdash; using procedurally generated paths.</div>
+                <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Simplex Noise</span><span class="tag">JavaScript</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
             </div>
-            <span class="card-arrow">&#8599;</span>
           </div>
-        </div>
-      </a>
+        </a>
 
-      <a class="card-link" href="blobscape.html">
-        <div class="card">
-          <img class="card-thumb" src="thumbnails/blobscape.jpg" alt="Blobscape preview" loading="lazy">
-          <div class="card-content">
-            <div class="card-body">
-              <div class="card-title">Blobscape</div>
-              <div class="card-desc">Immersive particle visualization with 2000+ particles drifting through wind patterns. Multiple themed palettes and cursor tracking.</div>
-              <div class="card-tags"><span class="tag">Canvas</span><span class="tag">JavaScript</span><span class="tag">Work in Progress</span></div>
+        <a class="card-link animate-on-scroll" href="speed-reader/">
+          <div class="card">
+            <div class="card-thumb-wrap">
+              <img class="card-thumb" src="thumbnails/speed-reader.jpg" alt="Speed Reader preview" loading="lazy">
             </div>
-            <span class="card-arrow">&#8599;</span>
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">Speed Reader</div>
+                <div class="card-desc">RSVP speed reading tool with anchor-centric display, adaptive pacing from 250&ndash;1200 WPM, and a marker system for important sections.</div>
+                <div class="card-tags"><span class="tag">JavaScript</span><span class="tag">IBM Plex Mono</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
+            </div>
           </div>
-        </div>
-      </a>
+        </a>
 
+        <a class="card-link animate-on-scroll" href="breathe.html">
+          <div class="card">
+            <div class="card-thumb-wrap">
+              <img class="card-thumb" src="thumbnails/breathe.jpg" alt="Breathe preview" loading="lazy">
+            </div>
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">Breathe</div>
+                <div class="card-desc">Meditative breathing guide that shifts background color in sync with your breath cycle. Adjustable rate, six color themes, and a clock overlay.</div>
+                <div class="card-tags"><span class="tag">Animation</span><span class="tag">JavaScript</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
+            </div>
+          </div>
+        </a>
+
+        <a class="card-link animate-on-scroll" href="https://l2g4t-c7v6b-x1q9z.github.io/sorvidpomo/" target="_blank" rel="noopener">
+          <div class="card">
+            <div class="card-thumb-wrap">
+              <img class="card-thumb" src="thumbnails/sorvidpomo.jpg" alt="sorvidpomo preview" loading="lazy">
+            </div>
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">sorvidpomo</div>
+                <div class="card-desc">Pomodoro focus timer with synthesized ambient audio, animated circular progress, and customizable durations.</div>
+                <div class="card-tags"><span class="tag">React</span><span class="tag">Framer Motion</span><span class="tag">Web Audio API</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
+            </div>
+          </div>
+        </a>
+
+        <a class="card-link animate-on-scroll" href="ankivoice.html">
+          <div class="card">
+            <div class="card-thumb-wrap">
+              <img class="card-thumb" src="thumbnails/ankivoice.jpg" alt="AnkiVoice preview" loading="lazy">
+            </div>
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">AnkiVoice</div>
+                <div class="card-desc">Hands-free Anki review via voice commands and pocket tap detection. Sensor fusion filters walking motion from intentional taps.</div>
+                <div class="card-tags"><span class="tag">React Native</span><span class="tag">TypeScript</span><span class="tag">Expo</span><span class="tag">In Development</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
+            </div>
+          </div>
+        </a>
+
+        <a class="card-link animate-on-scroll" href="blobscape.html">
+          <div class="card">
+            <div class="card-thumb-wrap">
+              <img class="card-thumb" src="thumbnails/blobscape.jpg" alt="Blobscape preview" loading="lazy">
+            </div>
+            <div class="card-content">
+              <div class="card-body">
+                <div class="card-title">Blobscape</div>
+                <div class="card-desc">Immersive particle visualization with 2000+ particles drifting through wind patterns. Multiple themed palettes and cursor tracking.</div>
+                <div class="card-tags"><span class="tag">Canvas</span><span class="tag">JavaScript</span><span class="tag">Work in Progress</span></div>
+              </div>
+              <span class="card-arrow">&#8599;</span>
+            </div>
+          </div>
+        </a>
+
+      </div>
     </section>
+
     <section id="contact">
-      <h2>Contact</h2>
-      <div class="contact-links">
+      <h2 class="animate-on-scroll">Contact</h2>
+      <div class="contact-links animate-on-scroll">
         <a href="mailto:soren.christensen@duke.edu">soren.christensen@duke.edu</a>
         <a href="https://github.com/L2G4T-C7V6B-X1Q9Z" target="_blank" rel="noopener">GitHub</a>
       </div>
     </section>
   </main>
+
   <footer>Built with HTML and GitHub Pages</footer>
+
+  <script>
+    (function () {
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('revealed');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+      var elements = document.querySelectorAll('.animate-on-scroll');
+      var cards = document.querySelectorAll('.project-grid > .animate-on-scroll');
+
+      cards.forEach(function (card, i) {
+        card.style.transitionDelay = (i * 0.08) + 's';
+      });
+
+      elements.forEach(function (el) {
+        observer.observe(el);
+      });
+    })();
+  </script>
 </body>
 </html>

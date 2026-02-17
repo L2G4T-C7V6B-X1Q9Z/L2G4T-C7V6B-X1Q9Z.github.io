@@ -9,6 +9,7 @@
     :root {
       --bg: #ffffff;
       --surface: #f8f8f8;
+      --surface-dark: #f1f1f1;
       --border: #e0e0e0;
       --text: #444;
       --heading: #3a3a3a;
@@ -21,37 +22,233 @@
       color: var(--text);
       line-height: 1.7;
     }
+
+    /* ── NAV: Glassmorphism sticky ── */
     nav {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 1.25rem 2rem;
-      border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
-      background: var(--bg);
-      z-index: 10;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
-    .nav-logo { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; color: var(--heading); text-decoration: none; }
+    .nav-logo {
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: -0.02em;
+      color: var(--heading);
+      text-decoration: none;
+    }
+    .nav-logo:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+      border-radius: 2px;
+    }
     .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; }
-    .nav-links a { color: var(--muted); text-decoration: none; }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      position: relative;
+      padding-bottom: 2px;
+    }
+    .nav-links a::after {
+      content: "";
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 100%;
+      height: 1.5px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s ease;
+    }
     .nav-links a:hover { color: var(--heading); }
-    main { max-width: 720px; margin: 0 auto; padding: 3rem 2rem 5rem; }
-    h1 { font-size: 2rem; font-weight: 700; color: var(--heading); margin-bottom: 0.5rem; letter-spacing: -0.02em; }
-    .subtitle { font-size: 1.05rem; color: var(--muted); margin-bottom: 2.5rem; }
-    h2 { font-size: 1.1rem; font-weight: 600; color: var(--heading); margin: 2.5rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-    h3 { font-size: 0.95rem; font-weight: 600; color: var(--heading); margin: 1.5rem 0 0.5rem; }
+    .nav-links a:hover::after { transform: scaleX(1); }
+    .nav-links a:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+      border-radius: 2px;
+    }
+
+    /* ── MAIN ── */
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 3rem 2rem 5rem;
+    }
+
+    /* ── HERO: Fade-in animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0); }
+      50% { box-shadow: 0 0 8px 2px rgba(192, 57, 43, 0.12); }
+    }
+    .hero-title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--heading);
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+      opacity: 0;
+      animation: fadeUp 0.8s ease forwards;
+    }
+    .hero-subtitle {
+      font-size: 1.05rem;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+      opacity: 0;
+      animation: fadeUp 0.8s ease 0.2s forwards;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 2.5rem;
+      opacity: 0;
+      animation: fadeUp 0.8s ease 0.4s forwards;
+    }
+    .status-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 99px;
+      background: rgba(192, 57, 43, 0.08);
+      color: var(--accent);
+      border: 1px solid rgba(192, 57, 43, 0.2);
+      font-weight: 500;
+      animation: pulseGlow 2s ease-in-out infinite;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 99px;
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ── SECTION HEADERS ── */
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--heading);
+      margin: 2.5rem 0 1rem;
+      border-bottom: 1px solid var(--accent);
+      padding-bottom: 0.5rem;
+    }
+    h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--heading);
+      margin: 1.5rem 0 0.5rem;
+    }
     p { margin-bottom: 1rem; font-size: 0.95rem; }
-    ul { margin: 0 0 1rem 1.5rem; font-size: 0.95rem; }
-    li { margin-bottom: 0.4rem; }
-    .tag { display: inline-block; font-size: 0.7rem; padding: 0.2rem 0.55rem; border-radius: 99px; background: var(--surface); color: var(--muted); border: 1px solid var(--border); margin-right: 0.3rem; }
-    .status-badge { display: inline-block; font-size: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 99px; background: rgba(192, 57, 43, 0.08); color: var(--accent); border: 1px solid rgba(192, 57, 43, 0.2); font-weight: 500; }
-    .arch-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0; font-family: "SF Mono", "Fira Code", monospace; font-size: 0.8rem; color: var(--muted); white-space: pre; overflow-x: auto; line-height: 1.5; }
-    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0; }
-    .feature-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
-    .feature-card h4 { font-size: 0.85rem; font-weight: 600; color: var(--heading); margin-bottom: 0.4rem; }
-    .feature-card p { font-size: 0.85rem; margin-bottom: 0; color: var(--muted); }
-    @media (max-width: 600px) { .feature-grid { grid-template-columns: 1fr; } }
+
+    /* ── LISTS ── */
+    ul {
+      margin: 0 0 1rem 1.5rem;
+      font-size: 0.95rem;
+    }
+    li {
+      margin-bottom: 0.5rem;
+      line-height: 1.65;
+    }
+
+    /* ── FEATURE CARDS ── */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+      border-color: var(--accent);
+    }
+    .feature-card h4 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--heading);
+      margin-bottom: 0.4rem;
+    }
+    .feature-card p {
+      font-size: 0.85rem;
+      margin-bottom: 0;
+      color: var(--muted);
+    }
+
+    /* ── ARCHITECTURE DIAGRAM ── */
+    .arch-diagram {
+      background: var(--surface-dark);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: pre;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+
+    /* ── SCROLL ANIMATIONS ── */
+    .animate-on-scroll {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .animate-on-scroll.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      nav { padding: 1rem 1.25rem; }
+      main { padding: 2rem 1.25rem 4rem; }
+      .hero-title { font-size: 1.65rem; }
+      .hero-subtitle { font-size: 0.95rem; }
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── ACCESSIBILITY ── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      .animate-on-scroll {
+        opacity: 1;
+        transform: none;
+      }
+    }
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+      border-radius: 2px;
+    }
   </style>
 </head>
 <body>
@@ -63,41 +260,46 @@
       <a href="index.html#contact">Contact</a>
     </div>
   </nav>
+
   <main>
-    <h1>AnkiVoice</h1>
-    <p class="subtitle">Hands-free Anki flashcard review for commuting, exercising, and any hands-busy activity.</p>
-    <span class="status-badge">In Development</span>
-    <span class="tag">React Native</span>
-    <span class="tag">TypeScript</span>
-    <span class="tag">Expo</span>
-    <span class="tag">AnkiConnect</span>
+    <h1 class="hero-title">AnkiVoice</h1>
+    <p class="hero-subtitle">Hands-free Anki flashcard review for commuting, exercising, and any hands-busy activity.</p>
+    <div class="hero-meta">
+      <span class="status-badge">In Development</span>
+      <span class="tag">React Native</span>
+      <span class="tag">TypeScript</span>
+      <span class="tag">Expo</span>
+      <span class="tag">AnkiConnect</span>
+    </div>
 
-    <h2>Concept</h2>
-    <p>AnkiVoice is a mobile app that lets you review Anki flashcards entirely without touching your phone. It's designed for situations where your hands are occupied &mdash; driving, running, cooking, walking between hospital floors &mdash; but your brain is free to study.</p>
-    <p>The system supports three input methods that can be used independently or combined: voice commands, pocket tap detection, and traditional on-screen buttons.</p>
+    <h2 class="animate-on-scroll">Concept</h2>
+    <div class="animate-on-scroll">
+      <p>AnkiVoice is a mobile app that lets you review Anki flashcards entirely without touching your phone. It's designed for situations where your hands are occupied &mdash; driving, running, cooking, walking between hospital floors &mdash; but your brain is free to study.</p>
+      <p>The system supports three input methods that can be used independently or combined: voice commands, pocket tap detection, and traditional on-screen buttons.</p>
+    </div>
 
-    <h2>Input Methods</h2>
+    <h2 class="animate-on-scroll">Input Methods</h2>
     <div class="feature-grid">
-      <div class="feature-card">
+      <div class="feature-card animate-on-scroll">
         <h4>Voice Commands</h4>
         <p>Wake word detection ("Anki") followed by natural commands: "flip it", "got it", "nope", "easy", "skip". Includes fuzzy matching for phonetic variations in noisy environments.</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card animate-on-scroll">
         <h4>Pocket Tap Detection</h4>
         <p>Accelerometer + gyroscope sensor fusion detects intentional taps through fabric while filtering out walking/running movements. Single tap shows answer, double tap marks good, triple tap marks again.</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card animate-on-scroll">
         <h4>Two Review Modes</h4>
         <p><strong>Discrete</strong>: give simple show/rate commands. <strong>Non-discrete</strong>: speak your answer aloud and the system evaluates it against the card's answer using similarity comparison.</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card animate-on-scroll">
         <h4>Driving Mode</h4>
         <p>Extra-large text, simplified UI, and audio-first interaction. Cards are automatically read aloud via text-to-speech. Designed for safe use during commutes.</p>
       </div>
     </div>
 
-    <h2>Architecture</h2>
-    <div class="arch-diagram">ankivoice/
+    <h2 class="animate-on-scroll">Architecture</h2>
+    <div class="arch-diagram animate-on-scroll">ankivoice/
 ├── apps/
 │   └── mobile/              React Native (Expo Router)
 │       └── src/
@@ -109,31 +311,56 @@
 │           └── store/                    Zustand state management
 └── docs/</div>
 
-    <h2>Sync System</h2>
-    <p>AnkiVoice connects to Anki Desktop via the AnkiConnect API. The sync system is offline-first: reviews are queued locally and synced when a connection is available. The queue uses exponential backoff retry logic and batch syncing to handle unreliable network conditions.</p>
-    <ul>
-      <li>Fetches decks and due cards from Anki Desktop</li>
-      <li>Processes cloze deletions for audio readback</li>
-      <li>Submits card reviews with correct intervals</li>
-      <li>Persists review queue to local storage for crash recovery</li>
-    </ul>
+    <h2 class="animate-on-scroll">Sync System</h2>
+    <div class="animate-on-scroll">
+      <p>AnkiVoice connects to Anki Desktop via the AnkiConnect API. The sync system is offline-first: reviews are queued locally and synced when a connection is available. The queue uses exponential backoff retry logic and batch syncing to handle unreliable network conditions.</p>
+      <ul>
+        <li>Fetches decks and due cards from Anki Desktop</li>
+        <li>Processes cloze deletions for audio readback</li>
+        <li>Submits card reviews with correct intervals</li>
+        <li>Persists review queue to local storage for crash recovery</li>
+      </ul>
+    </div>
 
-    <h2>Tap Detection</h2>
-    <p>The tap detector is the most technically interesting component. It fuses accelerometer and gyroscope data to distinguish intentional taps from ambient motion. The calibration process (5 taps) establishes a baseline for the user's phone placement and typical tap force.</p>
-    <ul>
-      <li>Multi-tap detection: single, double, triple, and long-press</li>
-      <li>Walking pattern filtering using periodic motion analysis</li>
-      <li>Sensitivity calibration adapts to phone case thickness and pocket material</li>
-      <li>Debounce logic prevents accidental triggers</li>
-    </ul>
+    <h2 class="animate-on-scroll">Tap Detection</h2>
+    <div class="animate-on-scroll">
+      <p>The tap detector is the most technically interesting component. It fuses accelerometer and gyroscope data to distinguish intentional taps from ambient motion. The calibration process (5 taps) establishes a baseline for the user's phone placement and typical tap force.</p>
+      <ul>
+        <li>Multi-tap detection: single, double, triple, and long-press</li>
+        <li>Walking pattern filtering using periodic motion analysis</li>
+        <li>Sensitivity calibration adapts to phone case thickness and pocket material</li>
+        <li>Debounce logic prevents accidental triggers</li>
+      </ul>
+    </div>
 
-    <h2>Tech Stack</h2>
-    <ul>
-      <li><strong>Frontend</strong>: React Native with Expo Router, TypeScript, Zustand for state</li>
-      <li><strong>Voice</strong>: Web Speech API (STT), Expo Speech (TTS), fuzzy string matching</li>
-      <li><strong>Sensors</strong>: Expo Sensors (accelerometer + gyroscope), custom fusion algorithm</li>
-      <li><strong>Sync</strong>: AnkiConnect HTTP API, AsyncStorage persistence, batch operations</li>
-    </ul>
+    <h2 class="animate-on-scroll">Tech Stack</h2>
+    <div class="animate-on-scroll">
+      <ul>
+        <li><strong>Frontend</strong>: React Native with Expo Router, TypeScript, Zustand for state</li>
+        <li><strong>Voice</strong>: Web Speech API (STT), Expo Speech (TTS), fuzzy string matching</li>
+        <li><strong>Sensors</strong>: Expo Sensors (accelerometer + gyroscope), custom fusion algorithm</li>
+        <li><strong>Sync</strong>: AnkiConnect HTTP API, AsyncStorage persistence, batch operations</li>
+      </ul>
+    </div>
   </main>
+
+  <script>
+    (function () {
+      var targets = document.querySelectorAll('.animate-on-scroll');
+      var cards = document.querySelectorAll('.feature-card.animate-on-scroll');
+      cards.forEach(function (card, i) {
+        card.style.transitionDelay = (i * 0.1) + 's';
+      });
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+      targets.forEach(function (el) { observer.observe(el); });
+    })();
+  </script>
 </body>
 </html>

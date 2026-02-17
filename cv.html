@@ -16,6 +16,7 @@
   :root {
     --accent: #c0392b;
     --accent-light: #d44;
+    --accent-bg: rgba(192, 57, 43, 0.06);
     --text: #3a3a3a;
     --text-light: #555;
     --text-lighter: #777;
@@ -48,32 +49,79 @@
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
-  /* ---- SITE NAV ---- */
+  /* Focus-visible for accessibility */
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* ---- SITE NAV (Glassmorphism) ---- */
 
   .site-nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 1.25rem 2rem;
-    border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
-    background: var(--bg);
-    z-index: 10;
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    z-index: 100;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
+
   .nav-logo {
     font-weight: 700;
     font-size: 1rem;
     letter-spacing: -0.02em;
     color: var(--text-heading);
   }
+
   .nav-logo a { color: var(--text-heading); }
   .nav-logo a:hover { text-decoration: none; }
+
   .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; }
-  .nav-links a { color: var(--muted); }
-  .nav-links a:hover { color: var(--text-heading); text-decoration: none; }
-  .nav-links a.active { color: var(--text-heading); }
+
+  .nav-links a {
+    color: var(--muted);
+    position: relative;
+    padding-bottom: 2px;
+    transition: color 0.2s ease;
+  }
+
+  .nav-links a::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    width: 100%;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform 0.25s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .nav-links a:hover {
+    color: var(--text-heading);
+    text-decoration: none;
+  }
+
+  .nav-links a:hover::after {
+    transform: scaleX(1);
+  }
+
+  .nav-links a.active {
+    color: var(--text-heading);
+  }
+
+  .nav-links a.active::after {
+    transform: scaleX(1);
+  }
 
   /* ---- LAYOUT: SIDEBAR + CONTENT ---- */
 
@@ -92,7 +140,7 @@
     flex-shrink: 0;
     padding: 40px 0 40px 36px;
     position: sticky;
-    top: 60px;
+    top: 70px;
     align-self: flex-start;
     height: fit-content;
     max-height: calc(100vh - 80px);
@@ -103,6 +151,7 @@
     list-style: none;
     border-left: 1px solid var(--border);
     padding-left: 0;
+    position: relative;
   }
 
   .toc li {
@@ -111,14 +160,14 @@
 
   .toc a {
     display: block;
-    padding: 4px 0 4px 16px;
+    padding: 5px 0 5px 16px;
     font-size: 13.5px;
     font-weight: 400;
     color: var(--text-lighter);
     text-decoration: none;
-    border-left: 2px solid transparent;
-    margin-left: -1px;
-    transition: color 0.15s, border-color 0.15s;
+    border-left: 3px solid transparent;
+    margin-left: -2px;
+    transition: color 0.25s ease, border-color 0.25s ease, font-weight 0.15s ease;
     letter-spacing: 0.2px;
   }
 
@@ -130,7 +179,7 @@
   .toc a.active {
     color: var(--accent);
     border-left-color: var(--accent);
-    font-weight: 500;
+    font-weight: 600;
   }
 
   /* ---- CV CONTENT ---- */
@@ -174,6 +223,11 @@
   .contact a {
     color: var(--text-light);
     text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  .contact a:hover {
+    color: var(--accent);
   }
 
   .contact .sep {
@@ -181,12 +235,33 @@
     color: var(--text-light);
   }
 
-  /* ---- SECTIONS ---- */
+  /* ---- SCROLL REVEAL ---- */
 
   .section {
     margin-bottom: 24px;
     scroll-margin-top: 80px;
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1);
   }
+
+  .section.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .section .stagger-item {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.5s cubic-bezier(0.16,1,0.3,1), transform 0.5s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .section.revealed .stagger-item {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ---- SECTION TITLES ---- */
 
   .section-title {
     font-size: 20px;
@@ -246,6 +321,13 @@
 
   .research-entry {
     margin-bottom: 22px;
+    padding-left: 14px;
+    border-left: 2px solid transparent;
+    transition: border-color 0.3s ease;
+  }
+
+  .research-entry:hover {
+    border-left-color: var(--rule-accent);
   }
 
   .research-entry .role-title {
@@ -453,10 +535,152 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 
+  /* ---- MOBILE TOC BUTTON & PANEL ---- */
+
+  .toc-fab {
+    display: none;
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-size: 22px;
+    line-height: 48px;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(192,57,43,0.35);
+    z-index: 200;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .toc-fab:hover {
+    transform: scale(1.08);
+    box-shadow: 0 6px 20px rgba(192,57,43,0.45);
+  }
+
+  .toc-fab:active {
+    transform: scale(0.96);
+  }
+
+  .toc-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 250;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  .toc-overlay.open {
+    opacity: 1;
+  }
+
+  .toc-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg);
+    z-index: 300;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 30px rgba(0,0,0,0.12);
+    padding: 20px 24px 32px;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.16,1,0.3,1);
+    max-height: 70vh;
+    overflow-y: auto;
+    display: none;
+  }
+
+  .toc-panel.open {
+    transform: translateY(0);
+  }
+
+  .toc-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .toc-panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-heading);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .toc-panel-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-lighter);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+  }
+
+  .toc-panel-links {
+    list-style: none;
+    padding: 0;
+  }
+
+  .toc-panel-links li {
+    margin-bottom: 2px;
+  }
+
+  .toc-panel-links a {
+    display: block;
+    padding: 10px 14px;
+    font-size: 16px;
+    color: var(--text);
+    text-decoration: none;
+    border-radius: 8px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .toc-panel-links a:hover {
+    background: var(--surface);
+    text-decoration: none;
+  }
+
+  .toc-panel-links a.active {
+    color: var(--accent);
+    background: var(--accent-bg);
+    font-weight: 500;
+  }
+
+  /* ---- ACCESSIBILITY: REDUCED MOTION ---- */
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+    html {
+      scroll-behavior: auto;
+    }
+    .section {
+      opacity: 1;
+      transform: none;
+    }
+    .section .stagger-item {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
   /* ---- PRINT ---- */
 
   @media print {
-    .site-nav, .site-footer, .cv-sidebar { display: none; }
+    .site-nav, .site-footer, .cv-sidebar, .toc-fab, .toc-overlay, .toc-panel { display: none !important; }
 
     body {
       font-size: 10pt;
@@ -479,6 +703,16 @@
 
     h1 {
       font-size: 28pt;
+    }
+
+    .section {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+
+    .section .stagger-item {
+      opacity: 1 !important;
+      transform: none !important;
     }
 
     .section-title {
@@ -507,6 +741,8 @@
     .research-entry {
       break-inside: avoid;
       margin-bottom: 14px;
+      padding-left: 0;
+      border-left: none;
     }
 
     .edu-entry {
@@ -537,9 +773,24 @@
 
   /* ---- RESPONSIVE ---- */
 
+  @media (max-width: 1024px) {
+    .cv-sidebar {
+      width: 170px;
+      padding-left: 24px;
+    }
+
+    .cv-content {
+      padding: 36px 28px 60vh;
+    }
+  }
+
   @media (max-width: 768px) {
     .cv-sidebar {
       display: none;
+    }
+
+    .toc-fab {
+      display: block;
     }
 
     .cv-content {
@@ -553,24 +804,38 @@
     h1 {
       font-size: 32px;
     }
+
+    .site-nav {
+      padding: 1rem 1.25rem;
+    }
+
+    .research-entry {
+      padding-left: 0;
+      border-left: none;
+    }
+
+    .research-entry:hover {
+      border-left-color: transparent;
+    }
   }
 </style>
 </head>
 <body>
 
 <!-- SITE NAV -->
-<nav class="site-nav">
+<nav class="site-nav" role="navigation" aria-label="Main navigation">
   <span class="nav-logo"><a href="index.html">Soren Christensen</a></span>
   <div class="nav-links">
-    <a href="index.html">Home</a>
+    <a href="index.html#projects">Projects</a>
     <a href="cv.html" class="active">CV</a>
+    <a href="index.html#contact">Contact</a>
   </div>
 </nav>
 
 <div class="cv-layout">
 
 <!-- SIDEBAR TOC -->
-<aside class="cv-sidebar">
+<aside class="cv-sidebar" role="complementary" aria-label="Table of contents">
   <ul class="toc">
     <li><a href="#education" data-section="education">Education</a></li>
     <li><a href="#research" data-section="research">Research</a></li>
@@ -583,7 +848,7 @@
   </ul>
 </aside>
 
-<div class="cv-content">
+<main class="cv-content" role="main">
 
 <!-- HEADER -->
 <header>
@@ -597,16 +862,16 @@
 </header>
 
 <!-- EDUCATION -->
-<div class="section" id="education">
+<section class="section" id="education">
   <div class="section-title">Education</div>
 
-  <div class="edu-entry">
+  <div class="edu-entry stagger-item">
     <div class="institution">Duke University School of Medicine</div>
     <div class="location-date">Durham, NC &nbsp;&middot;&nbsp; Jul 2023 &ndash; May 2027 Expected</div>
     <div class="degree">Doctor of Medicine</div>
   </div>
 
-  <div class="edu-entry">
+  <div class="edu-entry stagger-item">
     <div class="institution">Trinity College of Arts &amp; Sciences, Duke University</div>
     <div class="location-date">Durham, NC &nbsp;&middot;&nbsp; Aug 2018 &ndash; May 2022</div>
     <div class="degree">Bachelor of Science, Neuroscience (Graduation with Distinction)</div>
@@ -615,15 +880,17 @@
     <div class="details">GPA: 3.982 &nbsp;&middot;&nbsp; Summa Cum Laude &nbsp;&middot;&nbsp; Phi Beta Kappa</div>
   </div>
 
-  <div class="usmle">MCAT &nbsp;&mdash;&nbsp; <span>525</span></div>
-  <div class="usmle">USMLE &nbsp;&mdash;&nbsp; <span>Step 1: Pass &nbsp;&middot;&nbsp; Step 2 CK: Score Pending</span></div>
-</div>
+  <div class="stagger-item">
+    <div class="usmle">MCAT &nbsp;&mdash;&nbsp; <span>525</span></div>
+    <div class="usmle">USMLE &nbsp;&mdash;&nbsp; <span>Step 1: Pass &nbsp;&middot;&nbsp; Step 2 CK: Score Pending</span></div>
+  </div>
+</section>
 
 <!-- RESEARCH EXPERIENCE -->
-<div class="section" id="research">
+<section class="section" id="research">
   <div class="section-title">Research Experience</div>
 
-  <div class="research-entry">
+  <div class="research-entry stagger-item">
     <div class="role-title">Neuroradiology Research</div>
     <div class="pi">Timothy J. Amrhein, MD &nbsp;&middot;&nbsp; Department of Radiology, Duke University Medical Center</div>
     <div class="dates">Jul 2024 &ndash; Present</div>
@@ -634,7 +901,7 @@
     </ul>
   </div>
 
-  <div class="research-entry">
+  <div class="research-entry stagger-item">
     <div class="role-title">Radiology and AI Research</div>
     <div class="pi">Lars J. Grimm, MD, MHS &nbsp;&middot;&nbsp; Department of Radiology, Duke University Medical Center</div>
     <div class="dates">Jan 2024 &ndash; Jun 2024</div>
@@ -643,7 +910,7 @@
     </ul>
   </div>
 
-  <div class="research-entry">
+  <div class="research-entry stagger-item">
     <div class="role-title">Perioperative Neurocognitive Research</div>
     <div class="pi">Miles Berger, MD, PhD &nbsp;&middot;&nbsp; Department of Anesthesiology, Duke University Medical Center</div>
     <div class="dates">Oct 2018 &ndash; May 2022</div>
@@ -653,7 +920,7 @@
     </ul>
   </div>
 
-  <div class="research-entry">
+  <div class="research-entry stagger-item">
     <div class="role-title">Japanese Linguistics Research</div>
     <div class="pi">Yunchuan Chen, PhD &nbsp;&middot;&nbsp; Department of Asian &amp; Middle Eastern Studies, Duke University</div>
     <div class="dates">Feb 2020 &ndash; May 2022</div>
@@ -661,214 +928,324 @@
       <li>Honors thesis analyzing style shifts and honorific use in Japanese commentary videos</li>
     </ul>
   </div>
-</div>
+</section>
 
 <!-- PUBLICATIONS -->
-<div class="section" id="publications">
+<section class="section" id="publications">
   <div class="section-title">Publications</div>
 
-  <div class="pub-subsection">Peer-Reviewed Original Research</div>
+  <div class="pub-subsection stagger-item">Peer-Reviewed Original Research</div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">1.</span> Dontchos BN, Dodelzon K, Bhole S, Edmonds CE, Mullen LA, Parikh JR, Daly CP, Epling JA, <span class="author-highlight">Christensen SK</span>, Grimm LJ. Opinions and preferences regarding artificial intelligence use in healthcare delivery: results from a national multi-site survey of breast imaging patients. <em>J Am Coll Radiol</em>. 2025;22(9):1091-1094. doi:10.1016/j.jacr.2025.05.001.
   </div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">2.</span> Zhu D, Kranz PG, Edelmuth DGL, Lim J, <span class="author-highlight">Christensen SK</span>, Madhavan AA, Amrhein TJ. Maximizing the conspicuity of CSF-venous fistulas on CT myelography: assessment of contrast density and timing effects. <em>Am J Neuroradiol</em>. 2025. doi:10.3174/ajnr.A8972. [Epub ahead of print]
   </div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">3.</span> Devinney MJ, Spector AR, Wright MC, Thomas J, Avasarala P, Moretti E, Dominguez JE, Smith PJ, Whitson HE, Veasey SC, Mathew JP, Berger M; INTUIT Study Investigators [including <span class="author-highlight">Christensen SK</span>]. The role of sleep apnea in postoperative neurocognitive disorders among older noncardiac surgery patients: a prospective cohort study. <em>Anesth Analg</em>. 2025;140(1):99-109. doi:10.1213/ANE.0000000000007269.
   </div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">4.</span> Devinney MJ, Wong MK, Wright MC, Marcantonio ER, Terrando N, Browndyke JN, Whitson HE, Cohen HJ, Nackley AG, Klein ME, Ely EW, Mathew JP, Berger M; MADCO-PC and INTUIT Study Teams [including <span class="author-highlight">Christensen SK</span>]. Role of blood-brain barrier dysfunction in delirium following non-cardiac surgery in older adults. <em>Ann Neurol</em>. 2023;94(6):1024-1035. doi:10.1002/ana.26771.
   </div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">5.</span> Reese M*, <span class="author-highlight">Christensen SK</span>*, Anolick H*, Roberts KC, Wong MK, Wright MC, Acker L, Browndyke JN, Woldorff MG, Berger M; MADCO-PC and INTUIT Investigators. EEG pre-burst suppression: characterization and inverse association with preoperative cognitive function in older adults. <em>Front Aging Neurosci</em>. 2023;15:1229081. doi:10.3389/fnagi.2023.1229081. <span class="equal">*Equal contribution</span>
   </div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">6.</span> <span class="author-highlight">Christensen SK</span>, Chen Y. Style shifts in Japanese video game commentary monologues. <em>Proc Ling Soc Am</em>. 2022;7(1):5227. doi:10.3765/plsa.v7i1.5227.
   </div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">7.</span> Nobuhara CK, Bullock WM, Bunning T, Colin B, Cooter M, Devinney MJ, Ferrandino MN, Gadsden J, Garrigues G, Habib AS, Moretti E, Moul J, Ohlendorf B, Sandler A, Scheri R, Sharma B, Thomas JP, Young C, Mathew JP, Berger M; MADCO-PC and INTUIT Investigators Teams [including <span class="author-highlight">Christensen SK</span>]. A protocol to reduce self-reported pain scores and adverse events following lumbar punctures in older adults. <em>J Neurol</em>. 2020;267(7):2002-2006. doi:10.1007/s00415-020-09797-1.
   </div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">8.</span> Berger M, Oyeyemi D, Olurinde MO, Whitson HE, Weinhold KJ, Woldorff MG, Lipsitz LA, Moretti E, Giattino CM, Roberts KC, Zhou J, Bunning T, Ferrandino M, Scheri RP, Cooter M, Chan C, Cabeza R, Browndyke JN, Murdoch DM, Devinney MJ, Shaw LM, Cohen HJ, Mathew JP; INTUIT Investigators [including <span class="author-highlight">Christensen SK</span>]. The INTUIT study: investigating neuroinflammation underlying postoperative cognitive dysfunction. <em>J Am Geriatr Soc</em>. 2019;67(4):794-798. doi:10.1111/jgs.15770.
   </div>
 
-  <div class="pub-subsection">Peer-Reviewed Technical Reports</div>
+  <div class="pub-subsection stagger-item">Peer-Reviewed Technical Reports</div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">9.</span> <span class="author-highlight">Christensen SK</span>, Kranz PG, Malinzak MD, Gray L, Willhite J, Zhu D, Amrhein TJ. Circumferential epidural patch for postdural puncture headache: a technical report. <em>Am J Neuroradiol</em>. 2025;46(12):2411-2417. doi:10.3174/ajnr.A9038.
   </div>
 
-  <div class="pub-subsection">Peer-Reviewed Study Protocols</div>
+  <div class="pub-subsection stagger-item">Peer-Reviewed Study Protocols</div>
 
-  <div class="publication">
+  <div class="publication stagger-item">
     <span class="pub-number">10.</span> VanDusen KW, Eleswarpu S, Moretti EW, Devinney MJ, Crabtree DM, Laskowitz DT, Woldorff MG, Roberts KC, Whittle J, Browndyke JN, Cooter M, Rockhold FW, Anakwenze O, Bolognesi MP, Easley ME, Ferrandino MN, Jiranek WA, Berger M; MARBLE Study Investigators [including <span class="author-highlight">Christensen SK</span>]. The MARBLE study protocol: modulating ApoE signaling to reduce brain inflammation, delirium, and postoperative cognitive dysfunction. <em>J Alzheimers Dis</em>. 2020;75(4):1319-1328. doi:10.3233/JAD-191185.
   </div>
 
   <!-- Under Review manuscripts hidden until published -->
-</div>
+</section>
 
 <!-- PRESENTATIONS -->
-<div class="section" id="presentations">
+<section class="section" id="presentations">
   <div class="section-title">Presentations</div>
 
-  <div class="presentation">
+  <div class="presentation stagger-item">
     <span class="pres-type">Oral Presentation:</span> PCD vs. EID CT myelography for detecting CSF-venous fistulas in SIH: substantially lower radiation exposure. American Society of Neuroradiology (ASNR) Annual Meeting, 2026.
   </div>
 
-  <div class="presentation">
+  <div class="presentation stagger-item">
     <span class="pres-type">Poster Presentation:</span> PCD vs. EID CT myelography for detecting CSF-venous fistulas in SIH: substantially lower radiation exposure. Duke Radiology Research Day, 2026.
   </div>
 
-  <div class="presentation">
+  <div class="presentation stagger-item">
     <span class="pres-type">Poster Presentation:</span> Style shifts in Japanese video game commentary monologues. 96th Annual Meeting, Linguistic Society of America, 2022.
   </div>
 
-  <div class="presentation">
+  <div class="presentation stagger-item">
     <span class="pres-type">Oral Presentation:</span> Style shifts in Japanese video game commentary monologues. 45th Penn Linguistics Conference, 2021.
   </div>
-</div>
+</section>
 
 <!-- HONORS AND AWARDS -->
-<div class="section" id="honors">
+<section class="section" id="honors">
   <div class="section-title">Honors &amp; Awards</div>
   <div class="honors-grid">
-    <div class="honor-item">
+    <div class="honor-item stagger-item">
       <div class="honor-name">Best Medical Student Project</div>
       <div class="honor-meta">First Annual Radiology Research Day, Duke University, 2026</div>
     </div>
-    <div class="honor-item">
+    <div class="honor-item stagger-item">
       <div class="honor-name">Elizabeth B. Bressler Scholarship</div>
       <div class="honor-meta">Duke University School of Medicine, 2024</div>
     </div>
-    <div class="honor-item">
+    <div class="honor-item stagger-item">
       <div class="honor-name">Phi Beta Kappa</div>
       <div class="honor-meta">Duke University, 2022</div>
     </div>
-    <div class="honor-item">
+    <div class="honor-item stagger-item">
       <div class="honor-name">Summa Cum Laude</div>
       <div class="honor-meta">Duke University, 2022</div>
     </div>
-    <div class="honor-item">
+    <div class="honor-item stagger-item">
       <div class="honor-name">Best AMES Honors Thesis Award</div>
       <div class="honor-meta">Duke Asian &amp; Middle Eastern Studies, 2022</div>
     </div>
-    <div class="honor-item">
+    <div class="honor-item stagger-item">
       <div class="honor-name">Graduation with Distinction in Neuroscience</div>
       <div class="honor-meta">Duke University, 2022</div>
     </div>
-    <div class="honor-item">
+    <div class="honor-item stagger-item">
       <div class="honor-name">Graduation with Distinction in Asian &amp; Middle Eastern Studies</div>
       <div class="honor-meta">Duke University, 2022</div>
     </div>
-    <div class="honor-item">
+    <div class="honor-item stagger-item">
       <div class="honor-name">1st Place, Japanese Speech Contest</div>
       <div class="honor-meta">NC Research Triangle, 2022</div>
     </div>
-    <div class="honor-item">
+    <div class="honor-item stagger-item">
       <div class="honor-name">Charles Lafitte Foundation Research Grant</div>
       <div class="honor-meta">Duke Psychology &amp; Neuroscience, 2020</div>
     </div>
   </div>
-</div>
+</section>
 
 <!-- WORK EXPERIENCE -->
-<div class="section" id="work">
+<section class="section" id="work">
   <div class="section-title">Work Experience</div>
 
-  <div class="experience-entry">
+  <div class="experience-entry stagger-item">
     <div class="exp-title">Medical Screener</div>
     <div class="exp-org">Kameo Health, Atlanta, GA</div>
     <div class="exp-dates">Jun 2022 &ndash; Mar 2023</div>
     <div class="exp-desc">Medical screenings for film production casts and crews</div>
   </div>
-</div>
+</section>
 
 <!-- VOLUNTEER EXPERIENCE -->
-<div class="section" id="volunteer">
+<section class="section" id="volunteer">
   <div class="section-title">Volunteer Experience</div>
 
-  <div class="experience-entry">
+  <div class="experience-entry stagger-item">
     <div class="exp-title">Root Causes</div>
     <div class="exp-org">Duke University, Durham, NC</div>
     <div class="exp-dates">Apr 2025 &ndash; Present</div>
     <div class="exp-desc">Grocery and supply delivery to low-income families in Durham</div>
   </div>
 
-  <div class="experience-entry">
+  <div class="experience-entry stagger-item">
     <div class="exp-title">Crisis Counselor</div>
     <div class="exp-org">Crisis Text Line</div>
     <div class="exp-dates">May 2021 &ndash; May 2022</div>
   </div>
 
-  <div class="experience-entry">
+  <div class="experience-entry stagger-item">
     <div class="exp-title">Volunteer EMT</div>
     <div class="exp-org">Duke University Emergency Medical Services, Durham, NC</div>
     <div class="exp-dates">Sep 2019 &ndash; May 2022</div>
   </div>
-</div>
+</section>
 
 <!-- PROFESSIONAL MEMBERSHIPS -->
-<div class="section" id="memberships">
+<section class="section" id="memberships">
   <div class="section-title">Professional Memberships</div>
 
-  <div class="membership">
+  <div class="membership stagger-item">
     <span class="mem-org">American Society of Neuroradiology (ASNR)</span>
     <span class="mem-role">&nbsp;&middot;&nbsp; Member-In-Training, 2026 &ndash; Present</span>
   </div>
-</div>
+</section>
 
-</div><!-- end cv-content -->
+</main><!-- end cv-content -->
 </div><!-- end cv-layout -->
+
+<!-- MOBILE TOC BUTTON -->
+<button class="toc-fab" aria-label="Table of contents" id="tocFab">&#8801;</button>
+
+<!-- MOBILE TOC OVERLAY -->
+<div class="toc-overlay" id="tocOverlay"></div>
+
+<!-- MOBILE TOC PANEL -->
+<nav class="toc-panel" id="tocPanel" role="navigation" aria-label="Mobile table of contents">
+  <div class="toc-panel-header">
+    <span class="toc-panel-title">Contents</span>
+    <button class="toc-panel-close" id="tocClose" aria-label="Close table of contents">&times;</button>
+  </div>
+  <ul class="toc-panel-links">
+    <li><a href="#education" data-section="education">Education</a></li>
+    <li><a href="#research" data-section="research">Research</a></li>
+    <li><a href="#publications" data-section="publications">Publications</a></li>
+    <li><a href="#presentations" data-section="presentations">Presentations</a></li>
+    <li><a href="#honors" data-section="honors">Honors & Awards</a></li>
+    <li><a href="#work" data-section="work">Work</a></li>
+    <li><a href="#volunteer" data-section="volunteer">Volunteer</a></li>
+    <li><a href="#memberships" data-section="memberships">Memberships</a></li>
+  </ul>
+</nav>
 
 <footer class="site-footer">Built with HTML and GitHub Pages</footer>
 
 <script>
-  const sections = document.querySelectorAll('.section[id]');
-  const tocLinks = document.querySelectorAll('.toc a');
-  let current = '';
+  (function() {
+    'use strict';
 
-  function updateToc() {
-    const offset = 120;
+    // --- Scroll Reveal with IntersectionObserver ---
+    const sections = document.querySelectorAll('.section');
+    const revealObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('revealed');
+          // Stagger children
+          var items = entry.target.querySelectorAll('.stagger-item');
+          items.forEach(function(item, i) {
+            item.style.transitionDelay = (i * 0.06) + 's';
+          });
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, {
+      threshold: 0.1,
+      rootMargin: '0px 0px -40px 0px'
+    });
 
-    // If scrolled to bottom, activate last section
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 30) {
-      const last = sections[sections.length - 1].id;
-      if (current !== last) {
-        current = last;
-        tocLinks.forEach(l => l.classList.remove('active'));
-        const a = document.querySelector(`.toc a[data-section="${last}"]`);
-        if (a) a.classList.add('active');
+    sections.forEach(function(section) {
+      revealObserver.observe(section);
+    });
+
+    // --- TOC Scroll Tracking ---
+    var sectionEls = document.querySelectorAll('.section[id]');
+    var tocLinks = document.querySelectorAll('.toc a');
+    var panelLinks = document.querySelectorAll('.toc-panel-links a');
+    var current = '';
+
+    function updateToc() {
+      var offset = 120;
+
+      // If scrolled to bottom, activate last section
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 30) {
+        var last = sectionEls[sectionEls.length - 1].id;
+        if (current !== last) {
+          current = last;
+          setActive(last);
+        }
+        return;
       }
-      return;
-    }
 
-    // Find the last section whose top has scrolled past the offset
-    let active = sections[0]?.id || '';
-    for (const section of sections) {
-      if (section.getBoundingClientRect().top <= offset) {
-        active = section.id;
+      // Find the last section whose top has scrolled past the offset
+      var active = sectionEls[0] ? sectionEls[0].id : '';
+      for (var i = 0; i < sectionEls.length; i++) {
+        if (sectionEls[i].getBoundingClientRect().top <= offset) {
+          active = sectionEls[i].id;
+        }
+      }
+
+      if (active !== current) {
+        current = active;
+        setActive(active);
       }
     }
 
-    if (active !== current) {
-      current = active;
-      tocLinks.forEach(l => l.classList.remove('active'));
-      const a = document.querySelector(`.toc a[data-section="${active}"]`);
-      if (a) a.classList.add('active');
+    function setActive(id) {
+      tocLinks.forEach(function(l) { l.classList.remove('active'); });
+      panelLinks.forEach(function(l) { l.classList.remove('active'); });
+      var sidebarLink = document.querySelector('.toc a[data-section="' + id + '"]');
+      var panelLink = document.querySelector('.toc-panel-links a[data-section="' + id + '"]');
+      if (sidebarLink) sidebarLink.classList.add('active');
+      if (panelLink) panelLink.classList.add('active');
     }
-  }
 
-  window.addEventListener('scroll', updateToc, { passive: true });
-  updateToc();
+    window.addEventListener('scroll', updateToc, { passive: true });
+    updateToc();
+
+    // --- Mobile TOC Panel ---
+    var fab = document.getElementById('tocFab');
+    var overlay = document.getElementById('tocOverlay');
+    var panel = document.getElementById('tocPanel');
+    var closeBtn = document.getElementById('tocClose');
+
+    function openPanel() {
+      overlay.style.display = 'block';
+      panel.style.display = 'block';
+      // Force reflow for transition
+      void panel.offsetHeight;
+      overlay.classList.add('open');
+      panel.classList.add('open');
+      fab.style.display = 'none';
+    }
+
+    function closePanel() {
+      overlay.classList.remove('open');
+      panel.classList.remove('open');
+      setTimeout(function() {
+        overlay.style.display = 'none';
+        panel.style.display = 'none';
+        // Only show fab again if on mobile
+        if (window.innerWidth <= 768) {
+          fab.style.display = 'block';
+        }
+      }, 350);
+    }
+
+    fab.addEventListener('click', openPanel);
+    overlay.addEventListener('click', closePanel);
+    closeBtn.addEventListener('click', closePanel);
+
+    // Close panel when a link is clicked
+    panelLinks.forEach(function(link) {
+      link.addEventListener('click', function() {
+        closePanel();
+      });
+    });
+
+    // Handle resize: hide fab on desktop, show on mobile
+    window.addEventListener('resize', function() {
+      if (window.innerWidth > 768) {
+        fab.style.display = 'none';
+        closePanel();
+      } else {
+        if (!panel.classList.contains('open')) {
+          fab.style.display = 'block';
+        }
+      }
+    });
+  })();
 </script>
 
 </body>
