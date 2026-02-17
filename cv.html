@@ -833,33 +833,41 @@
 <script>
   const sections = document.querySelectorAll('.section[id]');
   const tocLinks = document.querySelectorAll('.toc a');
+  let current = '';
 
-  function setActive(id) {
-    tocLinks.forEach(link => link.classList.remove('active'));
-    const active = document.querySelector(`.toc a[data-section="${id}"]`);
-    if (active) active.classList.add('active');
+  function updateToc() {
+    const offset = 120;
+
+    // If scrolled to bottom, activate last section
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 30) {
+      const last = sections[sections.length - 1].id;
+      if (current !== last) {
+        current = last;
+        tocLinks.forEach(l => l.classList.remove('active'));
+        const a = document.querySelector(`.toc a[data-section="${last}"]`);
+        if (a) a.classList.add('active');
+      }
+      return;
+    }
+
+    // Find the last section whose top has scrolled past the offset
+    let active = sections[0]?.id || '';
+    for (const section of sections) {
+      if (section.getBoundingClientRect().top <= offset) {
+        active = section.id;
+      }
+    }
+
+    if (active !== current) {
+      current = active;
+      tocLinks.forEach(l => l.classList.remove('active'));
+      const a = document.querySelector(`.toc a[data-section="${active}"]`);
+      if (a) a.classList.add('active');
+    }
   }
 
-  // Track which section is in view
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) setActive(entry.target.id);
-    });
-  }, {
-    rootMargin: '-80px 0px -60% 0px',
-    threshold: 0
-  });
-
-  sections.forEach(section => observer.observe(section));
-
-  // When scrolled to bottom, activate the last section
-  window.addEventListener('scroll', () => {
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 50) {
-      setActive(sections[sections.length - 1].id);
-    }
-  }, { passive: true });
-
-  if (tocLinks.length > 0) tocLinks[0].classList.add('active');
+  window.addEventListener('scroll', updateToc, { passive: true });
+  updateToc();
 </script>
 
 </body>
