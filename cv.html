@@ -831,17 +831,19 @@
 <footer class="site-footer">Built with HTML and GitHub Pages</footer>
 
 <script>
-  // Sidebar TOC scroll tracking
   const sections = document.querySelectorAll('.section[id]');
   const tocLinks = document.querySelectorAll('.toc a');
 
+  function setActive(id) {
+    tocLinks.forEach(link => link.classList.remove('active'));
+    const active = document.querySelector(`.toc a[data-section="${id}"]`);
+    if (active) active.classList.add('active');
+  }
+
+  // Track which section is in view
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        tocLinks.forEach(link => link.classList.remove('active'));
-        const active = document.querySelector(`.toc a[data-section="${entry.target.id}"]`);
-        if (active) active.classList.add('active');
-      }
+      if (entry.isIntersecting) setActive(entry.target.id);
     });
   }, {
     rootMargin: '-80px 0px -60% 0px',
@@ -850,7 +852,13 @@
 
   sections.forEach(section => observer.observe(section));
 
-  // Set initial active state
+  // When scrolled to bottom, activate the last section
+  window.addEventListener('scroll', () => {
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 50) {
+      setActive(sections[sections.length - 1].id);
+    }
+  }, { passive: true });
+
   if (tocLinks.length > 0) tocLinks[0].classList.add('active');
 </script>
 
