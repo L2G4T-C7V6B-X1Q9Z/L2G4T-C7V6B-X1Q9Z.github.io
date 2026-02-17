@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>L2G4T-C7V6B-X1Q9Z</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --muted: #888;
+      --accent: #7c6ff7;
+      --accent-dim: #7c6ff720;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.25rem 2rem;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 10;
+    }
+    .nav-logo { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; }
+    .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; color: var(--muted); }
+    .nav-links a { color: var(--muted); }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    main { flex: 1; max-width: 760px; margin: 0 auto; padding: 4rem 2rem; width: 100%; }
+
+    .hero { margin-bottom: 4rem; }
+    .hero h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 1rem; }
+    .hero h1 span { color: var(--accent); }
+    .hero p { font-size: 1.1rem; color: var(--muted); line-height: 1.7; max-width: 560px; }
+
+    section { margin-bottom: 3.5rem; }
+    section h2 { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 1.25rem; }
+
+    .card {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 0.75rem;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .card:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .card-body { flex: 1; }
+    .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem; }
+    .card-desc { font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
+    .card-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+    .tag {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 99px;
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .card-arrow { color: var(--muted); font-size: 1.1rem; padding-top: 0.1rem; flex-shrink: 0; }
+    .card-link { display: block; text-decoration: none; color: inherit; }
+    .card-link:hover { text-decoration: none; }
+
+    .contact-links { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .contact-links a {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.875rem;
+      color: var(--text);
+      transition: border-color 0.2s;
+    }
+    .contact-links a:hover { border-color: var(--accent); text-decoration: none; }
+
+    footer {
+      text-align: center;
+      padding: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-logo">L2G4T-C7V6B-X1Q9Z</span>
+    <div class="nav-links">
+      <a href="#projects">Projects</a>
+      <a href="#contact">Contact</a>
+    </div>
+  </nav>
+  <main>
+    <div class="hero">
+      <h1>Hey, I'm <span>L2G4T-C7V6B-X1Q9Z</span></h1>
+      <p>I build things for the web. This is my personal corner of the internet -- projects, experiments, and whatever I'm working on next.</p>
+    </div>
+    <section id="projects">
+      <h2>Projects</h2>
+      <a class="card-link" href="https://l2g4t-c7v6b-x1q9z.github.io/sorvidpomo/" target="_blank" rel="noopener">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">sorvidpomo</div>
+            <div class="card-desc">A minimal Pomodoro focus timer with customizable durations, ambient audio, and an animated circular progress display.</div>
+            <div class="card-tags">
+              <span class="tag">React</span>
+              <span class="tag">Framer Motion</span>
+              <span class="tag">Tailwind CSS</span>
+              <span class="tag">Web Audio API</span>
+            </div>
+          </div>
+          <span class="card-arrow">arrow</span>
+        </div>
+      </a>
+    </section>
+    <section id="contact">
+      <h2>Contact</h2>
+      <div class="contact-links">
+        <a href="https://github.com/L2G4T-C7V6B-X1Q9Z" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </section>
+  </main>
+  <footer>Built with HTML and GitHub Pages</footer>
+</body>
+</html>
