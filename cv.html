@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CV &mdash; Soren K. Christensen</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap');
+
+  *, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :root {
+    --accent: #c0392b;
+    --accent-light: #d44;
+    --text: #444;
+    --text-light: #666;
+    --text-lighter: #999;
+    --text-heading: #444;
+    --hairline: #e0e0e0;
+    --bg: #ffffff;
+    --surface: #f5f5f5;
+    --rule-accent: rgba(192, 57, 43, 0.3);
+    --muted: #888;
+    --border: #e0e0e0;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 300;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.75;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---- SITE NAV ---- */
+
+  .site-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 2rem;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .nav-logo {
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+    color: var(--text-heading);
+  }
+  .nav-logo a { color: var(--text-heading); }
+  .nav-logo a:hover { text-decoration: none; }
+  .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; }
+  .nav-links a { color: var(--muted); }
+  .nav-links a:hover { color: var(--text-heading); text-decoration: none; }
+  .nav-links a.active { color: var(--text-heading); }
+
+  /* ---- CV CONTENT ---- */
+
+  .cv-content {
+    flex: 1;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 36px 50px;
+    width: 100%;
+  }
+
+  /* ---- HEADER / NAME ---- */
+
+  header {
+    margin-bottom: 30px;
+  }
+
+  h1 {
+    font-size: 44px;
+    font-weight: 200;
+    letter-spacing: 1px;
+    color: var(--text-heading);
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+
+  .name-rule {
+    width: 60px;
+    height: 1.5px;
+    background: var(--accent);
+    margin-bottom: 14px;
+  }
+
+  .contact {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-light);
+    letter-spacing: 0.3px;
+  }
+
+  .contact a {
+    color: var(--text-light);
+    text-decoration: none;
+  }
+
+  .contact .sep {
+    margin: 0 8px;
+    color: var(--text-lighter);
+  }
+
+  /* ---- SECTIONS ---- */
+
+  .section {
+    margin-bottom: 24px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 3.5px;
+    color: var(--text-light);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 0.5px solid var(--rule-accent);
+  }
+
+  /* ---- EDUCATION ---- */
+
+  .edu-entry {
+    margin-bottom: 16px;
+  }
+
+  .edu-entry .institution {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-heading);
+  }
+
+  .edu-entry .location-date {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--text-lighter);
+    margin-bottom: 2px;
+  }
+
+  .edu-entry .degree {
+    font-size: 14px;
+    font-weight: 300;
+    color: var(--text);
+  }
+
+  .edu-entry .details {
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--text-light);
+  }
+
+  .usmle {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-light);
+    margin-top: 12px;
+  }
+
+  .usmle span {
+    font-weight: 300;
+  }
+
+  /* ---- HONORS (columns) ---- */
+
+  .honors-grid {
+    columns: 2;
+    column-gap: 36px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .honor-item {
+    break-inside: avoid;
+    margin-bottom: 6px;
+    padding-left: 0;
+  }
+
+  .honor-item .honor-name {
+    font-weight: 400;
+    color: var(--text);
+  }
+
+  .honor-item .honor-meta {
+    font-weight: 300;
+    color: var(--text-lighter);
+    font-size: 12px;
+  }
+
+  /* ---- RESEARCH ---- */
+
+  .research-entry {
+    margin-bottom: 22px;
+  }
+
+  .research-entry .role-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-heading);
+  }
+
+  .research-entry .pi {
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--text-light);
+    margin-bottom: 1px;
+  }
+
+  .research-entry .dates {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-lighter);
+    margin-bottom: 6px;
+  }
+
+  .research-entry ul {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .research-entry li {
+    font-size: 13.5px;
+    font-weight: 300;
+    color: var(--text);
+    line-height: 1.7;
+    padding-left: 14px;
+    position: relative;
+    margin-bottom: 2px;
+  }
+
+  .research-entry li::before {
+    content: "\2013";
+    position: absolute;
+    left: 0;
+    color: var(--text-lighter);
+  }
+
+  /* ---- PUBLICATIONS ---- */
+
+  .pub-subsection {
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-lighter);
+    margin-top: 22px;
+    margin-bottom: 12px;
+  }
+
+  .pub-subsection:first-child {
+    margin-top: 0;
+  }
+
+  .publication {
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--text);
+    line-height: 1.7;
+    margin-bottom: 12px;
+    padding-left: 30px;
+    text-indent: -30px;
+  }
+
+  .pub-number {
+    font-weight: 600;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    display: inline;
+    margin-right: 4px;
+  }
+
+  .publication .author-highlight {
+    font-weight: 600;
+    color: var(--text-heading);
+  }
+
+  .publication em {
+    font-style: italic;
+  }
+
+  .publication .equal {
+    font-size: 11px;
+    color: var(--text-lighter);
+  }
+
+  .publication .status {
+    font-style: italic;
+    color: var(--text-lighter);
+  }
+
+  /* ---- PRESENTATIONS ---- */
+
+  .presentation {
+    font-size: 13.5px;
+    font-weight: 300;
+    color: var(--text);
+    margin-bottom: 6px;
+    line-height: 1.7;
+  }
+
+  .presentation .pres-type {
+    font-weight: 500;
+    color: var(--text-heading);
+  }
+
+  /* ---- WORK / VOLUNTEER ---- */
+
+  .experience-entry {
+    margin-bottom: 12px;
+  }
+
+  .experience-entry .exp-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-heading);
+  }
+
+  .experience-entry .exp-org {
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--text-light);
+  }
+
+  .experience-entry .exp-dates {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-lighter);
+  }
+
+  .experience-entry .exp-desc {
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--text);
+    padding-left: 14px;
+    position: relative;
+  }
+
+  .experience-entry .exp-desc::before {
+    content: "\2013";
+    position: absolute;
+    left: 0;
+    color: var(--text-lighter);
+  }
+
+  /* ---- MEMBERSHIPS ---- */
+
+  .membership {
+    font-size: 13.5px;
+    font-weight: 300;
+    color: var(--text);
+    line-height: 1.7;
+    margin-bottom: 4px;
+  }
+
+  .membership .mem-org {
+    font-weight: 400;
+  }
+
+  .membership .mem-role {
+    color: var(--text-light);
+    font-size: 12.5px;
+  }
+
+  /* ---- FOOTER ---- */
+
+  .site-footer {
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* ---- PRINT ---- */
+
+  @media print {
+    .site-nav, .site-footer { display: none; }
+
+    body {
+      font-size: 10pt;
+      orphans: 3;
+      widows: 3;
+    }
+
+    .cv-content {
+      padding: 0;
+      max-width: 100%;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 28pt;
+    }
+
+    .section-title {
+      font-size: 8pt;
+      letter-spacing: 3px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      border-bottom-color: var(--rule-accent) !important;
+    }
+
+    .name-rule {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .pub-number {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      color: var(--accent) !important;
+    }
+
+    .section {
+      margin-bottom: 14px;
+    }
+
+    .research-entry {
+      break-inside: avoid;
+      margin-bottom: 14px;
+    }
+
+    .edu-entry {
+      margin-bottom: 10px;
+    }
+
+    .publication {
+      break-inside: avoid;
+    }
+
+    .experience-entry {
+      break-inside: avoid;
+    }
+
+    .honors-grid {
+      columns: 2;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    @page {
+      margin: 0.4in 0.6in;
+    }
+  }
+
+  /* ---- RESPONSIVE ---- */
+
+  @media (max-width: 600px) {
+    .honors-grid {
+      columns: 1;
+    }
+
+    .cv-content {
+      padding: 24px 20px 40px;
+    }
+
+    h1 {
+      font-size: 32px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- SITE NAV -->
+<nav class="site-nav">
+  <span class="nav-logo"><a href="index.html">Soren Christensen</a></span>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="cv.html" class="active">CV</a>
+  </div>
+</nav>
+
+<div class="cv-content">
+
+<!-- HEADER -->
+<header>
+  <h1>Soren K. Christensen</h1>
+  <div class="name-rule"></div>
+  <div class="contact">
+    <a href="mailto:soren.christensen@duke.edu">soren.christensen@duke.edu</a>
+    <span class="sep">|</span>
+    (571) 499-1597
+  </div>
+</header>
+
+<!-- EDUCATION -->
+<div class="section">
+  <div class="section-title">Education</div>
+
+  <div class="edu-entry">
+    <div class="institution">Duke University School of Medicine</div>
+    <div class="location-date">Durham, NC &nbsp;&middot;&nbsp; Jul 2023 &ndash; May 2027 Expected</div>
+    <div class="degree">Doctor of Medicine</div>
+  </div>
+
+  <div class="edu-entry">
+    <div class="institution">Trinity College of Arts &amp; Sciences, Duke University</div>
+    <div class="location-date">Durham, NC &nbsp;&middot;&nbsp; Aug 2018 &ndash; May 2022</div>
+    <div class="degree">Bachelor of Science, Neuroscience (Graduation with Distinction)</div>
+    <div class="degree">Bachelor of Arts, Asian &amp; Middle Eastern Studies: Japanese (Graduation with Distinction)</div>
+    <div class="degree">Minor in Chemistry</div>
+    <div class="details">GPA: 3.982 &nbsp;&middot;&nbsp; Summa Cum Laude &nbsp;&middot;&nbsp; Phi Beta Kappa</div>
+  </div>
+
+  <div class="usmle">MCAT &nbsp;&mdash;&nbsp; <span>525</span></div>
+  <div class="usmle">USMLE &nbsp;&mdash;&nbsp; <span>Step 1: Pass &nbsp;&middot;&nbsp; Step 2 CK: Score Pending</span></div>
+</div>
+
+<!-- HONORS AND AWARDS -->
+<div class="section">
+  <div class="section-title">Honors &amp; Awards</div>
+  <div class="honors-grid">
+    <div class="honor-item">
+      <div class="honor-name">Best Medical Student Project</div>
+      <div class="honor-meta">First Annual Radiology Research Day, Duke University, 2026</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Elizabeth B. Bressler Scholarship</div>
+      <div class="honor-meta">Duke University School of Medicine, 2024</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Phi Beta Kappa</div>
+      <div class="honor-meta">Duke University, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Summa Cum Laude</div>
+      <div class="honor-meta">Duke University, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Best AMES Honors Thesis Award</div>
+      <div class="honor-meta">Duke Asian &amp; Middle Eastern Studies, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Graduation with Distinction in Neuroscience</div>
+      <div class="honor-meta">Duke University, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Graduation with Distinction in Asian &amp; Middle Eastern Studies</div>
+      <div class="honor-meta">Duke University, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">1st Place, Japanese Speech Contest</div>
+      <div class="honor-meta">NC Research Triangle, 2022</div>
+    </div>
+    <div class="honor-item">
+      <div class="honor-name">Charles Lafitte Foundation Research Grant</div>
+      <div class="honor-meta">Duke Psychology &amp; Neuroscience, 2020</div>
+    </div>
+  </div>
+</div>
+
+<!-- RESEARCH EXPERIENCE -->
+<div class="section">
+  <div class="section-title">Research Experience</div>
+
+  <div class="research-entry">
+    <div class="role-title">Neuroradiology Research</div>
+    <div class="pi">Timothy J. Amrhein, MD &nbsp;&middot;&nbsp; Department of Radiology, Duke University Medical Center</div>
+    <div class="dates">Jul 2024 &ndash; Present</div>
+    <ul>
+      <li>Studying spontaneous intracranial hypotension with a focus on CSF-venous fistula detection via CT myelography</li>
+      <li>Projects span photon-counting detector imaging, epidural blood patch techniques, and treatment efficacy</li>
+      <li>Best Medical Student Project, Duke Radiology Research Day; oral presentation at ASNR 2026</li>
+    </ul>
+  </div>
+
+  <div class="research-entry">
+    <div class="role-title">Radiology and AI Research</div>
+    <div class="pi">Lars J. Grimm, MD, MHS &nbsp;&middot;&nbsp; Department of Radiology, Duke University Medical Center</div>
+    <div class="dates">Jan 2024 &ndash; Jun 2024</div>
+    <ul>
+      <li>Co-authored multi-institutional survey on patient opinions regarding AI in healthcare, published in <em>Journal of the American College of Radiology</em></li>
+    </ul>
+  </div>
+
+  <div class="research-entry">
+    <div class="role-title">Perioperative Neurocognitive Research</div>
+    <div class="pi">Miles Berger, MD, PhD &nbsp;&middot;&nbsp; Department of Anesthesiology, Duke University Medical Center</div>
+    <div class="dates">Oct 2018 &ndash; May 2022</div>
+    <ul>
+      <li>Honors thesis defining a novel EEG state preceding burst suppression as a predictor of postoperative delirium</li>
+      <li>Also assisted with data collection and patient recruitment for INTUIT and MADCO-PC trials</li>
+    </ul>
+  </div>
+
+  <div class="research-entry">
+    <div class="role-title">Japanese Linguistics Research</div>
+    <div class="pi">Yunchuan Chen, PhD &nbsp;&middot;&nbsp; Department of Asian &amp; Middle Eastern Studies, Duke University</div>
+    <div class="dates">Feb 2020 &ndash; May 2022</div>
+    <ul>
+      <li>Honors thesis analyzing style shifts and honorific use in Japanese commentary videos</li>
+    </ul>
+  </div>
+</div>
+
+<!-- PUBLICATIONS -->
+<div class="section">
+  <div class="section-title">Publications</div>
+
+  <div class="pub-subsection">Peer-Reviewed Original Research</div>
+
+  <div class="publication">
+    <span class="pub-number">1.</span> Dontchos BN, Dodelzon K, Bhole S, Edmonds CE, Mullen LA, Parikh JR, Daly CP, Epling JA, <span class="author-highlight">Christensen SK</span>, Grimm LJ. Opinions and preferences regarding artificial intelligence use in healthcare delivery: results from a national multi-site survey of breast imaging patients. <em>J Am Coll Radiol</em>. 2025;22(9):1091-1094. doi:10.1016/j.jacr.2025.05.001.
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">2.</span> Zhu D, Kranz PG, Edelmuth DGL, Lim J, <span class="author-highlight">Christensen SK</span>, Madhavan AA, Amrhein TJ. Maximizing the conspicuity of CSF-venous fistulas on CT myelography: assessment of contrast density and timing effects. <em>Am J Neuroradiol</em>. 2025. doi:10.3174/ajnr.A8972. [Epub ahead of print]
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">3.</span> Devinney MJ, Spector AR, Wright MC, Thomas J, Avasarala P, Moretti E, Dominguez JE, Smith PJ, Whitson HE, Veasey SC, Mathew JP, Berger M; INTUIT Study Investigators [including <span class="author-highlight">Christensen SK</span>]. The role of sleep apnea in postoperative neurocognitive disorders among older noncardiac surgery patients: a prospective cohort study. <em>Anesth Analg</em>. 2025;140(1):99-109. doi:10.1213/ANE.0000000000007269.
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">4.</span> Devinney MJ, Wong MK, Wright MC, Marcantonio ER, Terrando N, Browndyke JN, Whitson HE, Cohen HJ, Nackley AG, Klein ME, Ely EW, Mathew JP, Berger M; MADCO-PC and INTUIT Study Teams [including <span class="author-highlight">Christensen SK</span>]. Role of blood-brain barrier dysfunction in delirium following non-cardiac surgery in older adults. <em>Ann Neurol</em>. 2023;94(6):1024-1035. doi:10.1002/ana.26771.
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">5.</span> Reese M*, <span class="author-highlight">Christensen SK</span>*, Anolick H*, Roberts KC, Wong MK, Wright MC, Acker L, Browndyke JN, Woldorff MG, Berger M; MADCO-PC and INTUIT Investigators. EEG pre-burst suppression: characterization and inverse association with preoperative cognitive function in older adults. <em>Front Aging Neurosci</em>. 2023;15:1229081. doi:10.3389/fnagi.2023.1229081. <span class="equal">*Equal contribution</span>
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">6.</span> <span class="author-highlight">Christensen SK</span>, Chen Y. Style shifts in Japanese video game commentary monologues. <em>Proc Ling Soc Am</em>. 2022;7(1):5227. doi:10.3765/plsa.v7i1.5227.
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">7.</span> Nobuhara CK, Bullock WM, Bunning T, Colin B, Cooter M, Devinney MJ, Ferrandino MN, Gadsden J, Garrigues G, Habib AS, Moretti E, Moul J, Ohlendorf B, Sandler A, Scheri R, Sharma B, Thomas JP, Young C, Mathew JP, Berger M; MADCO-PC and INTUIT Investigators Teams [including <span class="author-highlight">Christensen SK</span>]. A protocol to reduce self-reported pain scores and adverse events following lumbar punctures in older adults. <em>J Neurol</em>. 2020;267(7):2002-2006. doi:10.1007/s00415-020-09797-1.
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">8.</span> Berger M, Oyeyemi D, Olurinde MO, Whitson HE, Weinhold KJ, Woldorff MG, Lipsitz LA, Moretti E, Giattino CM, Roberts KC, Zhou J, Bunning T, Ferrandino M, Scheri RP, Cooter M, Chan C, Cabeza R, Browndyke JN, Murdoch DM, Devinney MJ, Shaw LM, Cohen HJ, Mathew JP; INTUIT Investigators [including <span class="author-highlight">Christensen SK</span>]. The INTUIT study: investigating neuroinflammation underlying postoperative cognitive dysfunction. <em>J Am Geriatr Soc</em>. 2019;67(4):794-798. doi:10.1111/jgs.15770.
+  </div>
+
+  <div class="pub-subsection">Peer-Reviewed Technical Reports</div>
+
+  <div class="publication">
+    <span class="pub-number">9.</span> <span class="author-highlight">Christensen SK</span>, Kranz PG, Malinzak MD, Gray L, Willhite J, Zhu D, Amrhein TJ. Circumferential epidural patch for postdural puncture headache: a technical report. <em>Am J Neuroradiol</em>. 2025;46(12):2411-2417. doi:10.3174/ajnr.A9038.
+  </div>
+
+  <div class="pub-subsection">Peer-Reviewed Study Protocols</div>
+
+  <div class="publication">
+    <span class="pub-number">10.</span> VanDusen KW, Eleswarpu S, Moretti EW, Devinney MJ, Crabtree DM, Laskowitz DT, Woldorff MG, Roberts KC, Whittle J, Browndyke JN, Cooter M, Rockhold FW, Anakwenze O, Bolognesi MP, Easley ME, Ferrandino MN, Jiranek WA, Berger M; MARBLE Study Investigators [including <span class="author-highlight">Christensen SK</span>]. The MARBLE study protocol: modulating ApoE signaling to reduce brain inflammation, delirium, and postoperative cognitive dysfunction. <em>J Alzheimers Dis</em>. 2020;75(4):1319-1328. doi:10.3233/JAD-191185.
+  </div>
+
+  <div class="pub-subsection">Under Review</div>
+
+  <div class="publication">
+    <span class="pub-number">11.</span> <span class="author-highlight">Christensen SK</span>, Kranz PG, Malinzak MD, Madhavan AA, Abadi E, Willhite J, Gray L, Zhu D, Amrhein TJ. Photon-counting detector vs. energy-integrating detector CT myelography for detecting CSF-venous fistulas in spontaneous intracranial hypotension: substantially lower radiation exposure. 2026. <span class="status">[Under Review]</span>
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">12.</span> Schartz D, Befera N, Amrhein TJ, <span class="author-highlight">Christensen SK</span>, Willhite J, Gray L, Madhavan AA, Malinzak MD, Kranz PG. Rates of retreatment after transvenous embolization of CSF-venous fistula in spontaneous intracranial hypotension. 2026. <span class="status">[Under Review]</span>
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">13.</span> Hall JC, Barrett C, <span class="author-highlight">Christensen SK</span>, Dalton J, Kaplan S, Jones CA, Johnson MO. Early palliative care for people with primary malignant brain tumors: a systematic review. 2026. <span class="status">[Under Review]</span>
+  </div>
+
+  <div class="publication">
+    <span class="pub-number">14.</span> Berger M, et al. [including <span class="author-highlight">Christensen SK</span>]. The ApoE mimetic peptide CN-105 in older surgical patients: the MARBLE phase 2 randomized clinical trial. 2025. <span class="status">[Under Review]</span>
+  </div>
+</div>
+
+<!-- PRESENTATIONS -->
+<div class="section">
+  <div class="section-title">Presentations</div>
+
+  <div class="presentation">
+    <span class="pres-type">Oral Presentation:</span> PCD vs. EID CT myelography for detecting CSF-venous fistulas in SIH: substantially lower radiation exposure. American Society of Neuroradiology (ASNR) Annual Meeting, 2026.
+  </div>
+
+  <div class="presentation">
+    <span class="pres-type">Poster Presentation:</span> PCD vs. EID CT myelography for detecting CSF-venous fistulas in SIH: substantially lower radiation exposure. Duke Radiology Research Day, 2026.
+  </div>
+
+  <div class="presentation">
+    <span class="pres-type">Poster Presentation:</span> Style shifts in Japanese video game commentary monologues. 96th Annual Meeting, Linguistic Society of America, 2022.
+  </div>
+
+  <div class="presentation">
+    <span class="pres-type">Oral Presentation:</span> Style shifts in Japanese video game commentary monologues. 45th Penn Linguistics Conference, 2021.
+  </div>
+</div>
+
+<!-- WORK EXPERIENCE -->
+<div class="section">
+  <div class="section-title">Work Experience</div>
+
+  <div class="experience-entry">
+    <div class="exp-title">Medical Screener</div>
+    <div class="exp-org">Kameo Health, Atlanta, GA</div>
+    <div class="exp-dates">Jun 2022 &ndash; Mar 2023</div>
+    <div class="exp-desc">Medical screenings for film production casts and crews</div>
+  </div>
+</div>
+
+<!-- VOLUNTEER EXPERIENCE -->
+<div class="section">
+  <div class="section-title">Volunteer Experience</div>
+
+  <div class="experience-entry">
+    <div class="exp-title">Root Causes</div>
+    <div class="exp-org">Duke University, Durham, NC</div>
+    <div class="exp-dates">Apr 2025 &ndash; Present</div>
+    <div class="exp-desc">Grocery and supply delivery to low-income families in Durham</div>
+  </div>
+
+  <div class="experience-entry">
+    <div class="exp-title">Crisis Counselor</div>
+    <div class="exp-org">Crisis Text Line</div>
+    <div class="exp-dates">May 2021 &ndash; May 2022</div>
+  </div>
+
+  <div class="experience-entry">
+    <div class="exp-title">Volunteer EMT</div>
+    <div class="exp-org">Duke University Emergency Medical Services, Durham, NC</div>
+    <div class="exp-dates">Sep 2019 &ndash; May 2022</div>
+  </div>
+</div>
+
+<!-- PROFESSIONAL MEMBERSHIPS -->
+<div class="section">
+  <div class="section-title">Professional Memberships</div>
+
+  <div class="membership">
+    <span class="mem-org">American Society of Neuroradiology (ASNR)</span>
+    <span class="mem-role">&nbsp;&middot;&nbsp; Member-In-Training, 2026 &ndash; Present</span>
+  </div>
+</div>
+
+</div><!-- end cv-content -->
+
+<footer class="site-footer">Built with HTML and GitHub Pages</footer>
+
+</body>
+</html>
