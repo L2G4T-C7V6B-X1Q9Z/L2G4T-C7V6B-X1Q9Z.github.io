@@ -1,0 +1,1051 @@
+/* Reset and Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'IBM Plex Mono', monospace !important;
+}
+
+:root {
+    /* Light Theme Colors */
+    --bg: #ffffff;
+    --bg-gradient: linear-gradient(135deg, #fafbfc 0%, #f0f2f5 100%);
+    --fg: #000000;
+    --context-color: #000000;
+    --accent: #65676b;
+    --border: #e4e6eb;
+    --highlight: #0a7cff;
+    --highlight-secondary: #7c3aed;
+    --btn-bg: #f5f6f7;
+    --btn-hover-bg: #e8eaed;
+    --btn-active-bg: #d0d2d5;
+    --btn-text: #1c1e21;
+    --btn-active-text: #1c1e21;
+    --input-bg: rgba(255, 255, 255, 0.95);
+    --input-text: #1c1e21;
+    --marker-flash: #16a34a;
+    --marker-highlight-bg: #fef3c7;
+    --marker-highlight-text: #92400e;
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.14);
+    --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.theme-dark {
+    /* Dark Theme Colors */
+    --bg: #0d0d0d;
+    --bg-gradient: linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 100%);
+    --fg: #ffffff;
+    --context-color: #ffffff;
+    --accent: #9ca3af;
+    --border: #2d333b;
+    --highlight: #60a5fa;
+    --highlight-secondary: #a78bfa;
+    --btn-bg: #1f2328;
+    --btn-hover-bg: #2d333b;
+    --btn-active-bg: #3d444d;
+    --btn-text: #eff1f3;
+    --btn-active-text: #eff1f3;
+    --input-bg: rgba(31, 35, 40, 0.98);
+    --input-text: #eff1f3;
+    --marker-flash: #22c55e;
+    --marker-highlight-bg: #713f12;
+    --marker-highlight-text: #fde047;
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.7);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.85);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.92);
+}
+
+body {
+    background-color: var(--bg);
+    background-image: var(--bg-gradient);
+    color: var(--fg);
+    overflow: hidden;
+    transition: background-color var(--transition-smooth), color var(--transition);
+}
+
+/* Screens */
+.screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-smooth), transform var(--transition-smooth);
+    transform: scale(0.95);
+}
+
+.screen.active {
+    opacity: 1;
+    pointer-events: all;
+    transform: scale(1);
+}
+
+/* Input Screen */
+.input-container {
+    width: min(600px, 90vw);
+    text-align: center;
+}
+
+h1 {
+    font-size: 2.5rem;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    margin-bottom: 3rem;
+    color: var(--fg);
+}
+
+.logo-link {
+    color: var(--fg);
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity var(--transition);
+}
+
+.logo-link:hover {
+    opacity: 0.7;
+}
+
+.clipboard-hint {
+    margin: 2rem 0 1rem 0;
+    font-size: 1rem;
+    color: var(--accent);
+    line-height: 1.6;
+}
+
+.clipboard-hint kbd {
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+}
+
+.paste-input {
+    width: 100%;
+    min-height: 120px;
+    padding: 1.5rem;
+    background: var(--input-bg);
+    color: var(--input-text);
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    font-size: 1rem;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-top: 1rem;
+    transition: all var(--transition-smooth);
+    cursor: text;
+    overflow-y: auto;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.paste-input:empty::before {
+    content: 'Paste text here (Ctrl+V)...';
+    color: var(--accent);
+    opacity: 0.5;
+    font-style: italic;
+}
+
+.paste-input:focus:empty::before {
+    content: '';
+}
+
+.paste-input:focus {
+    outline: none;
+    border-color: var(--highlight);
+    border-style: solid;
+    box-shadow: 0 0 0 3px rgba(10, 124, 255, 0.1);
+    background: var(--input-bg);
+}
+
+.paste-input:hover {
+    border-color: var(--accent);
+}
+
+.primary-btn {
+    padding: 0.75rem 2rem;
+    background: var(--btn-active-bg);
+    color: var(--btn-active-text);
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: opacity var(--transition);
+}
+
+.primary-btn:hover {
+    opacity: 0.8;
+}
+
+.primary-btn:active {
+    opacity: 0.6;
+}
+
+/* Reading Screen - VIGNETTE EFFECT */
+/* FOOLPROOF implementation: zero banding, constant size, smooth fade only */
+.reading-vignette {
+    /* Fixed positioning - covers entire viewport, never moves */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    /* CRITICAL: pointer-events none so it doesn't block interaction */
+    pointer-events: none;
+
+    /* PERFECT gradient: 120+ stops across 3 layers for ZERO banding in dark mode */
+    /* Extra density in 30-80% range where dark backgrounds show banding most */
+    background:
+        /* Layer 1: Ultra-dense gradient (68 stops) - optimized for dark mode visibility */
+        radial-gradient(ellipse at center,
+            transparent 0%,
+            transparent 15%,
+            rgba(0, 0, 0, 0.002) 17%,
+            rgba(0, 0, 0, 0.004) 19%,
+            rgba(0, 0, 0, 0.006) 21%,
+            rgba(0, 0, 0, 0.008) 23%,
+            rgba(0, 0, 0, 0.011) 25%,
+            rgba(0, 0, 0, 0.014) 27%,
+            rgba(0, 0, 0, 0.017) 29%,
+            rgba(0, 0, 0, 0.021) 31%,
+            rgba(0, 0, 0, 0.025) 33%,
+            rgba(0, 0, 0, 0.029) 35%,
+            rgba(0, 0, 0, 0.034) 37%,
+            rgba(0, 0, 0, 0.039) 39%,
+            rgba(0, 0, 0, 0.044) 41%,
+            rgba(0, 0, 0, 0.050) 43%,
+            rgba(0, 0, 0, 0.056) 45%,
+            rgba(0, 0, 0, 0.062) 47%,
+            rgba(0, 0, 0, 0.069) 49%,
+            rgba(0, 0, 0, 0.076) 51%,
+            rgba(0, 0, 0, 0.083) 53%,
+            rgba(0, 0, 0, 0.091) 55%,
+            rgba(0, 0, 0, 0.099) 57%,
+            rgba(0, 0, 0, 0.108) 59%,
+            rgba(0, 0, 0, 0.117) 61%,
+            rgba(0, 0, 0, 0.126) 63%,
+            rgba(0, 0, 0, 0.136) 65%,
+            rgba(0, 0, 0, 0.146) 67%,
+            rgba(0, 0, 0, 0.157) 69%,
+            rgba(0, 0, 0, 0.168) 71%,
+            rgba(0, 0, 0, 0.179) 73%,
+            rgba(0, 0, 0, 0.191) 75%,
+            rgba(0, 0, 0, 0.203) 77%,
+            rgba(0, 0, 0, 0.216) 79%,
+            rgba(0, 0, 0, 0.229) 81%,
+            rgba(0, 0, 0, 0.243) 83%,
+            rgba(0, 0, 0, 0.257) 85%,
+            rgba(0, 0, 0, 0.272) 87%,
+            rgba(0, 0, 0, 0.287) 89%,
+            rgba(0, 0, 0, 0.303) 91%,
+            rgba(0, 0, 0, 0.319) 93%,
+            rgba(0, 0, 0, 0.336) 95%,
+            rgba(0, 0, 0, 0.353) 97%,
+            rgba(0, 0, 0, 0.371) 99%,
+            rgba(0, 0, 0, 0.389) 101%,
+            rgba(0, 0, 0, 0.408) 103%,
+            rgba(0, 0, 0, 0.427) 105%,
+            rgba(0, 0, 0, 0.447) 107%,
+            rgba(0, 0, 0, 0.467) 109%,
+            rgba(0, 0, 0, 0.488) 111%,
+            rgba(0, 0, 0, 0.509) 113%,
+            rgba(0, 0, 0, 0.531) 115%,
+            rgba(0, 0, 0, 0.553) 117%,
+            rgba(0, 0, 0, 0.576) 119%,
+            rgba(0, 0, 0, 0.599) 121%,
+            rgba(0, 0, 0, 0.623) 123%,
+            rgba(0, 0, 0, 0.647) 125%,
+            rgba(0, 0, 0, 0.672) 127%,
+            rgba(0, 0, 0, 0.697) 129%,
+            rgba(0, 0, 0, 0.722) 131%,
+            rgba(0, 0, 0, 0.748) 133%,
+            rgba(0, 0, 0, 0.774) 135%,
+            rgba(0, 0, 0, 0.800) 137%,
+            rgba(0, 0, 0, 0.825) 140%,
+            rgba(0, 0, 0, 0.850) 143%,
+            rgba(0, 0, 0, 0.870) 147%,
+            rgba(0, 0, 0, 0.885) 152%
+        ),
+        /* Layer 2: Offset gradient (32 stops) for natural dithering */
+        radial-gradient(ellipse at center,
+            transparent 0%,
+            transparent 12%,
+            rgba(0, 0, 0, 0.001) 16%,
+            rgba(0, 0, 0, 0.003) 20%,
+            rgba(0, 0, 0, 0.007) 24%,
+            rgba(0, 0, 0, 0.013) 28%,
+            rgba(0, 0, 0, 0.022) 32%,
+            rgba(0, 0, 0, 0.033) 36%,
+            rgba(0, 0, 0, 0.047) 40%,
+            rgba(0, 0, 0, 0.064) 44%,
+            rgba(0, 0, 0, 0.084) 48%,
+            rgba(0, 0, 0, 0.107) 52%,
+            rgba(0, 0, 0, 0.133) 56%,
+            rgba(0, 0, 0, 0.162) 60%,
+            rgba(0, 0, 0, 0.194) 64%,
+            rgba(0, 0, 0, 0.229) 68%,
+            rgba(0, 0, 0, 0.267) 72%,
+            rgba(0, 0, 0, 0.308) 76%,
+            rgba(0, 0, 0, 0.352) 80%,
+            rgba(0, 0, 0, 0.399) 84%,
+            rgba(0, 0, 0, 0.449) 88%,
+            rgba(0, 0, 0, 0.502) 92%,
+            rgba(0, 0, 0, 0.558) 96%,
+            rgba(0, 0, 0, 0.617) 100%,
+            rgba(0, 0, 0, 0.679) 104%,
+            rgba(0, 0, 0, 0.743) 108%,
+            rgba(0, 0, 0, 0.798) 112%,
+            rgba(0, 0, 0, 0.840) 117%,
+            rgba(0, 0, 0, 0.870) 123%,
+            rgba(0, 0, 0, 0.890) 130%,
+            rgba(0, 0, 0, 0.900) 138%,
+            rgba(0, 0, 0, 0.905) 148%
+        ),
+        /* Layer 3: Tertiary gradient (24 stops) for final smoothing */
+        radial-gradient(ellipse at center,
+            transparent 0%,
+            transparent 10%,
+            rgba(0, 0, 0, 0.001) 15%,
+            rgba(0, 0, 0, 0.003) 21%,
+            rgba(0, 0, 0, 0.008) 27%,
+            rgba(0, 0, 0, 0.017) 33%,
+            rgba(0, 0, 0, 0.031) 39%,
+            rgba(0, 0, 0, 0.051) 45%,
+            rgba(0, 0, 0, 0.078) 51%,
+            rgba(0, 0, 0, 0.112) 57%,
+            rgba(0, 0, 0, 0.154) 63%,
+            rgba(0, 0, 0, 0.204) 69%,
+            rgba(0, 0, 0, 0.262) 75%,
+            rgba(0, 0, 0, 0.329) 81%,
+            rgba(0, 0, 0, 0.405) 87%,
+            rgba(0, 0, 0, 0.490) 93%,
+            rgba(0, 0, 0, 0.584) 99%,
+            rgba(0, 0, 0, 0.672) 105%,
+            rgba(0, 0, 0, 0.750) 111%,
+            rgba(0, 0, 0, 0.814) 118%,
+            rgba(0, 0, 0, 0.862) 126%,
+            rgba(0, 0, 0, 0.895) 135%,
+            rgba(0, 0, 0, 0.915) 145%,
+            rgba(0, 0, 0, 0.925) 157%
+        );
+
+    /* Initial state: invisible */
+    opacity: 0;
+
+    /* ONLY opacity transitions - 0.8s smooth cubic-bezier fade */
+    transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Z-index ensures vignette is above content but below UI controls */
+    z-index: 500;
+
+    /* NO blur filter - we have enough gradient stops that blur is unnecessary */
+    /* Blur can actually make edges look fuzzy/bad */
+
+    /* Performance optimization: tell browser only opacity will change */
+    will-change: opacity;
+
+    /* Hardware acceleration for smooth rendering - LOCKED to prevent any scaling */
+    transform: translateZ(0) scale(1);
+    -webkit-transform: translateZ(0) scale(1);
+
+    /* Additional performance + anti-aliasing optimizations */
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    -webkit-font-smoothing: subpixel-antialiased;
+
+    /* DEFENSIVE: Explicitly lock size - prevent ANY transforms besides our translateZ */
+    width: 100%;
+    height: 100%;
+    min-width: 100%;
+    min-height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* Accessibility: respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    .reading-vignette {
+        transition: opacity 0.2s ease;
+    }
+}
+
+/* ACTIVE STATE: Only changes opacity to 1, absolutely nothing else */
+/* DEFENSIVE: Explicitly prevent any property changes except opacity */
+.reading-vignette.active {
+    opacity: 1;
+    /* Lock transform - NEVER allow scale changes */
+    transform: translateZ(0) scale(1) !important;
+    -webkit-transform: translateZ(0) scale(1) !important;
+}
+
+.reading-display {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.word-display {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scaleX(0.7);
+    line-height: 1.2;
+    white-space: nowrap;
+    letter-spacing: -0.05em;
+}
+
+.anchor {
+    font-size: var(--font-size, 64px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    vertical-align: middle;
+    color: var(--fg);
+    transition: opacity 200ms ease-out;
+    animation: wordFade 0.4s ease-out;
+}
+
+@keyframes wordFade {
+    0% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.context {
+    font-size: var(--font-size, 64px);
+    color: var(--context-color);
+    font-weight: 700;
+    opacity: 1;
+    vertical-align: middle;
+    letter-spacing: -0.03em;
+    transition: opacity 200ms ease-out;
+    animation: contextFade 0.4s ease-out;
+}
+
+#context-before {
+}
+
+#context-after {
+}
+
+@keyframes contextFade {
+    0% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 0.6;
+    }
+}
+
+/* WPM Display */
+.wpm-display {
+    position: fixed;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.875rem;
+    color: var(--accent);
+    opacity: 0.5;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    transition: opacity var(--transition);
+}
+
+/* Time Remaining */
+.time-remaining {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 2rem;
+    font-size: 0.75rem;
+    color: var(--accent);
+    opacity: 0.4;
+    font-weight: 300;
+    letter-spacing: 0.02em;
+    transition: opacity var(--transition);
+}
+
+/* Pause Indicator */
+.pause-indicator {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 2rem;
+    font-size: 1.5rem;
+    color: var(--accent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 1000;
+}
+
+.pause-indicator.visible {
+    opacity: 0.8;
+}
+
+/* Pause Overlay */
+.pause-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition);
+    backdrop-filter: blur(8px);
+}
+
+.pause-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.pause-content {
+    text-align: center;
+    max-width: 600px;
+}
+
+.pause-title {
+    font-size: 2rem;
+    font-weight: 300;
+    margin-bottom: 1rem;
+}
+
+.pause-wpm {
+    font-size: 1rem;
+    color: var(--accent);
+    margin-bottom: 2rem;
+}
+
+.pause-wpm span {
+    color: var(--fg);
+    font-weight: 600;
+}
+
+.markers-list {
+    margin: 2rem 0;
+    text-align: left;
+}
+
+.marker-item {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background var(--transition);
+    font-size: 0.9rem;
+}
+
+.marker-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.marker-text {
+    margin-top: 0.5rem;
+    line-height: 1.6;
+    color: var(--accent);
+    font-size: 0.85rem;
+}
+
+.marker-highlight {
+    background: var(--marker-highlight-bg);
+    color: var(--marker-highlight-text);
+    padding: 0.1rem 0.25rem;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.pause-hint {
+    font-size: 1rem;
+    color: var(--accent);
+    margin-top: 2rem;
+}
+
+/* Controls Hint */
+.controls-hint {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;
+    color: var(--accent);
+    opacity: 0.4;
+    transition: opacity var(--transition);
+    pointer-events: none;
+}
+
+#reading-screen.active .controls-hint {
+    animation: fadeInOut 4s ease-in-out;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0; }
+    10%, 90% { opacity: 0.4; }
+}
+
+/* Completion Banner */
+.completion-banner {
+    position: fixed;
+    bottom: 2rem;
+    left: 2rem;
+    max-width: 400px;
+    padding: 1.5rem;
+    background: var(--input-bg);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(20px);
+    z-index: 3000;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity var(--transition-smooth), transform var(--transition-smooth);
+    pointer-events: none;
+}
+
+.completion-banner.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+}
+
+.completion-banner-title {
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, var(--highlight) 0%, var(--highlight-secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.completion-banner-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--accent);
+}
+
+.completion-banner-stats span {
+    display: block;
+}
+
+.completion-banner-stats strong {
+    color: var(--fg);
+    font-weight: 600;
+}
+
+.completion-markers-list {
+    margin-top: 1rem;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.completion-markers-list .marker-item {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+/* Settings Screen */
+.settings-container {
+    width: min(500px, 90vw);
+    max-height: 85vh;
+    padding: 2rem;
+    background: var(--input-bg);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-container h2 {
+    font-size: 1.75rem;
+    font-weight: 300;
+    margin-bottom: 1.5rem;
+    flex-shrink: 0;
+}
+
+.settings-scroll-area {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex: 1;
+    min-height: 0;
+}
+
+.settings-scroll-area::-webkit-scrollbar {
+    width: 8px;
+}
+
+.settings-scroll-area::-webkit-scrollbar-track {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+.settings-scroll-area::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: 4px;
+}
+
+.settings-scroll-area::-webkit-scrollbar-thumb:hover {
+    background: var(--fg);
+}
+
+.settings-container #settings-close {
+    flex-shrink: 0;
+    margin-top: auto;
+}
+
+.setting-group {
+    margin-bottom: 2rem;
+}
+
+.setting-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+}
+
+.setting-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.setting-btn {
+    flex: 1;
+    padding: 0.5rem 1rem;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all var(--transition-smooth);
+    font-weight: 500;
+}
+
+.setting-btn:hover {
+    background: var(--btn-hover-bg);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.setting-btn.active {
+    background: var(--btn-active-bg);
+    color: var(--btn-active-text);
+    border-color: var(--btn-active-bg);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+input[type="range"] {
+    width: calc(100% - 60px);
+    margin-right: 1rem;
+    accent-color: var(--fg);
+}
+
+#font-size-value {
+    font-size: 0.875rem;
+    color: var(--accent);
+}
+
+/* Settings Icon */
+.settings-icon {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    font-size: 1.25rem;
+    color: var(--fg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+    opacity: 0.6;
+    z-index: 100;
+}
+
+.settings-icon:hover {
+    opacity: 1;
+    border-color: var(--accent);
+}
+
+/* Help Card */
+.help-card {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition);
+    backdrop-filter: blur(8px);
+    z-index: 2000;
+}
+
+.help-card.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.help-content {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 500px;
+    width: 90%;
+}
+
+.help-content h3 {
+    font-size: 1.5rem;
+    font-weight: 300;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.help-shortcuts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.help-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.help-item:last-child {
+    border-bottom: none;
+}
+
+.help-item kbd {
+    background: var(--fg);
+    color: var(--bg);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-family: monospace;
+    font-weight: 600;
+    min-width: 2rem;
+    text-align: center;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.help-item span {
+    flex: 1;
+    text-align: right;
+    color: var(--accent);
+    font-size: 0.875rem;
+}
+
+.help-hint {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.875rem;
+    color: var(--accent);
+    opacity: 0.6;
+}
+
+/* Marker Flash Feedback */
+.marker-flash {
+    position: fixed;
+    top: 1.5rem;
+    right: 5rem;
+    background: var(--marker-flash);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 3000;
+    animation: flashFeedback 0.6s ease-out;
+}
+
+@keyframes flashFeedback {
+    0% {
+        opacity: 0;
+        transform: translateY(-0.5rem);
+    }
+    30% {
+        opacity: 0.7;
+        transform: translateY(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(0);
+    }
+}
+
+/* Focus Point Carets */
+.focus-caret {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;
+    color: var(--accent);
+    opacity: 0.6;
+    pointer-events: none;
+    transition: opacity 0.3s ease, color 0.3s ease;
+    z-index: 100;
+}
+
+.focus-caret-up {
+    top: calc(50% - 3rem);
+}
+
+.focus-caret-down {
+    top: calc(50% + 2.5rem);
+}
+
+/* Speed Change Animation - pulse on WPM display */
+.wpm-display.speed-faster {
+    animation: speedPulseFaster 0.5s ease-out;
+}
+
+.wpm-display.speed-slower {
+    animation: speedPulseSlower 0.5s ease-out;
+}
+
+@keyframes speedPulseFaster {
+    0% {
+        opacity: 0.5;
+        color: var(--fg);
+    }
+    50% {
+        opacity: 1;
+        color: #4ade80; /* green */
+    }
+    100% {
+        opacity: 0.5;
+        color: var(--fg);
+    }
+}
+
+@keyframes speedPulseSlower {
+    0% {
+        opacity: 0.5;
+        color: var(--fg);
+    }
+    50% {
+        opacity: 1;
+        color: #ef4444; /* red */
+    }
+    100% {
+        opacity: 0.5;
+        color: var(--fg);
+    }
+}
+
+/* Skip Indicator */
+.skip-indicator {
+    position: fixed;
+    top: 25%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3rem;
+    color: var(--fg);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2000;
+}
+
+.skip-indicator.skip-forward {
+    animation: skipAnimationForward 0.4s ease-out;
+}
+
+.skip-indicator.skip-backward {
+    animation: skipAnimationBackward 0.4s ease-out;
+}
+
+@keyframes skipAnimationForward {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) translateX(-2rem);
+    }
+    50% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) translateX(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) translateX(2rem);
+    }
+}
+
+@keyframes skipAnimationBackward {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) translateX(2rem);
+    }
+    50% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) translateX(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) translateX(-2rem);
+    }
+}
+
+
+/* Utility */
+.hidden {
+    display: none !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .anchor {
+        font-size: calc(var(--font-size, 64px) * 0.8);
+    }
+
+    .minimap {
+        right: 1rem;
+        width: 3px;
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+}

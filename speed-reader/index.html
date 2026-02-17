@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Speed Reader - A precision speed reading tool with adaptive pacing">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self';">
+    <title>Speed Reader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body role="application" aria-label="Speed Reading Application">
+    <!-- Input Screen -->
+    <div id="input-screen" class="screen active">
+        <div class="input-container">
+            <h1><a href="https://github.com/L2G4T-C7V6B-X1Q9Z/speed-read" target="_blank" rel="noopener noreferrer" class="logo-link" aria-label="Visit Speed Reader on GitHub">Speed Reader</a></h1>
+            <p class="clipboard-hint">Press <kbd>Ctrl+V</kbd> to paste and start reading</p>
+            <div id="paste-input" class="paste-input" contenteditable="true" aria-label="Paste your text here to start reading"></div>
+        </div>
+    </div>
+
+    <!-- Reading Screen -->
+    <div id="reading-screen" class="screen" role="main" aria-label="Reading display">
+        <div id="reading-vignette" class="reading-vignette" aria-hidden="true"></div>
+
+        <div class="reading-display">
+            <div id="focus-caret-up" class="focus-caret focus-caret-up" aria-hidden="true">▼</div>
+            <div id="word-display" class="word-display" role="status" aria-live="polite" aria-atomic="true">
+                <span id="context-before" class="context"></span>
+                <span id="anchor-word" class="anchor"></span>
+                <span id="context-after" class="context"></span>
+            </div>
+            <div id="focus-caret-down" class="focus-caret focus-caret-down" aria-hidden="true">▲</div>
+        </div>
+
+        <div id="pause-overlay" class="pause-overlay hidden" role="dialog" aria-labelledby="pause-title" aria-modal="true">
+            <div class="pause-content">
+                <div id="pause-title" class="pause-title">Paused</div>
+                <div class="pause-wpm">Current Speed: <span id="pause-wpm-value"></span> WPM</div>
+                <div id="markers-list" class="markers-list" role="list" aria-label="Reading markers"></div>
+                <div class="pause-hint">Press SPACE to continue</div>
+            </div>
+        </div>
+
+        <div id="wpm-display" class="wpm-display" role="status" aria-live="polite" aria-label="Current reading speed"></div>
+        <div id="time-remaining" class="time-remaining" role="timer" aria-live="polite" aria-label="Time remaining"></div>
+        <div id="pause-indicator" class="pause-indicator" aria-hidden="true">⏸</div>
+
+        <div id="skip-indicator" class="skip-indicator" aria-hidden="true"></div>
+        <div id="marker-flash" class="marker-flash" aria-live="polite" role="status">Marked</div>
+
+        <div id="controls-hint" class="controls-hint" role="status" aria-live="polite">
+            SPACE: pause • [] or ↑↓: speed • ←→: skip • m: marker • s: settings • ?: help • d: exit
+        </div>
+
+        <div id="help-card" class="help-card hidden" role="dialog" aria-labelledby="help-title" aria-modal="true">
+            <div class="help-content">
+                <h3 id="help-title">Keyboard Shortcuts</h3>
+                <div class="help-shortcuts">
+                    <div class="help-item">
+                        <kbd>SPACE</kbd>
+                        <span>Pause/Resume</span>
+                    </div>
+                    <div class="help-item">
+                        <kbd>[</kbd> or <kbd>↓</kbd>
+                        <span>Slower (-50 WPM)</span>
+                    </div>
+                    <div class="help-item">
+                        <kbd>]</kbd> or <kbd>↑</kbd>
+                        <span>Faster (+50 WPM)</span>
+                    </div>
+                    <div class="help-item">
+                        <kbd>→</kbd>
+                        <span>Skip forward (10 phrases)</span>
+                    </div>
+                    <div class="help-item">
+                        <kbd>←</kbd>
+                        <span>Skip backward (10 phrases)</span>
+                    </div>
+                    <div class="help-item">
+                        <kbd>m</kbd>
+                        <span>Add marker</span>
+                    </div>
+                    <div class="help-item">
+                        <kbd>s</kbd>
+                        <span>Toggle settings</span>
+                    </div>
+                    <div class="help-item">
+                        <kbd>?</kbd>
+                        <span>Show this help</span>
+                    </div>
+                    <div class="help-item">
+                        <kbd>d</kbd> or <kbd>ESC</kbd>
+                        <span>Exit reading</span>
+                    </div>
+                </div>
+                <div class="help-hint">Press any key to close</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Completion Banner -->
+    <div id="completion-banner" class="completion-banner hidden" role="status" aria-live="polite" aria-label="Reading completion statistics">
+        <div class="completion-banner-content">
+            <div class="completion-banner-title">Reading Complete!</div>
+            <div class="completion-banner-stats">
+                <span><strong id="total-words"></strong> words</span>
+                <span><strong id="total-time"></strong></span>
+                <span><strong id="avg-wpm"></strong> WPM avg</span>
+                <span><strong id="markers-count"></strong> markers</span>
+            </div>
+            <div id="completion-markers-list" class="completion-markers-list"></div>
+        </div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settings-screen" class="screen" role="dialog" aria-labelledby="settings-title" aria-modal="true">
+        <div class="settings-container">
+            <h2 id="settings-title">Settings</h2>
+
+            <div class="settings-scroll-area">
+                <div class="setting-group">
+                    <label for="theme-buttons" title="Choose between light and dark color schemes">Theme</label>
+                    <div class="setting-buttons">
+                        <button class="setting-btn" data-theme="light" title="Light color scheme">Light</button>
+                        <button class="setting-btn active" data-theme="dark" title="Dark color scheme">Dark</button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label for="base-wpm" title="Reading speed in words per minute">WPM</label>
+                    <input type="range" id="base-wpm" min="250" max="1200" value="350" step="50" aria-label="Starting words per minute" aria-valuemin="250" aria-valuemax="1200" aria-valuenow="350" title="Adjust initial reading speed">
+                    <span id="base-wpm-value" aria-live="polite">350</span>
+                </div>
+
+                <div class="setting-group">
+                    <label for="font-size" title="Size of text displayed while reading">Font Size</label>
+                    <input type="range" id="font-size" min="16" max="96" value="32" step="4" aria-label="Font size in pixels" aria-valuemin="16" aria-valuemax="96" aria-valuenow="32" title="Adjust text size">
+                    <span id="font-size-value" aria-live="polite">32px</span>
+                </div>
+
+                <div class="setting-group">
+                    <label for="context-words" title="Number of surrounding words shown with the focus word">Context Words</label>
+                    <input type="range" id="context-words" min="0" max="5" value="1" step="1" aria-label="Number of context words to show" aria-valuemin="0" aria-valuemax="5" aria-valuenow="1" title="Adjust number of context words">
+                    <span id="context-words-value" aria-live="polite">1</span>
+                </div>
+
+                <div class="setting-group">
+                    <label for="thock-volume" title="Volume of the aesthetic thock sound played with each word">Thock Sound Volume</label>
+                    <input type="range" id="thock-volume" min="0" max="1" value="0.7" step="0.05" aria-label="Thock sound volume" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.7" title="Adjust thock sound volume">
+                    <span id="thock-volume-value" aria-live="polite">70%</span>
+                </div>
+
+                <div class="setting-group">
+                    <label title="Automatically remove bracketed text from your reading material">Remove Brackets</label>
+                    <div class="setting-buttons">
+                        <button class="setting-btn active" data-brackets="true" title="Remove brackets and their content">On</button>
+                        <button class="setting-btn" data-brackets="false" title="Keep brackets and their content">Off</button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label title="Automatically adjust timing based on word length and punctuation">Adaptive Timing</label>
+                    <div class="setting-buttons">
+                        <button class="setting-btn" data-adaptive="true" title="Enable adaptive timing">On</button>
+                        <button class="setting-btn active" data-adaptive="false" title="Use fixed timing">Off</button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label title="Add extra pause at the end of sentences for better comprehension">Sentence Pause</label>
+                    <div class="setting-buttons">
+                        <button class="setting-btn" data-sentence-pause="true" title="Pause at sentence endings">On</button>
+                        <button class="setting-btn active" data-sentence-pause="false" title="No sentence pauses">Off</button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label title="Bold the first half of each word to guide your eye through text faster">Bionic Reading</label>
+                    <div class="setting-buttons">
+                        <button class="setting-btn" data-bionic="true" title="Enable bionic reading">On</button>
+                        <button class="setting-btn active" data-bionic="false" title="Disable bionic reading">Off</button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="settings-close" class="primary-btn" aria-label="Close settings">Close</button>
+        </div>
+    </div>
+
+    <button id="settings-icon" class="settings-icon" aria-label="Open settings">⚙</button>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

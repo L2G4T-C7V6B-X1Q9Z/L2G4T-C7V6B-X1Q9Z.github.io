@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strange Resonance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500&family=Lora:wght@400&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: 'Poppins', sans-serif; }
+    #canvas-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; }
+    #canvas-container canvas { display: block; width: 100%; height: 100%; }
+    #control-panel {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      z-index: 10; background: rgba(252,248,245,0.90);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      border-radius: 40px; padding: 10px 20px; box-shadow: 0 2px 24px rgba(0,0,0,0.6);
+    }
+    .ctrl-panel { display:flex; align-items:center; gap:12px; font-family:'Poppins',sans-serif; font-size:11px; color:#444; user-select:none; }
+    .ctrl-panel .divider { width:1px; height:20px; background:rgba(0,0,0,0.1); flex-shrink:0; }
+    .seed-group { display:flex; align-items:center; gap:4px; }
+    #seed-display { font-family:'Lora',serif; font-size:16px; color:#444; min-width:50px; width:60px; text-align:center; line-height:1; }
+    .seed-btn { padding:4px 8px; border:1px solid #d4d0cc; border-radius:4px; background:transparent; cursor:pointer; font-size:12px; color:#444; font-family:'Poppins',sans-serif; line-height:1; transition:background 0.15s; }
+    .seed-btn:hover { background:rgba(0,0,0,0.04); }
+    .slider-group { display:flex; align-items:center; gap:4px; }
+    .slider-group label { font-size:10px; color:#888; margin-right:4px; white-space:nowrap; }
+    .slider-group .slider-val { font-size:10px; color:#c23b22; font-weight:500; min-width:24px; text-align:right; }
+    .ctrl-slider { -webkit-appearance:none; appearance:none; height:3px; background:#e0dcd8; border-radius:2px; outline:none; width:72px; cursor:pointer; }
+    .ctrl-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:11px; height:11px; background:#c23b22; border-radius:50%; border:none; cursor:pointer; }
+    .ctrl-slider::-moz-range-thumb { width:11px; height:11px; background:#c23b22; border-radius:50%; border:none; cursor:pointer; }
+    .btn-regenerate { background:#c23b22; color:#fff; border:none; border-radius:20px; font-size:11px; padding:6px 14px; cursor:pointer; font-family:'Poppins',sans-serif; font-weight:500; transition:background 0.15s; white-space:nowrap; }
+    .btn-regenerate:hover { background:#a83220; }
+    .btn-save { border:1px solid #d4d0cc; background:transparent; border-radius:20px; font-size:11px; padding:6px 14px; cursor:pointer; font-family:'Poppins',sans-serif; color:#444; transition:background 0.15s; white-space:nowrap; }
+    .btn-save:hover { background:rgba(0,0,0,0.04); }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="control-panel">
+    <div class="ctrl-panel">
+      <div class="seed-group">
+        <button class="seed-btn" onclick="prevSeed()">&larr;</button>
+        <span id="seed-display">42</span>
+        <button class="seed-btn" onclick="nextSeed()">&rarr;</button>
+        <button class="seed-btn" onclick="pickRandomSeed()" title="Random">&#9860;</button>
+      </div>
+      <div class="divider"></div>
+      <div class="slider-group">
+        <label for="twistSlider">Twist</label>
+        <input type="range" id="twistSlider" class="ctrl-slider" min="0.2" max="2.4" step="0.1" value="1.0">
+        <span id="twistSlider-val" class="slider-val">1.0</span>
+      </div>
+      <div class="slider-group">
+        <label for="waveSlider">Wave</label>
+        <input type="range" id="waveSlider" class="ctrl-slider" min="0" max="35" step="1" value="8">
+        <span id="waveSlider-val" class="slider-val">8</span>
+      </div>
+      <div class="divider"></div>
+      <button class="btn-regenerate" onclick="regenerate()">Regenerate</button>
+      <button class="btn-save" onclick="savePNG()">Save PNG</button>
+    </div>
+  </div>
+
+  <script>
+    var params = { seed: 42, twist: 1.0, wave: 8 };
+
+    function mulberry32(s) {
+      return function() {
+        s |= 0; s = s + 0x6D2B79F5 | 0;
+        var t = Math.imul(s ^ s >>> 15, 1 | s);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    function setup() {
+      createCanvas(windowWidth, windowHeight).parent('canvas-container');
+      pixelDensity(displayDensity());
+      noLoop();
+      updateUI();
+      initGeneration();
+    }
+
+    function draw() {}
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+      initGeneration();
+    }
+
+    function initGeneration() {
+      var rng = mulberry32(params.seed);
+      noiseSeed(params.seed);
+      background(8, 6, 10);
+      noFill();
+      drawingContext.lineCap = 'round';
+
+      var artW = width  * 0.80;
+      var artH = height * 0.65;
+      var artX = (width  - artW) * 0.5;
+      var artY = (height - artH) * 0.5;
+
+      var N     = Math.floor(rng() * 62 + 45);
+      var nComp = Math.floor(rng() * 8 + 3);
+
+      // Seed-driven asymmetric focal point
+      var focalX = rng() * 0.4 + 0.3;
+      var focalY = rng() * 0.4 + 0.3;
+
+      var comps = [];
+      for (var k = 0; k < nComp; k++) {
+        comps.push({
+          amp:   (rng() * 0.38 + 0.06) * (rng() < 0.5 ? 1 : -1),
+          fx:    rng() * 3.2 + 0.3,
+          fy:    rng() * 1.0,
+          phase: rng() * TWO_PI,
+        });
+      }
+
+      var lines = [];
+      for (var i = 0; i < N; i++) {
+        lines.push({
+          yn:   i / (N - 1) + (rng() * 2 - 1) * 0.009,
+          aVar: rng() * 32 - 16,
+        });
+      }
+
+      function yAt(x, yn) {
+        var xn = (x - artX) / artW;
+        var dy = 0;
+        for (var k = 0; k < comps.length; k++) {
+          var c = comps[k];
+          dy += c.amp * Math.sin(c.fx * TWO_PI * xn + c.fy * TWO_PI * yn + c.phase);
+        }
+        // Gaussian envelope — warp stronger near focal point
+        var dxf = xn - focalX;
+        var dyf = yn - focalY;
+        var envelope = 0.3 + 0.7 * Math.exp(-(dxf * dxf + dyf * dyf) * 2.5);
+        dy *= params.twist * envelope;
+        dy += (noise(xn * 3.5 + 20, yn * 3.5 + 20) * 2 - 1) * (params.wave / artH);
+        return constrain(artY + (yn + dy) * artH, artY - artH * 0.55, artY + artH * 1.55);
+      }
+
+      var DX    = 3;
+      var xFrom = artX - DX * 6;
+      var xTo   = artX + artW + DX * 6;
+
+      // Pre-compute all line points with micro-jitter
+      var lineData = [];
+      for (var i = 0; i < N; i++) {
+        var d = lines[i];
+        var pts = [];
+        for (var x = xFrom; x <= xTo; x += DX) {
+          var jx = x + (noise(x * 0.1 + i * 7.7, d.yn * 100) * 2 - 1) * 1.2;
+          var jy = yAt(x, d.yn) + (noise(x * 0.1 + i * 3.3 + 500, d.yn * 100 + 500) * 2 - 1) * 0.8;
+          pts.push([jx, jy]);
+        }
+        lineData.push({ pts: pts, d: d, idx: i });
+      }
+
+      // Draw order: edges first (back), center last (front)
+      var drawOrder = [];
+      for (var i = 0; i < N; i++) drawOrder.push(i);
+      drawOrder.sort(function(a, b) {
+        return Math.abs(b / (N - 1) - 0.5) - Math.abs(a / (N - 1) - 0.5);
+      });
+
+      // Glow pass — soft halo on center 35% of lines
+      for (var di = 0; di < drawOrder.length; di++) {
+        var idx = drawOrder[di];
+        var t = idx / (N - 1);
+        var cd = Math.abs(t - 0.5) * 2;
+        if (cd > 0.35) continue;
+        var ga = (1 - cd / 0.35) * 10;
+        stroke(150, 148, 158, ga);
+        strokeWeight(6);
+        beginShape();
+        var pts = lineData[idx].pts;
+        for (var p = 0; p < pts.length; p++) curveVertex(pts[p][0], pts[p][1]);
+        endShape();
+      }
+
+      // Main pass — depth-layered lines
+      for (var di = 0; di < drawOrder.length; di++) {
+        var idx = drawOrder[di];
+        var ld = lineData[idx];
+        var d = ld.d;
+        var t = idx / (N - 1);
+        var cd = Math.abs(t - 0.5) * 2;
+        var fade = 1 - cd;
+
+        // Depth: center brighter & thicker, edges dimmer & thinner
+        var alpha = constrain(35 + 100 * fade * fade + d.aVar * 0.6, 15, 130);
+        var sw = lerp(0.9, 2.2, fade * fade);
+
+        // Subtle color temp: cool top → slightly warmer bottom
+        var r = lerp(130, 155, t);
+        var g = lerp(132, 148, t);
+        var b = lerp(160, 145, t);
+
+        stroke(r, g, b, alpha);
+        strokeWeight(sw);
+        beginShape();
+        var pts = ld.pts;
+        for (var p = 0; p < pts.length; p++) curveVertex(pts[p][0], pts[p][1]);
+        endShape();
+      }
+
+      // Vignette overlay
+      drawingContext.save();
+      var cx = width / 2, cy = height / 2;
+      var maxR = Math.sqrt(cx * cx + cy * cy);
+      var grad = drawingContext.createRadialGradient(cx, cy, maxR * 0.35, cx, cy, maxR);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.7, 'rgba(0,0,0,0.15)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+      drawingContext.fillStyle = grad;
+      drawingContext.fillRect(0, 0, width, height);
+      drawingContext.restore();
+    }
+
+    function updateUI() {
+      document.getElementById('seed-display').textContent = params.seed;
+      document.getElementById('twistSlider').value = params.twist;
+      document.getElementById('twistSlider-val').textContent = params.twist.toFixed(1);
+      document.getElementById('waveSlider').value = params.wave;
+      document.getElementById('waveSlider-val').textContent = params.wave;
+    }
+
+    function readParams() {
+      params.twist = parseFloat(document.getElementById('twistSlider').value);
+      params.wave  = parseFloat(document.getElementById('waveSlider').value);
+    }
+
+    function regenerate()     { readParams(); initGeneration(); }
+    function prevSeed()       { params.seed = Math.max(0, params.seed - 1); updateUI(); initGeneration(); }
+    function nextSeed()       { params.seed++; updateUI(); initGeneration(); }
+    function pickRandomSeed() { params.seed = Math.floor(Math.random() * 99999); updateUI(); initGeneration(); }
+    function savePNG() {
+      var sw = screen.width, sh = screen.height;
+      if (width !== sw || height !== sh) {
+        resizeCanvas(sw, sh);
+        initGeneration();
+      }
+      saveCanvas('resonance-' + params.seed, 'png');
+      if (width !== windowWidth || height !== windowHeight) {
+        resizeCanvas(windowWidth, windowHeight);
+        initGeneration();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      ['twistSlider', 'waveSlider'].forEach(function(id) {
+        var dec = id === 'twistSlider' ? 1 : 0;
+        document.getElementById(id).addEventListener('input', function() {
+          document.getElementById(id + '-val').textContent = parseFloat(this.value).toFixed(dec);
+        });
+      });
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.target.tagName === 'INPUT') return;
+      switch (e.code) {
+        case 'Space':      e.preventDefault(); regenerate(); break;
+        case 'ArrowLeft':  e.preventDefault(); prevSeed();   break;
+        case 'ArrowRight': e.preventDefault(); nextSeed();   break;
+        case 'KeyS':       e.preventDefault(); savePNG();    break;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eye trainer</title>
+<script>
+(function(){
+  var t=localStorage.getItem('eye-trainer-theme');
+  if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  if(t==='dark')document.documentElement.setAttribute('data-theme','dark');
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --red: #e63946;
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #999999;
+  --faint: #e5e5e5;
+  --font: 'JetBrains Mono', monospace;
+}
+
+[data-theme="dark"] {
+  --red: #e63946;
+  --bg: #0d0d14;
+  --fg: #e8e8ec;
+  --muted: #6b6b78;
+  --faint: #1e1e28;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body, .mode-card, .dur-btn, .btn-start, .btn-outline, .theme-toggle {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.screen.active { opacity: 1; pointer-events: all; }
+
+#startScreen { gap: 28px; }
+
+.title {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  text-transform: lowercase;
+  color: var(--fg);
+}
+
+.title span { color: var(--red); }
+
+.subtitle {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  margin-top: -16px;
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  max-width: 280px;
+}
+
+.mode-card {
+  padding: 10px 14px;
+  min-width: 100px;
+  border: 1px solid var(--faint);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  background: transparent;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.mode-card .mode-desc {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+  opacity: 0.6;
+  margin-top: 2px;
+}
+
+.mode-card:hover { border-color: var(--fg); color: var(--fg); }
+.mode-card.selected { border-color: var(--red); color: var(--red); }
+.mode-card.selected .mode-desc { color: var(--red); }
+
+.btn-start {
+  padding: 12px 48px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+  color: #fff;
+  background: var(--red);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.btn-start:hover { opacity: 0.85; }
+
+.hint {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.duration-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dur-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--faint);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  transition: all 0.15s ease;
+}
+
+.dur-btn:hover { border-color: var(--fg); color: var(--fg); }
+.dur-btn.selected { border-color: var(--red); color: var(--red); }
+
+#countdownScreen {
+  font-size: 72px;
+  font-weight: 300;
+  color: var(--red);
+}
+
+#countdownNum {
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+#exerciseScreen { z-index: 10; }
+
+canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.progress-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  background: var(--red);
+  transition: width 0.1s linear;
+  z-index: 100;
+}
+
+.timer-label {
+  position: fixed;
+  top: 12px; right: 20px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  z-index: 100;
+  letter-spacing: 0.05em;
+}
+
+.mode-label {
+  position: fixed;
+  top: 12px; left: 20px;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--faint);
+  z-index: 100;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.exit-hint {
+  position: fixed;
+  bottom: 16px; right: 20px;
+  font-size: 9px;
+  color: var(--faint);
+  z-index: 100;
+  letter-spacing: 0.05em;
+}
+
+#doneScreen { gap: 24px; }
+
+.done-title {
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  color: var(--fg);
+}
+
+.done-stats {
+  display: flex;
+  gap: 32px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.done-stat-val {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--fg);
+  margin-bottom: 2px;
+}
+
+.done-stat-label {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.done-buttons { display: flex; gap: 10px; }
+
+.btn-outline {
+  padding: 10px 28px;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--faint);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-outline:hover { border-color: var(--fg); color: var(--fg); }
+
+.theme-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid var(--faint);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.theme-toggle:hover { border-color: var(--muted); }
+
+.theme-toggle-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  position: relative;
+  transition: all 0.3s ease;
+  background: transparent;
+  box-shadow: inset -5px -1px 0 0 var(--fg);
+}
+
+[data-theme="dark"] .theme-toggle-icon {
+  background: var(--fg);
+  box-shadow: 0 0 4px 1px rgba(232,232,236,0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen active">
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode"><span class="theme-toggle-icon"></span></button>
+  <div class="title">eye <span>trainer</span></div>
+  <div class="subtitle">train your eyes</div>
+
+  <div class="mode-grid">
+    <button class="mode-card selected" data-mode="follow">follow<span class="mode-desc">smooth tracking</span></button>
+    <button class="mode-card" data-mode="flash">flash<span class="mode-desc">reaction speed</span></button>
+    <button class="mode-card" data-mode="saccade">saccade<span class="mode-desc">quick jumps</span></button>
+    <button class="mode-card" data-mode="snap">snap<span class="mode-desc">instant locks</span></button>
+  </div>
+
+  <div class="duration-row">
+    <button class="dur-btn selected" data-dur="30">30s</button>
+    <button class="dur-btn" data-dur="60">60s</button>
+    <button class="dur-btn" data-dur="90">90s</button>
+    <button class="dur-btn" data-dur="120">2m</button>
+  </div>
+
+  <button class="btn-start" id="startBtn">start</button>
+  <div class="hint">space to start &middot; esc to stop &middot; 1-4 select mode</div>
+</div>
+
+<div id="countdownScreen" class="screen">
+  <div id="countdownNum">3</div>
+</div>
+
+<div id="exerciseScreen" class="screen">
+  <canvas id="gameCanvas"></canvas>
+  <div class="progress-bar" id="progressBar"></div>
+  <div class="timer-label" id="timerLabel">0:30</div>
+  <div class="mode-label" id="modeLabel"></div>
+  <div class="exit-hint" id="exitHint">esc to exit</div>
+</div>
+
+<div id="doneScreen" class="screen">
+  <div class="done-title">done</div>
+  <div class="done-stats">
+    <div><div class="done-stat-val" id="statDuration">30s</div><div class="done-stat-label">duration</div></div>
+    <div><div class="done-stat-val" id="statMode">follow</div><div class="done-stat-label">mode</div></div>
+    <div><div class="done-stat-val" id="statSessions">1</div><div class="done-stat-label">sessions</div></div>
+    <div id="statExtraWrap" style="display:none"><div class="done-stat-val" id="statExtra"></div><div class="done-stat-label" id="statExtraLabel"></div></div>
+  </div>
+  <div class="done-buttons">
+    <button class="btn-outline" id="menuBtn">menu</button>
+    <button class="btn-start" id="retryBtn">again</button>
+  </div>
+  <div class="hint">space to retry</div>
+</div>
+
+<script>
+function lerp(a,b,t){return a+(b-a)*t}
+function clampPad(v,max,pad){return Math.max(pad,Math.min(max-pad,v))}
+function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2)}
+function isDark(){return document.documentElement.getAttribute('data-theme')==='dark'}
+
+class SeededRandom{
+  constructor(seed){this.s=seed||Date.now()}
+  next(){this.s=(this.s*1664525+1013904223)&0xFFFFFFFF;return(this.s>>>0)/4294967296}
+  float(min,max){return min+this.next()*(max-min)}
+  int(min,max){return Math.floor(this.float(min,max+1))}
+  choice(arr){return arr[this.int(0,arr.length-1)]}
+}
+
+class SimplexNoise{
+  constructor(seed){
+    this.grad3=[[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+    this.perm=new Uint8Array(512);
+    const rng=new SeededRandom(seed);
+    const p=new Uint8Array(256);
+    for(let i=0;i<256;i++)p[i]=i;
+    for(let i=255;i>0;i--){const j=rng.int(0,i);[p[i],p[j]]=[p[j],p[i]]}
+    for(let i=0;i<512;i++)this.perm[i]=p[i&255];
+  }
+  noise2D(x,y){
+    const F2=0.5*(Math.sqrt(3)-1),G2=(3-Math.sqrt(3))/6;
+    const s=(x+y)*F2;
+    const i=Math.floor(x+s),j=Math.floor(y+s);
+    const t=(i+j)*G2;
+    const X0=i-t,Y0=j-t;
+    const x0=x-X0,y0=y-Y0;
+    const i1=x0>y0?1:0,j1=x0>y0?0:1;
+    const x1=x0-i1+G2,y1=y0-j1+G2;
+    const x2=x0-1+2*G2,y2=y0-1+2*G2;
+    const ii=i&255,jj=j&255;
+    const dot=(g,x,y)=>g[0]*x+g[1]*y;
+    let n0=0,n1=0,n2=0;
+    let t0=0.5-x0*x0-y0*y0;
+    if(t0>=0){t0*=t0;n0=t0*t0*dot(this.grad3[this.perm[ii+this.perm[jj]]%12],x0,y0)}
+    let t1=0.5-x1*x1-y1*y1;
+    if(t1>=0){t1*=t1;n1=t1*t1*dot(this.grad3[this.perm[ii+i1+this.perm[jj+j1]]%12],x1,y1)}
+    let t2=0.5-x2*x2-y2*y2;
+    if(t2>=0){t2*=t2;n2=t2*t2*dot(this.grad3[this.perm[ii+1+this.perm[jj+1]]%12],x2,y2)}
+    return 70*(n0+n1+n2);
+  }
+}
+
+// Path generators
+function generateBezierPath(rng,bounds,dur){
+  const pad=30,pts=[],n=rng.int(4,7);
+  for(let i=0;i<=n;i++){
+    pts.push({
+      x:rng.float(pad,bounds.w-pad),y:rng.float(pad,bounds.h-pad),
+      cx1:rng.float(pad*0.7,bounds.w-pad*0.7),cy1:rng.float(pad*0.7,bounds.h-pad*0.7),
+      cx2:rng.float(pad*0.7,bounds.w-pad*0.7),cy2:rng.float(pad*0.7,bounds.h-pad*0.7)
+    });
+  }
+  return{type:'bezier',points:pts,duration:dur};
+}
+
+function evalBezier(path,t){
+  const pts=path.points,segCount=pts.length-1,raw=t*segCount;
+  const idx=Math.min(Math.floor(raw),segCount-1),lt=raw-idx;
+  const p0=pts[idx],p1=pts[idx+1],u=1-lt;
+  return{
+    x:u*u*u*p0.x+3*u*u*lt*p0.cx1+3*u*lt*lt*p1.cx2+lt*lt*lt*p1.x,
+    y:u*u*u*p0.y+3*u*u*lt*p0.cy1+3*u*lt*lt*p1.cy2+lt*lt*lt*p1.y
+  };
+}
+
+function generateSinePath(rng,bounds,dur){
+  return{
+    type:'sine',cx:bounds.w/2,cy:bounds.h/2,
+    ampX:rng.float(bounds.w*0.32,bounds.w*0.45),ampY:rng.float(bounds.h*0.30,bounds.h*0.44),
+    freqX:rng.float(0.8,2.5),freqY:rng.float(0.6,2.0),
+    phaseX:rng.float(0,Math.PI*2),phaseY:rng.float(0,Math.PI*2),duration:dur
+  };
+}
+
+function evalSine(path,t,elapsed){
+  return{
+    x:path.cx+path.ampX*Math.sin(2*Math.PI*path.freqX*elapsed+path.phaseX),
+    y:path.cy+path.ampY*Math.sin(2*Math.PI*path.freqY*elapsed+path.phaseY)
+  };
+}
+
+function generateCirclePath(rng,bounds,dur){
+  const maxR=Math.min(bounds.w,bounds.h)/2-35;
+  const r=rng.float(80,Math.max(100,maxR));
+  const cxMin=r+30,cxMax=bounds.w-r-30,cyMin=r+30,cyMax=bounds.h-r-30;
+  return{
+    type:'circle',
+    cx:rng.float(Math.min(cxMin,cxMax),Math.max(cxMin,cxMax)),
+    cy:rng.float(Math.min(cyMin,cyMax),Math.max(cyMin,cyMax)),
+    radius:r,angSpeed:rng.float(1.0,3.0)*(rng.next()>0.5?1:-1),
+    startAngle:rng.float(0,Math.PI*2),duration:dur
+  };
+}
+
+function evalCircle(path,t,elapsed){
+  const a=path.startAngle+path.angSpeed*elapsed;
+  return{x:path.cx+path.radius*Math.cos(a),y:path.cy+path.radius*Math.sin(a)};
+}
+
+function generateFigure8Path(rng,bounds,dur){
+  return{
+    type:'figure8',
+    cx:bounds.w/2+rng.float(-80,80),cy:bounds.h/2+rng.float(-60,60),
+    width:rng.float(bounds.w*0.28,Math.min(bounds.w*0.44,450)),
+    height:rng.float(bounds.h*0.24,Math.min(bounds.h*0.42,380)),
+    freq:rng.float(0.5,1.5),duration:dur
+  };
+}
+
+function evalFigure8(path,t,elapsed){
+  const theta=2*Math.PI*path.freq*elapsed;
+  return{x:path.cx+path.width*Math.sin(theta),y:path.cy+path.height*Math.sin(theta)*Math.cos(theta)};
+}
+
+function generateStarPath(rng,bounds,dur){
+  const maxR=Math.min(bounds.w,bounds.h)/2-35;
+  const outerR=rng.float(120,Math.min(maxR,380));
+  return{
+    type:'star',cx:bounds.w/2+rng.float(-100,100),cy:bounds.h/2+rng.float(-80,80),
+    outerR,innerR:outerR*rng.float(0.3,0.5),points:rng.int(4,7),
+    rotSpeed:rng.float(0.5,1.5),duration:dur
+  };
+}
+
+function evalStar(path,t,elapsed){
+  const totalPoints=path.points*2;
+  const progress=(elapsed/path.duration)*path.rotSpeed;
+  const pointProgress=(progress*totalPoints)%totalPoints;
+  const pointIndex=Math.floor(pointProgress),frac=pointProgress-pointIndex;
+  const r1=pointIndex%2===0?path.outerR:path.innerR;
+  const r2=(pointIndex+1)%2===0?path.outerR:path.innerR;
+  const r=lerp(r1,r2,frac);
+  const baseAngle=(pointIndex/totalPoints)*Math.PI*2;
+  const nextAngle=((pointIndex+1)/totalPoints)*Math.PI*2;
+  const a=lerp(baseAngle,nextAngle,frac)+progress*Math.PI*2*0.3;
+  return{x:path.cx+r*Math.cos(a),y:path.cy+r*Math.sin(a)};
+}
+
+class SessionPathGenerator{
+  constructor(bounds,duration){
+    this.bounds=bounds;
+    this.rng=new SeededRandom(Date.now());
+    this.simplex=new SimplexNoise(this.rng.int(0,99999));
+    this.segments=[];this.totalDuration=duration;
+    this.buildSegments();this.prevPos=null;this.prevVel={x:0,y:0};
+  }
+  buildSegments(){
+    const pool=['bezier','sine','circle','figure8','star','bezier','sine'];
+    const numSegs=this.rng.int(5,8);
+    const segDur=this.totalDuration/numSegs;
+    for(let i=0;i<numSegs;i++){
+      const pathType=this.rng.choice(pool);
+      let path;
+      switch(pathType){
+        case'bezier':path=generateBezierPath(this.rng,this.bounds,segDur);break;
+        case'sine':path=generateSinePath(this.rng,this.bounds,segDur);break;
+        case'circle':path=generateCirclePath(this.rng,this.bounds,segDur);break;
+        case'figure8':path=generateFigure8Path(this.rng,this.bounds,segDur);break;
+        case'star':path=generateStarPath(this.rng,this.bounds,segDur);break;
+        default:path=generateBezierPath(this.rng,this.bounds,segDur);
+      }
+      this.segments.push({path,startTime:i*segDur,endTime:(i+1)*segDur,blendDuration:Math.min(0.8,segDur*0.15)});
+    }
+  }
+  evalPath(path,t,segElapsed){
+    switch(path.type){
+      case'bezier':return evalBezier(path,t);
+      case'sine':return evalSine(path,t,segElapsed);
+      case'circle':return evalCircle(path,t,segElapsed);
+      case'figure8':return evalFigure8(path,t,segElapsed);
+      case'star':return evalStar(path,t,segElapsed);
+      default:return{x:this.bounds.w/2,y:this.bounds.h/2};
+    }
+  }
+  evaluate(elapsed){
+    elapsed=Math.max(0,elapsed);
+    const dur=this.totalDuration;
+    if(elapsed>=dur)elapsed=dur-0.001;
+    let segIdx=-1;
+    for(let i=0;i<this.segments.length;i++){
+      if(elapsed>=this.segments[i].startTime&&elapsed<this.segments[i].endTime){segIdx=i;break}
+    }
+    if(segIdx===-1)segIdx=this.segments.length-1;
+    const seg=this.segments[segIdx];
+    const segElapsed=elapsed-seg.startTime,segDur=seg.endTime-seg.startTime,t=segElapsed/segDur;
+    let pos=this.evalPath(seg.path,t,segElapsed);
+    const timeUntilEnd=seg.endTime-elapsed;
+    if(timeUntilEnd<seg.blendDuration&&segIdx<this.segments.length-1){
+      const nextSeg=this.segments[segIdx+1];
+      const nextPos=this.evalPath(nextSeg.path,0,0);
+      const blendT=1-(timeUntilEnd/seg.blendDuration);
+      const smoothT=blendT*blendT*(3-2*blendT);
+      pos.x=lerp(pos.x,nextPos.x,smoothT);pos.y=lerp(pos.y,nextPos.y,smoothT);
+    }
+    const nScale=12;
+    pos.x+=this.simplex.noise2D(elapsed*0.5,0)*nScale;
+    pos.y+=this.simplex.noise2D(0,elapsed*0.5)*nScale;
+    pos.x=clampPad(pos.x,this.bounds.w,28);pos.y=clampPad(pos.y,this.bounds.h,28);
+    if(this.prevPos)this.prevVel={x:pos.x-this.prevPos.x,y:pos.y-this.prevPos.y};
+    this.prevPos={x:pos.x,y:pos.y};
+    return pos;
+  }
+  getFuturePos(elapsed,lookAhead){
+    const saved={prevPos:this.prevPos?{...this.prevPos}:null,prevVel:{...this.prevVel}};
+    const pos=this.evaluate(elapsed+lookAhead);
+    this.prevPos=saved.prevPos;this.prevVel=saved.prevVel;
+    return pos;
+  }
+}
+
+// Flash mode with center-return
+class FlashEngine{
+  constructor(bounds,duration){
+    this.bounds=bounds;this.totalDuration=duration;
+    this.prevPos=null;this.currentPos=null;this.ghostPos=null;this.ghostAlpha=0;
+    this.dotVisible=false;this.pulseRingScale=0;this.pulseRingAlpha=0;
+    this.timerRingProgress=0;this.flashCount=0;
+    this.state='init';this.stateStart=0;this.centerAlpha=0;this.centerPulseT=0;
+  }
+  getDifficulty(elapsed){
+    const r=elapsed/this.totalDuration;
+    if(r<0.25)return{display:0.8,hold:0.5};
+    if(r<0.58){const t=(r-0.25)/0.33;return{display:0.8-0.3*t,hold:0.5-0.15*t}}
+    if(r<0.92){const t=(r-0.58)/0.34;return{display:0.5-0.2*t,hold:0.35-0.15*t}}
+    return{display:0.3,hold:0.15};
+  }
+  getNextPos(){
+    const pad=30,minDist=Math.min(this.bounds.w,this.bounds.h)*0.3;
+    let pos,attempts=0;
+    do{pos={x:pad+Math.random()*(this.bounds.w-pad*2),y:pad+Math.random()*(this.bounds.h-pad*2)};attempts++}
+    while(attempts<20&&this.prevPos&&dist(pos,this.prevPos)<minDist);
+    return pos;
+  }
+  spawnFlash(){
+    this.prevPos=this.currentPos;this.currentPos=this.getNextPos();
+    this.dotVisible=true;this.pulseRingScale=1;this.pulseRingAlpha=0.8;this.flashCount++;
+  }
+  update(elapsed){
+    if(this.stateStart===0)this.stateStart=elapsed;
+    const diff=this.getDifficulty(elapsed);
+    const t=elapsed-this.stateStart;
+    if(this.ghostPos&&this.ghostAlpha>0)this.ghostAlpha=Math.max(0,this.ghostAlpha-0.03);
+    switch(this.state){
+      case'init':this.spawnFlash();this.state='flash';this.stateStart=elapsed;break;
+      case'flash':
+        this.dotVisible=true;this.timerRingProgress=1-(t/diff.display);
+        if(t<0.2){const pt=t/0.2;this.pulseRingScale=1+pt*2;this.pulseRingAlpha=0.8*(1-pt)}
+        else this.pulseRingAlpha=0;
+        if(t>=diff.display){
+          this.ghostPos=this.currentPos?{...this.currentPos}:null;this.ghostAlpha=1;
+          this.dotVisible=false;this.timerRingProgress=0;
+          this.state='returning';this.stateStart=elapsed;
+        }break;
+      case'returning':
+        this.centerAlpha=Math.min(1,t/0.2);
+        if(t>=0.2){this.state='holding';this.stateStart=elapsed}
+        break;
+      case'holding':
+        this.centerAlpha=1;this.centerPulseT=t;
+        if(t>=diff.hold){this.state='transitioning';this.stateStart=elapsed}
+        break;
+      case'transitioning':
+        this.centerAlpha=Math.max(0,1-t/0.15);
+        if(t>=0.15){this.centerAlpha=0;this.spawnFlash();this.state='flash';this.stateStart=elapsed}
+        break;
+    }
+  }
+  render(ctx){
+    if(this.ghostPos&&this.ghostAlpha>0){
+      ctx.save();ctx.globalAlpha=this.ghostAlpha*0.15;ctx.strokeStyle='#e63946';ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(this.ghostPos.x,this.ghostPos.y,10,0,Math.PI*2);ctx.stroke();ctx.restore();
+    }
+    if(this.centerAlpha>0){
+      const cx=this.bounds.w/2,cy=this.bounds.h/2;
+      ctx.save();
+      ctx.strokeStyle='#e63946';ctx.lineWidth=1.5;ctx.globalAlpha=this.centerAlpha*0.6;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy-13);ctx.lineTo(cx,cy-4);
+      ctx.moveTo(cx,cy+4);ctx.lineTo(cx,cy+13);
+      ctx.moveTo(cx-13,cy);ctx.lineTo(cx-4,cy);
+      ctx.moveTo(cx+4,cy);ctx.lineTo(cx+13,cy);
+      ctx.stroke();
+      ctx.globalAlpha=this.centerAlpha;ctx.fillStyle='#e63946';
+      const scale=this.state==='holding'?1+0.3*Math.sin(this.centerPulseT*10):1;
+      ctx.beginPath();ctx.arc(cx,cy,3*scale,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    }
+    if(!this.currentPos||!this.dotVisible)return;
+    const x=this.currentPos.x,y=this.currentPos.y;
+    if(this.pulseRingAlpha>0){
+      ctx.save();ctx.globalAlpha=this.pulseRingAlpha;ctx.strokeStyle='#e63946';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(x,y,10*this.pulseRingScale,0,Math.PI*2);ctx.stroke();ctx.restore();
+    }
+    if(this.timerRingProgress>0){
+      ctx.save();ctx.strokeStyle='#e63946';ctx.lineWidth=2;ctx.globalAlpha=0.4;
+      ctx.beginPath();ctx.arc(x,y,18,-Math.PI/2,-Math.PI/2+Math.PI*2*this.timerRingProgress);ctx.stroke();ctx.restore();
+    }
+    ctx.save();ctx.fillStyle='rgba(230,57,70,0.3)';ctx.strokeStyle='#e63946';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();
+  }
+}
+
+// Saccade mode
+class SaccadeEngine{
+  constructor(bounds,duration){
+    this.bounds=bounds;this.totalDuration=duration;this.activeDot=0;this.lastSwitch=0;
+    this.dots=[{x:0,y:0},{x:0,y:0}];this.calculateDotPositions(0);
+  }
+  getPhase(elapsed){
+    const r=elapsed/this.totalDuration;
+    if(r<0.25)return{dwellTime:1.5,distRatio:0.6,axis:'horizontal'};
+    if(r<0.50)return{dwellTime:1.0,distRatio:0.70,axis:'vertical'};
+    if(r<0.75)return{dwellTime:0.6,distRatio:0.82,axis:'diagonal1'};
+    return{dwellTime:0.3,distRatio:0.95,axis:'diagonal2'};
+  }
+  calculateDotPositions(elapsed){
+    const phase=this.getPhase(elapsed);
+    const w=this.bounds.w,h=this.bounds.h,cx=w/2,cy=h/2,pad=40;
+    switch(phase.axis){
+      case'horizontal':{const hd=(w*phase.distRatio)/2;this.dots[0]={x:cx-hd,y:cy};this.dots[1]={x:cx+hd,y:cy};break}
+      case'vertical':{const hd=(h*phase.distRatio)/2;this.dots[0]={x:cx,y:cy-hd};this.dots[1]={x:cx,y:cy+hd};break}
+      case'diagonal1':{const dw=(w*phase.distRatio)/2,dh=(h*phase.distRatio)/2;this.dots[0]={x:cx-dw*0.7,y:cy-dh*0.7};this.dots[1]={x:cx+dw*0.7,y:cy+dh*0.7};break}
+      case'diagonal2':{const dw=(w*phase.distRatio)/2,dh=(h*phase.distRatio)/2;this.dots[0]={x:cx+dw*0.7,y:cy-dh*0.7};this.dots[1]={x:cx-dw*0.7,y:cy+dh*0.7};break}
+    }
+    for(const d of this.dots){d.x=clampPad(d.x,w,pad);d.y=clampPad(d.y,h,pad)}
+  }
+  update(elapsed){
+    const phase=this.getPhase(elapsed);this.calculateDotPositions(elapsed);
+    if(elapsed-this.lastSwitch>=phase.dwellTime){this.activeDot=1-this.activeDot;this.lastSwitch=elapsed}
+  }
+  render(ctx){
+    for(let i=0;i<2;i++){
+      const d=this.dots[i],active=i===this.activeDot;
+      ctx.save();
+      if(active){ctx.fillStyle='#e63946';ctx.beginPath();ctx.arc(d.x,d.y,12,0,Math.PI*2);ctx.fill()}
+      else{ctx.strokeStyle='rgba(230,57,70,0.2)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(d.x,d.y,12,0,Math.PI*2);ctx.stroke()}
+      ctx.restore();
+    }
+  }
+}
+
+// Snap mode
+class SnapEngine{
+  constructor(bounds,duration){
+    this.bounds=bounds;this.totalDuration=duration;
+    this.currentPos={x:bounds.w/2,y:bounds.h/2};this.prevPos=null;
+    this.jumpLineAlpha=0;this.lastJump=0;this.nextDwell=1.5;
+  }
+  getDwellBase(elapsed){
+    const r=elapsed/this.totalDuration;
+    if(r<0.33)return 1.5;if(r<0.66)return 1.0;return 0.5;
+  }
+  getNextPos(elapsed){
+    const pad=30,r=elapsed/this.totalDuration;
+    let minJump=r>0.66?300:r>0.33?200:150;
+    let pos,attempts=0;
+    do{pos={x:pad+Math.random()*(this.bounds.w-pad*2),y:pad+Math.random()*(this.bounds.h-pad*2)};attempts++}
+    while(attempts<20&&dist(pos,this.currentPos)<minJump);
+    return pos;
+  }
+  update(elapsed){
+    if(elapsed-this.lastJump>=this.nextDwell){
+      this.prevPos={...this.currentPos};this.currentPos=this.getNextPos(elapsed);
+      this.jumpLineAlpha=0.3;this.lastJump=elapsed;
+      this.nextDwell=this.getDwellBase(elapsed)*(0.8+Math.random()*0.4);
+    }
+    if(this.jumpLineAlpha>0)this.jumpLineAlpha=Math.max(0,this.jumpLineAlpha-0.015);
+  }
+  render(ctx){
+    if(this.prevPos&&this.jumpLineAlpha>0){
+      ctx.save();ctx.globalAlpha=this.jumpLineAlpha;ctx.strokeStyle='#e63946';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(this.prevPos.x,this.prevPos.y);ctx.lineTo(this.currentPos.x,this.currentPos.y);
+      ctx.stroke();ctx.restore();
+    }
+    ctx.save();ctx.fillStyle='#e63946';ctx.beginPath();
+    ctx.arc(this.currentPos.x,this.currentPos.y,12,0,Math.PI*2);ctx.fill();ctx.restore();
+  }
+}
+
+// Storage
+class DataStore{
+  constructor(){this.data=JSON.parse(localStorage.getItem('eyeTrainerV5')||'null')||{sessions:0}}
+  save(){localStorage.setItem('eyeTrainerV5',JSON.stringify(this.data))}
+  record(){this.data.sessions=(this.data.sessions||0)+1;this.save()}
+  getSessions(){return this.data.sessions||0}
+}
+
+// Main app
+class EyeTrainer{
+  constructor(){
+    this.canvas=document.getElementById('gameCanvas');
+    this.ctx=this.canvas.getContext('2d');
+    this.store=new DataStore();
+    this.gridCanvas=document.createElement('canvas');
+    this.gridCtx=this.gridCanvas.getContext('2d');
+    this.bgGridSpacing=38;this.bgGridDotSize=1.8;this.bgGridNeedsRedraw=true;
+    this.state='menu';this.mode='follow';this.sessionDuration=30;
+    this.engine=null;this.pathGen=null;this.startTime=0;this.elapsed=0;
+    this.running=false;this.animId=null;this.trail=[];this.trailMax=20;
+    this.setupEvents();this.resizeCanvas();
+  }
+  resizeCanvas(){
+    this.canvas.width=window.innerWidth;this.canvas.height=window.innerHeight;
+    this.gridCanvas.width=this.canvas.width;this.gridCanvas.height=this.canvas.height;
+    this.bgGridNeedsRedraw=true;
+    if(this.pathGen)this.pathGen.bounds={w:this.canvas.width,h:this.canvas.height};
+  }
+  renderBgGrid(){
+    if(!this.bgGridNeedsRedraw)return;
+    const w=this.gridCanvas.width,h=this.gridCanvas.height,ctx=this.gridCtx;
+    ctx.clearRect(0,0,w,h);
+    const cols=Math.ceil(w/this.bgGridSpacing),rows=Math.ceil(h/this.bgGridSpacing);
+    const offsetX=(w-(cols-1)*this.bgGridSpacing)/2,offsetY=(h-(rows-1)*this.bgGridSpacing)/2;
+    ctx.fillStyle=isDark()?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)';
+    for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
+      ctx.beginPath();ctx.arc(offsetX+col*this.bgGridSpacing,offsetY+row*this.bgGridSpacing,this.bgGridDotSize/2,0,Math.PI*2);ctx.fill();
+    }
+    this.bgGridNeedsRedraw=false;
+  }
+  setupEvents(){
+    window.addEventListener('resize',()=>this.resizeCanvas());
+    document.querySelectorAll('.mode-card').forEach(card=>{
+      card.addEventListener('click',()=>{
+        document.querySelectorAll('.mode-card').forEach(c=>c.classList.remove('selected'));
+        card.classList.add('selected');this.mode=card.dataset.mode;
+      });
+    });
+    document.querySelectorAll('.dur-btn').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        document.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('selected'));
+        btn.classList.add('selected');this.sessionDuration=parseInt(btn.dataset.dur);
+      });
+    });
+    document.getElementById('startBtn').addEventListener('click',()=>this.startSession());
+    document.getElementById('retryBtn').addEventListener('click',()=>this.startSession());
+    document.getElementById('menuBtn').addEventListener('click',()=>this.showMenu());
+    // Theme toggle
+    document.getElementById('themeToggle').addEventListener('click',()=>{
+      const current=document.documentElement.getAttribute('data-theme');
+      const next=current==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme',next);
+      localStorage.setItem('eye-trainer-theme',next);
+      this.bgGridNeedsRedraw=true;
+    });
+    window.addEventListener('keydown',e=>{
+      if(e.code==='Space'){e.preventDefault();if(this.state==='menu'||this.state==='done')this.startSession()}
+      if(e.code==='Escape'){
+        e.preventDefault();
+        if(this.state==='done')this.showMenu();
+        else if(this.state==='playing')this.showMenu();
+      }
+      const modeMap={'1':'follow','2':'flash','3':'saccade','4':'snap'};
+      if(this.state==='menu'&&modeMap[e.key]){
+        document.querySelectorAll('.mode-card').forEach(c=>c.classList.remove('selected'));
+        const card=document.querySelector(`[data-mode="${modeMap[e.key]}"]`);
+        if(card){card.classList.add('selected');this.mode=modeMap[e.key]}
+      }
+    });
+  }
+  showScreen(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+  showMenu(){
+    this.state='menu';this.running=false;
+    if(this.animId)cancelAnimationFrame(this.animId);
+    this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+    this.showScreen('startScreen');
+    this.canvas.style.cursor='default';
+  }
+  async startSession(){
+    if(this.state==='countdown')return;
+    this.running=false;if(this.animId)cancelAnimationFrame(this.animId);
+    this.state='countdown';this.showScreen('countdownScreen');this.trail=[];
+    this.resizeCanvas();this.bgGridNeedsRedraw=true;
+    const bounds={w:this.canvas.width,h:this.canvas.height};
+    const dur=this.sessionDuration;
+    this.engine=null;this.pathGen=null;
+    this.canvas.style.cursor='default';
+    switch(this.mode){
+      case'follow':this.pathGen=new SessionPathGenerator(bounds,dur);break;
+      case'flash':this.engine=new FlashEngine(bounds,dur);break;
+      case'saccade':this.engine=new SaccadeEngine(bounds,dur);break;
+      case'snap':this.engine=new SnapEngine(bounds,dur);break;
+    }
+    const numEl=document.getElementById('countdownNum');
+    for(let i=3;i>=1;i--){
+      numEl.textContent=i;numEl.style.transform='scale(1.3)';numEl.style.opacity='0.3';
+      await new Promise(r=>setTimeout(r,50));
+      numEl.style.transform='scale(1)';numEl.style.opacity='1';
+      await new Promise(r=>setTimeout(r,700));
+    }
+    this.state='playing';this.showScreen('exerciseScreen');
+    this.startTime=performance.now();this.running=true;
+    document.getElementById('modeLabel').textContent=this.mode;
+    document.getElementById('progressBar').style.width='0';
+    document.getElementById('timerLabel').textContent='0:'+String(dur).padStart(2,'0');
+    this.animId=requestAnimationFrame(ts=>this.loop(ts));
+  }
+  loop(timestamp){
+    if(!this.running)return;
+    this.elapsed=(timestamp-this.startTime)/1000;
+    const totalDur=this.sessionDuration;
+    if(this.elapsed>=totalDur){this.endSession();return}
+    const remaining=Math.max(0,totalDur-this.elapsed);
+    const mins=Math.floor(remaining/60),secs=Math.floor(remaining%60);
+    document.getElementById('timerLabel').textContent=mins+':'+String(secs).padStart(2,'0');
+    document.getElementById('progressBar').style.width=((this.elapsed/totalDur)*100)+'%';
+    const ctx=this.ctx,w=this.canvas.width,h=this.canvas.height;
+    ctx.clearRect(0,0,w,h);
+    this.renderBgGrid();ctx.drawImage(this.gridCanvas,0,0);
+    if(this.pathGen){
+      const pos=this.pathGen.evaluate(this.elapsed);
+      this.trail.push({x:pos.x,y:pos.y});
+      if(this.trail.length>this.trailMax)this.trail.shift();
+      this.renderFollowMode(pos);
+    }else if(this.engine){
+      this.engine.update(this.elapsed);
+      this.engine.render(ctx);
+    }
+    this.animId=requestAnimationFrame(ts=>this.loop(ts));
+  }
+  renderFollowMode(pos){
+    const ctx=this.ctx;
+    const numArrows=18,maxLookAhead=1.8,futurePositions=[];
+    for(let i=1;i<=numArrows;i++){
+      const lookAhead=(i/numArrows)*maxLookAhead;
+      const fp=this.pathGen.getFuturePos(this.elapsed,lookAhead);
+      futurePositions.push({...fp,t:i/numArrows});
+    }
+    ctx.save();ctx.setLineDash([3,6]);ctx.lineWidth=1;ctx.strokeStyle='rgba(230,57,70,0.12)';
+    ctx.beginPath();ctx.moveTo(pos.x,pos.y);
+    for(const fp of futurePositions)ctx.lineTo(fp.x,fp.y);
+    ctx.stroke();ctx.setLineDash([]);ctx.restore();
+    for(const fp of futurePositions){
+      const alpha=0.35*(1-fp.t*0.7),radius=2.5+(1-fp.t)*1.5;
+      ctx.save();ctx.globalAlpha=alpha;ctx.fillStyle='#e63946';
+      ctx.beginPath();ctx.arc(fp.x,fp.y,radius,0,Math.PI*2);ctx.fill();ctx.restore();
+    }
+    const arrowIndices=[2,5,9,14];
+    for(const ai of arrowIndices){
+      if(ai>=futurePositions.length||ai<1)continue;
+      const curr=futurePositions[ai],prev=futurePositions[ai-1];
+      const angle=Math.atan2(curr.y-prev.y,curr.x-prev.x);
+      const alpha=0.3*(1-curr.t*0.6),size=6+(1-curr.t)*4;
+      ctx.save();ctx.globalAlpha=alpha;ctx.translate(curr.x,curr.y);ctx.rotate(angle);
+      ctx.strokeStyle='#e63946';ctx.lineWidth=1.5;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(-size,-size*0.55);ctx.lineTo(0,0);ctx.lineTo(-size,size*0.55);
+      ctx.stroke();ctx.restore();
+    }
+    const trailLen=this.trail.length;
+    if(trailLen>1){
+      ctx.save();
+      for(let i=0;i<trailLen-1;i++){
+        const p=this.trail[i],age=i/trailLen;
+        ctx.globalAlpha=age*0.15;ctx.fillStyle='#e63946';
+        ctx.beginPath();ctx.arc(p.x,p.y,2+age*3,0,Math.PI*2);ctx.fill();
+      }
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.globalAlpha=0.08;ctx.fillStyle='#e63946';ctx.beginPath();ctx.arc(pos.x,pos.y,18,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=0.15;ctx.beginPath();ctx.arc(pos.x,pos.y,11,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;ctx.fillStyle='#e63946';ctx.beginPath();ctx.arc(pos.x,pos.y,6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(pos.x,pos.y,1.5,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+  endSession(){
+    this.running=false;if(this.animId)cancelAnimationFrame(this.animId);
+    this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+    this.state='done';this.store.record();
+    document.getElementById('statDuration').textContent=this.sessionDuration+'s';
+    document.getElementById('statMode').textContent=this.mode;
+    document.getElementById('statSessions').textContent=this.store.getSessions();
+    this.canvas.style.cursor='default';
+    const extraWrap=document.getElementById('statExtraWrap');
+    if(this.engine&&this.engine.getStats){
+      const stats=this.engine.getStats();
+      document.getElementById('statExtra').textContent=stats.value;
+      document.getElementById('statExtraLabel').textContent=stats.label;
+      extraWrap.style.display='';
+    }else{extraWrap.style.display='none'}
+    this.showScreen('doneScreen');
+  }
+}
+
+new EyeTrainer();
+</script>
+</body>
+</html>

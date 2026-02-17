@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breathe</title>
+    <style>
+        /* ============================================
+           BASE STYLES
+           ============================================ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            user-select: none;
+            cursor: default;
+        }
+
+        body {
+            font-family: ui-monospace, 'SF Mono', SFMono-Regular, 'JetBrains Mono',
+                         Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+            transition: background-color 0.1s linear;
+        }
+
+        /* ============================================
+           CLOCK
+           ============================================ */
+        #clock {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            z-index: 10;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        #clock.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #time {
+            font-size: 32px;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+            color: rgba(255, 255, 255, 0.4);
+            line-height: 1.2;
+        }
+
+        #date {
+            font-size: 16px;
+            font-weight: 300;
+            letter-spacing: 0.03em;
+            color: rgba(255, 255, 255, 0.25);
+            line-height: 1.4;
+            margin-top: 4px;
+        }
+
+        #kaomoji {
+            font-size: 14px;
+            font-weight: 300;
+            color: rgba(255, 255, 255, 0.2);
+            line-height: 1.4;
+            margin-top: 8px;
+        }
+
+        /* ============================================
+           SETTINGS PANEL
+           ============================================ */
+        #settings-panel {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            width: 300px;
+            background: rgba(15, 15, 20, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            z-index: 100;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+        }
+
+        #settings-panel.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        @supports (backdrop-filter: blur(20px)) {
+            #settings-panel {
+                background: rgba(15, 15, 20, 0.7);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+            }
+        }
+
+        .settings-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 0.02em;
+        }
+
+        .settings-content {
+            padding: 16px 20px;
+        }
+
+        .settings-group {
+            margin-bottom: 16px;
+        }
+
+        .settings-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .settings-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.4);
+            letter-spacing: 0.02em;
+            margin-bottom: 8px;
+        }
+
+        /* Theme buttons */
+        .theme-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .theme-btn {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .theme-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .theme-btn.active {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .theme-btn.night-theme {
+            background: rgba(180, 83, 40, 0.15);
+            border-color: rgba(212, 165, 116, 0.3);
+        }
+
+        .theme-btn.night-theme:hover {
+            background: rgba(180, 83, 40, 0.25);
+        }
+
+        .theme-btn.night-theme.active {
+            background: rgba(180, 83, 40, 0.35);
+            border-color: rgba(212, 165, 116, 0.5);
+        }
+
+        /* Sliders */
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Toggle buttons */
+        .toggle-options {
+            display: flex;
+            gap: 8px;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .toggle-btn.active {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Action buttons */
+        .action-btn {
+            width: 100%;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .settings-footer {
+            padding: 12px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .hotkey-hint {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.25);
+        }
+
+        /* ============================================
+           PAUSE INDICATOR
+           ============================================ */
+        #pause-indicator {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            color: rgba(255, 255, 255, 0.4);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        #pause-indicator.visible {
+            opacity: 1;
+        }
+
+        /* ============================================
+           REDUCED MOTION
+           ============================================ */
+        @media (prefers-reduced-motion: reduce) {
+            body {
+                transition: none;
+            }
+        }
+
+        /* ============================================
+           PRINT
+           ============================================ */
+        @media print {
+            body * {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Time/date display -->
+    <div id="clock">
+        <div id="time">12:00 PM</div>
+        <div id="date">Thu, Jan 9, 2026</div>
+        <div id="kaomoji"></div>
+    </div>
+
+    <!-- Settings panel -->
+    <div id="settings-panel">
+        <div class="settings-header">
+            <span>Settings</span>
+        </div>
+        <div class="settings-content">
+            <!-- Theme selector -->
+            <div class="settings-group">
+                <label>Theme</label>
+                <div class="theme-options">
+                    <button class="theme-btn active" data-theme="ocean">Ocean</button>
+                    <button class="theme-btn" data-theme="forest">Forest</button>
+                    <button class="theme-btn" data-theme="dusk">Dusk</button>
+                    <button class="theme-btn" data-theme="ember">Ember</button>
+                    <button class="theme-btn" data-theme="mono">Mono</button>
+                    <button class="theme-btn night-theme" data-theme="night">Night</button>
+                </div>
+            </div>
+
+            <!-- Breathing rate -->
+            <div class="settings-group">
+                <label>Breathing Rate: <span id="rate-display">6.0</span> bpm</label>
+                <input type="range" id="rate-slider" min="4" max="8" step="0.5" value="6">
+            </div>
+
+            <!-- Clock toggle -->
+            <div class="settings-group">
+                <label>Show Clock</label>
+                <div class="toggle-options">
+                    <button class="toggle-btn active" data-clock="on">On</button>
+                    <button class="toggle-btn" data-clock="off">Off</button>
+                </div>
+            </div>
+
+            <!-- Fullscreen button -->
+            <div class="settings-group">
+                <button id="fullscreen-btn" class="action-btn">Enter Fullscreen</button>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <span class="hotkey-hint">S = settings | H = clock | Space = pause | F = fullscreen</span>
+        </div>
+    </div>
+
+    <!-- Pause indicator (hidden by default) -->
+    <div id="pause-indicator">PAUSED</div>
+
+    <script>
+        /* ============================================
+           THEME DEFINITIONS
+           ============================================ */
+        const themes = {
+            ocean: {
+                exhale: { r: 26, g: 54, b: 93 },    // #1a365d - deep navy
+                inhale: { r: 147, g: 197, b: 253 }  // #93c5fd - light sky
+            },
+            forest: {
+                exhale: { r: 20, g: 83, b: 45 },    // #14532d - deep green
+                inhale: { r: 134, g: 239, b: 172 }  // #86efac - light mint
+            },
+            dusk: {
+                exhale: { r: 59, g: 7, b: 100 },    // #3b0764 - deep purple
+                inhale: { r: 216, g: 180, b: 254 }  // #d8b4fe - light lavender
+            },
+            ember: {
+                exhale: { r: 124, g: 45, b: 18 },   // #7c2d12 - deep orange
+                inhale: { r: 254, g: 215, b: 170 }  // #fed7aa - light peach
+            },
+            mono: {
+                exhale: { r: 31, g: 41, b: 55 },    // #1f2937 - dark gray
+                inhale: { r: 209, g: 213, b: 219 }  // #d1d5db - light gray
+            },
+            night: {
+                exhale: { r: 74, g: 28, b: 28 },    // #4a1c1c - deep red/brown
+                inhale: { r: 212, g: 165, b: 116 }  // #d4a574 - warm amber
+            }
+        };
+
+        /* ============================================
+           STATE
+           ============================================ */
+        const state = {
+            theme: 'ocean',
+            breathingRate: 6,
+            clockVisible: true,
+            isPaused: false,
+            settingsVisible: false,
+            settingsTimeout: null,
+            animationId: null,
+            startTime: null
+        };
+
+        /* ============================================
+           DOM REFERENCES
+           ============================================ */
+        const elements = {
+            body: document.body,
+            clock: document.getElementById('clock'),
+            time: document.getElementById('time'),
+            date: document.getElementById('date'),
+            kaomoji: document.getElementById('kaomoji'),
+            settingsPanel: document.getElementById('settings-panel'),
+            rateSlider: document.getElementById('rate-slider'),
+            rateDisplay: document.getElementById('rate-display'),
+            fullscreenBtn: document.getElementById('fullscreen-btn'),
+            pauseIndicator: document.getElementById('pause-indicator')
+        };
+
+        /* ============================================
+           KAOMOJI COLLECTION
+           ============================================ */
+        const kaomojis = [
+            // Joy
+            "(*≧▽≦)", "(*^▽^*)", "(´∀`*)", "(*´▽`*)", "(o^▽^o)", "(⌒▽⌒)☆", "ヽ(>∀<☆)ノ",
+            "o(≧▽≦)o", "(☆▽☆)", "(⌒ω⌒)", "٩(◕‿◕｡)۶", "(〃^▽^〃)", "(o˘◡˘o)", "(´｡• ω •｡`)",
+            "( ´ ▽ ` )", "ヽ(o^▽^o)ノ", "(✧ω✧)", "(ノ´ヮ`)ノ*: ・゚✧", "(´• ω •`)", "( ´ ∀ `)",
+            "╰(▔∀▔)╯", "(─‿‿─)", "(✯◡✯)", "(☆▽☆)", "٩(˘◡˘)۶", "( ͡ᵔ ͜ʖ ͡ᵔ )",
+            "ヽ(〃･ω･)ノ", "(っ˘ω˘ς )", "(づ￣ ³￣)づ", "(´,,•ω•,,)♡", "(^人^)", "(✿^‿^)",
+            "(o´▽`o)", "(❁´◡`❁)", "(*´∀`)♪", "(๑˃ᴗ˂)ﻭ", "(灬º‿º灬)♡", "(✿ฺ´∀`✿ฺ)",
+            "(*˘︶˘*)", "(｡♥‿♥｡)", "(◕‿◕✿)", "(◠‿◠)", "(ノ´ー`)ノ", "(♥ω♥ )", "(｀・ω・´)b",
+            // Love
+            "(´ε` )♡", "(*´ 3`)/ ～♡", "(♡°▽°♡)", "(´∀`)♡", "( ´・‿-) ~ ♥", "٩(♡ε♡)۶",
+            "(´ω`♡%)", "(♡˙︶˙♡)", "♡´・ᴗ・`♡", "(´,,•ω•,,)♡", "♡(ӦｖӦ｡)", "(灬º‿º灬)♡",
+            "(≧◡≦) ♡", "( ◜‿◝ )♡", "♡ (˘▽˘>ԅ( ˘⌣˘)", "(*♡∀♡)", "(⁄ ⁄•⁄ω⁄•⁄ ⁄)♡", "(*/ω＼*)",
+            "(˘ε˘˶ )", "ლ(´ ❥ `ლ)", "(♡ >ω< ♡)", "( ˘ ³˘)♥", "(灬♥ω♥灬)", "ღゝ◡╹)ノ♡",
+            // Embarrassment
+            "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", "(*/ω＼)", "(〃▽〃)", "(o^ ^o)", "(⁄ ⁄•⁄ω⁄•⁄ ⁄)", "(*ﾉωﾉ)",
+            "(๑°o°๑)", "(/▽＼)｡o○♡", "(ノ*0*)ノ", "o((*^▽^*))o", "(⁄ ⁄>⁄ω⁄<⁄ ⁄)⁄", "(/ω＼)",
+            "(ᵔ.ᵔ)", "⁄(⁄ ⁄ ⁄ω⁄ ⁄ ⁄)⁄", "(*μ_μ)",
+            // Sympathy
+            "(´；ω；`)", "(´・ω・`)", "(っ˘̩╭╮˘̩)っ", "(´；д；`)", "(; ω ;)", "ヽ(；▽；)ノ",
+            "(o;TωT)o", "(つ﹏<。)", "(ᗒᗣᗕ)՞", "(个_个)", "ヽ(>_<ヽ) ・゚✧", "(╥﹏╥)",
+            // Dissatisfaction
+            "(´-ω-`)", "( ´Д`)", "(눈_눈)", "( ´ д ` )", "(￣_￣|||)", "(º _ º )",
+            "(´_`)", "┐(´д`)┌", "(´~ `)", "(¬_¬)", "(´ε`)", "(；一_一)", "(─.─||）",
+            "(๑•́ ₃ •̀๑)", "( ´_ゝ`)", "(๑-_-๑)", "(-.-)", "(눈_눈)", "(⇀_⇀)",
+            "(　-_-)", "( -᷄ ω -᷅ )", "(-_-;)・・・", "╮(＿. ＿)╭", "(。-`ω´-)", "(≖_≖ )",
+            "(^_^メ)", "(＞︿＜)", "(¬‿¬)",
+            // Anger
+            "(#`Д´)", "(´Д⊂)", "(＃`Д´)ノ", "(╬`益´)", "┌∩┐(◣_◢)┌∩┐", "(ʘдʘ╬)",
+            "(凸ಠ益ಠ)凸", "٩(╬ʘ益ʘ╬)۶", "Σ(▼□▼メ)", "(╯°□°)╯︵ ┻━┻", "(ಠ_ಠ)", "( ` ω ´ )",
+            "(ノಠ益ಠ)ノ彡┻━┻", "(メ` ロ ´)/", "(ノಥ益ಥ)ノ", "щ(ಠ益ಠщ)", "(￢_￢)", "ヽ(`Д´)ノ",
+            "(‡▼益▼)", "(҂⌣̀_⌣́)", "٩(๑`^´๑)۶", "(>ω<)", "(◣_◢)", "(;≧皿≦)",
+            // Sadness
+            "(´;ω;`)", "( ; ω ; )", "(;﹏;)", "(πーπ)", "(╥_╥)", "(T＿T)", "(ToT)",
+            "(ノД`)・゜・。", "(┳◇┳)", "・゜・(ノД`)・゜・", "(´°̥̥̥̥̥̥̥̥ω°̥̥̥̥̥̥̥̥`)", "(இ﹏இ`｡)",
+            "(´;︵;`)", "(〒︿〒)", "(´∩｀。)", "｡ﾟ(ﾟ´Д`ﾟ)ﾟ｡", "( つ Д `)・゚。", "(つω`｡)",
+            // Pain
+            "~(>_<~)", "(>_<)", "(×_×;）", "(× _ ×;)", "(×_×)", "(+_+)", "( ˃̣̣̥⌓˂̣̣̥ )",
+            "(＋д＋)", "ヾ(×× ) ﾂ", "(;*△*;)", "(☆▽☆;)", "(●´⌓`●)", "(╯︵╰,)",
+            "(°ロ°)", "(×﹏×)", "(>﹏<)", "(;´༎ຶД༎ຶ`)", "(;´Д`)",
+            // Fear
+            "(;;;*_*)", "(ノдヽ)", "(°△°|||）", "(´；Д；`)", "((((；゜Д゜)))", "(°◇°;)",
+            "Σ(°△°|||)", "((´д`))", "(((( ;°Д°))))", "(º □ º l|l)/", "Σ(ﾟдﾟ;)", "{{(>_<)}}",
+            "(((＞Д＜)))", "(〃＞＿＜;〃)", "(; ･`д･´)", "((((;゜Д゜)))", "(O∆O)", "(￣□￣」)",
+            // Indifference
+            "( ´ _ ` )", "(￣へ￣)", "(눈_눈)", "(-_-) zzZ", "(￣~ ￣)", "(=_=)",
+            "(´-ε-`)", "(¬_¬\")", "╮(′～‵〞)╭", "(￣▽￣)ノ", "(^～^;)ゞ", "(´~`ヾ)",
+            "(￣_,￣ )", "(´＿`)", "┐(￣ヮ￣)┌", "(~_~;)", "(・_・ヾ", "┐('～`;)┌",
+            "ヾ(´¬`)ﾉ", "(・_・)", "(-｡-;", "(@_@)", "(ーー;)", "(′～`●)",
+            // Confusion
+            "(・_・ヾ", "(・・ ) ?", "(?_?)", "(¯ . ¯;)", "(・・;)", "(・∧‐)ゞ",
+            "(・・?", "(・・;)ゞ", "(・・ )?", "(・∧‐)ゞ", "(・・;)", "(・・?)ゞ",
+            "\\(º □ º l|l)/", "('◇')?", "(・・;)ゞ", "(´∧ω∧`*)", "σ(・・?)", "(◎_◎;)",
+            // Doubt
+            "(￢_￢)", "( ´_ゝ`)", "(¬ ¬ )", "¬_¬", "(¬‿¬ )", "(＃￣ω￣)", "(;¬_¬)",
+            "(¬_¬\")", "(⊙_☉)", "(;-_-)ノ", "(○'ω'○)", "~(˘▾˘~)", "(¬ε¬)", "(-ε- )",
+            // Surprise
+            "(゜o゜;", "∑(O_O;)", "(⊙_⊙)", "( ꒪Д꒪)", "Σ(°△°|||)︴", "(」゜ロ゜)」",
+            "w(°o°)w", "щ(゜ロ゜щ)", "(゜ロ゜)", "Σ(゜゜)", "(*゜ロ゜)", "(°ロ°)!",
+            "(⊙ˍ⊙)", "(☉_☉)", "(・_・;)", "(・o・;)", "(○o○)", "( ○ ω ○ )",
+            "(°o°:)", "(°ロ°;)", "(￢o￢)", "(゜-゜)", "(๑•̀ㅁ•́๑)", "Σ(っ゜Д゜;)っ",
+            // Greeting
+            "(*・ω・)ﾉ", "(^-^*)/", "(^o^)／", "(￣▽￣)ノ", "ヾ(^▽^*)))", "(*^▽^)／",
+            "(＾▽＾)ノ", "ヾ(＾∇＾)", "(´∀`)ノ", "＼(＾▽＾)／", "\\(^o^)/", "(* ^ ω ^)",
+            "(´• ω •`)ﾉ", "(o´ω`o)ﾉ", "(。･ω･)ﾉﾞ", "( ´ ▽ ` )ﾉ", "ヾ(´ω`=´ω`)ノ",
+            // Hugging
+            "(つ≧▽≦)つ", "(づ￣ ³￣)づ", "ヾ(＾▽＾)ヾ", "(っ´▽`)っ", "(/≧ω≦)/",
+            "(つ✧ω✧)つ", "(*´σー`)σ", "(o´･_･)っ", "＼(￣▽￣)／", "~(˘▾˘~)", "(⊃｡•́‿•̀｡)⊃",
+            "⊂(・▽・⊂)", "⊂(´• ω •`⊂)", "(⊃｡•́‿•̀｡)⊃", "༼ つ ◕_◕ ༽つ",
+            // Winking
+            "(^_~)", "( -_・)", "(^_<)〜☆", "(^_-)≡☆", "(^_<)", "(~_^)", "(^_−)☆",
+            "(-_・)", "(°ω°)", "(^.~)☆", "(^з^)-☆", "ヾ(^▽^*)))", "(-.-)zzZ",
+            // Apologizing
+            "m(_ _)m", "(シ_ _)シ", "m(__)m", "(m;_ _)m", "(ノω<、)", "＿|￣|○",
+            "<(_ _)>", "orz", "(;-;)", "m(_ _;m)", "ヾ(_ _*。)", "(/_＼;)", "(´;ω;`)",
+            // Nosebleeding
+            "(*￣ii￣)", "(*ﾟ∀ﾟ*)", "(♡°▽°♡)", "(*/ω＼*)", "(〃▽〃)", "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)",
+            "(>▽<;;)", "(*´ч ` *)", "(*/∇＼*)", "( ´///ω///`)", "ε=ε=(ノ≧∇≦)ノ",
+            // Hiding
+            "(*ﾉωﾉ)", "(ノ*0*)ノ", "(〃ノωノ)", "(o-_-o)", "(・_・;)", "|д･)",
+            "|ω・）", "┬┴┬┴┤(･_├┬┴┬┴", "ヽ(ー_ー )ノ", "|ω・）ﾉ",
+            // Writing
+            "φ(．．)", "__φ(．．)", "φ(..)メモメモ", "ψ(._. )>", "〆(・∀・＠)", "___φ(‐‐ )",
+            "φ(^∇^ )", "φ(・ω・*)", "φ(・・ )", "φ(￣ー￣ )", "_φ(°-°=)",
+            // Running
+            "ε=ε=ε=┌(;*´Д`)ﾉ", "─=≡Σ((( つ＞＜)つ", "☆ﾐ(o*･ω･)ﾉ", "ε===(っ≧ω≦)っ",
+            "ε=ε=ε=(~￣▽￣)~", "C= C= C= ┌( `ー´)┘", "─=≡Σ((( つ•̀ω•́)つ",
+            "(ノ≧∀≦)ノ", "ε=ε=ε=ε=┏(;￣▽￣)┛", "-=≡Σ(((つ´Д`)つ",
+            // Sleeping
+            "(－ω－) zzZ", "(∪｡∪)｡｡｡zzz", "(´〜｀*) zzz", "(-_-) zzZ", "(￣o￣) zzZZzzZZ",
+            "(u_u)", "(ρ_-)ﾉ", "(≧ω≦)zzz", "(_　_).zZ", "(´-﹃-`)", "(〃´ω`〃)",
+            // Cat
+            "(=^･ω･^=)", "(=^・^=)", "ฅ(^•ﻌ•^ฅ)", "(ฅ'ω'ฅ)", "(=①ω①=)", "(^・x・^)",
+            "ヾ(*ΦωΦ)ﾉ", "ฅ(=･ω･=)ฅ", "(^._.^)ﾉ", "(=^-ω-^=)", "ヽ(=^･ω･^=)丿",
+            "(=^‥^=)", "(=^-^=)", "(^-人-^)", "(・∀・)", "(=´∇｀=)", "ヾ(=ﾟ･ﾟ=)ﾉ",
+            // Bear
+            "ʕ•ᴥ•ʔ", "ʕ·ᴥ·ʔ", "ʕ ·ᴥ·ʔ", "ʕ≧ᴥ≦ʔ", "ʕ→ᴥ←ʔ", "(๑・ิω・ิ)っ",
+            "ʕ º ᴥ ºʔ", "ʕ ᵔᴥᵔ ʔ", "ʕ·ᴥ· ʔ", "ʕ •̀ o •́ ʔ", "ε(´סּ︵סּ`)з", "ʕっ•ᴥ•ʔっ",
+            // Dog
+            "∪･ω･∪", "▼o・ェ・o▼", "∪・ω・∪", "∪･ｪ･∪", "V●ᴥ●V", "ヾ(⌐■_■)ノ♪",
+            "U^ｪ^U", "(▽◕ ᴥ ◕▽)", "U ´꓃ ` U", "U・ᴥ・U",
+            // Rabbit
+            "／(=･ x ･=)＼", "／(^ x ^)＼", "／(･ × ･)＼", "U( ´•ᴥ•` )U", "(・x・)",
+            "( '-' )ノ)`-' )", "U(=･ x ･=)U", "(=^-^=)", "('・x・')", "U ＾ェ＾U",
+            // Pig
+            "( ´(00)` )", "(´(oo)`)", "( ´(oo)ˋ )", "(ˊ(00)ˋ)", "(￣(oo)￣)ノ",
+            "q(´・ω・')p", "(;´(00)`) 豚", "ヽ(´(00)`)ノ",
+            // Bird
+            "(･θ･)", "Σ( °o°)", "( ◉Θ◉)", "Σ>―(〃°ω°〃)♡→", "(✿◠‿◠)", "ヾ(￣◇￣)ノ〃",
+            "(ˊᗜˋ*)", "◎▼◎", "(^・^)", "(°<°)", "(`・ω・)", "ヾ(　´・ω・)ノ",
+            // Fish
+            ">゜))))彡", "<º))))><", ">°))))彡", "><(((('>", ">゜))))><", "(°)#))-",
+            "<・)))><<", "<+))>><", "(°))<<", ">°))彡", "<゜)))彡",
+            // Spider
+            "/╲/( •̀ ω •́ )＼╱\\", "/╲/\\╭[ ・ ▾ ・ ]╮/\\╱\\", "/╲/\\╭ºoꍘoº╮/\\╱\\",
+            // Friends
+            "ヾ(・ω・)ノ", "(・ω・)人(・ω・)", "ヽ(^◇^*)/", "(人･∀･)", "( ´∀`)人(´∀` )",
+            "(^_^)人(^_^)", "(＾▽＾)人(＾▽＾)", "ヾ(＾∇＾)", "(*´∀`*)", "(* ´ ▽ ` *)",
+            // Enemies
+            "ヽ( ｀д´*)ノ", "(҂` ﾛ ´)凸", "凸(¬‿¬)", "(ノ≧ڡ≦)☆", "(◣_◢)", "(╬ಠ益ಠ)",
+            "ヽ(#ﾟДﾟ)ﾉ", "(*｀益´*)", "(ꐦ°᷄д°᷅)", "(●__●)", "ψ(*｀ー´)ψ",
+            // Weapons
+            "o==[]::::::::>", "(ノ ゜Д゜)ノ ︵ ┻━┻", "(╯°□°)╯︵ ┻━┻", "┻━┻ ︵ヽ(`Д´)ﾉ︵ ┻━┻",
+            "(ﾉಥ益ಥ）ﾉ ┻━┻", "─=≡Σ(((っ゜Д゜)っ", "▬▬ι═══════ﺤ", "(▀̿̿Ĺ̯̿̿▀̿ ̿)",
+            // Magic
+            "(ノ◕ヮ◕)ノ*:・゚✧", "(ﾉ´ヮ´)ﾉ*:・゚✧", "(ノ°▽°)ノ︵┻━┻", "☆ﾟ.*･｡ﾟ",
+            "✧･ﾟ: *✧･ﾟ:*", "(∩｀-´)⊃━☆ﾟ.*･｡ﾟ", "( ´ ▽ ` )ﾉ", "(ﾉ>ω<)ﾉ :｡･:*:･ﾟ'★,｡･:*:･ﾟ'☆",
+            // Food
+            "(っ˘ڡ˘ς)", "(๑´ڡ`๑)", "(*´﹃`*)", "( ˘▽˘)っ♨", "(๑•́ ₃ •̀๑)", "(o˘◡˘o)",
+            "(⁎˃ᆺ˂)", "( *ˊᗜˋ* )", "Ψ(｀▽´)Ψ", "(っ'-')╮ =͟͟͞͞🍕",
+            // Music
+            "♪(´ε` )", "(ノ´▽｀)ノ♪", "ヾ(´〇`)ﾉ♪♪♪", "(＾▽＾)/♪", "♪( ´▽｀)",
+            "♬♫♪◖(● o ●)◗♪♫♬", "ヾ(⌐■_■)ノ♪", "(˘▽˘>ԅ( ˘⌣˘)", "└|∵|┐♪",
+            // Games
+            "◝(^O^)◜", "(˵ ͡° ͜ʖ ͡°˵)", "(づ￣ ³￣)づ", "ヽ(✿ﾟ▽ﾟ)ノ", "(シ_ _)シ",
+            "(ノ>ω<)ノ :｡･:*:･ﾟ'★,｡", "(ฅ'ω'ฅ)", "(ノ ゜Д゜)ノ ︵ ┻━┻",
+            // Faces
+            "(◕‿◕)", "^_^", "(•ᴗ•)", "ಠ_ಠ", "(¬‿¬)", "(⌐■_■)", "ಥ_ಥ",
+            "(◠‿◠)", "(｡♥‿♥｡)", "^ω^", "(´・ω・`)", "(◔_◔)", "(ʘ‿ʘ)",
+            // Special
+            "¯\\_(ツ)_/¯", "( ͡° ͜ʖ ͡°)", "ლ(ಠ益ಠლ)", "(ง •̀_•́)ง", "( ͡°( ͡° ͜ʖ( ͡° ͜ʖ ͡°)ʖ ͡°) ͡°)",
+            "┬┴┬┴┤ ͜ʖ ͡°) ├┬┴┬┴", "(◕ᴗ◕✿)", "(•_•) ( •_•)>⌐■-■ (⌐■_■)",
+            "☆*:.｡.o(≧▽≦)o.｡.:*☆", "(づ｡◕‿‿◕｡)づ", "(╯°□°）╯︵ ┻━┻",
+            "¯\\_( ͡° ͜ʖ ͡°)_/¯", "(ノ￣□￣)ノ ~┻━┻", "(~‾▿‾)~", "( ˘ ³˘)❤",
+            "ヽ༼ ຈل͜ຈ༽ ﾉ", "༼ つ ◕_◕ ༽つ", "(ง ͠° ͟ل͜ ͡°)ง", "¯\\(°_o)/¯"
+        ];
+
+        /* ============================================
+           COLOR INTERPOLATION
+           ============================================ */
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function lerpColor(color1, color2, t) {
+            return {
+                r: Math.round(lerp(color1.r, color2.r, t)),
+                g: Math.round(lerp(color1.g, color2.g, t)),
+                b: Math.round(lerp(color1.b, color2.b, t))
+            };
+        }
+
+        function colorToRgb(color) {
+            return `rgb(${color.r}, ${color.g}, ${color.b})`;
+        }
+
+        /* ============================================
+           BREATHING ANIMATION
+           ============================================ */
+        function easeInOutSine(t) {
+            return -(Math.cos(Math.PI * t) - 1) / 2;
+        }
+
+        function animate(timestamp) {
+            if (!state.startTime) state.startTime = timestamp;
+
+            if (state.isPaused) {
+                state.animationId = requestAnimationFrame(animate);
+                return;
+            }
+
+            const cycleDuration = (60 / state.breathingRate) * 1000; // ms per breath
+            const elapsed = (timestamp - state.startTime) % cycleDuration;
+            const progress = elapsed / cycleDuration;
+
+            // 0 to 0.5 = inhale (exhale color -> inhale color)
+            // 0.5 to 1 = exhale (inhale color -> exhale color)
+            let t;
+            if (progress < 0.5) {
+                // Inhale phase: 0->1 over first half
+                t = easeInOutSine(progress * 2);
+            } else {
+                // Exhale phase: 1->0 over second half
+                t = easeInOutSine(1 - (progress - 0.5) * 2);
+            }
+
+            const theme = themes[state.theme];
+            const currentColor = lerpColor(theme.exhale, theme.inhale, t);
+            elements.body.style.backgroundColor = colorToRgb(currentColor);
+
+            state.animationId = requestAnimationFrame(animate);
+        }
+
+        function startAnimation() {
+            state.startTime = null;
+            if (state.animationId) {
+                cancelAnimationFrame(state.animationId);
+            }
+            state.animationId = requestAnimationFrame(animate);
+        }
+
+        /* ============================================
+           THEME MANAGEMENT
+           ============================================ */
+        function setTheme(theme) {
+            state.theme = theme;
+
+            // Update active button
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.theme === theme);
+            });
+
+            // Save preference
+            localStorage.setItem('breathe-theme', theme);
+        }
+
+        /* ============================================
+           BREATHING RATE
+           ============================================ */
+        function setBreathingRate(bpm) {
+            state.breathingRate = bpm;
+            elements.rateDisplay.textContent = bpm.toFixed(1);
+            localStorage.setItem('breathe-rate', bpm);
+        }
+
+        /* ============================================
+           CLOCK
+           ============================================ */
+        function updateClock() {
+            const now = new Date();
+
+            // Time: H:MM AM/PM (12-hour format)
+            let hours = now.getHours();
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            elements.time.textContent = `${hours}:${minutes} ${ampm}`;
+
+            // Date: Day, Mon DD, YYYY
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const day = days[now.getDay()];
+            const month = months[now.getMonth()];
+            const date = now.getDate();
+            const year = now.getFullYear();
+            elements.date.textContent = `${day}, ${month} ${date}, ${year}`;
+        }
+
+        function toggleClock(visible) {
+            state.clockVisible = visible;
+            elements.clock.classList.toggle('hidden', !visible);
+
+            document.querySelectorAll('.toggle-btn[data-clock]').forEach(btn => {
+                btn.classList.toggle('active', (btn.dataset.clock === 'on') === visible);
+            });
+
+            localStorage.setItem('breathe-clock', visible);
+        }
+
+        function displayRandomKaomoji() {
+            const randomIndex = Math.floor(Math.random() * kaomojis.length);
+            elements.kaomoji.textContent = kaomojis[randomIndex];
+        }
+
+        /* ============================================
+           SETTINGS PANEL
+           ============================================ */
+        function showSettings() {
+            state.settingsVisible = true;
+            elements.settingsPanel.classList.add('visible');
+            clearTimeout(state.settingsTimeout);
+        }
+
+        function hideSettings() {
+            state.settingsVisible = false;
+            elements.settingsPanel.classList.remove('visible');
+        }
+
+        function scheduleSettingsHide() {
+            clearTimeout(state.settingsTimeout);
+            state.settingsTimeout = setTimeout(() => {
+                if (state.settingsVisible) {
+                    hideSettings();
+                }
+            }, 3000);
+        }
+
+        /* ============================================
+           PAUSE/PLAY
+           ============================================ */
+        function togglePause() {
+            state.isPaused = !state.isPaused;
+            elements.pauseIndicator.classList.toggle('visible', state.isPaused);
+
+            if (!state.isPaused) {
+                // Reset start time to continue smoothly
+                state.startTime = null;
+            }
+        }
+
+        /* ============================================
+           FULLSCREEN
+           ============================================ */
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+                elements.fullscreenBtn.textContent = 'Exit Fullscreen';
+            } else {
+                document.exitFullscreen();
+                elements.fullscreenBtn.textContent = 'Enter Fullscreen';
+            }
+        }
+
+        /* ============================================
+           EVENT LISTENERS
+           ============================================ */
+        function initEventListeners() {
+            // Mouse movement shows settings
+            document.addEventListener('mousemove', () => {
+                showSettings();
+                scheduleSettingsHide();
+            });
+
+            // Keep settings visible while hovering
+            elements.settingsPanel.addEventListener('mouseenter', () => {
+                clearTimeout(state.settingsTimeout);
+            });
+
+            elements.settingsPanel.addEventListener('mouseleave', () => {
+                scheduleSettingsHide();
+            });
+
+            // Theme buttons
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    setTheme(btn.dataset.theme);
+                });
+            });
+
+            // Clock toggle
+            document.querySelectorAll('.toggle-btn[data-clock]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    toggleClock(btn.dataset.clock === 'on');
+                });
+            });
+
+            // Rate slider
+            elements.rateSlider.addEventListener('input', (e) => {
+                setBreathingRate(parseFloat(e.target.value));
+            });
+
+            // Fullscreen button
+            elements.fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+            // Fullscreen change event
+            document.addEventListener('fullscreenchange', () => {
+                elements.fullscreenBtn.textContent = document.fullscreenElement
+                    ? 'Exit Fullscreen'
+                    : 'Enter Fullscreen';
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() === 's') {
+                    if (state.settingsVisible) {
+                        hideSettings();
+                    } else {
+                        showSettings();
+                        scheduleSettingsHide();
+                    }
+                } else if (e.key.toLowerCase() === 'h') {
+                    toggleClock(!state.clockVisible);
+                } else if (e.key === ' ') {
+                    e.preventDefault();
+                    togglePause();
+                } else if (e.key.toLowerCase() === 'f') {
+                    toggleFullscreen();
+                }
+            });
+        }
+
+        /* ============================================
+           INITIALIZATION
+           ============================================ */
+        function loadSavedSettings() {
+            const savedTheme = localStorage.getItem('breathe-theme');
+            if (savedTheme && themes[savedTheme]) setTheme(savedTheme);
+
+            const savedRate = localStorage.getItem('breathe-rate');
+            if (savedRate) {
+                const rate = parseFloat(savedRate);
+                setBreathingRate(rate);
+                elements.rateSlider.value = rate;
+            }
+
+            const savedClock = localStorage.getItem('breathe-clock');
+            if (savedClock !== null) {
+                toggleClock(savedClock === 'true');
+            }
+        }
+
+        function init() {
+            // Initialize clock
+            updateClock();
+            setInterval(updateClock, 1000);
+
+            // Display random kaomoji
+            displayRandomKaomoji();
+
+            // Load saved settings
+            loadSavedSettings();
+
+            // Initialize event listeners
+            initEventListeners();
+
+            // Start breathing animation
+            startAnimation();
+
+            // Start with settings hidden
+            hideSettings();
+        }
+
+        // Run on DOM ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>

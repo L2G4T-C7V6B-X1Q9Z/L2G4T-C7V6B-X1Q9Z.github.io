@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sanguine Drift</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&family=Lora:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #faf8f6;
+      color: #555;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: #fff;
+      border-top: 3px solid #c23b22;
+      border-bottom: 1px solid #e8e4e0;
+    }
+
+    header h1 {
+      font-family: 'Lora', serif;
+      font-weight: 400;
+      font-size: 22px;
+      color: #444;
+      letter-spacing: 0.3px;
+    }
+
+    header .subtitle {
+      font-size: 11px;
+      color: #999;
+      font-weight: 300;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    .layout {
+      display: flex;
+      height: calc(100vh - 58px);
+    }
+
+    .sidebar {
+      width: 270px;
+      min-width: 270px;
+      background: #fff;
+      border-right: 1px solid #e8e4e0;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .sidebar-section {
+      margin-bottom: 20px;
+    }
+
+    .sidebar-section h3 {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.8px;
+      color: #aaa;
+      margin-bottom: 12px;
+    }
+
+    .seed-display {
+      font-family: 'Lora', serif;
+      font-size: 28px;
+      color: #444;
+      text-align: center;
+      margin-bottom: 12px;
+      font-weight: 400;
+    }
+
+    .seed-nav {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+
+    .seed-nav button {
+      flex: 1;
+      padding: 6px 0;
+      border: 1px solid #d4d0cc;
+      background: #faf8f6;
+      color: #666;
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .seed-nav button:hover {
+      border-color: #c23b22;
+      color: #c23b22;
+    }
+
+    .seed-jump {
+      display: flex;
+      gap: 5px;
+    }
+
+    .seed-jump input {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #d4d0cc;
+      border-radius: 4px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      color: #555;
+      background: #faf8f6;
+      outline: none;
+    }
+
+    .seed-jump input:focus {
+      border-color: #c23b22;
+    }
+
+    .seed-jump button {
+      padding: 6px 14px;
+      border: 1px solid #c23b22;
+      background: #c23b22;
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .seed-jump button:hover {
+      background: #a52f1c;
+      border-color: #a52f1c;
+    }
+
+    .divider {
+      height: 1px;
+      background: #ece8e4;
+      margin: 18px 0;
+    }
+
+    .control-group {
+      margin-bottom: 12px;
+    }
+
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 4px;
+      font-weight: 400;
+    }
+
+    .control-group .value {
+      font-weight: 500;
+      color: #444;
+      font-size: 10px;
+      font-family: 'Poppins', sans-serif;
+      min-width: 36px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 3px;
+      background: #e8e4e0;
+      border-radius: 2px;
+      outline: none;
+      margin: 2px 0;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #c23b22;
+      cursor: pointer;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #c23b22;
+      cursor: pointer;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      padding: 9px 0;
+      background: #c23b22;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-primary:hover {
+      background: #a52f1c;
+    }
+
+    .btn-secondary {
+      padding: 9px 0;
+      background: #faf8f6;
+      color: #666;
+      border: 1px solid #d4d0cc;
+      border-radius: 4px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-secondary:hover {
+      border-color: #c23b22;
+      color: #c23b22;
+    }
+
+    .status {
+      text-align: center;
+      font-size: 10px;
+      color: #bbb;
+      margin-top: 18px;
+      font-weight: 300;
+      letter-spacing: 0.3px;
+    }
+
+    .status.done {
+      color: #c23b22;
+    }
+
+    .shortcuts {
+      text-align: center;
+      font-size: 9px;
+      color: #ccc;
+      margin-top: 10px;
+      font-weight: 300;
+      letter-spacing: 0.2px;
+    }
+
+    .main-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #f0ece8;
+    }
+
+    #canvas-container {
+      box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+      border-radius: 2px;
+      background: #faf7f2;
+    }
+
+    #canvas-container canvas {
+      display: block;
+      border-radius: 2px;
+    }
+
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #d4d0cc; border-radius: 2px; }
+
+    @media (max-width: 700px) {
+      .layout { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        min-width: unset;
+        max-height: 260px;
+        border-right: none;
+        border-bottom: 1px solid #e8e4e0;
+      }
+      .main-area { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Sanguine Drift</h1>
+    <span class="subtitle">Generative Flow Field</span>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+
+      <div class="sidebar-section">
+        <h3>Seed</h3>
+        <div class="seed-display" id="seed-display">42</div>
+        <div class="seed-nav">
+          <button onclick="prevSeed()">&larr; Prev</button>
+          <button onclick="nextSeed()">Next &rarr;</button>
+          <button onclick="pickRandomSeed()">Random</button>
+        </div>
+        <div class="seed-jump">
+          <input type="number" id="seed-input" placeholder="Jump to seed" min="0">
+          <button onclick="jumpToSeed()">Go</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="sidebar-section">
+        <h3>Parameters</h3>
+
+        <div class="control-group">
+          <label>Particles <span class="value" id="count-val">3000</span></label>
+          <input type="range" id="count" min="500" max="8000" step="100" value="3000"
+            oninput="document.getElementById('count-val').textContent=this.value">
+        </div>
+
+        <div class="control-group">
+          <label>Noise Scale <span class="value" id="noiseScale-val">0.003</span></label>
+          <input type="range" id="noiseScale" min="0.001" max="0.010" step="0.001" value="0.003"
+            oninput="document.getElementById('noiseScale-val').textContent=parseFloat(this.value).toFixed(3)">
+        </div>
+
+        <div class="control-group">
+          <label>Flow Strength <span class="value" id="flowStrength-val">2.0</span></label>
+          <input type="range" id="flowStrength" min="0.5" max="5.0" step="0.1" value="2.0"
+            oninput="document.getElementById('flowStrength-val').textContent=parseFloat(this.value).toFixed(1)">
+        </div>
+
+        <div class="control-group">
+          <label>Trail Opacity <span class="value" id="trailOpacity-val">8</span></label>
+          <input type="range" id="trailOpacity" min="2" max="30" step="1" value="8"
+            oninput="document.getElementById('trailOpacity-val').textContent=this.value">
+        </div>
+
+        <div class="control-group">
+          <label>Turbulence <span class="value" id="turbulence-val">4.0</span></label>
+          <input type="range" id="turbulence" min="1.0" max="8.0" step="0.5" value="4.0"
+            oninput="document.getElementById('turbulence-val').textContent=parseFloat(this.value).toFixed(1)">
+        </div>
+
+        <div class="control-group">
+          <label>Lifespan <span class="value" id="lifespan-val">200</span></label>
+          <input type="range" id="lifespan" min="50" max="500" step="10" value="200"
+            oninput="document.getElementById('lifespan-val').textContent=this.value">
+        </div>
+
+        <div class="control-group">
+          <label>Stroke Weight <span class="value" id="strokeWeight-val">0.8</span></label>
+          <input type="range" id="strokeWeight" min="0.3" max="2.0" step="0.1" value="0.8"
+            oninput="document.getElementById('strokeWeight-val').textContent=parseFloat(this.value).toFixed(1)">
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="sidebar-section">
+        <h3>Actions</h3>
+        <div class="actions">
+          <button class="btn-primary" onclick="regenerate()">Regenerate</button>
+          <button class="btn-secondary" onclick="resetDefaults()">Reset Defaults</button>
+          <button class="btn-secondary" onclick="downloadPNG()">Download PNG</button>
+        </div>
+      </div>
+
+      <div class="status" id="status">Generating...</div>
+      <div class="shortcuts">Space: regenerate &middot; S: save &middot; &larr; &rarr;: seeds</div>
+
+    </aside>
+
+    <div class="main-area">
+      <div id="canvas-container"></div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    //  SANGUINE DRIFT — Generative Flow Field
+    //  Algorithmic philosophy: invisible circulation made visible
+    // ============================================================
+
+    // === CONFIGURATION ===
+    const defaults = {
+      seed: 42,
+      count: 3000,
+      noiseScale: 0.003,
+      flowStrength: 2.0,
+      trailOpacity: 8,
+      turbulence: 4.0,
+      lifespan: 200,
+      strokeWeight: 0.8
+    };
+
+    let params = { ...defaults };
+    let particles = [];
+    let gen = 0;
+    let canvasSize;
+
+    // === P5.JS LIFECYCLE ===
+    function setup() {
+      const mainArea = document.querySelector('.main-area');
+      canvasSize = Math.min(
+        mainArea.clientWidth - 60,
+        mainArea.clientHeight - 60,
+        900
+      );
+      canvasSize = Math.max(canvasSize, 300);
+
+      let canvas = createCanvas(canvasSize, canvasSize);
+      canvas.parent('canvas-container');
+      pixelDensity(1);
+      noFill();
+
+      initGeneration();
+    }
+
+    function draw() {
+      for (let p of particles) {
+        p.update();
+        p.display();
+      }
+
+      gen++;
+
+      if (gen % 30 === 0) {
+        document.getElementById('status').textContent =
+          'Generation: ' + gen + ' frames';
+        document.getElementById('status').className = 'status';
+      }
+
+      if (gen >= 600) {
+        noLoop();
+        document.getElementById('status').textContent =
+          'Complete \u2014 ' + gen + ' frames';
+        document.getElementById('status').className = 'status done';
+      }
+    }
+
+    // === GENERATION CONTROL ===
+    function initGeneration() {
+      randomSeed(params.seed);
+      noiseSeed(params.seed);
+
+      background(250, 247, 242);
+
+      particles = [];
+      for (let i = 0; i < params.count; i++) {
+        particles.push(new Particle());
+      }
+
+      gen = 0;
+      document.getElementById('status').textContent = 'Generating...';
+      document.getElementById('status').className = 'status';
+      loop();
+    }
+
+    // === PARTICLE CLASS ===
+    class Particle {
+      constructor() {
+        this.reset();
+      }
+
+      reset() {
+        let margin = canvasSize * 0.06;
+        this.x = random(-margin, width + margin);
+        this.y = random(-margin, height + margin);
+        this.px = this.x;
+        this.py = this.y;
+        this.life = 0;
+        this.maxLife = random(params.lifespan * 0.5, params.lifespan * 1.5);
+        this.speed = 1;
+      }
+
+      update() {
+        this.px = this.x;
+        this.py = this.y;
+
+        // Flow angle from primary noise field
+        let angle = noise(
+          this.x * params.noiseScale,
+          this.y * params.noiseScale
+        ) * TWO_PI * params.turbulence;
+
+        // Speed variation from secondary noise field
+        let speedFactor = noise(
+          this.x * params.noiseScale * 0.7 + 500,
+          this.y * params.noiseScale * 0.7 + 500
+        );
+        speedFactor = 0.3 + speedFactor * 0.7;
+
+        this.x += cos(angle) * params.flowStrength * speedFactor;
+        this.y += sin(angle) * params.flowStrength * speedFactor;
+        this.speed = speedFactor;
+        this.life++;
+
+        if (
+          this.life > this.maxLife ||
+          this.x < -60 || this.x > width + 60 ||
+          this.y < -60 || this.y > height + 60
+        ) {
+          this.reset();
+        }
+      }
+
+      display() {
+        // Skip the frame immediately after reset (zero-length line)
+        if (this.px === this.x && this.py === this.y) return;
+
+        // Color from tertiary noise field: warm gray -> crimson
+        let t = noise(
+          this.x * params.noiseScale * 0.5 + 1000,
+          this.y * params.noiseScale * 0.5 + 1000
+        );
+        t = pow(t, 1.8); // bias toward gray — red is rarer, more precious
+
+        let r = lerp(165, 192, t);
+        let g = lerp(155, 50, t);
+        let b = lerp(150, 40, t);
+
+        // Stroke weight: bell curve over lifetime, thicker in slow zones
+        let lifeRatio = this.life / this.maxLife;
+        let sw = params.strokeWeight * (0.4 + 0.6 * sin(lifeRatio * PI));
+        sw *= (1.15 - this.speed * 0.3);
+
+        stroke(r, g, b, params.trailOpacity);
+        strokeWeight(sw);
+        line(this.px, this.py, this.x, this.y);
+      }
+    }
+
+    // === UI HANDLERS ===
+    function readParams() {
+      params.count = parseInt(document.getElementById('count').value);
+      params.noiseScale = parseFloat(document.getElementById('noiseScale').value);
+      params.flowStrength = parseFloat(document.getElementById('flowStrength').value);
+      params.trailOpacity = parseInt(document.getElementById('trailOpacity').value);
+      params.turbulence = parseFloat(document.getElementById('turbulence').value);
+      params.lifespan = parseInt(document.getElementById('lifespan').value);
+      params.strokeWeight = parseFloat(document.getElementById('strokeWeight').value);
+    }
+
+    function updateUI() {
+      document.getElementById('seed-display').textContent = params.seed;
+      document.getElementById('count').value = params.count;
+      document.getElementById('count-val').textContent = params.count;
+      document.getElementById('noiseScale').value = params.noiseScale;
+      document.getElementById('noiseScale-val').textContent = params.noiseScale.toFixed(3);
+      document.getElementById('flowStrength').value = params.flowStrength;
+      document.getElementById('flowStrength-val').textContent = params.flowStrength.toFixed(1);
+      document.getElementById('trailOpacity').value = params.trailOpacity;
+      document.getElementById('trailOpacity-val').textContent = params.trailOpacity;
+      document.getElementById('turbulence').value = params.turbulence;
+      document.getElementById('turbulence-val').textContent = params.turbulence.toFixed(1);
+      document.getElementById('lifespan').value = params.lifespan;
+      document.getElementById('lifespan-val').textContent = params.lifespan;
+      document.getElementById('strokeWeight').value = params.strokeWeight;
+      document.getElementById('strokeWeight-val').textContent = params.strokeWeight.toFixed(1);
+    }
+
+    function regenerate() {
+      readParams();
+      initGeneration();
+    }
+
+    function resetDefaults() {
+      params = { ...defaults };
+      updateUI();
+      initGeneration();
+    }
+
+    function prevSeed() {
+      readParams();
+      params.seed = Math.max(0, params.seed - 1);
+      document.getElementById('seed-display').textContent = params.seed;
+      initGeneration();
+    }
+
+    function nextSeed() {
+      readParams();
+      params.seed++;
+      document.getElementById('seed-display').textContent = params.seed;
+      initGeneration();
+    }
+
+    function pickRandomSeed() {
+      readParams();
+      params.seed = Math.floor(Math.random() * 100000);
+      document.getElementById('seed-display').textContent = params.seed;
+      initGeneration();
+    }
+
+    function jumpToSeed() {
+      let val = parseInt(document.getElementById('seed-input').value);
+      if (!isNaN(val) && val >= 0) {
+        readParams();
+        params.seed = val;
+        document.getElementById('seed-display').textContent = params.seed;
+        document.getElementById('seed-input').value = '';
+        initGeneration();
+      }
+    }
+
+    function downloadPNG() {
+      saveCanvas('sanguine-drift-seed-' + params.seed, 'png');
+    }
+
+    // === EVENT LISTENERS ===
+    document.getElementById('seed-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') jumpToSeed();
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.target.tagName === 'INPUT') return;
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          regenerate();
+          break;
+        case 's':
+        case 'S':
+          downloadPNG();
+          break;
+        case 'r':
+        case 'R':
+          resetDefaults();
+          break;
+        case 'ArrowLeft':
+          prevSeed();
+          break;
+        case 'ArrowRight':
+          nextSeed();
+          break;
+      }
+    });
+  </script>
+
+</body>
+</html>

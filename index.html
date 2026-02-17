@@ -140,6 +140,7 @@
     <span class="nav-logo">Soren Christensen</span>
     <div class="nav-links">
       <a href="#projects">Projects</a>
+      <a href="cv.html">CV</a>
       <a href="#contact">Contact</a>
     </div>
   </nav>
@@ -148,43 +149,128 @@
       <!-- To add your photo: save as photo.jpg in this folder, then uncomment the line below -->
       <!-- <img class="hero-photo" src="photo.jpg" alt="Soren Christensen"> -->
       <div class="hero-text">
-        <h1>Hey, I'm <span>Soren</span>.</h1>
-        <p>MS3 at Duke. I build things on the side &mdash; this is where I keep them.</p>
+        <h1><span>Soren</span> Christensen</h1>
+        <p>Third-year medical student at Duke University School of Medicine. Neuroradiology research, software projects, and other work.</p>
       </div>
     </div>
     <section id="projects">
       <h2>Projects</h2>
+
       <a class="card-link" href="cv.html">
         <div class="card">
           <div class="card-body">
             <div class="card-title">Curriculum Vitae</div>
-            <div class="card-desc">My full academic CV &mdash; education, research, publications, and presentations.</div>
-            <div class="card-tags">
-              <span class="tag">Academic</span>
-            </div>
+            <div class="card-desc">Full academic CV &mdash; education, research, publications, and presentations.</div>
+            <div class="card-tags"><span class="tag">Academic</span></div>
           </div>
           <span class="card-arrow">&#8599;</span>
         </div>
       </a>
+
+      <a class="card-link" href="sanguine-drift.html">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">Sanguine Drift</div>
+            <div class="card-desc">Generative flow field visualization. Thousands of particles trace invisible currents through a seeded noise field, rendered in warm grays and crimson.</div>
+            <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+          </div>
+          <span class="card-arrow">&#8599;</span>
+        </div>
+      </a>
+
+      <a class="card-link" href="strange-resonance.html">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">Strange Resonance</div>
+            <div class="card-desc">Attractor visualization using layered trigonometric equations. Depth-sorted lines with glow passes and a vignette overlay create a sense of dimensional space.</div>
+            <div class="card-tags"><span class="tag">p5.js</span><span class="tag">Generative Art</span><span class="tag">Canvas</span></div>
+          </div>
+          <span class="card-arrow">&#8599;</span>
+        </div>
+      </a>
+
+      <a class="card-link" href="sky-simulator.html">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">Sky View Simulator</div>
+            <div class="card-desc">Real-time sky map rendering stars, constellations, satellites, planets, and aircraft based on observer coordinates and current time.</div>
+            <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Astronomy</span><span class="tag">JavaScript</span></div>
+          </div>
+          <span class="card-arrow">&#8599;</span>
+        </div>
+      </a>
+
+      <a class="card-link" href="eye-trainer.html">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">Eye Trainer</div>
+            <div class="card-desc">Precision eye training tool with four exercise modes &mdash; smooth tracking, flash reaction, saccade jumps, and snap locks &mdash; using procedurally generated paths.</div>
+            <div class="card-tags"><span class="tag">Canvas</span><span class="tag">Simplex Noise</span><span class="tag">JavaScript</span></div>
+          </div>
+          <span class="card-arrow">&#8599;</span>
+        </div>
+      </a>
+
+      <a class="card-link" href="speed-reader/">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">Speed Reader</div>
+            <div class="card-desc">RSVP speed reading tool with anchor-centric display, adaptive pacing from 250&ndash;1200 WPM, and a marker system for important sections.</div>
+            <div class="card-tags"><span class="tag">JavaScript</span><span class="tag">IBM Plex Mono</span></div>
+          </div>
+          <span class="card-arrow">&#8599;</span>
+        </div>
+      </a>
+
+      <a class="card-link" href="breathe.html">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">Breathe</div>
+            <div class="card-desc">Meditative breathing guide that shifts background color in sync with your breath cycle. Adjustable rate, six color themes, and a clock overlay.</div>
+            <div class="card-tags"><span class="tag">Animation</span><span class="tag">JavaScript</span></div>
+          </div>
+          <span class="card-arrow">&#8599;</span>
+        </div>
+      </a>
+
       <a class="card-link" href="https://l2g4t-c7v6b-x1q9z.github.io/sorvidpomo/" target="_blank" rel="noopener">
         <div class="card">
           <div class="card-body">
             <div class="card-title">sorvidpomo</div>
-            <div class="card-desc">A minimal Pomodoro focus timer with customizable durations, ambient audio, and an animated circular progress display.</div>
-            <div class="card-tags">
-              <span class="tag">React</span>
-              <span class="tag">Framer Motion</span>
-              <span class="tag">Tailwind CSS</span>
-              <span class="tag">Web Audio API</span>
-            </div>
+            <div class="card-desc">Pomodoro focus timer with synthesized ambient audio, animated circular progress, and customizable durations.</div>
+            <div class="card-tags"><span class="tag">React</span><span class="tag">Framer Motion</span><span class="tag">Web Audio API</span></div>
           </div>
           <span class="card-arrow">&#8599;</span>
         </div>
       </a>
+
+      <a class="card-link" href="ankivoice.html">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">AnkiVoice</div>
+            <div class="card-desc">Hands-free Anki review via voice commands and pocket tap detection. Sensor fusion filters walking motion from intentional taps. In development.</div>
+            <div class="card-tags"><span class="tag">React Native</span><span class="tag">TypeScript</span><span class="tag">Expo</span></div>
+          </div>
+          <span class="card-arrow">&#8599;</span>
+        </div>
+      </a>
+
+      <a class="card-link" href="blobscape.html">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">Blobscape</div>
+            <div class="card-desc">Immersive particle visualization with 2000+ particles drifting through wind patterns. Multiple themed palettes and cursor tracking.</div>
+            <div class="card-tags"><span class="tag">Canvas</span><span class="tag">JavaScript</span><span class="tag">Work in Progress</span></div>
+          </div>
+          <span class="card-arrow">&#8599;</span>
+        </div>
+      </a>
+
     </section>
     <section id="contact">
       <h2>Contact</h2>
       <div class="contact-links">
+        <a href="mailto:soren.christensen@duke.edu">soren.christensen@duke.edu</a>
         <a href="https://github.com/L2G4T-C7V6B-X1Q9Z" target="_blank" rel="noopener">GitHub</a>
       </div>
     </section>

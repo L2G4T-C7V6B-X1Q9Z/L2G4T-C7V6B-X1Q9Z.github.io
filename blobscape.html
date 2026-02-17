@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Blobscape</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body { cursor: none; }
+  body.active { cursor: default; }
+
+  #scene {
+    position: fixed;
+    inset: -250px;
+    overflow: hidden;
+  }
+
+  .blob {
+    position: absolute;
+    left: 0;
+    top: 0;
+    border-radius: 50%;
+    will-change: transform;
+    opacity: 0.88;
+  }
+
+  #veil {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    transition: background-color 1.6s ease;
+  }
+
+  /* ── Clock ── */
+  #clock {
+    position: fixed;
+    bottom: 50%;
+    left: 50%;
+    transform: translate(-50%, 50%);
+    font-size: clamp(3.5rem, 9vw, 8rem);
+    font-weight: 300;
+    letter-spacing: 0.05em;
+    opacity: 0.10;
+    pointer-events: none;
+    z-index: 5;
+    transition: color 1.2s ease, opacity 1.2s ease;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Solar info (bottom-left) ── */
+  #solar-info {
+    position: fixed;
+    bottom: 24px;
+    left: 28px;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0.13;
+    transition: color 1.2s ease, opacity 1.2s ease;
+    line-height: 1.6;
+  }
+
+  #solar-info .solar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #solar-info .solar-icon {
+    font-size: 11px;
+    opacity: 0.7;
+  }
+
+  #solar-info .solar-label {
+    opacity: 0.7;
+    font-weight: 300;
+  }
+
+  #solar-info .solar-time {
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+
+  #solar-info.loading {
+    font-size: 12px;
+    opacity: 0.08;
+  }
+
+  /* ── Palette bar ── */
+  #palette-bar {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.18);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  body.active #palette-bar { opacity: 1; }
+
+  .palette-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.2);
+    transition: transform 0.2s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .palette-dot:hover {
+    transform: scale(1.22);
+    border-color: rgba(255,255,255,0.55);
+  }
+
+  .palette-dot.selected {
+    border-color: rgba(255,255,255,0.8);
+    box-shadow: 0 0 10px rgba(255,255,255,0.25);
+  }
+
+  .palette-label {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: rgba(255,255,255,0.65);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    font-weight: 500;
+  }
+
+  .palette-dot:hover .palette-label { opacity: 1; }
+
+  /* ── Top-right buttons ── */
+  .corner-btn {
+    position: fixed;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(0,0,0,0.15);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: rgba(255,255,255,0.55);
+    cursor: pointer;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.4s ease, background 0.2s ease;
+  }
+
+  body.active .corner-btn { opacity: 1; }
+  .corner-btn:hover { background: rgba(0,0,0,0.3); color: rgba(255,255,255,0.85); }
+  .corner-btn svg { width: 15px; height: 15px; }
+
+  #fs-btn { top: 14px; right: 14px; }
+
+  /* ── Hint ── */
+  #hint {
+    position: fixed;
+    bottom: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: rgba(255,255,255,0.28);
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  body.active #hint { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+<div id="veil"></div>
+<div id="clock"></div>
+
+<div id="solar-info" class="loading">
+  <div class="solar-row" id="solar-row-1"></div>
+  <div class="solar-row" id="solar-row-2"></div>
+</div>
+
+<div id="palette-bar"></div>
+
+<button id="fs-btn" class="corner-btn" aria-label="Toggle fullscreen">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
+  </svg>
+</button>
+
+<div id="hint">F &middot; fullscreen &nbsp;&nbsp; &larr; &rarr; &middot; palettes &nbsp;&nbsp; scroll &middot; cycle</div>
+
+<script>
+// ══════════════════════════════════════════
+// SOLAR CALCULATIONS (simplified NOAA)
+// ══════════════════════════════════════════
+
+const DEG = Math.PI / 180;
+const RAD = 180 / Math.PI;
+
+function julianDay(date) {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  const d = date.getUTCDate() + (date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600) / 24;
+  const a = Math.floor((14 - m) / 12);
+  const yy = y + 4800 - a;
+  const mm = m + 12 * a - 3;
+  return d + Math.floor((153 * mm + 2) / 5) + 365 * yy + Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) - 32045;
+}
+
+function solarTimes(lat, lon, date) {
+  const jd = julianDay(date);
+  const n = jd - 2451545.0;
+  const L = (280.46 + 0.9856474 * n) % 360;
+  const g = ((357.528 + 0.9856003 * n) % 360) * DEG;
+  const lambda = (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * DEG;
+  const epsilon = 23.439 * DEG - 0.0000004 * n * DEG;
+  const sinDec = Math.sin(epsilon) * Math.sin(lambda);
+  const dec = Math.asin(sinDec);
+
+  // Equation of time (minutes)
+  const y2 = Math.tan(epsilon / 2) ** 2;
+  const Lrad = L * DEG;
+  const eot = 4 * RAD * (y2 * Math.sin(2 * Lrad) - 2 * 0.0167 * Math.sin(g) + 4 * 0.0167 * y2 * Math.sin(g) * Math.cos(2 * Lrad));
+
+  // Solar noon (in minutes from midnight UTC)
+  const solarNoonMin = 720 - 4 * lon - eot;
+
+  // Hour angle
+  const cosHA = (Math.sin(-0.833 * DEG) - Math.sin(lat * DEG) * Math.sin(dec)) / (Math.cos(lat * DEG) * Math.cos(dec));
+
+  // Check for polar day/night
+  if (cosHA > 1) return { noon: solarNoonMin, rise: null, set: null, polarNight: true };
+  if (cosHA < -1) return { noon: solarNoonMin, rise: null, set: null, polarDay: true };
+
+  const ha = Math.acos(cosHA) * RAD;
+  const riseMin = solarNoonMin - ha * 4;
+  const setMin = solarNoonMin + ha * 4;
+
+  return { noon: solarNoonMin, rise: riseMin, set: setMin };
+}
+
+function utcMinToLocal(utcMin, date) {
+  const offset = -date.getTimezoneOffset(); // local offset in minutes
+  let local = utcMin + offset;
+  if (local < 0) local += 1440;
+  if (local >= 1440) local -= 1440;
+  return local;
+}
+
+function minutesSinceMidnight(date) {
+  return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
+}
+
+function fmtDuration(mins) {
+  if (mins < 0) mins += 1440;
+  const h = Math.floor(mins / 60);
+  const m = Math.floor(mins % 60);
+  if (h === 0) return `${m}m`;
+  return `${h}h ${m.toString().padStart(2, '0')}m`;
+}
+
+let userLat = null;
+let userLon = null;
+let solarCache = null;
+let solarCacheDate = null;
+
+function updateSolar() {
+  const info = document.getElementById('solar-info');
+  const row1 = document.getElementById('solar-row-1');
+  const row2 = document.getElementById('solar-row-2');
+
+  if (userLat === null) {
+    row1.innerHTML = '';
+    row2.innerHTML = '';
+    return;
+  }
+
+  info.classList.remove('loading');
+
+  const now = new Date();
+  const today = now.toDateString();
+  const nowMin = minutesSinceMidnight(now);
+
+  // Recalculate if day changed
+  if (solarCacheDate !== today) {
+    const todaySolar = solarTimes(userLat, userLon, now);
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowSolar = solarTimes(userLat, userLon, tomorrow);
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdaySolar = solarTimes(userLat, userLon, yesterday);
+
+    solarCache = {
+      today: {
+        rise: todaySolar.rise !== null ? utcMinToLocal(todaySolar.rise, now) : null,
+        set: todaySolar.set !== null ? utcMinToLocal(todaySolar.set, now) : null,
+        noon: utcMinToLocal(todaySolar.noon, now),
+      },
+      tomorrow: {
+        rise: tomorrowSolar.rise !== null ? utcMinToLocal(tomorrowSolar.rise, tomorrow) : null,
+        set: tomorrowSolar.set !== null ? utcMinToLocal(tomorrowSolar.set, tomorrow) : null,
+        noon: utcMinToLocal(tomorrowSolar.noon, tomorrow),
+      },
+      yesterday: {
+        set: yesterdaySolar.set !== null ? utcMinToLocal(yesterdaySolar.set, yesterday) : null,
+      },
+      polar: todaySolar.polarDay || todaySolar.polarNight || false,
+    };
+    solarCacheDate = today;
+  }
+
+  const s = solarCache;
+  if (s.polar) {
+    row1.innerHTML = '';
+    row2.innerHTML = '';
+    return;
+  }
+
+  // Line 1: time until next sunrise or sunset
+  let sunEvent, sunLabel, sunIcon, sunMins;
+  const rise = s.today.rise;
+  const set = s.today.set;
+  const tomorrowRise = s.tomorrow.rise;
+
+  if (nowMin < rise) {
+    // Before sunrise
+    sunLabel = 'sunrise';
+    sunIcon = '☀';
+    sunMins = rise - nowMin;
+  } else if (nowMin < set) {
+    // Daytime — show time until sunset
+    sunLabel = 'sunset';
+    sunIcon = '◑';
+    sunMins = set - nowMin;
+  } else {
+    // After sunset — show time until tomorrow's sunrise
+    sunLabel = 'sunrise';
+    sunIcon = '☀';
+    sunMins = (1440 - nowMin) + tomorrowRise;
+  }
+
+  // Line 2: time until solar noon or solar midnight
+  // Solar midnight = midpoint between today's sunset and tomorrow's sunrise
+  // (or between yesterday's sunset and today's sunrise if before sunrise)
+  let midEvent, midLabel, midIcon, midMins;
+  const noon = s.today.noon;
+
+  if (nowMin < rise) {
+    // Before sunrise — we're in the "night" period
+    // Solar midnight = midpoint between yesterday's sunset and today's sunrise
+    const ySet = s.yesterday.set || (set - 1440); // fallback
+    const solarMidnight = ySet + ((rise + 1440 - ySet) / 2);
+    const midnightLocal = solarMidnight % 1440;
+
+    if (nowMin < midnightLocal) {
+      midLabel = 'solar midnight';
+      midIcon = '●';
+      midMins = midnightLocal - nowMin;
+    } else {
+      midLabel = 'solar noon';
+      midIcon = '○';
+      midMins = noon - nowMin;
+    }
+  } else if (nowMin < noon) {
+    // Morning — show time until solar noon
+    midLabel = 'solar noon';
+    midIcon = '○';
+    midMins = noon - nowMin;
+  } else if (nowMin < set) {
+    // Afternoon — solar midnight is next
+    const solarMidnightMin = set + ((tomorrowRise + 1440 - set) / 2);
+    midLabel = 'solar midnight';
+    midIcon = '●';
+    midMins = solarMidnightMin - nowMin;
+  } else {
+    // After sunset — solar midnight
+    const solarMidnightMin = set + ((tomorrowRise + 1440 - set) / 2);
+    if (nowMin < solarMidnightMin) {
+      midLabel = 'solar midnight';
+      midIcon = '●';
+      midMins = solarMidnightMin - nowMin;
+    } else {
+      // Past solar midnight — show time until tomorrow's solar noon
+      const tomorrowNoon = s.tomorrow.noon;
+      midLabel = 'solar noon';
+      midIcon = '○';
+      midMins = (1440 - nowMin) + tomorrowNoon;
+    }
+  }
+
+  row1.innerHTML = `<span class="solar-icon">${sunIcon}</span><span class="solar-label">${sunLabel}</span><span class="solar-time">${fmtDuration(sunMins)}</span>`;
+  row2.innerHTML = `<span class="solar-icon">${midIcon}</span><span class="solar-label">${midLabel}</span><span class="solar-time">${fmtDuration(midMins)}</span>`;
+}
+
+// Request geolocation
+function requestLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+      solarCacheDate = null; // force recalc
+      updateSolar();
+    },
+    () => {
+      // Permission denied or error — hide solar info
+      document.getElementById('solar-info').style.display = 'none';
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 3600000 }
+  );
+}
+
+requestLocation();
+
+
+// ══════════════════════════════════════════
+// PALETTES
+// ══════════════════════════════════════════
+
+const PALETTES = [
+  {
+    name: 'Sunset',
+    bg: '#0f0604',
+    veil: 'rgba(255,240,230,0.26)',
+    clockColor: '#000',
+    colors: [
+      { h: 12, s: 85, l: 65 },
+      { h: 30, s: 88, l: 68 },
+      { h: 350, s: 70, l: 70 },
+      { h: 45, s: 82, l: 70 },
+      { h: 210, s: 72, l: 68 },
+    ],
+    dot: 'linear-gradient(135deg, #f4845f, #f06292)',
+  },
+  {
+    name: 'Ocean',
+    bg: '#020e18',
+    veil: 'rgba(210,235,255,0.20)',
+    clockColor: '#000',
+    colors: [
+      { h: 195, s: 82, l: 58 },
+      { h: 215, s: 78, l: 62 },
+      { h: 178, s: 68, l: 55 },
+      { h: 235, s: 60, l: 67 },
+      { h: 190, s: 85, l: 52 },
+    ],
+    dot: 'linear-gradient(135deg, #4dd0e1, #1976d2)',
+  },
+  {
+    name: 'Aurora',
+    bg: '#030d10',
+    veil: 'rgba(190,255,225,0.16)',
+    clockColor: '#000',
+    colors: [
+      { h: 155, s: 72, l: 52 },
+      { h: 280, s: 58, l: 62 },
+      { h: 175, s: 68, l: 48 },
+      { h: 305, s: 52, l: 58 },
+      { h: 135, s: 62, l: 55 },
+    ],
+    dot: 'linear-gradient(135deg, #66bb6a, #ab47bc)',
+  },
+  {
+    name: 'Ember',
+    bg: '#120600',
+    veil: 'rgba(255,225,200,0.22)',
+    clockColor: '#000',
+    colors: [
+      { h: 8, s: 82, l: 55 },
+      { h: 28, s: 88, l: 60 },
+      { h: 48, s: 85, l: 63 },
+      { h: 358, s: 75, l: 52 },
+      { h: 18, s: 80, l: 58 },
+    ],
+    dot: 'linear-gradient(135deg, #ef5350, #ff9800)',
+  },
+  {
+    name: 'Lavender',
+    bg: '#0c0612',
+    veil: 'rgba(235,225,255,0.22)',
+    clockColor: '#000',
+    colors: [
+      { h: 268, s: 62, l: 68 },
+      { h: 292, s: 52, l: 66 },
+      { h: 322, s: 58, l: 70 },
+      { h: 248, s: 48, l: 70 },
+      { h: 338, s: 55, l: 68 },
+    ],
+    dot: 'linear-gradient(135deg, #b39ddb, #f48fb1)',
+  },
+  {
+    name: 'Midnight',
+    bg: '#04040e',
+    veil: 'rgba(170,180,255,0.14)',
+    clockColor: '#556',
+    colors: [
+      { h: 235, s: 58, l: 48 },
+      { h: 258, s: 52, l: 43 },
+      { h: 218, s: 62, l: 52 },
+      { h: 278, s: 48, l: 46 },
+      { h: 200, s: 58, l: 50 },
+    ],
+    dot: 'linear-gradient(135deg, #5c6bc0, #7e57c2)',
+  },
+  {
+    name: 'Golden Hour',
+    bg: '#100800',
+    veil: 'rgba(255,235,200,0.25)',
+    clockColor: '#000',
+    colors: [
+      { h: 38, s: 90, l: 62 },
+      { h: 22, s: 85, l: 58 },
+      { h: 50, s: 88, l: 65 },
+      { h: 8, s: 78, l: 60 },
+      { h: 42, s: 82, l: 68 },
+    ],
+    dot: 'linear-gradient(135deg, #ffb74d, #ff8a65)',
+  },
+  {
+    name: 'Deep Sea',
+    bg: '#020810',
+    veil: 'rgba(180,210,240,0.14)',
+    clockColor: '#334',
+    colors: [
+      { h: 210, s: 70, l: 38 },
+      { h: 195, s: 65, l: 42 },
+      { h: 230, s: 55, l: 45 },
+      { h: 180, s: 60, l: 35 },
+      { h: 220, s: 50, l: 48 },
+    ],
+    dot: 'linear-gradient(135deg, #1565c0, #00838f)',
+  },
+  {
+    name: 'Cherry Blossom',
+    bg: '#100810',
+    veil: 'rgba(255,230,240,0.25)',
+    clockColor: '#000',
+    colors: [
+      { h: 340, s: 70, l: 75 },
+      { h: 320, s: 55, l: 72 },
+      { h: 350, s: 65, l: 78 },
+      { h: 0, s: 60, l: 80 },
+      { h: 310, s: 45, l: 76 },
+    ],
+    dot: 'linear-gradient(135deg, #f48fb1, #ce93d8)',
+  },
+  // ── Dark modes ──
+  {
+    name: 'Void',
+    bg: '#000000',
+    veil: 'rgba(255,255,255,0.04)',
+    clockColor: 'rgba(255,255,255,0.5)',
+    colors: [
+      { h: 0, s: 0, l: 28 },
+      { h: 0, s: 0, l: 22 },
+      { h: 0, s: 0, l: 32 },
+      { h: 0, s: 0, l: 25 },
+      { h: 0, s: 0, l: 30 },
+    ],
+    dot: 'linear-gradient(135deg, #444, #222)',
+    dark: true,
+  },
+  {
+    name: 'Night Vision',
+    bg: '#000000',
+    veil: 'rgba(255,0,0,0.03)',
+    clockColor: 'rgba(255,40,40,0.4)',
+    colors: [
+      { h: 0, s: 80, l: 22 },
+      { h: 355, s: 75, l: 18 },
+      { h: 5, s: 85, l: 25 },
+      { h: 350, s: 70, l: 20 },
+      { h: 10, s: 78, l: 22 },
+    ],
+    dot: 'linear-gradient(135deg, #b71c1c, #4a0000)',
+    dark: true,
+  },
+];
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+
+let currentPalette = 0;
+let idleTimer = null;
+const IDLE_DELAY = 3500;
+const BLOB_COUNT = 6;
+
+// ══════════════════════════════════════════
+// BLOBS
+// ══════════════════════════════════════════
+
+function makeGrad(c, isDark) {
+  const a1 = isDark ? 0.5 : 0.88;
+  const a2 = isDark ? 0.3 : 0.65;
+  return `radial-gradient(circle at 50% 50%, hsla(${c.h},${c.s}%,${c.l}%,${a1}), hsla(${c.h},${c.s}%,${c.l}%,${a2}) 45%, transparent 72%)`;
+}
+
+const blobs = Array.from({ length: BLOB_COUNT }, (_, i) => ({
+  el: null,
+  colorIdx: i % PALETTES[0].colors.length,
+  x: 10 + Math.random() * 80,
+  y: 10 + Math.random() * 80,
+  s: 1.0 + Math.random() * 0.45,
+  vx: (Math.random() - 0.5) * 0.022,
+  vy: (Math.random() - 0.5) * 0.022,
+  phase: Math.random() * Math.PI * 2,
+  wobble: 0.00014 + Math.random() * 0.00008,
+}));
+
+// ══════════════════════════════════════════
+// DOM SETUP
+// ══════════════════════════════════════════
+
+const scene = document.getElementById('scene');
+const veil = document.getElementById('veil');
+const clock = document.getElementById('clock');
+const bar = document.getElementById('palette-bar');
+const fsBtn = document.getElementById('fs-btn');
+
+blobs.forEach((b) => {
+  const div = document.createElement('div');
+  div.className = 'blob';
+  div.style.width = '85vw';
+  div.style.height = '85vw';
+  scene.appendChild(div);
+  b.el = div;
+});
+
+// Palette dots
+PALETTES.forEach((pal, i) => {
+  const dot = document.createElement('div');
+  dot.className = 'palette-dot' + (i === 0 ? ' selected' : '');
+  dot.style.background = pal.dot;
+  const label = document.createElement('span');
+  label.className = 'palette-label';
+  label.textContent = pal.name;
+  dot.appendChild(label);
+  dot.addEventListener('click', () => switchPalette(i));
+  bar.appendChild(dot);
+});
+
+// ══════════════════════════════════════════
+// PALETTE SWITCHING
+// ══════════════════════════════════════════
+
+function switchPalette(idx) {
+  if (idx < 0) idx = PALETTES.length - 1;
+  if (idx >= PALETTES.length) idx = 0;
+  currentPalette = idx;
+  const pal = PALETTES[idx];
+  const isDark = pal.dark || false;
+
+  document.body.style.background = pal.bg;
+  veil.style.backgroundColor = pal.veil;
+
+  // Backdrop blur — less for dark palettes
+  const blurAmt = isDark ? 30 : 50;
+  veil.style.backdropFilter = `blur(${blurAmt}px) saturate(1.08)`;
+  veil.style.webkitBackdropFilter = `blur(${blurAmt}px) saturate(1.08)`;
+
+  clock.style.color = pal.clockColor;
+  clock.style.opacity = isDark ? '0.06' : '0.10';
+
+  const solarInfo = document.getElementById('solar-info');
+  solarInfo.style.color = pal.clockColor;
+  solarInfo.style.opacity = isDark ? '0.08' : '0.13';
+
+  blobs.forEach((b, i) => {
+    b.colorIdx = i % pal.colors.length;
+    const c = pal.colors[b.colorIdx];
+    b.el.style.transition = 'background 1.6s ease, opacity 1.6s ease';
+    b.el.style.background = makeGrad(c, isDark);
+    b.el.style.opacity = isDark ? '0.55' : '0.88';
+    setTimeout(() => { b.el.style.transition = ''; }, 1700);
+  });
+
+  document.querySelectorAll('.palette-dot').forEach((d, i) => {
+    d.classList.toggle('selected', i === idx);
+  });
+}
+
+switchPalette(0);
+
+// ══════════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════════
+
+function updateClock() {
+  const now = new Date();
+  const h = now.getHours().toString().padStart(2, '0');
+  const m = now.getMinutes().toString().padStart(2, '0');
+  clock.textContent = `${h}:${m}`;
+  updateSolar();
+}
+updateClock();
+setInterval(updateClock, 15000);
+
+// Also update every minute boundary precisely
+(function alignToMinute() {
+  const now = new Date();
+  const msUntilNextMin = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+  setTimeout(() => {
+    updateClock();
+    setInterval(updateClock, 60000);
+  }, msUntilNextMin);
+})();
+
+// ══════════════════════════════════════════
+// IDLE DETECTION
+// ══════════════════════════════════════════
+
+function wakeUp() {
+  document.body.classList.add('active');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    document.body.classList.remove('active');
+  }, IDLE_DELAY);
+}
+
+document.addEventListener('mousemove', wakeUp);
+document.addEventListener('touchstart', wakeUp);
+document.addEventListener('keydown', (e) => {
+  wakeUp();
+  const key = e.key.toLowerCase();
+  if (key === 'f') {
+    e.preventDefault();
+    toggleFullscreen();
+  } else if (key === 'arrowright' || key === 'arrowdown') {
+    e.preventDefault();
+    switchPalette(currentPalette + 1);
+  } else if (key === 'arrowleft' || key === 'arrowup') {
+    e.preventDefault();
+    switchPalette(currentPalette - 1);
+  }
+});
+
+let scrollCooldown = false;
+document.addEventListener('wheel', (e) => {
+  wakeUp();
+  if (scrollCooldown) return;
+  scrollCooldown = true;
+  setTimeout(() => { scrollCooldown = false; }, 400);
+  switchPalette(currentPalette + (e.deltaY > 0 || e.deltaX > 0 ? 1 : -1));
+});
+
+// ══════════════════════════════════════════
+// FULLSCREEN
+// ══════════════════════════════════════════
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+fsBtn.addEventListener('click', () => { wakeUp(); toggleFullscreen(); });
+
+// ══════════════════════════════════════════
+// ANIMATION LOOP
+// ══════════════════════════════════════════
+
+let lastTime = performance.now();
+let lastDraw = 0;
+
+function animate(t) {
+  requestAnimationFrame(animate);
+
+  const rawDt = t - lastTime;
+  lastTime = t;
+  const dt = Math.min(rawDt, 100);
+
+  blobs.forEach((b, idx) => {
+    const turn = Math.sin(t * 0.000032 + idx * 0.85) * 0.0009;
+    b.vx += turn * 0.016;
+    b.vy += Math.cos(t * 0.000028 + idx * 1.15) * 0.0009;
+
+    const cap = 0.022;
+    b.vx = Math.max(-cap, Math.min(cap, b.vx));
+    b.vy = Math.max(-cap, Math.min(cap, b.vy));
+
+    b.x += b.vx * 0.42;
+    b.y += b.vy * 0.42;
+
+    const pad = 12;
+    if (b.x < pad) { b.x = pad; b.vx = Math.abs(b.vx) * 0.82; }
+    if (b.x > 100 - pad) { b.x = 100 - pad; b.vx = -Math.abs(b.vx) * 0.82; }
+    if (b.y < pad) { b.y = pad; b.vy = Math.abs(b.vy) * 0.82; }
+    if (b.y > 100 - pad) { b.y = 100 - pad; b.vy = -Math.abs(b.vy) * 0.82; }
+
+    b.phase += b.wobble * dt;
+  });
+
+  // DOM update throttled to ~20fps
+  if (t - lastDraw < 50) return;
+  lastDraw = t;
+
+  blobs.forEach((b) => {
+    const sp = Math.sin(b.phase);
+    const cp = Math.cos(b.phase + 1.3);
+    const r1 = 42 + 15 * sp;
+    const r2 = 58 - 13 * cp;
+    const r3 = 46 + 17 * Math.sin(b.phase + 2.1);
+    const r4 = 54 - 11 * Math.cos(b.phase + 2.9);
+
+    b.el.style.transform = `translate(calc(${b.x}vw - 50%), calc(${b.y}vh - 50%)) scale(${b.s})`;
+    b.el.style.borderRadius = `${r1}% ${r2}% ${r3}% ${r4}%`;
+  });
+}
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
