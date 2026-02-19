@@ -13,7 +13,7 @@
   html, body {
     height: 100%;
     overflow: hidden;
-    background: #000;
+    background: #fff;
     font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     user-select: none;
@@ -35,7 +35,7 @@
     top: 0;
     border-radius: 50%;
     will-change: transform;
-    opacity: 0.88;
+    opacity: 1;
   }
 
   #veil {
@@ -54,7 +54,7 @@
     font-size: clamp(3.5rem, 9vw, 8rem);
     font-weight: 300;
     letter-spacing: 0.05em;
-    opacity: 0.10;
+    opacity: 0.70;
     pointer-events: none;
     z-index: 5;
     transition: color 1.2s ease, opacity 1.2s ease;
@@ -68,7 +68,7 @@
     left: 28px;
     z-index: 5;
     pointer-events: none;
-    opacity: 0.13;
+    opacity: 0.60;
     transition: color 1.2s ease, opacity 1.2s ease;
     line-height: 1.6;
   }
@@ -186,6 +186,8 @@
   .corner-btn svg { width: 15px; height: 15px; }
 
   #fs-btn { top: 14px; right: 14px; }
+  #invert-btn { top: 14px; right: 56px; }
+  html.inverted { filter: invert(1) hue-rotate(180deg); }
 
   /* ── Hint ── */
   #hint {
@@ -206,7 +208,6 @@
 </style>
 </head>
 <body>
-<a href="index.html" onmouseenter="this.style.borderColor='#c0392b';this.style.color='#c0392b'" onmouseleave="this.style.borderColor='#e0e0e0';this.style.color='#444'" style="position:fixed;top:1rem;left:1rem;z-index:9999;background:rgba(255,255,255,0.9);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:0.5rem 1rem;border-radius:8px;text-decoration:none;color:#444;font-size:0.85rem;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;border:1px solid #e0e0e0;transition:border-color 0.2s,color 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(0,0,0,0.04);">&#8592; Home</a>
 
 <div id="scene"></div>
 <div id="veil"></div>
@@ -218,6 +219,12 @@
 </div>
 
 <div id="palette-bar"></div>
+
+<button id="invert-btn" class="corner-btn" aria-label="Invert colors">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 010 20z" fill="currentColor"/>
+  </svg>
+</button>
 
 <button id="fs-btn" class="corner-btn" aria-label="Toggle fullscreen">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -297,10 +304,10 @@ function fmtDuration(mins) {
   return `${h}h ${m.toString().padStart(2, '0')}m`;
 }
 
-let userLat = null;
-let userLon = null;
-let solarCache = null;
-let solarCacheDate = null;
+var userLat = null;
+var userLon = null;
+var solarCache = null;
+var solarCacheDate = null;
 
 function updateSolar() {
   const info = document.getElementById('solar-info');
@@ -440,6 +447,7 @@ function requestLocation() {
       userLon = pos.coords.longitude;
       solarCacheDate = null; // force recalc
       updateSolar();
+      if (typeof Celestial !== 'undefined') Celestial.refresh();
     },
     () => {
       // Permission denied or error — hide solar info
@@ -456,130 +464,130 @@ requestLocation();
 // PALETTES
 // ══════════════════════════════════════════
 
-const PALETTES = [
+var PALETTES = [
   {
     name: 'Sunset',
-    bg: '#0f0604',
-    veil: 'rgba(255,240,230,0.26)',
-    clockColor: '#000',
+    bg: '#ffffff',
+    veil: 'rgba(255,255,255,0.01)',
+    clockColor: '#333',
     colors: [
-      { h: 12, s: 85, l: 65 },
-      { h: 30, s: 88, l: 68 },
-      { h: 350, s: 70, l: 70 },
-      { h: 45, s: 82, l: 70 },
-      { h: 210, s: 72, l: 68 },
+      { h: 12, s: 80, l: 72 },
+      { h: 30, s: 85, l: 74 },
+      { h: 350, s: 65, l: 75 },
+      { h: 45, s: 78, l: 76 },
+      { h: 210, s: 68, l: 74 },
     ],
     dot: 'linear-gradient(135deg, #f4845f, #f06292)',
   },
   {
     name: 'Ocean',
-    bg: '#020e18',
-    veil: 'rgba(210,235,255,0.20)',
-    clockColor: '#000',
+    bg: '#ffffff',
+    veil: 'rgba(255,255,255,0.01)',
+    clockColor: '#333',
     colors: [
-      { h: 195, s: 82, l: 58 },
-      { h: 215, s: 78, l: 62 },
-      { h: 178, s: 68, l: 55 },
-      { h: 235, s: 60, l: 67 },
-      { h: 190, s: 85, l: 52 },
+      { h: 195, s: 78, l: 68 },
+      { h: 215, s: 74, l: 72 },
+      { h: 178, s: 64, l: 65 },
+      { h: 235, s: 56, l: 74 },
+      { h: 190, s: 80, l: 62 },
     ],
     dot: 'linear-gradient(135deg, #4dd0e1, #1976d2)',
   },
   {
     name: 'Aurora',
-    bg: '#030d10',
-    veil: 'rgba(190,255,225,0.16)',
-    clockColor: '#000',
+    bg: '#ffffff',
+    veil: 'rgba(255,255,255,0.01)',
+    clockColor: '#333',
     colors: [
-      { h: 155, s: 72, l: 52 },
-      { h: 280, s: 58, l: 62 },
-      { h: 175, s: 68, l: 48 },
-      { h: 305, s: 52, l: 58 },
-      { h: 135, s: 62, l: 55 },
+      { h: 155, s: 68, l: 62 },
+      { h: 280, s: 54, l: 72 },
+      { h: 175, s: 64, l: 58 },
+      { h: 305, s: 48, l: 68 },
+      { h: 135, s: 58, l: 65 },
     ],
     dot: 'linear-gradient(135deg, #66bb6a, #ab47bc)',
   },
   {
     name: 'Ember',
-    bg: '#120600',
-    veil: 'rgba(255,225,200,0.22)',
-    clockColor: '#000',
+    bg: '#ffffff',
+    veil: 'rgba(255,255,255,0.01)',
+    clockColor: '#333',
     colors: [
-      { h: 8, s: 82, l: 55 },
-      { h: 28, s: 88, l: 60 },
-      { h: 48, s: 85, l: 63 },
-      { h: 358, s: 75, l: 52 },
-      { h: 18, s: 80, l: 58 },
+      { h: 8, s: 78, l: 65 },
+      { h: 28, s: 84, l: 70 },
+      { h: 48, s: 80, l: 72 },
+      { h: 358, s: 70, l: 62 },
+      { h: 18, s: 76, l: 68 },
     ],
     dot: 'linear-gradient(135deg, #ef5350, #ff9800)',
   },
   {
     name: 'Lavender',
-    bg: '#0c0612',
-    veil: 'rgba(235,225,255,0.22)',
-    clockColor: '#000',
+    bg: '#ffffff',
+    veil: 'rgba(255,255,255,0.01)',
+    clockColor: '#333',
     colors: [
-      { h: 268, s: 62, l: 68 },
-      { h: 292, s: 52, l: 66 },
-      { h: 322, s: 58, l: 70 },
-      { h: 248, s: 48, l: 70 },
-      { h: 338, s: 55, l: 68 },
+      { h: 268, s: 58, l: 76 },
+      { h: 292, s: 48, l: 74 },
+      { h: 322, s: 54, l: 78 },
+      { h: 248, s: 44, l: 78 },
+      { h: 338, s: 50, l: 76 },
     ],
     dot: 'linear-gradient(135deg, #b39ddb, #f48fb1)',
   },
   {
     name: 'Midnight',
-    bg: '#04040e',
-    veil: 'rgba(170,180,255,0.14)',
-    clockColor: '#556',
+    bg: '#ffffff',
+    veil: 'rgba(255,255,255,0.01)',
+    clockColor: '#333',
     colors: [
-      { h: 235, s: 58, l: 48 },
-      { h: 258, s: 52, l: 43 },
-      { h: 218, s: 62, l: 52 },
-      { h: 278, s: 48, l: 46 },
-      { h: 200, s: 58, l: 50 },
+      { h: 235, s: 54, l: 62 },
+      { h: 258, s: 48, l: 58 },
+      { h: 218, s: 58, l: 66 },
+      { h: 278, s: 44, l: 60 },
+      { h: 200, s: 54, l: 64 },
     ],
     dot: 'linear-gradient(135deg, #5c6bc0, #7e57c2)',
   },
   {
     name: 'Golden Hour',
-    bg: '#100800',
-    veil: 'rgba(255,235,200,0.25)',
-    clockColor: '#000',
+    bg: '#ffffff',
+    veil: 'rgba(255,255,255,0.01)',
+    clockColor: '#333',
     colors: [
-      { h: 38, s: 90, l: 62 },
-      { h: 22, s: 85, l: 58 },
-      { h: 50, s: 88, l: 65 },
-      { h: 8, s: 78, l: 60 },
-      { h: 42, s: 82, l: 68 },
+      { h: 38, s: 86, l: 72 },
+      { h: 22, s: 80, l: 68 },
+      { h: 50, s: 84, l: 74 },
+      { h: 8, s: 74, l: 70 },
+      { h: 42, s: 78, l: 76 },
     ],
     dot: 'linear-gradient(135deg, #ffb74d, #ff8a65)',
   },
   {
     name: 'Deep Sea',
-    bg: '#020810',
-    veil: 'rgba(180,210,240,0.14)',
-    clockColor: '#334',
+    bg: '#ffffff',
+    veil: 'rgba(255,255,255,0.01)',
+    clockColor: '#333',
     colors: [
-      { h: 210, s: 70, l: 38 },
-      { h: 195, s: 65, l: 42 },
-      { h: 230, s: 55, l: 45 },
-      { h: 180, s: 60, l: 35 },
-      { h: 220, s: 50, l: 48 },
+      { h: 210, s: 66, l: 56 },
+      { h: 195, s: 60, l: 58 },
+      { h: 230, s: 50, l: 62 },
+      { h: 180, s: 56, l: 52 },
+      { h: 220, s: 46, l: 60 },
     ],
     dot: 'linear-gradient(135deg, #1565c0, #00838f)',
   },
   {
     name: 'Cherry Blossom',
-    bg: '#100810',
-    veil: 'rgba(255,230,240,0.25)',
-    clockColor: '#000',
+    bg: '#ffffff',
+    veil: 'rgba(255,255,255,0.01)',
+    clockColor: '#333',
     colors: [
-      { h: 340, s: 70, l: 75 },
-      { h: 320, s: 55, l: 72 },
-      { h: 350, s: 65, l: 78 },
-      { h: 0, s: 60, l: 80 },
-      { h: 310, s: 45, l: 76 },
+      { h: 340, s: 66, l: 80 },
+      { h: 320, s: 50, l: 78 },
+      { h: 350, s: 60, l: 82 },
+      { h: 0, s: 55, l: 84 },
+      { h: 310, s: 40, l: 80 },
     ],
     dot: 'linear-gradient(135deg, #f48fb1, #ce93d8)',
   },
@@ -587,8 +595,8 @@ const PALETTES = [
   {
     name: 'Void',
     bg: '#000000',
-    veil: 'rgba(255,255,255,0.04)',
-    clockColor: 'rgba(255,255,255,0.5)',
+    veil: 'rgba(255,255,255,0.02)',
+    clockColor: 'rgba(255,255,255,0.9)',
     colors: [
       { h: 0, s: 0, l: 28 },
       { h: 0, s: 0, l: 22 },
@@ -602,8 +610,8 @@ const PALETTES = [
   {
     name: 'Night Vision',
     bg: '#000000',
-    veil: 'rgba(255,0,0,0.03)',
-    clockColor: 'rgba(255,40,40,0.4)',
+    veil: 'rgba(255,0,0,0.015)',
+    clockColor: 'rgba(255,50,50,0.8)',
     colors: [
       { h: 0, s: 80, l: 22 },
       { h: 355, s: 75, l: 18 },
@@ -620,8 +628,8 @@ const PALETTES = [
 // STATE
 // ══════════════════════════════════════════
 
-let currentPalette = 0;
-let idleTimer = null;
+var currentPalette = 0;
+var idleTimer = null;
 const IDLE_DELAY = 3500;
 const BLOB_COUNT = 6;
 
@@ -630,12 +638,12 @@ const BLOB_COUNT = 6;
 // ══════════════════════════════════════════
 
 function makeGrad(c, isDark) {
-  const a1 = isDark ? 0.5 : 0.88;
-  const a2 = isDark ? 0.3 : 0.65;
+  const a1 = isDark ? 0.5 : 0.92;
+  const a2 = isDark ? 0.3 : 0.70;
   return `radial-gradient(circle at 50% 50%, hsla(${c.h},${c.s}%,${c.l}%,${a1}), hsla(${c.h},${c.s}%,${c.l}%,${a2}) 45%, transparent 72%)`;
 }
 
-const blobs = Array.from({ length: BLOB_COUNT }, (_, i) => ({
+var blobs = Array.from({ length: BLOB_COUNT }, (_, i) => ({
   el: null,
   colorIdx: i % PALETTES[0].colors.length,
   x: 10 + Math.random() * 80,
@@ -691,32 +699,42 @@ function switchPalette(idx) {
   const isDark = pal.dark || false;
 
   document.body.style.background = pal.bg;
-  veil.style.backgroundColor = pal.veil;
 
-  // Backdrop blur — less for dark palettes
-  const blurAmt = isDark ? 30 : 50;
-  veil.style.backdropFilter = `blur(${blurAmt}px) saturate(1.08)`;
-  veil.style.webkitBackdropFilter = `blur(${blurAmt}px) saturate(1.08)`;
+  if (isDark) {
+    scene.style.filter = 'none';
+    veil.style.backdropFilter = 'blur(40px) saturate(1.1)';
+    veil.style.webkitBackdropFilter = 'blur(40px) saturate(1.1)';
+    veil.style.backgroundColor = pal.veil;
+  } else {
+    scene.style.filter = 'blur(60px)';
+    veil.style.backdropFilter = 'none';
+    veil.style.webkitBackdropFilter = 'none';
+    veil.style.backgroundColor = 'transparent';
+  }
 
   clock.style.color = pal.clockColor;
-  clock.style.opacity = isDark ? '0.06' : '0.10';
+  clock.style.opacity = isDark ? '0.75' : '0.70';
 
   const solarInfo = document.getElementById('solar-info');
   solarInfo.style.color = pal.clockColor;
-  solarInfo.style.opacity = isDark ? '0.08' : '0.13';
+  solarInfo.style.opacity = isDark ? '0.65' : '0.60';
 
   blobs.forEach((b, i) => {
     b.colorIdx = i % pal.colors.length;
     const c = pal.colors[b.colorIdx];
     b.el.style.transition = 'background 1.6s ease, opacity 1.6s ease';
     b.el.style.background = makeGrad(c, isDark);
-    b.el.style.opacity = isDark ? '0.55' : '0.88';
+    b.el.style.opacity = isDark ? '0.55' : '1';
     setTimeout(() => { b.el.style.transition = ''; }, 1700);
   });
 
   document.querySelectorAll('.palette-dot').forEach((d, i) => {
     d.classList.toggle('selected', i === idx);
   });
+
+  // Module integration hooks
+  if (typeof Celestial !== 'undefined' && Celestial.onPaletteChange) Celestial.onPaletteChange();
+  if (typeof UIComponents !== 'undefined' && UIComponents.syncColorsWithPalette) UIComponents.syncColorsWithPalette();
 }
 
 switchPalette(0);
@@ -765,6 +783,9 @@ document.addEventListener('keydown', (e) => {
   if (key === 'f') {
     e.preventDefault();
     toggleFullscreen();
+  } else if (key === 'i') {
+    e.preventDefault();
+    toggleInvert();
   } else if (key === 'arrowright' || key === 'arrowdown') {
     e.preventDefault();
     switchPalette(currentPalette + 1);
@@ -795,6 +816,12 @@ function toggleFullscreen() {
   }
 }
 fsBtn.addEventListener('click', () => { wakeUp(); toggleFullscreen(); });
+
+const invertBtn = document.getElementById('invert-btn');
+function toggleInvert() {
+  document.documentElement.classList.toggle('inverted');
+}
+invertBtn.addEventListener('click', () => { wakeUp(); toggleInvert(); });
 
 // ══════════════════════════════════════════
 // ANIMATION LOOP
@@ -850,5 +877,56 @@ function animate(t) {
 
 requestAnimationFrame(animate);
 </script>
+
+<!-- Module scripts: visual polish, celestial features, UI components -->
+<script src="visual-fixes.js"></script>
+<script src="celestial.js"></script>
+<script src="ui-components.js"></script>
+
+<script>
+// ══════════════════════════════════════════
+// MODULE INTEGRATION
+// ══════════════════════════════════════════
+(function () {
+  // Initialize Celestial module
+  if (typeof Celestial !== 'undefined') Celestial.init();
+
+  // Wire UIComponents toggle settings to Celestial elements
+  if (typeof UIComponents !== 'undefined') {
+    var s = UIComponents.getSettings();
+
+    // Apply initial visibility from saved settings (short delay for DOM creation)
+    setTimeout(function () {
+      var weatherEl = document.getElementById('celestial-weather');
+      var sunArc = document.getElementById('celestial-sun-arc');
+      var moonArc = document.getElementById('celestial-moon-arc');
+      if (weatherEl && !s.showWeather) weatherEl.style.display = 'none';
+      if (sunArc && !s.showSolarArc) sunArc.style.display = 'none';
+      if (moonArc && !s.showSolarArc) moonArc.style.display = 'none';
+    }, 100);
+
+    // Listen for toggle changes to show/hide Celestial elements
+    var toggleWeather = document.getElementById('toggle-weather');
+    var toggleSolar = document.getElementById('toggle-solar');
+
+    if (toggleWeather) {
+      toggleWeather.addEventListener('change', function () {
+        var weatherEl = document.getElementById('celestial-weather');
+        if (weatherEl) weatherEl.style.display = this.checked ? '' : 'none';
+      });
+    }
+
+    if (toggleSolar) {
+      toggleSolar.addEventListener('change', function () {
+        var sunArc = document.getElementById('celestial-sun-arc');
+        var moonArc = document.getElementById('celestial-moon-arc');
+        if (sunArc) sunArc.style.display = this.checked ? '' : 'none';
+        if (moonArc) moonArc.style.display = this.checked ? '' : 'none';
+      });
+    }
+  }
+})();
+</script>
+
 </body>
 </html>
