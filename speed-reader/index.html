@@ -1,199 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Speed Reader - A precision speed reading tool with adaptive pacing">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://l2g4t-c7v6b-x1q9z.github.io; connect-src 'self';">
-    <script src="/auth.js"></script>
-    <title>Speed Reader</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Password Required</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .auth-box { text-align: center; max-width: 320px; width: 90%; }
+  .auth-title {
+    font-size: 1.25rem; font-weight: 600; color: #3a3a3a;
+    margin-bottom: 1.5rem; letter-spacing: -0.02em;
+  }
+  .auth-input {
+    width: 100%; padding: 0.7rem 1rem; font-size: 1rem;
+    border: 1px solid #e0e0e0; border-radius: 8px; outline: none;
+    font-family: inherit; transition: border-color 0.2s;
+  }
+  .auth-input:focus { border-color: #c0392b; }
+  .auth-err { font-size: 0.85rem; color: #c0392b; margin-top: 0.75rem; min-height: 1.2em; }
+</style>
 </head>
-<body role="application" aria-label="Speed Reading Application">
-<a href="../index.html" onmouseenter="this.style.borderColor='#c0392b';this.style.color='#c0392b'" onmouseleave="this.style.borderColor='#e0e0e0';this.style.color='#444'" style="position:fixed;top:1rem;left:1rem;z-index:9999;background:rgba(255,255,255,0.9);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:0.5rem 1rem;border-radius:8px;text-decoration:none;color:#444;font-size:0.85rem;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;border:1px solid #e0e0e0;transition:border-color 0.2s,color 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(0,0,0,0.04);">&#8592; Home</a>
-    <!-- Input Screen -->
-    <div id="input-screen" class="screen active">
-        <div class="input-container">
-            <h1><a href="https://github.com/L2G4T-C7V6B-X1Q9Z/speed-read" target="_blank" rel="noopener noreferrer" class="logo-link" aria-label="Visit Speed Reader on GitHub">Speed Reader</a></h1>
-            <p class="clipboard-hint">Press <kbd>Ctrl+V</kbd> to paste and start reading</p>
-            <div id="paste-input" class="paste-input" contenteditable="true" aria-label="Paste your text here to start reading"></div>
-        </div>
-    </div>
+<body>
+<div class="auth-box">
+  <div class="auth-title">Password Required</div>
+  <input class="auth-input" type="password" placeholder="Enter password" autocomplete="off" autofocus>
+  <div class="auth-err"></div>
+</div>
+<script>
+(function(){
+  var SALT = '42086968d5d96bb4860efa1ad983b09f';
+  var IV = 'a725a36dd87614d0a157c5d0';
+  var TAG = '622256522600e9b5c1a963272a32030d';
+  var DATA = '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';
 
-    <!-- Reading Screen -->
-    <div id="reading-screen" class="screen" role="main" aria-label="Reading display">
-        <div id="reading-vignette" class="reading-vignette" aria-hidden="true"></div>
+  function hexToBytes(h){var b=new Uint8Array(h.length/2);for(var i=0;i<h.length;i+=2)b[i/2]=parseInt(h.substr(i,2),16);return b;}
+  function b64ToBytes(s){var bin=atob(s);var b=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b;}
 
-        <div class="reading-display">
-            <div id="focus-caret-up" class="focus-caret focus-caret-up" aria-hidden="true">▼</div>
-            <div id="word-display" class="word-display" role="status" aria-live="polite" aria-atomic="true">
-                <span id="context-before" class="context"></span>
-                <span id="anchor-word" class="anchor"></span>
-                <span id="context-after" class="context"></span>
-            </div>
-            <div id="focus-caret-down" class="focus-caret focus-caret-down" aria-hidden="true">▲</div>
-        </div>
+  async function decrypt(password){
+    var salt=hexToBytes(SALT);
+    var iv=hexToBytes(IV);
+    var tag=hexToBytes(TAG);
+    var ct=b64ToBytes(DATA);
+    var enc=new TextEncoder();
+    var keyMaterial=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']);
+    var key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:600000,hash:'SHA-256'},keyMaterial,{name:'AES-GCM',length:256},false,['decrypt']);
+    var combined=new Uint8Array(ct.length+tag.length);
+    combined.set(ct);combined.set(tag,ct.length);
+    var plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},key,combined);
+    return new TextDecoder().decode(plain);
+  }
 
-        <div id="pause-overlay" class="pause-overlay hidden" role="dialog" aria-labelledby="pause-title" aria-modal="true">
-            <div class="pause-content">
-                <div id="pause-title" class="pause-title">Paused</div>
-                <div class="pause-wpm">Current Speed: <span id="pause-wpm-value"></span> WPM</div>
-                <div id="markers-list" class="markers-list" role="list" aria-label="Reading markers"></div>
-                <div class="pause-hint">Press SPACE to continue</div>
-            </div>
-        </div>
-
-        <div id="wpm-display" class="wpm-display" role="status" aria-live="polite" aria-label="Current reading speed"></div>
-        <div id="time-remaining" class="time-remaining" role="timer" aria-live="polite" aria-label="Time remaining"></div>
-        <div id="pause-indicator" class="pause-indicator" aria-hidden="true">⏸</div>
-
-        <div id="skip-indicator" class="skip-indicator" aria-hidden="true"></div>
-        <div id="marker-flash" class="marker-flash" aria-live="polite" role="status">Marked</div>
-
-        <div id="controls-hint" class="controls-hint" role="status" aria-live="polite">
-            SPACE: pause • [] or ↑↓: speed • ←→: skip • m: marker • s: settings • ?: help • d: exit
-        </div>
-
-        <div id="help-card" class="help-card hidden" role="dialog" aria-labelledby="help-title" aria-modal="true">
-            <div class="help-content">
-                <h3 id="help-title">Keyboard Shortcuts</h3>
-                <div class="help-shortcuts">
-                    <div class="help-item">
-                        <kbd>SPACE</kbd>
-                        <span>Pause/Resume</span>
-                    </div>
-                    <div class="help-item">
-                        <kbd>[</kbd> or <kbd>↓</kbd>
-                        <span>Slower (-50 WPM)</span>
-                    </div>
-                    <div class="help-item">
-                        <kbd>]</kbd> or <kbd>↑</kbd>
-                        <span>Faster (+50 WPM)</span>
-                    </div>
-                    <div class="help-item">
-                        <kbd>→</kbd>
-                        <span>Skip forward (10 phrases)</span>
-                    </div>
-                    <div class="help-item">
-                        <kbd>←</kbd>
-                        <span>Skip backward (10 phrases)</span>
-                    </div>
-                    <div class="help-item">
-                        <kbd>m</kbd>
-                        <span>Add marker</span>
-                    </div>
-                    <div class="help-item">
-                        <kbd>s</kbd>
-                        <span>Toggle settings</span>
-                    </div>
-                    <div class="help-item">
-                        <kbd>?</kbd>
-                        <span>Show this help</span>
-                    </div>
-                    <div class="help-item">
-                        <kbd>d</kbd> or <kbd>ESC</kbd>
-                        <span>Exit reading</span>
-                    </div>
-                </div>
-                <div class="help-hint">Press any key to close</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Completion Banner -->
-    <div id="completion-banner" class="completion-banner hidden" role="status" aria-live="polite" aria-label="Reading completion statistics">
-        <div class="completion-banner-content">
-            <div class="completion-banner-title">Reading Complete!</div>
-            <div class="completion-banner-stats">
-                <span><strong id="total-words"></strong> words</span>
-                <span><strong id="total-time"></strong></span>
-                <span><strong id="avg-wpm"></strong> WPM avg</span>
-                <span><strong id="markers-count"></strong> markers</span>
-            </div>
-            <div id="completion-markers-list" class="completion-markers-list"></div>
-        </div>
-    </div>
-
-    <!-- Settings Screen -->
-    <div id="settings-screen" class="screen" role="dialog" aria-labelledby="settings-title" aria-modal="true">
-        <div class="settings-container">
-            <h2 id="settings-title">Settings</h2>
-
-            <div class="settings-scroll-area">
-                <div class="setting-group">
-                    <label for="theme-buttons" title="Choose between light and dark color schemes">Theme</label>
-                    <div class="setting-buttons">
-                        <button class="setting-btn" data-theme="light" title="Light color scheme">Light</button>
-                        <button class="setting-btn active" data-theme="dark" title="Dark color scheme">Dark</button>
-                    </div>
-                </div>
-
-                <div class="setting-group">
-                    <label for="base-wpm" title="Reading speed in words per minute">WPM</label>
-                    <input type="range" id="base-wpm" min="250" max="1200" value="350" step="50" aria-label="Starting words per minute" aria-valuemin="250" aria-valuemax="1200" aria-valuenow="350" title="Adjust initial reading speed">
-                    <span id="base-wpm-value" aria-live="polite">350</span>
-                </div>
-
-                <div class="setting-group">
-                    <label for="font-size" title="Size of text displayed while reading">Font Size</label>
-                    <input type="range" id="font-size" min="16" max="96" value="32" step="4" aria-label="Font size in pixels" aria-valuemin="16" aria-valuemax="96" aria-valuenow="32" title="Adjust text size">
-                    <span id="font-size-value" aria-live="polite">32px</span>
-                </div>
-
-                <div class="setting-group">
-                    <label for="context-words" title="Number of surrounding words shown with the focus word">Context Words</label>
-                    <input type="range" id="context-words" min="0" max="5" value="1" step="1" aria-label="Number of context words to show" aria-valuemin="0" aria-valuemax="5" aria-valuenow="1" title="Adjust number of context words">
-                    <span id="context-words-value" aria-live="polite">1</span>
-                </div>
-
-                <div class="setting-group">
-                    <label for="thock-volume" title="Volume of the aesthetic thock sound played with each word">Thock Sound Volume</label>
-                    <input type="range" id="thock-volume" min="0" max="1" value="0.7" step="0.05" aria-label="Thock sound volume" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.7" title="Adjust thock sound volume">
-                    <span id="thock-volume-value" aria-live="polite">70%</span>
-                </div>
-
-                <div class="setting-group">
-                    <label title="Automatically remove bracketed text from your reading material">Remove Brackets</label>
-                    <div class="setting-buttons">
-                        <button class="setting-btn active" data-brackets="true" title="Remove brackets and their content">On</button>
-                        <button class="setting-btn" data-brackets="false" title="Keep brackets and their content">Off</button>
-                    </div>
-                </div>
-
-                <div class="setting-group">
-                    <label title="Automatically adjust timing based on word length and punctuation">Adaptive Timing</label>
-                    <div class="setting-buttons">
-                        <button class="setting-btn" data-adaptive="true" title="Enable adaptive timing">On</button>
-                        <button class="setting-btn active" data-adaptive="false" title="Use fixed timing">Off</button>
-                    </div>
-                </div>
-
-                <div class="setting-group">
-                    <label title="Add extra pause at the end of sentences for better comprehension">Sentence Pause</label>
-                    <div class="setting-buttons">
-                        <button class="setting-btn" data-sentence-pause="true" title="Pause at sentence endings">On</button>
-                        <button class="setting-btn active" data-sentence-pause="false" title="No sentence pauses">Off</button>
-                    </div>
-                </div>
-
-                <div class="setting-group">
-                    <label title="Bold the first half of each word to guide your eye through text faster">Bionic Reading</label>
-                    <div class="setting-buttons">
-                        <button class="setting-btn" data-bionic="true" title="Enable bionic reading">On</button>
-                        <button class="setting-btn active" data-bionic="false" title="Disable bionic reading">Off</button>
-                    </div>
-                </div>
-            </div>
-
-            <button id="settings-close" class="primary-btn" aria-label="Close settings">Close</button>
-        </div>
-    </div>
-
-    <button id="settings-icon" class="settings-icon" aria-label="Open settings">⚙</button>
-
-    <script src="renderer.js"></script>
+  var input=document.querySelector('.auth-input');
+  var err=document.querySelector('.auth-err');
+  input.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){
+      err.textContent='';
+      decrypt(input.value).then(function(html){
+        document.open();document.write(html);document.close();
+      }).catch(function(){
+        err.textContent='Incorrect password';
+        input.value='';input.focus();
+      });
+    }
+  });
+})();
+</script>
 </body>
 </html>
