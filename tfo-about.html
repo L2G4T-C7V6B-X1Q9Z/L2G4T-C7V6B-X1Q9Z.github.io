@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About - Triangle Family Outings</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,400;0,700;1,400&family=Nunito+Sans:wght@400;600;700;800&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Merriweather', Georgia, serif; background: #fff; color: #333; -webkit-font-smoothing: antialiased; }
+  .nav { background: #fff; border-bottom: 2px solid #222; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+  .nav-logo { font-family: 'Nunito Sans', sans-serif; font-size: 15px; font-weight: 800; color: #222; text-transform: uppercase; letter-spacing: 2.5px; text-decoration: none; }
+  .nav-right { display: flex; gap: 20px; font-family: 'Nunito Sans', sans-serif; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .nav-right a { color: #555; text-decoration: none; }
+  .nav-right a:hover { color: #000; }
+  .nav-right a.active { color: #c0392b; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 48px 24px 60px; }
+  h1 { font-size: 34px; font-weight: 700; line-height: 1.25; color: #111; margin-bottom: 12px; letter-spacing: -0.3px; }
+  .subtitle { font-size: 19px; line-height: 1.55; color: #555; font-style: italic; margin-bottom: 36px; }
+  .prose p { font-size: 17.5px; line-height: 1.82; color: #333; margin-bottom: 24px; }
+  .prose a { color: #c0392b; text-decoration: underline; text-decoration-color: rgba(192,57,43,0.3); text-underline-offset: 3px; }
+  .prose h2 { font-family: 'Nunito Sans', sans-serif; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: #999; margin-top: 44px; margin-bottom: 20px; padding-top: 28px; border-top: 1px solid #e5e5e5; }
+  .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 28px 0; }
+  .team-card { background: #faf8f5; border-radius: 8px; padding: 24px; text-align: center; }
+  .team-card .avatar { width: 56px; height: 56px; border-radius: 50%; background: #e8d5c4; display: flex; align-items: center; justify-content: center; font-family: 'Nunito Sans', sans-serif; font-size: 20px; font-weight: 800; color: #8b6914; margin: 0 auto 12px; }
+  .team-card .name { font-family: 'Nunito Sans', sans-serif; font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px; }
+  .team-card .role { font-family: 'Nunito Sans', sans-serif; font-size: 13px; color: #888; }
+  .footer { background: #222; color: #aaa; padding: 40px 24px; text-align: center; font-family: 'Nunito Sans', sans-serif; font-size: 13px; margin-top: 48px; }
+  .footer .f-logo { font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 2.5px; color: #fff; margin-bottom: 8px; }
+  .footer a { color: #ccc; text-decoration: none; }
+  @media (max-width: 520px) { h1 { font-size: 27px; } .nav-right { display: none; } .team-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav class="nav">
+  <a class="nav-logo" href="tfo-farms.html">Triangle Family Outings</a>
+  <div class="nav-right">
+    <a href="tfo-day-trips.html">Day Trips</a>
+    <a href="tfo-farms.html">Farms</a>
+    <a href="tfo-outdoors.html">Outdoors</a>
+    <a href="tfo-about.html" class="active">About</a>
+  </div>
+</nav>
+<div class="wrap">
+  <h1>About Us</h1>
+  <p class="subtitle">We're a small team of parents in the Triangle who got tired of Googling "things to do with kids near me" and getting the same ten results.</p>
+  <div class="prose">
+    <p>Triangle Family Outings started in 2024 as a shared Google Doc between three friends who kept texting each other the same question: "Is there anything to do with kids on a Tuesday?" We'd find a great farm or nature trail or museum, tell each other about it, and then six months later nobody could remember the name.</p>
+    <p>So we started writing things down. Then we started fact-checking. Then we started calling places to verify hours because half the websites in the Triangle haven't been updated since 2019. And somewhere along the way it turned into this.</p>
+    <p>We cover Durham, Raleigh, Chapel Hill, and everywhere in between. Our focus is practical, verified information for families. We call ahead. We check seasonal hours. We note when parking is terrible. We tell you if a place is worth the drive or if you should just go to the park instead.</p>
+
+    <h2>The Team</h2>
+    <div class="team-grid">
+      <div class="team-card">
+        <div class="avatar">KM</div>
+        <div class="name">Katie Moorefield</div>
+        <div class="role">Farms & Animals, Day Trips</div>
+      </div>
+      <div class="team-card">
+        <div class="avatar">JR</div>
+        <div class="name">Jessie Reeves</div>
+        <div class="role">Outdoors, Trails & Parks</div>
+      </div>
+      <div class="team-card">
+        <div class="avatar">DL</div>
+        <div class="name">David Lam</div>
+        <div class="role">Museums, Indoor Activities</div>
+      </div>
+      <div class="team-card">
+        <div class="avatar">AP</div>
+        <div class="name">Amira Patel</div>
+        <div class="role">Food, Events & Festivals</div>
+      </div>
+    </div>
+
+    <h2>Contact</h2>
+    <p>Got a tip? Know a spot we missed? Just want to tell us about a goat you met? Email us at <a href="#">hello@trianglefamilyoutings.com</a> or find us on <a href="#">Instagram</a>.</p>
+    <p>We don't accept payment for listings. If a place is on our site, it's because we actually think it's worth your time.</p>
+  </div>
+</div>
+<div class="footer">
+  <div class="f-logo">Triangle Family Outings</div>
+  <p>Weekend plans, weekday escapes, and everything in between.</p>
+  <p style="margin-top:10px;">&copy; 2026 &middot; Durham, NC &middot; <a href="#">Privacy</a> &middot; <a href="#">Contact</a> &middot; <a href="#">Instagram</a></p>
+</div>
+</body>
+</html>
