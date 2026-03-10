@@ -31,12 +31,18 @@
   .footer { background: #222; color: #aaa; padding: 40px 24px; text-align: center; font-family: 'Nunito Sans', sans-serif; font-size: 13px; margin-top: 48px; }
   .footer .f-logo { font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 2.5px; color: #fff; margin-bottom: 8px; }
   .footer a { color: #ccc; text-decoration: none; }
-  @media (max-width: 520px) { h1 { font-size: 27px; } .nav-right { display: none; } .article-list h3 { font-size: 19px; } }
+  .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+  .hamburger svg { width: 24px; height: 24px; }
+  .nav-right.open { display: flex; }
+  @media (max-width: 520px) { h1 { font-size: 27px; } .nav-right { display: none; position: absolute; top: 56px; left: 0; right: 0; flex-direction: column; background: #fff; border-bottom: 2px solid #222; padding: 16px 24px; gap: 16px; } .nav-right.open { display: flex; } .hamburger { display: block; } .article-list h3 { font-size: 19px; } }
 </style>
 </head>
 <body>
 <nav class="nav">
   <a class="nav-logo" href="tfo-farms.html">Triangle Family Outings</a>
+  <button class="hamburger" onclick="document.querySelector('.nav-right').classList.toggle('open')" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
   <div class="nav-right">
     <a href="tfo-day-trips.html">Day Trips</a>
     <a href="tfo-farms.html" class="active">Farms</a>
