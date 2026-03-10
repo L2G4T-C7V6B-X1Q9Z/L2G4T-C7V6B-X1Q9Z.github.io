@@ -37,6 +37,8 @@
 </div>
 <script>
 (function(){
+  var SK='site_pw';
+
   var SALT = '7391c641b83d7c3ccaa2b21662af9149';
   var IV = '66cb8e991fc75bad07133f20';
   var TAG = 'd8f56ed0b03ebabcf8d480ff1010687f';
@@ -61,10 +63,22 @@
 
   var input=document.querySelector('.auth-input');
   var err=document.querySelector('.auth-err');
+
+  var saved=sessionStorage.getItem(SK);
+  if(saved){
+    decrypt(saved).then(function(html){
+      document.open();document.write(html);document.close();
+    }).catch(function(){
+      sessionStorage.removeItem(SK);
+    });
+  }
+
   input.addEventListener('keydown',function(e){
     if(e.key==='Enter'){
       err.textContent='';
-      decrypt(input.value).then(function(html){
+      var pw=input.value;
+      decrypt(pw).then(function(html){
+        sessionStorage.setItem(SK,pw);
         document.open();document.write(html);document.close();
       }).catch(function(){
         err.textContent='Incorrect password';

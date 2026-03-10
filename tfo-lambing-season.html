@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spring Lambing Season at Homeland Creamery: What to Expect - Triangle Family Outings</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,400;0,700;1,400&family=Nunito+Sans:wght@400;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Merriweather', Georgia, serif;
+    background: #fff;
+    color: #333;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Nav */
+  .nav {
+    background: #fff;
+    border-bottom: 2px solid #222;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-logo {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: #222;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    text-decoration: none;
+  }
+
+  .nav-right {
+    display: flex;
+    gap: 20px;
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .nav-right a {
+    color: #555;
+    text-decoration: none;
+  }
+
+  .nav-right a:hover { color: #000; }
+
+  /* Article */
+  .article-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 40px 24px 60px;
+  }
+
+  .cat-label {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    color: #c0392b;
+    margin-bottom: 16px;
+  }
+
+  h1 {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #111;
+    margin-bottom: 18px;
+    letter-spacing: -0.3px;
+  }
+
+  .deck {
+    font-size: 19px;
+    line-height: 1.55;
+    color: #555;
+    font-style: italic;
+    margin-bottom: 24px;
+    font-weight: 400;
+  }
+
+  .byline {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14px;
+    color: #777;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 32px;
+  }
+
+  .byline strong {
+    color: #333;
+  }
+
+  /* Prose */
+  .prose p {
+    font-size: 17.5px;
+    line-height: 1.82;
+    color: #333;
+    margin-bottom: 24px;
+  }
+
+  .prose a {
+    color: #c0392b;
+    text-decoration: underline;
+    text-decoration-color: rgba(192,57,43,0.3);
+    text-underline-offset: 3px;
+  }
+
+  .prose h2 {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #999;
+    margin-top: 44px;
+    margin-bottom: 20px;
+    padding-top: 28px;
+    border-top: 1px solid #e5e5e5;
+  }
+
+  .prose h3 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 8px;
+    margin-top: 36px;
+    line-height: 1.3;
+  }
+
+  .prose .place-meta {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 14px;
+    font-weight: 600;
+  }
+
+  .prose blockquote {
+    border-left: 3px solid #c0392b;
+    padding: 16px 20px;
+    margin: 28px 0;
+    background: #faf8f5;
+    font-style: italic;
+    font-size: 17px;
+    line-height: 1.7;
+    color: #444;
+  }
+
+  .prose .detail-box {
+    background: #f7f7f5;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 16px 0 28px;
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14.5px;
+    line-height: 1.7;
+    color: #555;
+  }
+
+  .prose .detail-box strong {
+    color: #333;
+  }
+
+  .prose img {
+    width: 100%;
+    border-radius: 6px;
+    margin: 8px 0 28px;
+  }
+
+  .prose .caption {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 13px;
+    color: #999;
+    text-align: center;
+    margin-top: -20px;
+    margin-bottom: 28px;
+  }
+
+  .prose ul {
+    margin-bottom: 24px;
+    padding-left: 24px;
+  }
+
+  .prose ul li {
+    font-size: 17px;
+    line-height: 1.75;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  /* Tags */
+  .article-tags {
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid #ddd;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .article-tags a {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: 100px;
+    background: #f0f0ed;
+    color: #666;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Author card */
+  .author-card {
+    display: flex;
+    gap: 16px;
+    margin-top: 36px;
+    padding: 24px;
+    background: #faf8f5;
+    border-radius: 8px;
+  }
+
+  .author-card .avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #e8d5c4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: #8b6914;
+    flex-shrink: 0;
+  }
+
+  .author-card .bio {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14px;
+    color: #666;
+    line-height: 1.6;
+  }
+
+  .author-card .bio strong {
+    color: #333;
+    font-size: 15px;
+  }
+
+  /* Footer */
+  .footer {
+    background: #222;
+    color: #aaa;
+    padding: 40px 24px;
+    text-align: center;
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 13px;
+    margin-top: 48px;
+  }
+
+  .footer .f-logo {
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .footer a { color: #ccc; text-decoration: none; }
+
+  @media (max-width: 520px) {
+    h1 { font-size: 27px; }
+    .nav-right { display: none; }
+    .prose h3 { font-size: 21px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="tfo-farms.html">Triangle Family Outings</a>
+  <div class="nav-right">
+    <a href="tfo-day-trips.html">Day Trips</a>
+    <a href="tfo-farms.html">Farms</a>
+    <a href="tfo-outdoors.html">Outdoors</a>
+    <a href="tfo-about.html">About</a>
+  </div>
+</nav>
+
+<div class="article-wrap">
+
+  <div class="cat-label">Farms &amp; Animals</div>
+
+  <h1>Spring Lambing Season at Homeland Creamery: What to Expect</h1>
+
+  <p class="deck">Baby lamb season runs March through April, and yes, you can hold them. Here's everything you need to know before making the drive.</p>
+
+  <div class="byline">By <strong>Katie Moorefield</strong> &middot; February 26, 2026 &middot; 5 min read</div>
+
+  <div class="prose">
+
+    <p>Every spring, somewhere around mid-March, Homeland Creamery in East Bend starts posting photos of newborn lambs on their social media and the Triangle parent internet collectively loses its mind. Within 24 hours the comments are full of people asking the same three questions: Can I hold one? How much does it cost? Is it worth the drive?</p>
+
+    <p>The answers are yes, not much, and absolutely. But there's some stuff worth knowing before you load the kids in the car and point yourself toward Yadkin County.</p>
+
+    <h2>What Lambing Season Actually Looks Like</h2>
+
+    <p>Homeland Creamery is a working dairy and sheep farm that's been in the Bowman family for generations. They've got about 80 ewes, and lambing season typically runs from mid-March through the end of April, though the exact timing depends on when the ewes decide to cooperate. During this window, the farm opens up for visitors to come see (and hold) the baby lambs. We're talking days-old lambs here. Tiny, wobbly, absurdly soft little things that will absolutely ruin your kids for every stuffed animal they own.</p>
+
+    <p>The farm sets up a holding area where staff bring lambs out for visitors. You sit down, they place a lamb in your lap, and your child experiences a level of joy that you will spend the rest of the year trying to replicate. The lambs are calm, the staff are patient, and even toddlers can participate with a little help.</p>
+
+    <h2>The Practical Stuff</h2>
+
+    <h3>Getting There</h3>
+    <p class="place-meta">East Bend, NC &middot; ~1.5 hours from Durham</p>
+
+    <p>Let's address the elephant in the room: East Bend is not close. From Durham, you're looking at about an hour and a half each way, most of it on I-40 West past Greensboro and then winding through Yadkin County on two-lane roads. It's a pretty drive, especially in spring, but it's a commitment. This is a half-day trip minimum, and if you've got kids who hate the car, plan accordingly.</p>
+
+    <p>Our recommendation: make a morning of it. Get there when they open, spend an hour or so with the lambs, then hit the farm store and ice cream window before heading back. You'll be home by early afternoon and everyone will have had a genuinely great time.</p>
+
+    <h2>What Else Is There</h2>
+
+    <p>Homeland Creamery makes their own ice cream on-site, and it's legitimately excellent. We're not talking about a chest freezer in a barn with some Breyers. They make it from milk produced by their own cows, in small batches, and the flavor list rotates. The butter pecan is the one locals swear by. During lambing season, the ice cream window is usually open even if the weather is iffy, because they know why you're there.</p>
+
+    <p>The farm store sells their ice cream by the pint, along with local honey, jams, cheese, and other farm goods. It's small but well-stocked and worth a browse. There's also a small play area with a few things for kids to climb on, though it's nothing elaborate.</p>
+
+    <blockquote>
+      <strong>Pro tip:</strong> Bring a blanket or towel to sit on. The lamb-holding area is clean but it's a farm, and you'll be sitting on hay bales or the ground. Also, dress in layers. March in Yadkin County can be 40 degrees at 9am and 65 by noon.
+    </blockquote>
+
+    <h2>Best Time to Go</h2>
+
+    <p>Weekday mornings are the move. Saturdays during peak lambing season get crowded, especially if the farm has posted new lamb photos that week. If you can swing a weekday visit, you'll have a much more relaxed experience with shorter waits and more one-on-one time with the lambs. The staff are also more available to answer questions and tell you about the farm when they're not managing a crowd.</p>
+
+    <p>If weekdays aren't possible, aim for first thing on a Saturday morning. By mid-morning the parking area fills up and you'll be waiting in line.</p>
+
+    <h2>Cost and Logistics</h2>
+
+    <div class="detail-box">
+      <strong>Address:</strong> 6506 Crater Rd, East Bend, NC 27018<br>
+      <strong>Lambing Season:</strong> Mid-March through late April (weather and ewes permitting)<br>
+      <strong>Hours:</strong> Typically Mon-Sat, 9am-5pm during season (check their Facebook for daily updates)<br>
+      <strong>Cost:</strong> Free to visit. Ice cream and farm store purchases separate.<br>
+      <strong>Phone:</strong> (336) 699-3286<br>
+      <strong>Parking:</strong> Free, gravel lot. Can fill up on Saturdays.
+    </div>
+
+    <p>Yes, you read that right. It's free. The farm doesn't charge admission for lambing season visits. You'll almost certainly end up spending money on ice cream and farm store items, but nobody's going to charge you to hold a lamb. That's a pretty remarkable deal for an experience this good.</p>
+
+    <h2>Is It Worth the Drive?</h2>
+
+    <p>Look, an hour and a half is a real drive. If your kids are under 2 and car-averse, maybe wait a year. But if you've got kids ages 2 and up who have any interest in animals at all, this is one of the best family outings in the wider Triangle region. It's free, it's genuine, and the combination of baby lambs plus really good ice cream is hard to beat.</p>
+
+    <p>The farm isn't polished or Instagram-optimized. There's no gift shop full of branded merchandise, no overpriced lemonade stand, no admission wristbands. It's a real family farm that opens its doors during one of the most magical times of the agricultural year and lets your kids be part of it. That's increasingly rare, and it's worth protecting by actually showing up.</p>
+
+    <p>Just check their Facebook page before you go. Lambing season timing varies year to year, and they post updates when new lambs arrive and when visiting hours are active. Don't be the family that drives 90 minutes only to find out the lambs haven't started arriving yet.</p>
+
+    <p><em>Information verified February 2026. Hours and availability change seasonally. Always check Homeland Creamery's Facebook page for the most current updates before visiting.</em></p>
+
+  </div>
+
+  <!-- Tags -->
+  <div class="article-tags">
+    <a href="#">Farms</a>
+    <a href="#">Baby Animals</a>
+    <a href="#">Day Trip</a>
+    <a href="#">East Bend</a>
+    <a href="#">Free</a>
+    <a href="#">Spring</a>
+  </div>
+
+  <!-- Author -->
+  <div class="author-card">
+    <div class="avatar">KM</div>
+    <div class="bio">
+      <strong>Katie Moorefield</strong><br>
+      Katie covers family outings, farms, and outdoor activities across the Triangle. She lives in Cary with two kids and a dog who is deeply suspicious of goats. <a href="#">More from Katie</a>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <div class="f-logo">Triangle Family Outings</div>
+  <p>Weekend plans, weekday escapes, and everything in between.</p>
+  <p style="margin-top:10px;">&copy; 2026 &middot; Durham, NC &middot; <a href="#">Privacy</a> &middot; <a href="#">Contact</a> &middot; <a href="#">Instagram</a></p>
+</div>
+
+</body>
+</html>

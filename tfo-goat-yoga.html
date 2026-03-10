@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Goat Yoga Situation in the Triangle: A Completely Serious Investigation - Triangle Family Outings</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,400;0,700;1,400&family=Nunito+Sans:wght@400;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Merriweather', Georgia, serif;
+    background: #fff;
+    color: #333;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Nav */
+  .nav {
+    background: #fff;
+    border-bottom: 2px solid #222;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-logo {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: #222;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    text-decoration: none;
+  }
+
+  .nav-right {
+    display: flex;
+    gap: 20px;
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .nav-right a {
+    color: #555;
+    text-decoration: none;
+  }
+
+  .nav-right a:hover { color: #000; }
+
+  /* Article */
+  .article-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 40px 24px 60px;
+  }
+
+  .cat-label {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    color: #c0392b;
+    margin-bottom: 16px;
+  }
+
+  h1 {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #111;
+    margin-bottom: 18px;
+    letter-spacing: -0.3px;
+  }
+
+  .deck {
+    font-size: 19px;
+    line-height: 1.55;
+    color: #555;
+    font-style: italic;
+    margin-bottom: 24px;
+    font-weight: 400;
+  }
+
+  .byline {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14px;
+    color: #777;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 32px;
+  }
+
+  .byline strong {
+    color: #333;
+  }
+
+  /* Prose */
+  .prose p {
+    font-size: 17.5px;
+    line-height: 1.82;
+    color: #333;
+    margin-bottom: 24px;
+  }
+
+  .prose a {
+    color: #c0392b;
+    text-decoration: underline;
+    text-decoration-color: rgba(192,57,43,0.3);
+    text-underline-offset: 3px;
+  }
+
+  .prose h2 {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #999;
+    margin-top: 44px;
+    margin-bottom: 20px;
+    padding-top: 28px;
+    border-top: 1px solid #e5e5e5;
+  }
+
+  .prose h3 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 8px;
+    margin-top: 36px;
+    line-height: 1.3;
+  }
+
+  .prose .place-meta {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 14px;
+    font-weight: 600;
+  }
+
+  .prose blockquote {
+    border-left: 3px solid #c0392b;
+    padding: 16px 20px;
+    margin: 28px 0;
+    background: #faf8f5;
+    font-style: italic;
+    font-size: 17px;
+    line-height: 1.7;
+    color: #444;
+  }
+
+  .prose .detail-box {
+    background: #f7f7f5;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 16px 0 28px;
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14.5px;
+    line-height: 1.7;
+    color: #555;
+  }
+
+  .prose .detail-box strong {
+    color: #333;
+  }
+
+  .prose img {
+    width: 100%;
+    border-radius: 6px;
+    margin: 8px 0 28px;
+  }
+
+  .prose .caption {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 13px;
+    color: #999;
+    text-align: center;
+    margin-top: -20px;
+    margin-bottom: 28px;
+  }
+
+  .prose ul {
+    margin-bottom: 24px;
+    padding-left: 24px;
+  }
+
+  .prose ul li {
+    font-size: 17px;
+    line-height: 1.75;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  /* Tags */
+  .article-tags {
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid #ddd;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .article-tags a {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: 100px;
+    background: #f0f0ed;
+    color: #666;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Author card */
+  .author-card {
+    display: flex;
+    gap: 16px;
+    margin-top: 36px;
+    padding: 24px;
+    background: #faf8f5;
+    border-radius: 8px;
+  }
+
+  .author-card .avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #e8d5c4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: #8b6914;
+    flex-shrink: 0;
+  }
+
+  .author-card .bio {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14px;
+    color: #666;
+    line-height: 1.6;
+  }
+
+  .author-card .bio strong {
+    color: #333;
+    font-size: 15px;
+  }
+
+  /* Footer */
+  .footer {
+    background: #222;
+    color: #aaa;
+    padding: 40px 24px;
+    text-align: center;
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 13px;
+    margin-top: 48px;
+  }
+
+  .footer .f-logo {
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .footer a { color: #ccc; text-decoration: none; }
+
+  @media (max-width: 520px) {
+    h1 { font-size: 27px; }
+    .nav-right { display: none; }
+    .prose h3 { font-size: 21px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="tfo-farms.html">Triangle Family Outings</a>
+  <div class="nav-right">
+    <a href="tfo-day-trips.html">Day Trips</a>
+    <a href="tfo-farms.html">Farms</a>
+    <a href="tfo-outdoors.html">Outdoors</a>
+    <a href="tfo-about.html">About</a>
+  </div>
+</nav>
+
+<div class="article-wrap">
+
+  <div class="cat-label">Farms &amp; Animals</div>
+
+  <h1>The Goat Yoga Situation in the Triangle: A Completely Serious Investigation</h1>
+
+  <p class="deck">We tried three goat yoga operations near Durham. One was great, one was chaos, and one goat ate a yoga mat.</p>
+
+  <div class="byline">By <strong>Amira Patel</strong> &middot; January 14, 2026 &middot; 5 min read</div>
+
+  <div class="prose">
+
+    <p>Let me be clear about something upfront: I take goat yoga very seriously. I know that sounds like a joke. It is not. When you pay $35 to do downward dog while a Nigerian Dwarf goat stands on your back, you are making a commitment, and I believe that commitment deserves rigorous journalistic scrutiny.</p>
+
+    <p>The Triangle currently has at least three operations offering some version of goat yoga within about 45 minutes of Durham. I attended all three over the course of six weeks this past fall, each time bringing my two kids (ages 5 and 8) and a genuine desire to evaluate the experience. Here is what I found.</p>
+
+    <h2>The Reviews</h2>
+
+    <h3>Spring Haven Farm</h3>
+    <p class="place-meta">Apex, NC &middot; ~30 min from Durham</p>
+
+    <p>Spring Haven is the one to book if you want goat yoga to actually feel like yoga. The session runs about an hour in a fenced pasture with mats provided. The instructor is a real, certified yoga teacher who has apparently made peace with the fact that her career has taken this particular turn. She guides you through a legitimate gentle flow while six to eight baby Nigerian Dwarf goats wander among the participants, occasionally climbing on people, mostly just being goats.</p>
+
+    <p>The key difference here is structure. The goats are supervised by a farm handler who gently redirects any goat that's getting too aggressive with mat-chewing or hair-eating. The instructor keeps the class moving so you're not just sitting there waiting for a goat to notice you. My 8-year-old loved it. My 5-year-old spent most of the time trying to pick up goats instead of doing yoga, which honestly seemed like a valid choice.</p>
+
+    <div class="detail-box">
+      <strong>Cost:</strong> $35/person, $25/child under 12<br>
+      <strong>Schedule:</strong> Saturdays at 10am, April through October (weather permitting)<br>
+      <strong>Book:</strong> Online, usually fills up 1-2 weeks in advance<br>
+      <strong>What to wear:</strong> Clothes you don't mind getting dirty. Goats don't care about your Lululemon.
+    </div>
+
+    <h3>Meadow Ridge Homestead</h3>
+    <p class="place-meta">Hillsborough, NC &middot; ~20 min from Durham</p>
+
+    <p>Meadow Ridge is what happens when the goat-to-human ratio gets out of hand. I don't want to be mean about this because the people who run it are clearly nice, and the farm itself is lovely. But there were approximately 14 goats and 8 humans in our session, and at no point did anything resembling yoga occur.</p>
+
+    <p>Within five minutes of the class starting, a goat had knocked over my water bottle, another was standing on my mat eating the corner of it (more on this shortly), and a third had climbed onto the back of a woman in child's pose and refused to get down. The instructor gamely tried to lead us through sun salutations, but she was also the goat handler, so she kept stopping to retrieve goats from places goats shouldn't be.</p>
+
+    <p>My kids, naturally, thought this was the greatest thing they had ever witnessed. My 5-year-old laughed so hard she got the hiccups. My 8-year-old said, and I quote, "Mom, this is the best yoga class you've ever taken," which is both sweet and devastating.</p>
+
+    <blockquote>
+      <strong>The yoga mat incident:</strong> A large white goat named Gerald spent approximately 12 minutes eating the corner of a communal yoga mat while making sustained eye contact with me. Nobody stopped him. By the time someone noticed, he had consumed a roughly 4-by-6-inch section. Gerald showed no remorse. The farm did not charge me for the mat.
+    </blockquote>
+
+    <div class="detail-box">
+      <strong>Cost:</strong> $30/person, kids free under 10<br>
+      <strong>Schedule:</strong> Saturdays and Sundays, spring through fall<br>
+      <strong>Book:</strong> Facebook DM or call<br>
+      <strong>Bring:</strong> Your own mat (trust me on this) and a sense of humor
+    </div>
+
+    <h3>Willowbrook Acres</h3>
+    <p class="place-meta">Pittsboro, NC &middot; ~35 min from Durham</p>
+
+    <p>Willowbrook is the Goldilocks option. Not as polished as Spring Haven, not as chaotic as Meadow Ridge, but genuinely charming in a way that feels like what goat yoga is supposed to be. The session is 45 minutes, held in a small paddock with about 6 goats and a max of 10 participants. The goats are friendly and well-socialized, meaning they'll approach you, climb on you if you're low to the ground, and nuzzle your hand, but they won't steal your belongings or eat your equipment.</p>
+
+    <p>The instructor takes a more casual approach. She calls out poses but doesn't push it. There's a lot of "just hang out in this pose and see if a goat comes over," which is honestly the right vibe. About halfway through, she stops the yoga entirely and lets everyone just sit and play with the goats for 15 minutes, which is what we all wanted anyway.</p>
+
+    <p>They also do "goat happy hour" sessions where you skip the yoga pretense entirely and just hang out with goats while drinking local cider. I haven't attended one of those yet, but I have thought about it every day since learning it exists.</p>
+
+    <div class="detail-box">
+      <strong>Cost:</strong> $30/person, $20/child under 12<br>
+      <strong>Schedule:</strong> Saturdays at 10am and 2pm, spring through fall<br>
+      <strong>Book:</strong> Website, usually available same week<br>
+      <strong>Bonus:</strong> Goat Happy Hour sessions available for adults, $25 includes one drink
+    </div>
+
+    <h2>So Which One Should You Book?</h2>
+
+    <p>It depends on what you're actually after. If you want to do yoga and also there happen to be goats, book Spring Haven. If you want your kids to witness beautiful chaos and laugh until they can't breathe, Meadow Ridge will deliver. If you want the most well-rounded, pleasant experience that balances actual goat interaction with a reasonable amount of stretching, Willowbrook is your spot.</p>
+
+    <p>If you want to drink cider while sitting in a field surrounded by goats and not pretending it's exercise, Willowbrook's goat happy hour is the clear winner, and frankly I think they've cracked the code on what this whole concept should have been from the beginning.</p>
+
+    <h2>Practical Notes for Families</h2>
+
+    <ul>
+      <li><strong>Age minimums vary.</strong> Spring Haven requires kids to be 5+. Meadow Ridge and Willowbrook allow younger kids but honestly, under 3 is going to be more work than fun.</li>
+      <li><strong>Wear old clothes.</strong> Goats step on things. Goats drool on things. One goat chewed my ponytail. Dress accordingly.</li>
+      <li><strong>Bring your own mat</strong> if you have one. Communal mats exist at all three locations but have seen things. Gerald has seen to that.</li>
+      <li><strong>Book ahead.</strong> Spring Haven fills up fast. The others are more flexible but weekend slots still go quickly in peak season.</li>
+      <li><strong>Allergy note:</strong> If your kid is allergic to animal dander, this is 45-60 minutes of direct contact with goats. Plan accordingly.</li>
+    </ul>
+
+    <p>Goat yoga is ridiculous. I know this. You know this. The goats definitely know this. But it's also genuinely fun, especially with kids, and the Triangle has some surprisingly good options. Just maybe don't bring your nicest yoga mat.</p>
+
+    <p><em>All three operations are seasonal, typically running April through October. Schedules and pricing may change. Check individual farms for current availability.</em></p>
+
+  </div>
+
+  <!-- Tags -->
+  <div class="article-tags">
+    <a href="#">Goat Yoga</a>
+    <a href="#">Farms</a>
+    <a href="#">Durham</a>
+    <a href="#">Weird Fun</a>
+    <a href="#">Outdoors</a>
+    <a href="#">Triangle NC</a>
+  </div>
+
+  <!-- Author -->
+  <div class="author-card">
+    <div class="avatar">AP</div>
+    <div class="bio">
+      <strong>Amira Patel</strong><br>
+      Amira writes about food, events, and the weirder side of Triangle family life. She's a Raleigh native raising two kids and a very judgmental cat. <a href="#">More from Amira</a>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <div class="f-logo">Triangle Family Outings</div>
+  <p>Weekend plans, weekday escapes, and everything in between.</p>
+  <p style="margin-top:10px;">&copy; 2026 &middot; Durham, NC &middot; <a href="#">Privacy</a> &middot; <a href="#">Contact</a> &middot; <a href="#">Instagram</a></p>
+</div>
+
+</body>
+</html>
