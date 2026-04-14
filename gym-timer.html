@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Gym Timer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200;400;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: #111;
+    color: #ccc;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 120px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  h1 {
+    font-size: 11px;
+    color: #888;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+    font-weight: 400;
+  }
+  #exercise-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: #eee;
+    text-align: center;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+  }
+  #set-info {
+    font-size: 13px;
+    color: #aaa;
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+  }
+  #weight-info {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 36px;
+  }
+  #timer-display {
+    font-size: 80px;
+    font-weight: 200;
+    font-variant-numeric: tabular-nums;
+    color: #eee;
+    margin-bottom: 6px;
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+  #timer-label {
+    font-size: 11px;
+    color: #999;
+    margin-bottom: 32px;
+    height: 16px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  #main-btn {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    border: 2px solid #333;
+    background: #1a1a1a;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #bbb;
+    cursor: pointer;
+    transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    margin-bottom: 20px;
+  }
+  #main-btn:active {
+    transform: scale(0.96);
+  }
+  #main-btn.resting {
+    border-color: #c0392b;
+    color: #c0392b;
+  }
+  #main-btn.paused {
+    border-color: #555;
+    color: #555;
+  }
+  #main-btn.go {
+    border-color: #c0392b;
+    background: #c0392b;
+    color: #fff;
+  }
+  #skip-btn {
+    background: none;
+    border: 1px solid #333;
+    color: #999;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 8px 20px;
+    border-radius: 20px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Bottom logging area */
+  #log-area {
+    display: none;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: auto;
+    padding: 12px 20px;
+    width: 100%;
+    max-width: 360px;
+  }
+  #rep-counter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .rep-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid #333;
+    background: transparent;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 400;
+    color: #999;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .rep-btn:active {
+    transform: scale(0.9);
+    border-color: #c0392b;
+    color: #c0392b;
+  }
+  #rep-count {
+    font-size: 22px;
+    font-weight: 700;
+    color: #eee;
+    min-width: 30px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  #rep-label {
+    font-size: 9px;
+    color: #666;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  #notes-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid #333;
+    border-radius: 6px;
+    background: #1a1a1a;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #ddd;
+    text-align: center;
+    outline: none;
+    transition: border-color 0.2s;
+    -webkit-user-select: auto;
+    user-select: auto;
+  }
+  #notes-input:focus {
+    border-color: #c0392b;
+  }
+  #notes-input::placeholder {
+    color: #555;
+    font-size: 11px;
+  }
+
+  /* Bottom fixed bar */
+  #bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #111;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  #progress {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 20px;
+    padding: 12px 24px 16px;
+    width: 100%;
+  }
+  .exercise-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .exercise-dots {
+    display: flex;
+    gap: 6px;
+  }
+  .exercise-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: #555;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .exercise-label.active { color: #c0392b; }
+  .exercise-label.completed { color: #777; }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #2a2a2a;
+    transition: all 0.3s;
+  }
+  .dot.active { background: #c0392b; }
+  .dot.completed { background: #999; }
+
+  /* Done screen */
+  #workout-done {
+    display: none;
+    text-align: center;
+    width: 100%;
+    max-width: 340px;
+  }
+  #workout-done h2 {
+    font-size: 28px;
+    color: #eee;
+    font-weight: 700;
+    margin-bottom: 24px;
+    letter-spacing: -1px;
+  }
+  #summary {
+    text-align: left;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    font-size: 12px;
+    line-height: 1.8;
+    color: #999;
+    white-space: pre-wrap;
+  }
+  #summary .exercise-header {
+    color: #eee;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  #summary .set-line {
+    color: #666;
+    padding-left: 8px;
+  }
+  #summary .set-note {
+    color: #c0392b;
+  }
+  #copy-btn {
+    width: 100%;
+    padding: 14px;
+    border: 2px solid #c0392b;
+    background: #c0392b;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-radius: 10px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.15s;
+  }
+  #copy-btn:active {
+    transform: scale(0.97);
+  }
+  #copy-btn.copied {
+    background: #1a1a1a;
+    color: #c0392b;
+  }
+</style>
+</head>
+<body>
+
+<h1>Lower Day</h1>
+<div id="exercise-name"></div>
+<div id="set-info"></div>
+<div id="weight-info"></div>
+<div id="timer-display"></div>
+<div id="timer-label"></div>
+<button id="main-btn">Set Done</button>
+<button id="skip-btn">Skip Rest</button>
+
+<div id="bottom-bar">
+  <div id="log-area">
+    <div id="rep-label">REPS</div>
+    <div id="rep-counter">
+      <button class="rep-btn" id="rep-minus">-</button>
+      <div id="rep-count">10</div>
+      <button class="rep-btn" id="rep-plus">+</button>
+    </div>
+    <input type="text" id="notes-input" placeholder="notes..." inputmode="text">
+  </div>
+  <div id="progress"></div>
+</div>
+
+<div id="workout-done">
+  <h2>Done.</h2>
+  <div id="summary"></div>
+  <button id="copy-btn">Copy Summary</button>
+</div>
+
+<script>
+const workout = [
+  { name: "Leg Press", sets: 3, reps: "8-12", repDefault: 10, weight: "160 + bonus plate", rest: 150 },
+  { name: "Leg Curl Machine", sets: 3, reps: "10-12", repDefault: 10, weight: "40 lbs", rest: 150 },
+  { name: "Calf Raises (2 DBs)", sets: 3, reps: "12-15", repDefault: 13, weight: "30+30 = 60 lbs", rest: 90 },
+];
+
+const setLogs = [];
+
+let currentExercise = 0;
+let currentSet = 0;
+let state = "ready";
+let timerInterval = null;
+let restRemaining = 0;
+let restEndTime = null; // absolute timestamp when rest ends
+let currentLogEntry = null;
+let repCount = 10;
+
+// Track which exercise the log area is for (the one we just finished)
+let logExerciseIndex = 0;
+
+const elName = document.getElementById("exercise-name");
+const elSet = document.getElementById("set-info");
+const elWeight = document.getElementById("weight-info");
+const elTimer = document.getElementById("timer-display");
+const elTimerLabel = document.getElementById("timer-label");
+const elBtn = document.getElementById("main-btn");
+const elSkip = document.getElementById("skip-btn");
+const elProgress = document.getElementById("progress");
+const elDone = document.getElementById("workout-done");
+const elSummary = document.getElementById("summary");
+const elCopy = document.getElementById("copy-btn");
+const elLogArea = document.getElementById("log-area");
+const elNotesInput = document.getElementById("notes-input");
+const elRepCount = document.getElementById("rep-count");
+const elRepMinus = document.getElementById("rep-minus");
+const elRepPlus = document.getElementById("rep-plus");
+
+function getGlobalSetIndex() {
+  let idx = 0;
+  for (let i = 0; i < currentExercise; i++) idx += workout[i].sets;
+  return idx + currentSet;
+}
+
+function renderProgress() {
+  elProgress.innerHTML = "";
+  const globalCurrent = getGlobalSetIndex();
+  let idx = 0;
+  for (let i = 0; i < workout.length; i++) {
+    const group = document.createElement("div");
+    group.className = "exercise-group";
+    const dotsRow = document.createElement("div");
+    dotsRow.className = "exercise-dots";
+    for (let j = 0; j < workout[i].sets; j++) {
+      const dot = document.createElement("div");
+      dot.className = "dot";
+      if (idx < globalCurrent) dot.classList.add("completed");
+      else if (idx === globalCurrent) dot.classList.add("active");
+      dotsRow.appendChild(dot);
+      idx++;
+    }
+    const label = document.createElement("div");
+    label.className = "exercise-label";
+    if (i < currentExercise) label.classList.add("completed");
+    else if (i === currentExercise) label.classList.add("active");
+    label.textContent = workout[i].name;
+    group.appendChild(label);
+    group.appendChild(dotsRow);
+    elProgress.appendChild(group);
+  }
+}
+
+function renderExercise() {
+  const ex = workout[currentExercise];
+  elName.textContent = ex.name;
+  elSet.textContent = `Set ${currentSet + 1} / ${ex.sets}  \u00b7  ${ex.reps} reps`;
+  elWeight.textContent = ex.weight;
+  renderProgress();
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+let flashInterval = null;
+
+function startFlash() {
+  let on = true;
+  flashInterval = setInterval(() => {
+    document.body.style.background = on ? "#2a0a0a" : "#111";
+    elTimer.style.color = on ? "#c0392b" : "#eee";
+    on = !on;
+  }, 600);
+}
+
+function stopFlash() {
+  if (flashInterval) {
+    clearInterval(flashInterval);
+    flashInterval = null;
+  }
+  document.body.style.background = "#111";
+  elTimer.style.color = "#eee";
+}
+
+function showLogArea(exerciseIdx) {
+  logExerciseIndex = exerciseIdx;
+  repCount = workout[exerciseIdx].repDefault;
+  elRepCount.textContent = repCount;
+  elNotesInput.value = "";
+  elNotesInput.placeholder = "notes...";
+  elLogArea.style.display = "flex";
+}
+
+function hideLogArea() {
+  elLogArea.style.display = "none";
+}
+
+function captureLog() {
+  if (currentLogEntry) {
+    const note = elNotesInput.value.trim();
+    currentLogEntry.reps = repCount;
+    currentLogEntry.note = note;
+    currentLogEntry = null;
+  }
+}
+
+function setDone() {
+  stopFlash();
+  // Capture previous log if still open
+  captureLog();
+
+  const logEntry = {
+    exercise: currentExercise,
+    set: currentSet,
+    reps: 0,
+    note: ""
+  };
+  setLogs.push(logEntry);
+  currentLogEntry = logEntry;
+
+  const finishedExercise = currentExercise;
+  currentSet++;
+
+  // Show log area for the set we just finished
+  showLogArea(finishedExercise);
+
+  // Check if workout is complete
+  const isLastSet = finishedExercise >= workout.length - 1 && currentSet >= workout[finishedExercise].sets;
+  if (isLastSet) {
+    elBtn.textContent = "Finish";
+    elBtn.className = "go";
+    state = "finishing";
+    elTimer.textContent = "-:--";
+    elTimerLabel.textContent = "LOG YOUR LAST SET";
+    elSkip.style.display = "none";
+    renderProgress();
+    return;
+  }
+
+  // Advance exercise if needed
+  if (currentSet >= workout[currentExercise].sets) {
+    currentExercise++;
+    currentSet = 0;
+  }
+
+  // Start rest timer using absolute end time
+  elSkip.style.display = "inline-block";
+  elSkip.style.pointerEvents = "auto";
+  state = "resting";
+  restRemaining = workout[finishedExercise].rest;
+  restEndTime = Date.now() + restRemaining * 1000;
+  elTimer.textContent = formatTime(restRemaining);
+  elTimerLabel.textContent = "REST";
+  elBtn.textContent = "Pause";
+  elBtn.className = "resting";
+  renderProgress();
+  saveState();
+
+  timerInterval = setInterval(() => {
+    const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+      restDone();
+    } else {
+      restRemaining = remaining;
+      elTimer.textContent = formatTime(remaining);
+    }
+  }, 250);
+}
+
+function restDone() {
+  captureLog();
+  hideLogArea();
+  state = "alert";
+  elTimer.textContent = "0:00";
+  elTimerLabel.textContent = "GO";
+  elBtn.textContent = "Set Done";
+  elBtn.className = "go";
+  elSkip.style.display = "none";
+  renderExercise();
+  startFlash();
+  saveState();
+}
+
+function pauseRest() {
+  clearInterval(timerInterval);
+  state = "paused";
+  elBtn.textContent = "Resume";
+  elBtn.className = "paused";
+  elTimerLabel.textContent = "PAUSED";
+  saveState();
+}
+
+function resumeRest() {
+  state = "resting";
+  restEndTime = Date.now() + restRemaining * 1000;
+  elBtn.textContent = "Pause";
+  elBtn.className = "resting";
+  elTimerLabel.textContent = "REST";
+  saveState();
+  timerInterval = setInterval(() => {
+    const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+      restDone();
+    } else {
+      restRemaining = remaining;
+      elTimer.textContent = formatTime(remaining);
+    }
+  }, 250);
+}
+
+function skipRest() {
+  clearInterval(timerInterval);
+  captureLog();
+  hideLogArea();
+  state = "ready";
+  elTimer.textContent = "-:--";
+  elTimerLabel.textContent = "";
+  elBtn.textContent = "Set Done";
+  elBtn.className = "";
+  elSkip.style.display = "none";
+  renderExercise();
+  saveState();
+}
+
+function buildSummary() {
+  let text = "";
+  for (let i = 0; i < workout.length; i++) {
+    const ex = workout[i];
+    text += ex.name + " @ " + ex.weight + "\n";
+    for (let j = 0; j < ex.sets; j++) {
+      const log = setLogs.find(l => l.exercise === i && l.set === j);
+      if (log) {
+        const note = log.note ? " -- " + log.note : "";
+        text += "  S" + (j + 1) + ": " + log.reps + " reps" + note + "\n";
+      } else {
+        text += "  S" + (j + 1) + ": -\n";
+      }
+    }
+    if (i < workout.length - 1) text += "\n";
+  }
+  return text;
+}
+
+function buildSummaryHTML() {
+  let html = "";
+  for (let i = 0; i < workout.length; i++) {
+    const ex = workout[i];
+    html += '<div class="exercise-header">' + ex.name + ' @ ' + ex.weight + '</div>';
+    for (let j = 0; j < ex.sets; j++) {
+      const log = setLogs.find(l => l.exercise === i && l.set === j);
+      if (log) {
+        const note = log.note ? ' -- ' + log.note : '';
+        html += '<div class="set-line">S' + (j + 1) + ': <span class="set-note">' + log.reps + ' reps' + note + '</span></div>';
+      } else {
+        html += '<div class="set-line">S' + (j + 1) + ': -</div>';
+      }
+    }
+    if (i < workout.length - 1) html += '<br>';
+  }
+  return html;
+}
+
+function finishWorkout() {
+  captureLog();
+  hideLogArea();
+  state = "finished";
+  document.querySelector("h1").style.display = "none";
+  elName.style.display = "none";
+  elSet.style.display = "none";
+  elWeight.style.display = "none";
+  elTimer.style.display = "none";
+  elTimerLabel.style.display = "none";
+  elBtn.style.display = "none";
+  elSkip.style.display = "none";
+  elProgress.style.display = "none";
+  elDone.style.display = "block";
+  elSummary.innerHTML = buildSummaryHTML();
+  try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+}
+
+// Button handlers
+elBtn.addEventListener("click", () => {
+  if (state === "ready" || state === "alert") setDone();
+  else if (state === "resting") pauseRest();
+  else if (state === "paused") resumeRest();
+  else if (state === "finishing") finishWorkout();
+});
+
+elSkip.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (state === "resting" || state === "paused") skipRest();
+});
+
+elRepMinus.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (repCount > 0) {
+    repCount--;
+    elRepCount.textContent = repCount;
+  }
+});
+
+elRepPlus.addEventListener("click", (e) => {
+  e.stopPropagation();
+  repCount++;
+  elRepCount.textContent = repCount;
+});
+
+elCopy.addEventListener("click", () => {
+  const text = buildSummary();
+  navigator.clipboard.writeText(text).then(() => {
+    elCopy.textContent = "Copied";
+    elCopy.className = "copied";
+    setTimeout(() => {
+      elCopy.textContent = "Copy Summary";
+      elCopy.className = "";
+    }, 2000);
+  });
+});
+
+// State persistence
+function saveState() {
+  const s = {
+    currentExercise, currentSet, state, restEndTime, restRemaining,
+    setLogs: JSON.parse(JSON.stringify(setLogs)),
+    repCount
+  };
+  try { localStorage.setItem("gym-timer-state", JSON.stringify(s)); } catch(e) {}
+}
+
+function restoreState() {
+  try {
+    const raw = localStorage.getItem("gym-timer-state");
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    currentExercise = s.currentExercise;
+    currentSet = s.currentSet;
+    repCount = s.repCount || 10;
+    setLogs.length = 0;
+    s.setLogs.forEach(l => setLogs.push(l));
+
+    if (s.state === "resting" && s.restEndTime) {
+      const remaining = Math.ceil((s.restEndTime - Date.now()) / 1000);
+      if (remaining <= 0) {
+        // Rest already ended while phone was asleep
+        state = "alert";
+        restEndTime = null;
+        renderExercise();
+        elTimer.textContent = "0:00";
+        elTimerLabel.textContent = "GO";
+        elBtn.textContent = "Set Done";
+        elBtn.className = "go";
+        elSkip.style.display = "none";
+        hideLogArea();
+        startFlash();
+      } else {
+        // Resume countdown
+        state = "resting";
+        restRemaining = remaining;
+        restEndTime = s.restEndTime;
+        renderExercise();
+        elTimer.textContent = formatTime(remaining);
+        elTimerLabel.textContent = "REST";
+        elBtn.textContent = "Pause";
+        elBtn.className = "resting";
+        elSkip.style.display = "inline-block";
+        showLogArea(currentExercise > 0 && currentSet === 0 ? currentExercise - 1 : currentExercise);
+        timerInterval = setInterval(() => {
+          const rem = Math.ceil((restEndTime - Date.now()) / 1000);
+          if (rem <= 0) {
+            clearInterval(timerInterval);
+            restDone();
+          } else {
+            restRemaining = rem;
+            elTimer.textContent = formatTime(rem);
+          }
+        }, 250);
+      }
+      return true;
+    } else if (s.state === "alert") {
+      state = "alert";
+      renderExercise();
+      elTimer.textContent = "0:00";
+      elTimerLabel.textContent = "GO";
+      elBtn.textContent = "Set Done";
+      elBtn.className = "go";
+      hideLogArea();
+      startFlash();
+      return true;
+    } else if (s.state === "paused") {
+      state = "paused";
+      restRemaining = s.restRemaining;
+      renderExercise();
+      elTimer.textContent = formatTime(restRemaining);
+      elTimerLabel.textContent = "PAUSED";
+      elBtn.textContent = "Resume";
+      elBtn.className = "paused";
+      elSkip.style.display = "inline-block";
+      return true;
+    } else {
+      // ready state -- just restore position
+      renderExercise();
+      return true;
+    }
+  } catch(e) { return false; }
+}
+
+// When phone wakes up, re-sync the timer
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state === "resting" && restEndTime) {
+    const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+      restDone();
+    } else {
+      restRemaining = remaining;
+      elTimer.textContent = formatTime(remaining);
+    }
+  }
+});
+
+// Init
+elSkip.style.display = "none";
+hideLogArea();
+if (!restoreState()) {
+  elTimer.textContent = "-:--";
+  elTimerLabel.textContent = "";
+  renderExercise();
+}
+</script>
+
+</body>
+</html>
