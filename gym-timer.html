@@ -512,12 +512,12 @@ function setDone() {
   elSkip.style.display = "inline-block";
   elSkip.style.pointerEvents = "auto";
   state = "resting";
-  // Longer rest when switching exercises (add 60s for equipment change)
   const switchingExercise = (finishedExercise !== currentExercise);
-  restRemaining = workout[finishedExercise].rest + (switchingExercise ? 60 : 0);
+  // Shorter rest between exercises (different muscle group, less fatigue)
+  restRemaining = switchingExercise ? 60 : workout[finishedExercise].rest;
   restEndTime = Date.now() + restRemaining * 1000;
   elTimer.textContent = formatTime(restRemaining);
-  elTimerLabel.textContent = switchingExercise ? "REST + SWITCH" : "REST";
+  elTimerLabel.textContent = switchingExercise ? "SWITCH" : "REST";
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
   renderProgress();
@@ -541,7 +541,7 @@ function restDone() {
   state = "alert";
   elTimer.textContent = "0:00";
   elTimerLabel.textContent = "GO";
-  elBtn.textContent = "Set Done";
+  elBtn.textContent = "Start Set";
   elBtn.className = "go";
   elSkip.style.display = "none";
   renderExercise();
