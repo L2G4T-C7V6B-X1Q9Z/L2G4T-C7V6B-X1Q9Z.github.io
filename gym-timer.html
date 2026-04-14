@@ -422,10 +422,19 @@ let flashInterval = null;
 
 function startFlash() {
   let on = true;
+  let count = 0;
   flashInterval = setInterval(() => {
+    count++;
     document.body.style.background = on ? "#2a0a0a" : "#111";
     elTimer.style.color = on ? "#c0392b" : "#eee";
     on = !on;
+    // Stop pulsing after ~5 seconds (8 toggles), hold on red
+    if (count >= 8) {
+      clearInterval(flashInterval);
+      flashInterval = null;
+      document.body.style.background = "#1a0808";
+      elTimer.style.color = "#c0392b";
+    }
   }, 600);
 }
 
@@ -503,10 +512,12 @@ function setDone() {
   elSkip.style.display = "inline-block";
   elSkip.style.pointerEvents = "auto";
   state = "resting";
-  restRemaining = workout[finishedExercise].rest;
+  // Longer rest when switching exercises (add 60s for equipment change)
+  const switchingExercise = (finishedExercise !== currentExercise);
+  restRemaining = workout[finishedExercise].rest + (switchingExercise ? 60 : 0);
   restEndTime = Date.now() + restRemaining * 1000;
   elTimer.textContent = formatTime(restRemaining);
-  elTimerLabel.textContent = "REST";
+  elTimerLabel.textContent = switchingExercise ? "REST + SWITCH" : "REST";
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
   renderProgress();
