@@ -648,9 +648,21 @@ function finishWorkout() {
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
 }
 
+function acknowledgeAlert() {
+  stopFlash();
+  state = "ready";
+  elTimer.textContent = "-:--";
+  elTimerLabel.textContent = "";
+  elBtn.textContent = "Set Done";
+  elBtn.className = "";
+  renderExercise();
+  saveState();
+}
+
 // Button handlers
 elBtn.addEventListener("click", () => {
-  if (state === "ready" || state === "alert") setDone();
+  if (state === "ready") setDone();
+  else if (state === "alert") acknowledgeAlert();
   else if (state === "resting") pauseRest();
   else if (state === "paused") resumeRest();
   else if (state === "finishing") finishWorkout();
