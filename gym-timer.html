@@ -517,10 +517,10 @@ function setDone() {
   restRemaining = switchingExercise ? 60 : workout[finishedExercise].rest;
   restEndTime = Date.now() + restRemaining * 1000;
   elTimer.textContent = formatTime(restRemaining);
-  elTimerLabel.textContent = switchingExercise ? "SWITCH" : "REST";
+  elTimerLabel.textContent = switchingExercise ? "UP NEXT" : "REST";
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
-  renderProgress();
+  renderExercise();
   saveState();
 
   timerInterval = setInterval(() => {
