@@ -133,27 +133,37 @@
     stroke: #c0392b;
     stroke-width: 3;
     stroke-linecap: round;
-    transition: stroke-dashoffset 0.25s linear;
+    /* No CSS transition -- updates are driven directly by timer interval */
   }
   .btn-wrap.paused #rest-ring-bar {
     stroke: #777;
-    transition: none;
   }
 
+  /* Skip button: small circular button positioned to the right of the main button,
+     vertically aligned with its center. Fast-forward icon. */
   #skip-btn {
-    background: none;
+    position: absolute;
+    left: calc(100% + 18px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #1a1a1a;
     border: 1px solid #333;
     color: #999;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 1px;
-    padding: 8px 20px;
-    border-radius: 20px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: transform 0.1s, color 0.2s, border-color 0.2s;
   }
+  #skip-btn:active { transform: translateY(-50%) scale(0.92); }
+  #skip-btn svg { width: 18px; height: 18px; }
 
-  /* Top corner buttons (back / forward / settings) */
+  /* Top corner buttons (back / forward / settings) — SVG icons, perfectly centered */
   .top-btn {
     position: fixed;
     top: 16px;
@@ -163,9 +173,6 @@
     border: 1px solid #333;
     background: #1a1a1a;
     color: #aaa;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 22px;
-    font-weight: 400;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     display: flex;
@@ -173,13 +180,14 @@
     justify-content: center;
     z-index: 50;
     padding: 0;
-    line-height: 1;
     transition: opacity 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
   }
+  .top-btn svg { width: 18px; height: 18px; display: block; }
   .top-btn:active { transform: scale(0.92); }
   #nav-back { left: 16px; }
   #nav-forward { left: 68px; display: none; }
-  #settings-btn { right: 16px; font-size: 18px; }
+  #settings-btn { right: 16px; }
+  #settings-btn svg { width: 20px; height: 20px; }
   .top-btn.disabled { opacity: 0.22; pointer-events: none; }
 
   /* Bottom logging area */
@@ -603,9 +611,15 @@
 </head>
 <body>
 
-<button id="nav-back" class="top-btn disabled" aria-label="Go back">&#8592;</button>
-<button id="nav-forward" class="top-btn" aria-label="Go forward">&#8594;</button>
-<button id="settings-btn" class="top-btn" aria-label="Settings">&#9881;</button>
+<button id="nav-back" class="top-btn disabled" aria-label="Go back">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+</button>
+<button id="nav-forward" class="top-btn" aria-label="Go forward">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+</button>
+<button id="settings-btn" class="top-btn" aria-label="Settings">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+</button>
 
 <h1 id="day-title">Upper Day</h1>
 <div id="exercise-name"></div>
@@ -619,8 +633,10 @@
     <circle id="rest-ring-track" cx="92" cy="92" r="88"></circle>
     <circle id="rest-ring-bar"   cx="92" cy="92" r="88"></circle>
   </svg>
+  <button id="skip-btn" aria-label="Skip rest">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 4l9 8-9 8V4zm10 0l9 8-9 8V4z"/></svg>
+  </button>
 </div>
-<button id="skip-btn" aria-label="Skip rest">Skip Rest</button>
 
 <div id="bottom-bar">
   <div id="log-area">
@@ -1000,8 +1016,10 @@ function renderExercise() {
 }
 
 function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+  // Always ceil (handles floats from precise pause/resume math)
+  const total = Math.max(0, Math.ceil(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
@@ -1016,7 +1034,7 @@ function stopFlash() {
 }
 
 // ============ REST RING ============
-function updateRestRing(immediate) {
+function updateRestRing() {
   if (!restEndTime || !restTotalSeconds) {
     elRingBar.setAttribute("stroke-dashoffset", RING_CIRCUMFERENCE);
     return;
@@ -1024,14 +1042,7 @@ function updateRestRing(immediate) {
   const remaining = Math.max(0, (restEndTime - Date.now()) / 1000);
   const fraction = Math.max(0, Math.min(1, remaining / restTotalSeconds));
   const offset = RING_CIRCUMFERENCE * (1 - fraction);
-  if (immediate) {
-    elRingBar.style.transition = "none";
-    elRingBar.setAttribute("stroke-dashoffset", offset);
-    void elRingBar.getBoundingClientRect();
-    elRingBar.style.transition = "";
-  } else {
-    elRingBar.setAttribute("stroke-dashoffset", offset);
-  }
+  elRingBar.setAttribute("stroke-dashoffset", offset);
 }
 function showRestRing(show, paused) {
   elBtnWrap.classList.toggle("show-ring", !!show);
@@ -1063,9 +1074,10 @@ function captureLog() {
 // ============ TIMER LOOP ============
 function startCountdown() {
   if (timerInterval) clearInterval(timerInterval);
-  updateRestRing(true);
+  updateRestRing();
+  // 100ms updates = smooth ring without CSS transition
   timerInterval = setInterval(() => {
-    const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
+    const remaining = Math.max(0, (restEndTime - Date.now()) / 1000);
     if (remaining <= 0) {
       clearInterval(timerInterval);
       timerInterval = null;
@@ -1073,10 +1085,10 @@ function startCountdown() {
       restDone();
     } else {
       restRemaining = remaining;
-      elTimer.textContent = formatTime(remaining);
+      elTimer.textContent = formatTime(Math.ceil(remaining));
       updateRestRing();
     }
-  }, 250);
+  }, 100);
 }
 
 // ============ HISTORY (back/forward) ============
@@ -1140,7 +1152,7 @@ function applyState(notesValue) {
       elTimerLabel.textContent = "REST";
       elBtn.textContent = "Pause";
       elBtn.className = "resting";
-      elSkip.style.display = "inline-block";
+      elSkip.style.display = "flex";
       elLogArea.style.display = "flex";
       elRepCount.textContent = repCount;
       elNotesInput.value = notesValue;
@@ -1166,12 +1178,12 @@ function applyState(notesValue) {
     elTimerLabel.textContent = "PAUSED";
     elBtn.textContent = "Resume";
     elBtn.className = "paused";
-    elSkip.style.display = "inline-block";
+    elSkip.style.display = "flex";
     elLogArea.style.display = "flex";
     elRepCount.textContent = repCount;
     elNotesInput.value = notesValue;
     showRestRing(true, true);
-    updateRestRing(true);
+    updateRestRing();
   } else if (state === "finishing") {
     renderExercise();
     elBtn.textContent = "Finish";
@@ -1265,7 +1277,7 @@ function setDone() {
     currentSet = 0;
   }
 
-  elSkip.style.display = "inline-block";
+  elSkip.style.display = "flex";
   elSkip.style.pointerEvents = "auto";
   state = "resting";
   const switchingExercise = (finishedExercise !== currentExercise);
