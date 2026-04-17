@@ -644,7 +644,7 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 </button>
 
-<h1 id="day-title">Upper Day</h1>
+<h1 id="day-title">Lower Day</h1>
 <div id="exercise-name"></div>
 <div id="set-info"></div>
 <div id="exercise-note"></div>
@@ -732,58 +732,46 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Upper Day";
+const dayType = "Lower Day";
 
 const workout = [
   {
-    name: "Chest Press Machine",
+    name: "Leg Press",
     sets: 3,
     reps: "8-12",
-    weight: "100 lbs",
+    weight: "190+BP lbs",
     rest: 150,
-    note: "Full ROM. Stay at 100 until 12/12/10+.",
+    note: "Weight PR move (175 -> 190). L knee discomfort -- monitor S3 at full ROM.",
     setNotes: [
-      "Top of range should feel doable. Focus on full ROM and chest squeeze.",
-      "Where you dropped to 8 last week. Push for 10+. Chest, not shoulders.",
-      "0 RIR. Last week: 7. Push to failure or near it. Strong negatives."
+      "First set at new weight. Feel it out. Stop short of full ROM if knee complains.",
+      "Push hard. Top of range feels doable? Good sign for the new weight.",
+      "0-1 RIR. If L knee starts up, stop the rep and tell me -- not worth grinding through pain."
     ]
   },
   {
-    name: "Lat Pulldown",
+    name: "Leg Curl Machine",
     sets: 3,
-    reps: "8-12",
-    weight: "95 lbs",
+    reps: "10-12",
+    weight: "50 lbs",
     rest: 150,
-    note: "PR weight (was 90). Squeeze, controlled negatives, full stretch.",
+    note: "Weight PR move (40 -> 50, +10 lb forced jump). Expect rep count to drop.",
     setNotes: [
-      "First set at PR weight. Feel the bar path. Lats, not arms.",
-      "Same effort. Don't grind ugly reps -- stop with form, not failure.",
-      "0-1 RIR. New weight, see what you've got. Top of range = move to 100 next week."
+      "New weight. Big +10 lb jump. Aim for 10+ but don't be surprised if you get 8.",
+      "Same effort. Slow eccentric, controlled.",
+      "Last set at new weight. Push to RIR 0-1."
     ]
   },
   {
-    name: "DB Lateral Raise",
+    name: "Standing Calf Raises",
     sets: 3,
     reps: "12-15",
-    weight: "10 lbs",
+    weight: "70 lbs (35+35)",
     rest: 90,
-    note: "Slow. No swinging. Stop at shoulder height.",
+    note: "Stay at 70 until all sets hit 15. S2 fell to 13 last week.",
     setNotes: [
-      "Top range easy. Slow tempo, pause at top.",
-      "Same. Strict form, no momentum.",
-      "Where you dropped to 11 last week. Push past it. 15/15/15 unlocks 12.5s."
-    ]
-  },
-  {
-    name: "Dumbbell Curls",
-    sets: 2,
-    reps: "10-12",
-    weight: "15 lbs",
-    rest: 90,
-    note: "Squeeze top. Last: 12/10.",
-    setNotes: [
-      "Top range. Last week: 12. Squeeze the contraction, controlled lower.",
-      "Last week: 10. Push to 12. Both sets at 12 = move up next week."
+      "Full stretch at bottom, full squeeze at top. Slow tempo.",
+      "Where you dropped to 13 last week. Push for 15. Don't bounce.",
+      "Last week: 19. Push to failure -- this set is for size, not technique caution."
     ]
   },
 ];
