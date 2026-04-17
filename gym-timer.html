@@ -158,10 +158,27 @@
     align-items: center;
     justify-content: center;
     padding: 0;
-    transition: transform 0.1s, color 0.2s, border-color 0.2s;
+    transition: transform 0.12s ease, color 0.2s, border-color 0.2s, background 0.2s;
   }
-  #skip-btn:active { transform: translateY(-50%) scale(0.92); }
-  #skip-btn svg { width: 18px; height: 18px; }
+  #skip-btn:active {
+    transform: translateY(-50%) scale(0.85);
+    color: #c0392b;
+    border-color: #c0392b;
+    background: rgba(192, 57, 43, 0.12);
+  }
+  #skip-btn svg {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.18s ease;
+  }
+  /* Subtle "skipping forward" cue: icon slides right + fades on press */
+  @keyframes skip-icon-fly {
+    0%   { transform: translateX(0);  opacity: 1; }
+    100% { transform: translateX(8px); opacity: 0; }
+  }
+  #skip-btn.pressed svg {
+    animation: skip-icon-fly 0.18s ease-out forwards;
+  }
 
   /* Top corner buttons (back / forward / settings) — SVG icons, perfectly centered */
   .top-btn {
@@ -458,9 +475,15 @@
   .modal-close.danger {
     border-color: #5a2a25;
     color: #c0392b;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
   }
   .modal-close.danger:active {
     background: rgba(192, 57, 43, 0.1);
+  }
+  .modal-close.danger.confirming {
+    background: #c0392b;
+    color: #fff;
+    border-color: #c0392b;
   }
 
   /* Edit modal-specific */
@@ -1239,10 +1262,6 @@ function setDone() {
   stopFlash();
   captureLog();
 
-  initAudio();
-  requestWakeLock();
-  ensureNotifPermission();
-
   const logEntry = {
     exercise: currentExercise,
     set: currentSet,
@@ -1268,7 +1287,7 @@ function setDone() {
     elSkip.style.display = "none";
     showRestRing(false);
     renderProgress();
-    saveState();
+    requestAnimationFrame(() => { saveState(); });
     return;
   }
 
@@ -1290,9 +1309,16 @@ function setDone() {
   elBtn.className = "resting";
   renderExercise();
   showRestRing(true, false);
-  scheduleRestNotif(restRemaining * 1000);
-  saveState();
   startCountdown();
+
+  // Defer all expensive non-critical work to next frame so the UI updates immediately
+  requestAnimationFrame(() => {
+    initAudio();
+    requestWakeLock();
+    ensureNotifPermission();
+    scheduleRestNotif(restRemaining * 1000);
+    saveState();
+  });
 }
 
 function restDone() {
@@ -1303,7 +1329,6 @@ function restDone() {
   showRestRing(false);
 
   if (settings.autoStart) {
-    // Auto-start: skip the alert→ack handshake. Go straight to ready.
     state = "ready";
     elTimer.textContent = "-:--";
     elTimerLabel.textContent = "GO";
@@ -1321,9 +1346,12 @@ function restDone() {
     renderExercise();
   }
   startFlash();
-  triggerAlertFeedback();
-  saveState();
   updateNavButtons();
+  // Defer audio/vibration/save so UI updates first (no perceptible lag)
+  requestAnimationFrame(() => {
+    triggerAlertFeedback();
+    saveState();
+  });
 }
 
 function pauseRest() {
@@ -1522,12 +1550,24 @@ function closeSettings() {
   elSettingsModal.classList.remove("show");
 }
 const elSettingsReset = document.getElementById("settings-reset");
+let resetConfirmTimer = null;
+function resetConfirmReset() {
+  elSettingsReset.classList.remove('confirming');
+  elSettingsReset.textContent = 'Reset Workout';
+  if (resetConfirmTimer) { clearTimeout(resetConfirmTimer); resetConfirmTimer = null; }
+}
 elSettingsBtn.addEventListener("click", openSettings);
-elSettingsClose.addEventListener("click", closeSettings);
+elSettingsClose.addEventListener("click", () => { resetConfirmReset(); closeSettings(); });
 elSettingsReset.addEventListener("click", () => {
-  if (confirm("Reset all workout progress and start over?")) {
+  if (elSettingsReset.classList.contains('confirming')) {
+    // Second tap -- actually reset
     try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
     location.reload();
+  } else {
+    elSettingsReset.classList.add('confirming');
+    elSettingsReset.textContent = 'Tap again to confirm';
+    if (resetConfirmTimer) clearTimeout(resetConfirmTimer);
+    resetConfirmTimer = setTimeout(resetConfirmReset, 3000);
   }
 });
 elSettingsModal.addEventListener("click", (e) => {
@@ -1554,7 +1594,13 @@ elBtn.addEventListener("click", () => {
 });
 elSkip.addEventListener("click", (e) => {
   e.stopPropagation();
-  if (state === "resting" || state === "paused") skipRest();
+  if (state !== "resting" && state !== "paused") return;
+  // Subtle press animation: icon flies right while we transition state
+  elSkip.classList.add("pressed");
+  setTimeout(() => {
+    skipRest();
+    elSkip.classList.remove("pressed");
+  }, 160);
 });
 elRepMinus.addEventListener("click", (e) => {
   e.stopPropagation();
