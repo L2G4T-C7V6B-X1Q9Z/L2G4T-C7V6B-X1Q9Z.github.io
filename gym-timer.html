@@ -218,7 +218,7 @@
     font-size: 11px;
   }
 
-  /* Bottom fixed bar */
+  /* Bottom fixed bar — transparent so body bg shows through (unified flash) */
   #bottom-bar {
     position: fixed;
     bottom: 0;
@@ -227,7 +227,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: #111;
+    background: transparent;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   #progress {
@@ -270,35 +270,65 @@
     background: #2a2a2a;
     transition: background 0.3s;
     flex-shrink: 0;
+    position: relative;
   }
   .dot.active { background: #c0392b; }
   .dot.completed { background: #fafafa; cursor: pointer; }
 
-  /* Active dot blinking red while doing the set (states: ready / alert / finishing) */
-  @keyframes blink-set {
-    0%, 100% { background: #c0392b; box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.0); }
-    50%      { background: #4a1810; box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.25); }
+  /* Active dot blinking — Mazda turn signal pattern (snap on, gradual fade off).
+     Just an outline ring, no blur, no glow. */
+  @keyframes mazda-dot-blink {
+    0%   { opacity: 1; }
+    100% { opacity: 0; }
   }
-  .dot.active.blinking {
-    animation: blink-set 0.9s ease-in-out infinite;
+  .dot.active.blinking::before {
+    content: "";
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border: 1.5px solid #c0392b;
+    border-radius: 50%;
+    animation: mazda-dot-blink 1.0s ease-out infinite;
+    pointer-events: none;
   }
 
-  /* Active (next) dot pulsing during rest/paused — slower, breathing */
-  @keyframes pulse-rest {
-    0%, 100% { background: #c0392b; transform: scale(1); }
-    50%      { background: #7a2820; transform: scale(1.35); }
+  /* Just-completed dot echoes a white ghost rightward toward the next dot,
+     fading out so it disappears before reaching the next dot. */
+  @keyframes echo-travel {
+    0%   { transform: translateX(0);    opacity: 0.85; }
+    80%  { opacity: 0; }
+    100% { transform: translateX(13px); opacity: 0; }
   }
-  .dot.active.pulsing {
-    animation: pulse-rest 2.4s ease-in-out infinite;
+  .dot.completed.echoing::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fafafa;
+    animation: echo-travel 1.4s ease-out infinite;
+    pointer-events: none;
   }
 
-  /* Just-completed dot echoing toward next during rest */
-  @keyframes echo-completed {
-    0%   { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.55); }
-    100% { box-shadow: 0 0 0 18px rgba(192, 57, 43, 0); }
+  /* Body alert flash — Mazda turn signal pattern (snap on, gradual fade).
+     Bottom bar inherits because it's transparent. */
+  @keyframes mazda-bg-flash {
+    0%   { background: #4a1410; }
+    100% { background: #111; }
   }
-  .dot.completed.echoing {
-    animation: echo-completed 1.8s ease-out infinite;
+  @keyframes mazda-timer-flash {
+    0%   { color: #c0392b; }
+    100% { color: #eee; }
+  }
+  body.alert-flashing {
+    animation: mazda-bg-flash 0.85s ease-out 6;
+  }
+  body.alert-flashing #timer-display {
+    animation: mazda-timer-flash 0.85s ease-out 6;
   }
 
   /* Edit modal */
@@ -692,9 +722,9 @@ function renderProgress() {
         dot.setAttribute("aria-label", "Edit " + workout[i].name + " set " + (j + 1));
       } else if (idx === globalCurrent) {
         dot.classList.add("active");
-        if (isResting) {
-          dot.classList.add("pulsing");
-        } else if (isDoingSet) {
+        // Only blink during the actual set (not during rest).
+        // During rest, the just-completed dot's echo signals transition.
+        if (isDoingSet) {
           dot.classList.add("blinking");
         }
       }
@@ -726,32 +756,14 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-// ============ FLASH ============
-let flashInterval = null;
+// ============ FLASH (Mazda turn signal pattern via CSS) ============
 function startFlash() {
-  if (flashInterval) return;
-  let on = true;
-  let count = 0;
-  flashInterval = setInterval(() => {
-    count++;
-    document.body.style.background = on ? "#2a0a0a" : "#111";
-    elTimer.style.color = on ? "#c0392b" : "#eee";
-    on = !on;
-    if (count >= 8) {
-      clearInterval(flashInterval);
-      flashInterval = null;
-      document.body.style.background = "#1a0808";
-      elTimer.style.color = "#c0392b";
-    }
-  }, 600);
+  document.body.classList.remove('alert-flashing');
+  void document.body.offsetWidth; // force reflow to restart animation
+  document.body.classList.add('alert-flashing');
 }
 function stopFlash() {
-  if (flashInterval) {
-    clearInterval(flashInterval);
-    flashInterval = null;
-  }
-  document.body.style.background = "#111";
-  elTimer.style.color = "#eee";
+  document.body.classList.remove('alert-flashing');
 }
 
 // ============ LOG AREA ============
@@ -1214,7 +1226,9 @@ function saveState() {
     setLogs: setLogs.map(l => ({...l})),
     repCount,
     notes: elNotesInput.value,
-    logExerciseIndex
+    logExerciseIndex,
+    history: history.map(h => ({...h, setLogs: h.setLogs.map(l => ({...l}))})),
+    future:  future.map(f => ({...f, setLogs: f.setLogs.map(l => ({...l}))}))
   };
   try { localStorage.setItem("gym-timer-state", JSON.stringify(s)); } catch(e) {}
 }
@@ -1239,6 +1253,12 @@ function restoreState() {
     state = s.state;
     restEndTime = s.restEndTime;
     restRemaining = s.restRemaining;
+
+    // Restore history and future stacks
+    history.length = 0;
+    if (Array.isArray(s.history)) s.history.forEach(h => history.push(h));
+    future.length = 0;
+    if (Array.isArray(s.future)) s.future.forEach(f => future.push(f));
 
     if (state === "resting" || state === "paused" || state === "finishing") {
       const lastLog = setLogs[setLogs.length - 1];
