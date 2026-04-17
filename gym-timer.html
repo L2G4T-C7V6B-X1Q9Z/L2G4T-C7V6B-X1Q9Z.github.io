@@ -15,7 +15,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 40px 20px 120px;
+    padding: 76px 20px 140px;
     -webkit-user-select: none;
     user-select: none;
   }
@@ -24,49 +24,53 @@
     color: #888;
     letter-spacing: 4px;
     text-transform: uppercase;
-    margin-bottom: 32px;
+    margin-bottom: 24px;
     font-weight: 400;
+    text-align: center;
   }
   #exercise-name {
     font-size: 22px;
     font-weight: 700;
     color: #eee;
     text-align: center;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     letter-spacing: -0.5px;
   }
   #set-info {
     font-size: 13px;
     color: #aaa;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     letter-spacing: 0.5px;
     text-align: center;
   }
   #exercise-note {
     font-size: 11px;
-    color: #888;
+    color: #777;
     font-style: italic;
-    margin-bottom: 32px;
+    margin-bottom: 24px;
     text-align: center;
-    max-width: 320px;
-    line-height: 1.4;
+    max-width: 300px;
+    line-height: 1.45;
+    min-height: 16px;
   }
   #timer-display {
-    font-size: 80px;
+    font-size: 76px;
     font-weight: 200;
     font-variant-numeric: tabular-nums;
     color: #eee;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     line-height: 1;
     letter-spacing: -2px;
+    text-align: center;
   }
   #timer-label {
     font-size: 11px;
     color: #999;
-    margin-bottom: 32px;
+    margin-bottom: 24px;
     height: 16px;
     letter-spacing: 3px;
     text-transform: uppercase;
+    text-align: center;
   }
 
   /* Main button + progress ring wrapper */
@@ -121,13 +125,13 @@
   .btn-wrap.show-ring #rest-ring { display: block; }
   #rest-ring-track {
     fill: none;
-    stroke: rgba(192, 57, 43, 0.15);
-    stroke-width: 2.5;
+    stroke: rgba(192, 57, 43, 0.12);
+    stroke-width: 3;
   }
   #rest-ring-bar {
     fill: none;
     stroke: #c0392b;
-    stroke-width: 2.5;
+    stroke-width: 3;
     stroke-linecap: round;
     transition: stroke-dashoffset 0.25s linear;
   }
@@ -430,7 +434,7 @@
   .toggle.on::after { left: 22px; }
   .modal-close {
     width: 100%;
-    margin-top: 18px;
+    margin-top: 12px;
     padding: 10px;
     border: 1px solid #333;
     background: transparent;
@@ -442,6 +446,13 @@
     border-radius: 8px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+  }
+  .modal-close.danger {
+    border-color: #5a2a25;
+    color: #c0392b;
+  }
+  .modal-close.danger:active {
+    background: rgba(192, 57, 43, 0.1);
   }
 
   /* Edit modal-specific */
@@ -605,8 +616,8 @@
 <div class="btn-wrap" id="btn-wrap">
   <button id="main-btn" aria-label="Set done or rest control">Set Done</button>
   <svg id="rest-ring" viewBox="0 0 184 184" aria-hidden="true">
-    <circle id="rest-ring-track" cx="92" cy="92" r="91"></circle>
-    <circle id="rest-ring-bar"   cx="92" cy="92" r="91"></circle>
+    <circle id="rest-ring-track" cx="92" cy="92" r="88"></circle>
+    <circle id="rest-ring-bar"   cx="92" cy="92" r="88"></circle>
   </svg>
 </div>
 <button id="skip-btn" aria-label="Skip rest">Skip Rest</button>
@@ -648,6 +659,7 @@
       </div>
       <div class="toggle" id="toggle-autostart" role="switch"></div>
     </div>
+    <button class="modal-close danger" id="settings-reset">Reset Workout</button>
     <button class="modal-close" id="settings-close">Close</button>
   </div>
 </div>
@@ -690,7 +702,12 @@ const workout = [
     reps: "8-12",
     weight: "100 lbs",
     rest: 150,
-    note: "Full ROM. Stay at 100 until 12/12/10+. Last: 12/8/7."
+    note: "Full ROM. Stay at 100 until 12/12/10+.",
+    setNotes: [
+      "Top of range should feel doable. Focus on full ROM and chest squeeze.",
+      "Where you dropped to 8 last week. Push for 10+. Chest, not shoulders.",
+      "0 RIR. Last week: 7. Push to failure or near it. Strong negatives."
+    ]
   },
   {
     name: "Lat Pulldown",
@@ -698,7 +715,12 @@ const workout = [
     reps: "8-12",
     weight: "95 lbs",
     rest: 150,
-    note: "PR weight (was 90). Squeeze, controlled negatives, full stretch."
+    note: "PR weight (was 90). Squeeze, controlled negatives, full stretch.",
+    setNotes: [
+      "First set at PR weight. Feel the bar path. Lats, not arms.",
+      "Same effort. Don't grind ugly reps -- stop with form, not failure.",
+      "0-1 RIR. New weight, see what you've got. Top of range = move to 100 next week."
+    ]
   },
   {
     name: "DB Lateral Raise",
@@ -706,7 +728,12 @@ const workout = [
     reps: "12-15",
     weight: "10 lbs",
     rest: 90,
-    note: "Slow. No swinging. Stop at shoulder height. Stay at 10 until 15/15/15."
+    note: "Slow. No swinging. Stop at shoulder height.",
+    setNotes: [
+      "Top range easy. Slow tempo, pause at top.",
+      "Same. Strict form, no momentum.",
+      "Where you dropped to 11 last week. Push past it. 15/15/15 unlocks 12.5s."
+    ]
   },
   {
     name: "Dumbbell Curls",
@@ -714,13 +741,17 @@ const workout = [
     reps: "10-12",
     weight: "15 lbs",
     rest: 90,
-    note: "Squeeze top. Last: 12/10. Push S2."
+    note: "Squeeze top. Last: 12/10.",
+    setNotes: [
+      "Top range. Last week: 12. Squeeze the contraction, controlled lower.",
+      "Last week: 10. Push to 12. Both sets at 12 = move up next week."
+    ]
   },
 ];
 
 const STATE_TTL_MS = 4 * 60 * 60 * 1000;
 const HISTORY_MAX = 30;
-const RING_CIRCUMFERENCE = 2 * Math.PI * 91; // r=91 → ~571.77
+const RING_CIRCUMFERENCE = 2 * Math.PI * 88; // r=88 → ~552.92
 
 // ============ SETTINGS ============
 const defaultSettings = {
@@ -957,7 +988,14 @@ function renderExercise() {
   elName.textContent = ex.name;
   // Order: Weight \u00b7 Set X/Y \u00b7 reps
   elSet.textContent = ex.weight + "  \u00b7  Set " + (currentSet + 1) + "/" + ex.sets + "  \u00b7  " + ex.reps + " reps";
-  elNote.textContent = ex.note || "";
+  // Set-specific note takes priority, falls back to exercise note
+  let noteText = "";
+  if (Array.isArray(ex.setNotes) && ex.setNotes[currentSet]) {
+    noteText = ex.setNotes[currentSet];
+  } else if (ex.note) {
+    noteText = ex.note;
+  }
+  elNote.textContent = noteText;
   renderProgress();
 }
 
@@ -1279,6 +1317,8 @@ function restDone() {
 function pauseRest() {
   cancelRestNotif();
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  // Capture EXACT remaining time (float seconds) so resume doesn't round-up jump
+  restRemaining = Math.max(0, (restEndTime - Date.now()) / 1000);
   state = "paused";
   elBtn.textContent = "Resume";
   elBtn.className = "paused";
@@ -1469,8 +1509,15 @@ function openSettings() {
 function closeSettings() {
   elSettingsModal.classList.remove("show");
 }
+const elSettingsReset = document.getElementById("settings-reset");
 elSettingsBtn.addEventListener("click", openSettings);
 elSettingsClose.addEventListener("click", closeSettings);
+elSettingsReset.addEventListener("click", () => {
+  if (confirm("Reset all workout progress and start over?")) {
+    try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+    location.reload();
+  }
+});
 elSettingsModal.addEventListener("click", (e) => {
   if (e.target === elSettingsModal) closeSettings();
 });
@@ -1588,6 +1635,13 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ============ INIT ============
+// Allow URL reset (e.g. ?reset=1) to wipe saved workout state
+if (new URLSearchParams(location.search).has('reset')) {
+  try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+  // Strip ?reset from URL so refreshes don't keep resetting
+  history.replaceState(null, '', location.pathname);
+}
+
 elSkip.style.display = "none";
 hideLogArea();
 showRestRing(false);
