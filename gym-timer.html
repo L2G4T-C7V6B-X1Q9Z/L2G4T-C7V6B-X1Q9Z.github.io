@@ -32,19 +32,24 @@
     font-weight: 700;
     color: #eee;
     text-align: center;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     letter-spacing: -0.5px;
   }
   #set-info {
     font-size: 13px;
     color: #aaa;
-    margin-bottom: 6px;
-    letter-spacing: 1px;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+    text-align: center;
   }
-  #weight-info {
-    font-size: 13px;
+  #exercise-note {
+    font-size: 11px;
     color: #888;
-    margin-bottom: 36px;
+    font-style: italic;
+    margin-bottom: 32px;
+    text-align: center;
+    max-width: 320px;
+    line-height: 1.4;
   }
   #timer-display {
     font-size: 80px;
@@ -63,6 +68,17 @@
     letter-spacing: 3px;
     text-transform: uppercase;
   }
+
+  /* Main button + progress ring wrapper */
+  .btn-wrap {
+    position: relative;
+    width: 184px;
+    height: 184px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
   #main-btn {
     width: 180px;
     height: 180px;
@@ -76,26 +92,50 @@
     text-transform: uppercase;
     color: #bbb;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: transform 0.2s, color 0.2s;
     -webkit-tap-highlight-color: transparent;
-    margin-bottom: 20px;
   }
-  #main-btn:active {
-    transform: scale(0.96);
-  }
-  #main-btn.resting {
-    border-color: #c0392b;
+  #main-btn:active { transform: scale(0.96); }
+  #main-btn.resting,
+  #main-btn.paused {
+    border-color: transparent;
     color: #c0392b;
   }
-  #main-btn.paused {
-    border-color: #555;
-    color: #555;
-  }
+  #main-btn.paused { color: #777; }
   #main-btn.go {
     border-color: #c0392b;
     background: #c0392b;
     color: #fff;
   }
+
+  /* Progress ring (drains as rest counts down) */
+  #rest-ring {
+    position: absolute;
+    inset: 0;
+    width: 184px;
+    height: 184px;
+    pointer-events: none;
+    display: none;
+    transform: rotate(-90deg);
+  }
+  .btn-wrap.show-ring #rest-ring { display: block; }
+  #rest-ring-track {
+    fill: none;
+    stroke: rgba(192, 57, 43, 0.15);
+    stroke-width: 2.5;
+  }
+  #rest-ring-bar {
+    fill: none;
+    stroke: #c0392b;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.25s linear;
+  }
+  .btn-wrap.paused #rest-ring-bar {
+    stroke: #777;
+    transition: none;
+  }
+
   #skip-btn {
     background: none;
     border: 1px solid #333;
@@ -109,8 +149,8 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Nav buttons (back / forward) */
-  .nav-btn {
+  /* Top corner buttons (back / forward / settings) */
+  .top-btn {
     position: fixed;
     top: 16px;
     width: 42px;
@@ -132,13 +172,11 @@
     line-height: 1;
     transition: opacity 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
   }
-  .nav-btn:active { transform: scale(0.92); }
+  .top-btn:active { transform: scale(0.92); }
   #nav-back { left: 16px; }
-  #nav-forward { right: 16px; display: none; }
-  .nav-btn.disabled {
-    opacity: 0.22;
-    pointer-events: none;
-  }
+  #nav-forward { left: 68px; display: none; }
+  #settings-btn { right: 16px; font-size: 18px; }
+  .top-btn.disabled { opacity: 0.22; pointer-events: none; }
 
   /* Bottom logging area */
   #log-area {
@@ -210,15 +248,10 @@
     -webkit-user-select: auto;
     user-select: auto;
   }
-  #notes-input:focus {
-    border-color: #c0392b;
-  }
-  #notes-input::placeholder {
-    color: #555;
-    font-size: 11px;
-  }
+  #notes-input:focus { border-color: #c0392b; }
+  #notes-input::placeholder { color: #555; font-size: 11px; }
 
-  /* Bottom fixed bar — transparent so body bg shows through (unified flash) */
+  /* Bottom fixed bar — transparent so body bg flashes through */
   #bottom-bar {
     position: fixed;
     bottom: 0;
@@ -262,7 +295,7 @@
   .exercise-label.active { color: #c0392b; }
   .exercise-label.completed { color: #777; }
 
-  /* Dots: base + states + animations */
+  /* Dots */
   .dot {
     width: 8px;
     height: 8px;
@@ -271,31 +304,24 @@
     transition: background 0.3s;
     flex-shrink: 0;
     position: relative;
+    box-sizing: border-box;
   }
   .dot.active { background: #c0392b; }
   .dot.completed { background: #fafafa; cursor: pointer; }
 
-  /* Active dot blinking — Mazda turn signal pattern (snap on, gradual fade off).
-     Just an outline ring, no blur, no glow. */
-  @keyframes mazda-dot-blink {
-    0%   { opacity: 1; }
-    100% { opacity: 0; }
+  /* Active dot blinking — hollow circle, red edge only, Mazda turn signal pattern.
+     Same 8px diameter, just border, no fill. Snap on then gradual fade off. */
+  @keyframes mazda-edge {
+    0%   { border-color: #c0392b; }
+    100% { border-color: rgba(192, 57, 43, 0); }
   }
-  .dot.active.blinking::before {
-    content: "";
-    position: absolute;
-    top: -4px;
-    left: -4px;
-    right: -4px;
-    bottom: -4px;
+  .dot.active.blinking {
+    background: transparent;
     border: 1.5px solid #c0392b;
-    border-radius: 50%;
-    animation: mazda-dot-blink 1.0s ease-out infinite;
-    pointer-events: none;
+    animation: mazda-edge 0.7s ease-out infinite;
   }
 
-  /* Just-completed dot echoes a white ghost rightward toward the next dot,
-     fading out so it disappears before reaching the next dot. */
+  /* Just-completed dot echoes a white ghost rightward toward the next dot. */
   @keyframes echo-travel {
     0%   { transform: translateX(0);    opacity: 0.85; }
     80%  { opacity: 0; }
@@ -314,25 +340,24 @@
     pointer-events: none;
   }
 
-  /* Body alert flash — Mazda turn signal pattern (snap on, gradual fade).
-     Bottom bar inherits because it's transparent. */
-  @keyframes mazda-bg-flash {
+  /* Body alert flash — Mazda turn signal pattern, 700ms cycle. */
+  @keyframes mazda-bg {
     0%   { background: #4a1410; }
     100% { background: #111; }
   }
-  @keyframes mazda-timer-flash {
+  @keyframes mazda-timer {
     0%   { color: #c0392b; }
     100% { color: #eee; }
   }
   body.alert-flashing {
-    animation: mazda-bg-flash 0.85s ease-out 6;
+    animation: mazda-bg 0.7s ease-out 6;
   }
   body.alert-flashing #timer-display {
-    animation: mazda-timer-flash 0.85s ease-out 6;
+    animation: mazda-timer 0.7s ease-out 6;
   }
 
-  /* Edit modal */
-  #edit-modal {
+  /* Settings modal */
+  #settings-modal, #edit-modal {
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.85);
@@ -342,8 +367,8 @@
     z-index: 200;
     padding: 20px;
   }
-  #edit-modal.show { display: flex; }
-  .edit-card {
+  #settings-modal.show, #edit-modal.show { display: flex; }
+  .modal-card {
     background: #1a1a1a;
     border: 1px solid #2a2a2a;
     border-radius: 12px;
@@ -351,6 +376,75 @@
     width: 100%;
     max-width: 320px;
   }
+  .modal-title {
+    font-size: 11px;
+    color: #888;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    font-weight: 400;
+  }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid #252525;
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label {
+    font-size: 13px;
+    color: #ddd;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .setting-sub {
+    font-size: 10px;
+    color: #777;
+    margin-top: 2px;
+    letter-spacing: 0.5px;
+  }
+  .toggle {
+    width: 44px;
+    height: 24px;
+    background: #333;
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.18s;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .toggle.on { background: #c0392b; }
+  .toggle::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: #f0f0f0;
+    border-radius: 50%;
+    transition: left 0.18s;
+  }
+  .toggle.on::after { left: 22px; }
+  .modal-close {
+    width: 100%;
+    margin-top: 18px;
+    padding: 10px;
+    border: 1px solid #333;
+    background: transparent;
+    color: #aaa;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-radius: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Edit modal-specific */
   .edit-title {
     font-size: 16px;
     color: #eee;
@@ -456,12 +550,22 @@
     font-weight: 700;
     font-size: 13px;
   }
+  #summary .duration-tag {
+    color: #666;
+    font-weight: 400;
+    font-size: 11px;
+  }
   #summary .set-line {
     color: #666;
     padding-left: 8px;
   }
   #summary .set-note {
     color: #c0392b;
+  }
+  #summary .total-line {
+    color: #eee;
+    font-weight: 700;
+    margin-top: 12px;
   }
   #copy-btn {
     width: 100%;
@@ -479,9 +583,7 @@
     -webkit-tap-highlight-color: transparent;
     transition: all 0.15s;
   }
-  #copy-btn:active {
-    transform: scale(0.97);
-  }
+  #copy-btn:active { transform: scale(0.97); }
   #copy-btn.copied {
     background: #1a1a1a;
     color: #c0392b;
@@ -490,16 +592,23 @@
 </head>
 <body>
 
-<button id="nav-back" class="nav-btn disabled" aria-label="Go back">&#8592;</button>
-<button id="nav-forward" class="nav-btn" aria-label="Go forward">&#8594;</button>
+<button id="nav-back" class="top-btn disabled" aria-label="Go back">&#8592;</button>
+<button id="nav-forward" class="top-btn" aria-label="Go forward">&#8594;</button>
+<button id="settings-btn" class="top-btn" aria-label="Settings">&#9881;</button>
 
 <h1 id="day-title">Upper Day</h1>
 <div id="exercise-name"></div>
 <div id="set-info"></div>
-<div id="weight-info"></div>
+<div id="exercise-note"></div>
 <div id="timer-display" role="timer" aria-live="polite" aria-atomic="true"></div>
 <div id="timer-label"></div>
-<button id="main-btn" aria-label="Set done or rest control">Set Done</button>
+<div class="btn-wrap" id="btn-wrap">
+  <button id="main-btn" aria-label="Set done or rest control">Set Done</button>
+  <svg id="rest-ring" viewBox="0 0 184 184" aria-hidden="true">
+    <circle id="rest-ring-track" cx="92" cy="92" r="91"></circle>
+    <circle id="rest-ring-bar"   cx="92" cy="92" r="91"></circle>
+  </svg>
+</div>
 <button id="skip-btn" aria-label="Skip rest">Skip Rest</button>
 
 <div id="bottom-bar">
@@ -515,8 +624,36 @@
   <div id="progress"></div>
 </div>
 
+<div id="settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
+  <div class="modal-card">
+    <div class="modal-title">Settings</div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Sound</div>
+        <div class="setting-sub">Beep when rest ends</div>
+      </div>
+      <div class="toggle" id="toggle-sound" role="switch"></div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Vibration</div>
+        <div class="setting-sub">Buzz when rest ends</div>
+      </div>
+      <div class="toggle" id="toggle-vibration" role="switch"></div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Auto-start next set</div>
+        <div class="setting-sub">Skip the GO acknowledge step</div>
+      </div>
+      <div class="toggle" id="toggle-autostart" role="switch"></div>
+    </div>
+    <button class="modal-close" id="settings-close">Close</button>
+  </div>
+</div>
+
 <div id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-exercise">
-  <div class="edit-card">
+  <div class="modal-card">
     <div class="edit-title" id="edit-exercise"></div>
     <div class="edit-subtitle" id="edit-set"></div>
     <div class="edit-row">
@@ -547,14 +684,61 @@
 const dayType = "Upper Day";
 
 const workout = [
-  { name: "Chest Press Machine", sets: 3, reps: "8-12", repDefault: 10, weight: "100 lbs", rest: 150 },
-  { name: "Lat Pulldown", sets: 3, reps: "8-12", repDefault: 10, weight: "95 lbs", rest: 150 },
-  { name: "DB Lateral Raise", sets: 3, reps: "12-15", repDefault: 13, weight: "10 lbs", rest: 90 },
-  { name: "Dumbbell Curls", sets: 2, reps: "10-12", repDefault: 11, weight: "15 lbs", rest: 90 },
+  {
+    name: "Chest Press Machine",
+    sets: 3,
+    reps: "8-12",
+    weight: "100 lbs",
+    rest: 150,
+    note: "Full ROM. Stay at 100 until 12/12/10+. Last: 12/8/7."
+  },
+  {
+    name: "Lat Pulldown",
+    sets: 3,
+    reps: "8-12",
+    weight: "95 lbs",
+    rest: 150,
+    note: "PR weight (was 90). Squeeze, controlled negatives, full stretch."
+  },
+  {
+    name: "DB Lateral Raise",
+    sets: 3,
+    reps: "12-15",
+    weight: "10 lbs",
+    rest: 90,
+    note: "Slow. No swinging. Stop at shoulder height. Stay at 10 until 15/15/15."
+  },
+  {
+    name: "Dumbbell Curls",
+    sets: 2,
+    reps: "10-12",
+    weight: "15 lbs",
+    rest: 90,
+    note: "Squeeze top. Last: 12/10. Push S2."
+  },
 ];
 
 const STATE_TTL_MS = 4 * 60 * 60 * 1000;
 const HISTORY_MAX = 30;
+const RING_CIRCUMFERENCE = 2 * Math.PI * 91; // r=91 → ~571.77
+
+// ============ SETTINGS ============
+const defaultSettings = {
+  sound: true,
+  vibration: true,
+  autoStart: true
+};
+let settings = { ...defaultSettings };
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem('gym-timer-settings');
+    if (raw) settings = { ...defaultSettings, ...JSON.parse(raw) };
+  } catch (e) {}
+}
+function saveSettings() {
+  try { localStorage.setItem('gym-timer-settings', JSON.stringify(settings)); } catch(e) {}
+}
+loadSettings();
 
 // ============ STATE ============
 const setLogs = [];
@@ -564,6 +748,7 @@ let currentSet = 0;
 let state = "ready";
 let timerInterval = null;
 let restRemaining = 0;
+let restTotalSeconds = 0;
 let restEndTime = null;
 let currentLogEntry = null;
 let repCount = 10;
@@ -576,7 +761,6 @@ let audioCtx = null;
 let editingLog = null;
 let editRepCount = 0;
 
-// History stacks for back/forward navigation
 const history = [];
 const future = [];
 
@@ -584,10 +768,12 @@ const future = [];
 const elDayTitle = document.getElementById("day-title");
 const elName = document.getElementById("exercise-name");
 const elSet = document.getElementById("set-info");
-const elWeight = document.getElementById("weight-info");
+const elNote = document.getElementById("exercise-note");
 const elTimer = document.getElementById("timer-display");
 const elTimerLabel = document.getElementById("timer-label");
 const elBtn = document.getElementById("main-btn");
+const elBtnWrap = document.getElementById("btn-wrap");
+const elRingBar = document.getElementById("rest-ring-bar");
 const elSkip = document.getElementById("skip-btn");
 const elProgress = document.getElementById("progress");
 const elDone = document.getElementById("workout-done");
@@ -600,6 +786,12 @@ const elRepMinus = document.getElementById("rep-minus");
 const elRepPlus = document.getElementById("rep-plus");
 const elNavBack = document.getElementById("nav-back");
 const elNavForward = document.getElementById("nav-forward");
+const elSettingsBtn = document.getElementById("settings-btn");
+const elSettingsModal = document.getElementById("settings-modal");
+const elSettingsClose = document.getElementById("settings-close");
+const elToggleSound = document.getElementById("toggle-sound");
+const elToggleVibration = document.getElementById("toggle-vibration");
+const elToggleAutoStart = document.getElementById("toggle-autostart");
 const elEditModal = document.getElementById("edit-modal");
 const elEditExercise = document.getElementById("edit-exercise");
 const elEditSet = document.getElementById("edit-set");
@@ -612,6 +804,8 @@ const elEditRepPlus = document.getElementById("edit-rep-plus");
 
 elDayTitle.textContent = dayType;
 document.title = "Gym - " + dayType;
+elRingBar.setAttribute("stroke-dasharray", RING_CIRCUMFERENCE);
+elRingBar.setAttribute("stroke-dashoffset", RING_CIRCUMFERENCE); // start empty
 
 // ============ WAKE LOCK ============
 async function requestWakeLock() {
@@ -664,6 +858,7 @@ function initAudio() {
   } catch(e) {}
 }
 function playAlertSound() {
+  if (!settings.sound) return;
   try {
     if (!audioCtx) initAudio();
     if (!audioCtx) return;
@@ -685,8 +880,28 @@ function playAlertSound() {
   } catch (e) {}
 }
 function triggerAlertFeedback() {
-  if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]);
+  if (settings.vibration && navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]);
   playAlertSound();
+}
+
+// ============ HELPERS ============
+function getMaxReps(repsStr) {
+  const m = repsStr.match(/(\d+)\s*-\s*(\d+)/);
+  return m ? parseInt(m[2], 10) : (parseInt(repsStr, 10) || 10);
+}
+function formatDuration(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m + "m " + s.toString().padStart(2, "0") + "s";
+}
+function getExerciseDuration(exerciseIdx) {
+  const logs = setLogs.filter(l => l.exercise === exerciseIdx && l.timestamp);
+  if (logs.length === 0) return null;
+  if (logs.length === 1) return 0;
+  const first = Math.min(...logs.map(l => l.timestamp));
+  const last  = Math.max(...logs.map(l => l.timestamp));
+  return last - first;
 }
 
 // ============ RENDERING ============
@@ -712,7 +927,6 @@ function renderProgress() {
       dot.className = "dot";
       if (idx < globalCurrent) {
         dot.classList.add("completed");
-        // The just-completed dot echoes toward the next during rest
         if (idx === globalCurrent - 1 && isResting) {
           dot.classList.add("echoing");
         }
@@ -722,11 +936,7 @@ function renderProgress() {
         dot.setAttribute("aria-label", "Edit " + workout[i].name + " set " + (j + 1));
       } else if (idx === globalCurrent) {
         dot.classList.add("active");
-        // Only blink during the actual set (not during rest).
-        // During rest, the just-completed dot's echo signals transition.
-        if (isDoingSet) {
-          dot.classList.add("blinking");
-        }
+        if (isDoingSet) dot.classList.add("blinking");
       }
       dotsRow.appendChild(dot);
       idx++;
@@ -745,8 +955,9 @@ function renderProgress() {
 function renderExercise() {
   const ex = workout[currentExercise];
   elName.textContent = ex.name;
-  elSet.textContent = `Set ${currentSet + 1} / ${ex.sets}  \u00b7  ${ex.reps} reps`;
-  elWeight.textContent = ex.weight;
+  // Order: Weight \u00b7 Set X/Y \u00b7 reps
+  elSet.textContent = ex.weight + "  \u00b7  Set " + (currentSet + 1) + "/" + ex.sets + "  \u00b7  " + ex.reps + " reps";
+  elNote.textContent = ex.note || "";
   renderProgress();
 }
 
@@ -756,25 +967,44 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-// ============ FLASH (Mazda turn signal pattern via CSS) ============
+// ============ FLASH (Mazda) ============
 function startFlash() {
   document.body.classList.remove('alert-flashing');
-  void document.body.offsetWidth; // force reflow to restart animation
+  void document.body.offsetWidth;
   document.body.classList.add('alert-flashing');
 }
 function stopFlash() {
   document.body.classList.remove('alert-flashing');
 }
 
+// ============ REST RING ============
+function updateRestRing(immediate) {
+  if (!restEndTime || !restTotalSeconds) {
+    elRingBar.setAttribute("stroke-dashoffset", RING_CIRCUMFERENCE);
+    return;
+  }
+  const remaining = Math.max(0, (restEndTime - Date.now()) / 1000);
+  const fraction = Math.max(0, Math.min(1, remaining / restTotalSeconds));
+  const offset = RING_CIRCUMFERENCE * (1 - fraction);
+  if (immediate) {
+    elRingBar.style.transition = "none";
+    elRingBar.setAttribute("stroke-dashoffset", offset);
+    void elRingBar.getBoundingClientRect();
+    elRingBar.style.transition = "";
+  } else {
+    elRingBar.setAttribute("stroke-dashoffset", offset);
+  }
+}
+function showRestRing(show, paused) {
+  elBtnWrap.classList.toggle("show-ring", !!show);
+  elBtnWrap.classList.toggle("paused", !!paused);
+}
+
 // ============ LOG AREA ============
 function showLogArea(exerciseIdx) {
   logExerciseIndex = exerciseIdx;
-  const prevLogs = setLogs.filter(l => l.exercise === exerciseIdx && l.reps > 0);
-  if (prevLogs.length > 0) {
-    repCount = prevLogs[prevLogs.length - 1].reps;
-  } else {
-    repCount = workout[exerciseIdx].repDefault;
-  }
+  // Default reps to MAX of the rep range for the exercise
+  repCount = getMaxReps(workout[exerciseIdx].reps);
   elRepCount.textContent = repCount;
   elNotesInput.value = "";
   elNotesInput.placeholder = "notes...";
@@ -795,15 +1025,18 @@ function captureLog() {
 // ============ TIMER LOOP ============
 function startCountdown() {
   if (timerInterval) clearInterval(timerInterval);
+  updateRestRing(true);
   timerInterval = setInterval(() => {
     const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
     if (remaining <= 0) {
       clearInterval(timerInterval);
       timerInterval = null;
+      updateRestRing();
       restDone();
     } else {
       restRemaining = remaining;
       elTimer.textContent = formatTime(remaining);
+      updateRestRing();
     }
   }, 250);
 }
@@ -812,7 +1045,7 @@ function startCountdown() {
 function snapshot() {
   return {
     currentExercise, currentSet, state,
-    restEndTime, restRemaining,
+    restEndTime, restRemaining, restTotalSeconds,
     setLogs: setLogs.map(l => ({...l})),
     repCount, logExerciseIndex,
     notes: elNotesInput.value,
@@ -820,7 +1053,6 @@ function snapshot() {
   };
 }
 function applySnapshot(s) {
-  // Clean up active timers/animations before applying
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   cancelRestNotif();
   stopFlash();
@@ -830,21 +1062,28 @@ function applySnapshot(s) {
   state = s.state;
   restEndTime = s.restEndTime;
   restRemaining = s.restRemaining;
+  restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
   setLogs.length = 0;
   s.setLogs.forEach(l => setLogs.push(l));
   repCount = s.repCount;
   logExerciseIndex = s.logExerciseIndex;
   currentLogEntry = s.currentLogEntryIdx >= 0 ? setLogs[s.currentLogEntryIdx] : null;
 
+  // If restoring an expired resting state, restart the countdown with full rest period
+  // (otherwise back from alert just bounces right back to alert)
+  if (state === "resting" && restEndTime && restEndTime < Date.now()) {
+    restEndTime = Date.now() + restRemaining * 1000;
+  }
+
   applyState(s.notes || "");
   saveState();
 }
 function applyState(notesValue) {
-  // Render UI for current state
+  showRestRing(false, false);
+
   if (state === "resting" && restEndTime) {
     const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
     if (remaining <= 0) {
-      // Rest already ended
       state = "alert";
       restEndTime = null;
       renderExercise();
@@ -867,6 +1106,7 @@ function applyState(notesValue) {
       elLogArea.style.display = "flex";
       elRepCount.textContent = repCount;
       elNotesInput.value = notesValue;
+      showRestRing(true, false);
       requestWakeLock();
       scheduleRestNotif(remaining * 1000);
       startCountdown();
@@ -892,6 +1132,8 @@ function applyState(notesValue) {
     elLogArea.style.display = "flex";
     elRepCount.textContent = repCount;
     elNotesInput.value = notesValue;
+    showRestRing(true, true);
+    updateRestRing(true);
   } else if (state === "finishing") {
     renderExercise();
     elBtn.textContent = "Finish";
@@ -955,7 +1197,8 @@ function setDone() {
     exercise: currentExercise,
     set: currentSet,
     reps: 0,
-    note: ""
+    note: "",
+    timestamp: Date.now()
   };
   setLogs.push(logEntry);
   currentLogEntry = logEntry;
@@ -973,6 +1216,7 @@ function setDone() {
     elTimer.textContent = "-:--";
     elTimerLabel.textContent = "LOG YOUR LAST SET";
     elSkip.style.display = "none";
+    showRestRing(false);
     renderProgress();
     saveState();
     return;
@@ -988,31 +1232,48 @@ function setDone() {
   state = "resting";
   const switchingExercise = (finishedExercise !== currentExercise);
   restRemaining = switchingExercise ? 60 : workout[finishedExercise].rest;
+  restTotalSeconds = restRemaining;
   restEndTime = Date.now() + restRemaining * 1000;
   elTimer.textContent = formatTime(restRemaining);
   elTimerLabel.textContent = switchingExercise ? "UP NEXT" : "REST";
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
   renderExercise();
+  showRestRing(true, false);
   scheduleRestNotif(restRemaining * 1000);
   saveState();
   startCountdown();
 }
 
 function restDone() {
+  pushHistory();
   cancelRestNotif();
   captureLog();
   hideLogArea();
-  state = "alert";
-  elTimer.textContent = "0:00";
-  elTimerLabel.textContent = "GO";
-  elBtn.textContent = "Start Set";
-  elBtn.className = "go";
-  elSkip.style.display = "none";
-  renderExercise();
+  showRestRing(false);
+
+  if (settings.autoStart) {
+    // Auto-start: skip the alert→ack handshake. Go straight to ready.
+    state = "ready";
+    elTimer.textContent = "-:--";
+    elTimerLabel.textContent = "GO";
+    elBtn.textContent = "Set Done";
+    elBtn.className = "";
+    elSkip.style.display = "none";
+    renderExercise();
+  } else {
+    state = "alert";
+    elTimer.textContent = "0:00";
+    elTimerLabel.textContent = "GO";
+    elBtn.textContent = "Start Set";
+    elBtn.className = "go";
+    elSkip.style.display = "none";
+    renderExercise();
+  }
   startFlash();
   triggerAlertFeedback();
   saveState();
+  updateNavButtons();
 }
 
 function pauseRest() {
@@ -1022,6 +1283,7 @@ function pauseRest() {
   elBtn.textContent = "Resume";
   elBtn.className = "paused";
   elTimerLabel.textContent = "PAUSED";
+  showRestRing(true, true);
   renderProgress();
   saveState();
 }
@@ -1032,6 +1294,7 @@ function resumeRest() {
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
   elTimerLabel.textContent = "REST";
+  showRestRing(true, false);
   renderProgress();
   scheduleRestNotif(restRemaining * 1000);
   saveState();
@@ -1044,6 +1307,7 @@ function skipRest() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   captureLog();
   hideLogArea();
+  showRestRing(false);
   state = "ready";
   elTimer.textContent = "-:--";
   elTimerLabel.textContent = "";
@@ -1070,11 +1334,19 @@ function acknowledgeAlert() {
 function summaryDateStr() {
   return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 }
+function getTotalDuration() {
+  const ts = setLogs.filter(l => l.timestamp).map(l => l.timestamp);
+  if (ts.length < 2) return null;
+  return Math.max(...ts) - Math.min(...ts);
+}
 function buildSummary() {
   let text = dayType + " -- " + summaryDateStr() + "\n\n";
   for (let i = 0; i < workout.length; i++) {
     const ex = workout[i];
-    text += ex.name + " @ " + ex.weight + "\n";
+    const dur = getExerciseDuration(i);
+    text += ex.name + " @ " + ex.weight;
+    if (dur && dur > 0) text += "  (" + formatDuration(dur) + ")";
+    text += "\n";
     for (let j = 0; j < ex.sets; j++) {
       const log = setLogs.find(l => l.exercise === i && l.set === j);
       if (log) {
@@ -1086,13 +1358,18 @@ function buildSummary() {
     }
     if (i < workout.length - 1) text += "\n";
   }
+  const total = getTotalDuration();
+  if (total) text += "\nTotal: " + formatDuration(total) + "\n";
   return text;
 }
 function buildSummaryHTML() {
   let html = '<div class="exercise-header">' + dayType + ' -- ' + summaryDateStr() + '</div><br>';
   for (let i = 0; i < workout.length; i++) {
     const ex = workout[i];
-    html += '<div class="exercise-header">' + ex.name + ' @ ' + ex.weight + '</div>';
+    const dur = getExerciseDuration(i);
+    let header = ex.name + ' @ ' + ex.weight;
+    let durTag = (dur && dur > 0) ? ' <span class="duration-tag">(' + formatDuration(dur) + ')</span>' : '';
+    html += '<div class="exercise-header">' + header + durTag + '</div>';
     for (let j = 0; j < ex.sets; j++) {
       const log = setLogs.find(l => l.exercise === i && l.set === j);
       if (log) {
@@ -1104,6 +1381,8 @@ function buildSummaryHTML() {
     }
     if (i < workout.length - 1) html += '<br>';
   }
+  const total = getTotalDuration();
+  if (total) html += '<div class="total-line">Total: ' + formatDuration(total) + '</div>';
   return html;
 }
 
@@ -1113,18 +1392,20 @@ function finishWorkout() {
   releaseWakeLock();
   captureLog();
   hideLogArea();
+  showRestRing(false);
   state = "finished";
   elDayTitle.style.display = "none";
   elName.style.display = "none";
   elSet.style.display = "none";
-  elWeight.style.display = "none";
+  elNote.style.display = "none";
   elTimer.style.display = "none";
   elTimerLabel.style.display = "none";
-  elBtn.style.display = "none";
+  elBtnWrap.style.display = "none";
   elSkip.style.display = "none";
   elProgress.style.display = "none";
   elNavBack.style.display = "none";
   elNavForward.style.display = "none";
+  elSettingsBtn.style.display = "none";
   elDone.style.display = "block";
   elSummary.innerHTML = buildSummaryHTML();
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
@@ -1146,7 +1427,6 @@ function closeEditModal() {
   elEditModal.classList.remove("show");
   editingLog = null;
 }
-
 elEditCancel.addEventListener("click", closeEditModal);
 elEditSave.addEventListener("click", () => {
   if (editingLog) {
@@ -1168,7 +1448,40 @@ elEditModal.addEventListener("click", (e) => {
   if (e.target === elEditModal) closeEditModal();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && elEditModal.classList.contains("show")) closeEditModal();
+  if (e.key !== "Escape") return;
+  if (elEditModal.classList.contains("show")) closeEditModal();
+  else if (elSettingsModal.classList.contains("show")) closeSettings();
+});
+
+// ============ SETTINGS MODAL ============
+function applySettingsToggles() {
+  elToggleSound.classList.toggle("on", !!settings.sound);
+  elToggleVibration.classList.toggle("on", !!settings.vibration);
+  elToggleAutoStart.classList.toggle("on", !!settings.autoStart);
+  elToggleSound.setAttribute("aria-checked", !!settings.sound);
+  elToggleVibration.setAttribute("aria-checked", !!settings.vibration);
+  elToggleAutoStart.setAttribute("aria-checked", !!settings.autoStart);
+}
+function openSettings() {
+  applySettingsToggles();
+  elSettingsModal.classList.add("show");
+}
+function closeSettings() {
+  elSettingsModal.classList.remove("show");
+}
+elSettingsBtn.addEventListener("click", openSettings);
+elSettingsClose.addEventListener("click", closeSettings);
+elSettingsModal.addEventListener("click", (e) => {
+  if (e.target === elSettingsModal) closeSettings();
+});
+elToggleSound.addEventListener("click", () => {
+  settings.sound = !settings.sound; saveSettings(); applySettingsToggles();
+});
+elToggleVibration.addEventListener("click", () => {
+  settings.vibration = !settings.vibration; saveSettings(); applySettingsToggles();
+});
+elToggleAutoStart.addEventListener("click", () => {
+  settings.autoStart = !settings.autoStart; saveSettings(); applySettingsToggles();
 });
 
 // ============ INPUT HANDLERS ============
@@ -1180,32 +1493,21 @@ elBtn.addEventListener("click", () => {
   else if (state === "paused") resumeRest();
   else if (state === "finishing") finishWorkout();
 });
-
 elSkip.addEventListener("click", (e) => {
   e.stopPropagation();
   if (state === "resting" || state === "paused") skipRest();
 });
-
 elRepMinus.addEventListener("click", (e) => {
   e.stopPropagation();
-  if (repCount > 0) {
-    repCount--;
-    elRepCount.textContent = repCount;
-    saveState();
-  }
+  if (repCount > 0) { repCount--; elRepCount.textContent = repCount; saveState(); }
 });
 elRepPlus.addEventListener("click", (e) => {
   e.stopPropagation();
-  repCount++;
-  elRepCount.textContent = repCount;
-  saveState();
+  repCount++; elRepCount.textContent = repCount; saveState();
 });
-
 elNotesInput.addEventListener("input", () => saveState());
-
 elNavBack.addEventListener("click", back);
 elNavForward.addEventListener("click", forward);
-
 elCopy.addEventListener("click", () => {
   const text = buildSummary();
   navigator.clipboard.writeText(text).then(() => {
@@ -1222,7 +1524,7 @@ elCopy.addEventListener("click", () => {
 function saveState() {
   const s = {
     savedAt: Date.now(),
-    currentExercise, currentSet, state, restEndTime, restRemaining,
+    currentExercise, currentSet, state, restEndTime, restRemaining, restTotalSeconds,
     setLogs: setLogs.map(l => ({...l})),
     repCount,
     notes: elNotesInput.value,
@@ -1232,18 +1534,15 @@ function saveState() {
   };
   try { localStorage.setItem("gym-timer-state", JSON.stringify(s)); } catch(e) {}
 }
-
 function restoreState() {
   try {
     const raw = localStorage.getItem("gym-timer-state");
     if (!raw) return false;
     const s = JSON.parse(raw);
-
     if (s.savedAt && (Date.now() - s.savedAt > STATE_TTL_MS)) {
       try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
       return false;
     }
-
     currentExercise = s.currentExercise;
     currentSet = s.currentSet;
     repCount = s.repCount || 10;
@@ -1253,8 +1552,8 @@ function restoreState() {
     state = s.state;
     restEndTime = s.restEndTime;
     restRemaining = s.restRemaining;
+    restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
 
-    // Restore history and future stacks
     history.length = 0;
     if (Array.isArray(s.history)) s.history.forEach(h => history.push(h));
     future.length = 0;
@@ -1264,7 +1563,6 @@ function restoreState() {
       const lastLog = setLogs[setLogs.length - 1];
       if (lastLog) currentLogEntry = lastLog;
     }
-
     applyState(s.notes || "");
     return true;
   } catch(e) { return false; }
@@ -1281,6 +1579,7 @@ document.addEventListener("visibilitychange", () => {
     } else {
       restRemaining = remaining;
       elTimer.textContent = formatTime(remaining);
+      updateRestRing();
     }
   }
   if (state !== "ready" && state !== "finished" && !wakeLock) {
@@ -1291,7 +1590,9 @@ document.addEventListener("visibilitychange", () => {
 // ============ INIT ============
 elSkip.style.display = "none";
 hideLogArea();
+showRestRing(false);
 updateNavButtons();
+applySettingsToggles();
 if (!restoreState()) {
   elTimer.textContent = "-:--";
   elTimerLabel.textContent = "";
