@@ -305,6 +305,44 @@
     flex-direction: column;
     align-items: center;
     gap: 8px;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  /* Long-press feedback: slight shrink + fade to signal grab is ready */
+  .exercise-group.drag-pressed {
+    transform: scale(0.94);
+    opacity: 0.75;
+  }
+  /* Once drag is active, hide the original so the ghost reads as the "held" one */
+  .exercise-group.drag-dragging {
+    opacity: 0;
+    pointer-events: none;
+  }
+  /* Highlight the drop target with a red underline + subtle scale */
+  .exercise-group.drag-target {
+    transform: scale(1.08);
+  }
+  .exercise-group.drag-target .exercise-label {
+    color: #c0392b;
+  }
+  /* Floating ghost follows the pointer */
+  .drag-ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    z-index: 1000;
+    transform-origin: center;
+    filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.55));
+  }
+  .drag-ghost .exercise-label {
+    color: #c0392b !important;
+  }
+  /* Lock page scroll during reorder so the user can drag freely */
+  body.reordering {
+    overflow: hidden;
+    touch-action: none;
   }
   .exercise-dots {
     display: flex;
@@ -792,6 +830,14 @@ const STATE_TTL_MS = 4 * 60 * 60 * 1000;
 const HISTORY_MAX = 30;
 const RING_CIRCUMFERENCE = 2 * Math.PI * 88; // r=88 → ~552.92
 
+// Snapshot the original workout order so reorder can be persisted/restored by exercise name.
+// Never mutated; lookup source when rehydrating a reordered state from localStorage.
+const originalWorkout = workout.slice();
+
+// ============ DRAG REORDER CONFIG ============
+const LONG_PRESS_MS = 450;       // hold this long before drag mode engages
+const DRAG_MOVE_CANCEL_PX = 10;  // finger movement before long-press that cancels drag intent (treated as scroll)
+
 // ============ SETTINGS ============
 const defaultSettings = {
   sound: true,
@@ -830,6 +876,8 @@ let audioCtx = null;
 
 let editingLog = null;
 let editRepCount = 0;
+
+let dragState = null;  // drag-reorder: {pointerId, fromIdx, targetIdx, startX, startY, sourceEl, ghostEl, ghostOriginX, ghostOriginY, longPressTimer, pressed, dragging}
 
 const history = [];
 const future = [];
@@ -990,6 +1038,7 @@ function renderProgress() {
   for (let i = 0; i < workout.length; i++) {
     const group = document.createElement("div");
     group.className = "exercise-group";
+    group.dataset.exerciseIdx = i;
     const dotsRow = document.createElement("div");
     dotsRow.className = "exercise-dots";
     for (let j = 0; j < workout[i].sets; j++) {
@@ -1400,6 +1449,7 @@ function skipRest() {
 
 function acknowledgeAlert() {
   pushHistory();
+  captureLog();  // Safety: ensure any pending reps/notes are pinned to the log entry
   stopFlash();
   state = "ready";
   elTimer.textContent = "-:--";
@@ -1408,6 +1458,234 @@ function acknowledgeAlert() {
   elBtn.className = "";
   renderExercise();
   saveState();
+}
+
+// ============ DRAG REORDER ============
+// Long-press on an exercise-group (label + dots area) to grab it.
+// Drag to target position, release to commit.
+// Short tap on a completed dot still opens the edit modal (handled by skipping drag init when target is a completed dot).
+
+// Transform an exercise index according to a splice(fromIdx,1) + splice(toIdx,0,moved) reorder.
+function transformExerciseIdx(ei, fromIdx, toIdx) {
+  if (ei === fromIdx) return toIdx;
+  if (fromIdx < ei && ei <= toIdx) return ei - 1;
+  if (toIdx <= ei && ei < fromIdx) return ei + 1;
+  return ei;
+}
+
+function reorderExercise(fromIdx, toIdx) {
+  if (fromIdx === toIdx) return;
+  if (fromIdx < 0 || fromIdx >= workout.length) return;
+  if (toIdx < 0 || toIdx >= workout.length) return;
+
+  pushHistory();
+
+  // If the edit modal is open on a log, its editingLog reference survives
+  // (setLogs array isn't reordered, only log.exercise values get remapped),
+  // but any displayed exercise NAME in the modal could go stale. Close to be safe.
+  if (elEditModal.classList.contains("show")) closeEditModal();
+
+  // Shuffle the workout array
+  const moved = workout.splice(fromIdx, 1)[0];
+  workout.splice(toIdx, 0, moved);
+
+  // Remap every live exercise-index reference
+  const remap = (ei) => transformExerciseIdx(ei, fromIdx, toIdx);
+
+  currentExercise = remap(currentExercise);
+  logExerciseIndex = remap(logExerciseIndex);
+  setLogs.forEach(l => { l.exercise = remap(l.exercise); });
+
+  // Remap history and future snapshots too, so back/forward stay correct
+  const remapSnapshot = (snap) => {
+    if (typeof snap.currentExercise === 'number') snap.currentExercise = remap(snap.currentExercise);
+    if (typeof snap.logExerciseIndex === 'number') snap.logExerciseIndex = remap(snap.logExerciseIndex);
+    if (Array.isArray(snap.setLogs)) {
+      snap.setLogs.forEach(l => { l.exercise = remap(l.exercise); });
+    }
+  };
+  history.forEach(remapSnapshot);
+  future.forEach(remapSnapshot);
+
+  renderExercise();  // rerenders name/weight/reps + calls renderProgress()
+  saveState();
+
+  // Haptic confirmation of commit
+  if (settings.vibration && navigator.vibrate) navigator.vibrate(15);
+}
+
+function clearDragTargetHighlight() {
+  elProgress.querySelectorAll('.drag-target').forEach(el => el.classList.remove('drag-target'));
+}
+
+function cancelDragPress() {
+  // Pointerdown happened but didn't graduate into a drag (e.g., user scrolled or tapped briefly).
+  if (!dragState) return;
+  clearTimeout(dragState.longPressTimer);
+  if (dragState.sourceEl) dragState.sourceEl.classList.remove('drag-pressed');
+  dragState = null;
+}
+
+function enterDragMode() {
+  if (!dragState || dragState.dragging) return;
+
+  dragState.dragging = true;
+
+  // Haptic cue — the user has "grabbed" the exercise
+  if (settings.vibration && navigator.vibrate) navigator.vibrate(30);
+
+  // Clone the source group as a floating ghost
+  const src = dragState.sourceEl;
+  const rect = src.getBoundingClientRect();
+  const ghost = src.cloneNode(true);
+  ghost.classList.add('drag-ghost');
+  ghost.classList.remove('drag-pressed');
+  ghost.style.width = rect.width + 'px';
+  ghost.style.height = rect.height + 'px';
+  ghost.style.transform = `translate(${rect.left}px, ${rect.top}px) scale(1.08)`;
+  document.body.appendChild(ghost);
+  dragState.ghostEl = ghost;
+  dragState.ghostOriginX = rect.left;
+  dragState.ghostOriginY = rect.top;
+
+  // Hide the original (its slot is still visible — just invisible content)
+  src.classList.remove('drag-pressed');
+  src.classList.add('drag-dragging');
+
+  // Route all subsequent pointer events to the source element, even if the finger
+  // leaves the viewport or the browser triggers a system gesture. Without capture,
+  // iOS Safari can swallow pointercancel on system-level interrupts and leave the
+  // ghost + body.reordering class permanently stuck.
+  try { src.setPointerCapture(dragState.pointerId); } catch(e) {}
+
+  document.body.classList.add('reordering');
+}
+
+function handleProgressPointerDown(e) {
+  // Only one drag at a time — ignore extra touches while a drag or press is active
+  if (dragState) return;
+
+  // Don't start drag while a modal is open
+  if (elEditModal.classList.contains('show') || elSettingsModal.classList.contains('show')) return;
+
+  // Only respond to primary button / first touch
+  if (e.button !== undefined && e.button !== 0) return;
+
+  const group = e.target.closest('.exercise-group');
+  if (!group) return;
+
+  // Preserve existing tap-to-edit behavior for completed dots
+  if (e.target.classList && e.target.classList.contains('dot') && e.target.classList.contains('completed')) {
+    return;
+  }
+
+  const fromIdx = parseInt(group.dataset.exerciseIdx, 10);
+  if (isNaN(fromIdx)) return;
+
+  dragState = {
+    pointerId: e.pointerId,
+    fromIdx,
+    targetIdx: fromIdx,
+    startX: e.clientX,
+    startY: e.clientY,
+    sourceEl: group,
+    ghostEl: null,
+    ghostOriginX: 0,
+    ghostOriginY: 0,
+    pressed: false,
+    dragging: false,
+    longPressTimer: setTimeout(enterDragMode, LONG_PRESS_MS)
+  };
+
+  // Subtle immediate feedback so user knows their press registered
+  group.classList.add('drag-pressed');
+  dragState.pressed = true;
+}
+
+function handleDocumentPointerMove(e) {
+  if (!dragState) return;
+  if (dragState.pointerId !== undefined && e.pointerId !== dragState.pointerId) return;
+
+  const dx = e.clientX - dragState.startX;
+  const dy = e.clientY - dragState.startY;
+
+  // Movement before long-press engages = treat as scroll, cancel drag intent
+  if (!dragState.dragging) {
+    if (Math.abs(dx) > DRAG_MOVE_CANCEL_PX || Math.abs(dy) > DRAG_MOVE_CANCEL_PX) {
+      cancelDragPress();
+    }
+    return;
+  }
+
+  // In drag mode: prevent scroll and update ghost + target highlight
+  if (e.cancelable) e.preventDefault();
+
+  if (dragState.ghostEl) {
+    const tx = dragState.ghostOriginX + dx;
+    const ty = dragState.ghostOriginY + dy;
+    dragState.ghostEl.style.transform = `translate(${tx}px, ${ty}px) scale(1.08)`;
+  }
+
+  // Figure out which group the pointer is over.
+  // Temporarily ignore the ghost (already pointer-events: none) and the source (dragging class has pointer-events: none).
+  const hit = document.elementFromPoint(e.clientX, e.clientY);
+  const targetGroup = hit ? hit.closest('.exercise-group') : null;
+
+  clearDragTargetHighlight();
+  if (targetGroup && !targetGroup.classList.contains('drag-dragging')) {
+    const targetIdx = parseInt(targetGroup.dataset.exerciseIdx, 10);
+    if (!isNaN(targetIdx)) {
+      dragState.targetIdx = targetIdx;
+      targetGroup.classList.add('drag-target');
+      return;
+    }
+  }
+  // Not over a valid target — leave targetIdx at fromIdx so release is a no-op
+  dragState.targetIdx = dragState.fromIdx;
+}
+
+function handleDocumentPointerUp(e) {
+  if (!dragState) return;
+  if (dragState.pointerId !== undefined && e.pointerId !== dragState.pointerId) return;
+
+  clearTimeout(dragState.longPressTimer);
+
+  if (dragState.dragging) {
+    const from = dragState.fromIdx;
+    const to = dragState.targetIdx;
+
+    // Cleanup visuals BEFORE reorder so the about-to-move element reads fresh
+    if (dragState.ghostEl) dragState.ghostEl.remove();
+    if (dragState.sourceEl) {
+      dragState.sourceEl.classList.remove('drag-dragging');
+      dragState.sourceEl.classList.remove('drag-pressed');
+    }
+    clearDragTargetHighlight();
+    document.body.classList.remove('reordering');
+
+    dragState = null;
+    if (from !== to) reorderExercise(from, to);
+    return;
+  }
+
+  // Wasn't a drag — just a quick press. Clear the press visual.
+  if (dragState.sourceEl) dragState.sourceEl.classList.remove('drag-pressed');
+  dragState = null;
+}
+
+function handleDocumentPointerCancel(e) {
+  if (!dragState) return;
+  if (dragState.pointerId !== undefined && e.pointerId !== dragState.pointerId) return;
+
+  clearTimeout(dragState.longPressTimer);
+  if (dragState.ghostEl) dragState.ghostEl.remove();
+  if (dragState.sourceEl) {
+    dragState.sourceEl.classList.remove('drag-dragging');
+    dragState.sourceEl.classList.remove('drag-pressed');
+  }
+  clearDragTargetHighlight();
+  document.body.classList.remove('reordering');
+  dragState = null;
 }
 
 // ============ SUMMARY ============
@@ -1613,6 +1891,17 @@ elRepPlus.addEventListener("click", (e) => {
 elNotesInput.addEventListener("input", () => saveState());
 elNavBack.addEventListener("click", back);
 elNavForward.addEventListener("click", forward);
+
+// Drag reorder — pointer events delegated on #progress, move/up/cancel on document
+// so a finger that leaves the source element still commits the drag correctly.
+elProgress.addEventListener("pointerdown", handleProgressPointerDown);
+document.addEventListener("pointermove", handleDocumentPointerMove, { passive: false });
+document.addEventListener("pointerup", handleDocumentPointerUp);
+document.addEventListener("pointercancel", handleDocumentPointerCancel);
+// Prevent iOS long-press context menu while dragging an exercise-group.
+elProgress.addEventListener("contextmenu", (e) => {
+  if (dragState) e.preventDefault();
+});
 elCopy.addEventListener("click", () => {
   const text = buildSummary();
   navigator.clipboard.writeText(text).then(() => {
@@ -1634,6 +1923,8 @@ function saveState() {
     repCount,
     notes: elNotesInput.value,
     logExerciseIndex,
+    // Persist any mid-session reorder so refreshes/background kills don't snap back
+    workoutOrder: workout.map(ex => ex.name),
     history: history.map(h => ({...h, setLogs: h.setLogs.map(l => ({...l}))})),
     future:  future.map(f => ({...f, setLogs: f.setLogs.map(l => ({...l}))}))
   };
@@ -1648,6 +1939,18 @@ function restoreState() {
       try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
       return false;
     }
+
+    // Reapply saved reorder BEFORE anything else reads workout[].
+    // If saved order has same names as current workout, rebuild workout to match.
+    if (Array.isArray(s.workoutOrder) && s.workoutOrder.length === workout.length) {
+      const byName = new Map(originalWorkout.map(ex => [ex.name, ex]));
+      const reordered = s.workoutOrder.map(name => byName.get(name));
+      if (reordered.every(ex => ex)) {
+        workout.length = 0;
+        reordered.forEach(ex => workout.push(ex));
+      }
+    }
+
     currentExercise = s.currentExercise;
     currentSet = s.currentSet;
     repCount = s.repCount || 10;
@@ -1696,8 +1999,10 @@ document.addEventListener("visibilitychange", () => {
 // Allow URL reset (e.g. ?reset=1) to wipe saved workout state
 if (new URLSearchParams(location.search).has('reset')) {
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
-  // Strip ?reset from URL so refreshes don't keep resetting
-  history.replaceState(null, '', location.pathname);
+  // Strip ?reset from URL so refreshes don't keep resetting.
+  // NOTE: the local `history` const above shadows window.history inside this script,
+  // so we have to reach for the real thing explicitly.
+  try { window.history.replaceState(null, '', location.pathname); } catch(e) {}
 }
 
 elSkip.style.display = "none";
