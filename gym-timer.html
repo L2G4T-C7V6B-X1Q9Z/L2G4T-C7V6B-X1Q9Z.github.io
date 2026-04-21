@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Gym Timer</title>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200;400;600;700&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -306,42 +307,42 @@
     align-items: center;
     gap: 8px;
     -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
     touch-action: manipulation;
     transition: transform 0.15s ease, opacity 0.15s ease;
   }
-  /* Long-press feedback: slight shrink + fade to signal grab is ready */
-  .exercise-group.drag-pressed {
-    transform: scale(0.94);
-    opacity: 0.75;
+  /* SortableJS classes */
+  /* .sortable-chosen = the item held via long-press (stays in list, scales up) */
+  .exercise-group.sortable-chosen {
+    transform: scale(1.04);
   }
-  /* Once drag is active, hide the original so the ghost reads as the "held" one */
-  .exercise-group.drag-dragging {
-    opacity: 0;
-    pointer-events: none;
+  /* .sortable-drag = floating clone following the finger (attached to <body>) */
+  .exercise-group.sortable-drag {
+    opacity: 0.96;
+    background: #1a1a1a;
+    border: 1px solid #c0392b;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(192, 57, 43, 0.35);
+    padding: 8px;
+    cursor: grabbing;
   }
-  /* Highlight the drop target with a red underline + subtle scale */
-  .exercise-group.drag-target {
-    transform: scale(1.08);
-  }
-  .exercise-group.drag-target .exercise-label {
-    color: #c0392b;
-  }
-  /* Floating ghost follows the pointer */
-  .drag-ghost {
-    position: fixed;
-    left: 0;
-    top: 0;
-    pointer-events: none;
-    z-index: 1000;
-    transform-origin: center;
-    filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.55));
-  }
-  .drag-ghost .exercise-label {
+  .exercise-group.sortable-drag .exercise-label {
     color: #c0392b !important;
   }
-  /* Lock page scroll during reorder so the user can drag freely */
-  body.reordering {
+  /* .sortable-ghost = the placeholder slot in the original list */
+  .exercise-group.sortable-ghost {
+    opacity: 0.25;
+    background: #2a2a2a;
+    border-radius: 4px;
+  }
+  .exercise-group.sortable-ghost > * { visibility: hidden; }
+  /* Lock scroll + kill iOS pull-to-refresh + text selection during drag */
+  body.dragging-exercise {
     overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
     touch-action: none;
   }
   .exercise-dots {
@@ -834,10 +835,6 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * 88; // r=88 → ~552.92
 // Never mutated; lookup source when rehydrating a reordered state from localStorage.
 const originalWorkout = workout.slice();
 
-// ============ DRAG REORDER CONFIG ============
-const LONG_PRESS_MS = 450;       // hold this long before drag mode engages
-const DRAG_MOVE_CANCEL_PX = 10;  // finger movement before long-press that cancels drag intent (treated as scroll)
-
 // ============ SETTINGS ============
 const defaultSettings = {
   sound: true,
@@ -876,8 +873,6 @@ let audioCtx = null;
 
 let editingLog = null;
 let editRepCount = 0;
-
-let dragState = null;  // drag-reorder: {pointerId, fromIdx, targetIdx, startX, startY, sourceEl, ghostEl, ghostOriginX, ghostOriginY, longPressTimer, pressed, dragging}
 
 const history = [];
 const future = [];
@@ -1514,175 +1509,9 @@ function reorderExercise(fromIdx, toIdx) {
   if (settings.vibration && navigator.vibrate) navigator.vibrate(15);
 }
 
-function clearDragTargetHighlight() {
-  elProgress.querySelectorAll('.drag-target').forEach(el => el.classList.remove('drag-target'));
-}
-
-function cancelDragPress() {
-  // Pointerdown happened but didn't graduate into a drag (e.g., user scrolled or tapped briefly).
-  if (!dragState) return;
-  clearTimeout(dragState.longPressTimer);
-  if (dragState.sourceEl) dragState.sourceEl.classList.remove('drag-pressed');
-  dragState = null;
-}
-
-function enterDragMode() {
-  if (!dragState || dragState.dragging) return;
-
-  dragState.dragging = true;
-
-  // Haptic cue — the user has "grabbed" the exercise
-  if (settings.vibration && navigator.vibrate) navigator.vibrate(30);
-
-  // Clone the source group as a floating ghost
-  const src = dragState.sourceEl;
-  const rect = src.getBoundingClientRect();
-  const ghost = src.cloneNode(true);
-  ghost.classList.add('drag-ghost');
-  ghost.classList.remove('drag-pressed');
-  ghost.style.width = rect.width + 'px';
-  ghost.style.height = rect.height + 'px';
-  ghost.style.transform = `translate(${rect.left}px, ${rect.top}px) scale(1.08)`;
-  document.body.appendChild(ghost);
-  dragState.ghostEl = ghost;
-  dragState.ghostOriginX = rect.left;
-  dragState.ghostOriginY = rect.top;
-
-  // Hide the original (its slot is still visible — just invisible content)
-  src.classList.remove('drag-pressed');
-  src.classList.add('drag-dragging');
-
-  // Route all subsequent pointer events to the source element, even if the finger
-  // leaves the viewport or the browser triggers a system gesture. Without capture,
-  // iOS Safari can swallow pointercancel on system-level interrupts and leave the
-  // ghost + body.reordering class permanently stuck.
-  try { src.setPointerCapture(dragState.pointerId); } catch(e) {}
-
-  // Cache each exercise-group's pre-transform position/height so the pointer-Y
-  // comparison stays stable even as neighbors translate to open a gap.
-  const groups = [...elProgress.querySelectorAll('.exercise-group')];
-  dragState.initialRects = groups.map(g => {
-    const r = g.getBoundingClientRect();
-    return { el: g, top: r.top, height: g.offsetHeight };
-  });
-
-  document.body.classList.add('reordering');
-}
-
-function handleProgressPointerDown(e) {
-  // Only one drag at a time — ignore extra touches while a drag or press is active
-  if (dragState) return;
-
-  // Don't start drag while a modal is open
-  if (elEditModal.classList.contains('show') || elSettingsModal.classList.contains('show')) return;
-
-  // Only respond to primary button / first touch
-  if (e.button !== undefined && e.button !== 0) return;
-
-  const group = e.target.closest('.exercise-group');
-  if (!group) return;
-
-  // Preserve existing tap-to-edit behavior for completed dots
-  if (e.target.classList && e.target.classList.contains('dot') && e.target.classList.contains('completed')) {
-    return;
-  }
-
-  const fromIdx = parseInt(group.dataset.exerciseIdx, 10);
-  if (isNaN(fromIdx)) return;
-
-  dragState = {
-    pointerId: e.pointerId,
-    fromIdx,
-    targetIdx: fromIdx,
-    startX: e.clientX,
-    startY: e.clientY,
-    sourceEl: group,
-    ghostEl: null,
-    ghostOriginX: 0,
-    ghostOriginY: 0,
-    pressed: false,
-    dragging: false,
-    longPressTimer: setTimeout(enterDragMode, LONG_PRESS_MS)
-  };
-
-  // Subtle immediate feedback so user knows their press registered
-  group.classList.add('drag-pressed');
-  dragState.pressed = true;
-}
-
-function handleDocumentPointerMove(e) {
-  if (!dragState) return;
-  if (dragState.pointerId !== undefined && e.pointerId !== dragState.pointerId) return;
-
-  const dx = e.clientX - dragState.startX;
-  const dy = e.clientY - dragState.startY;
-
-  // Movement before long-press engages = treat as scroll, cancel drag intent
-  if (!dragState.dragging) {
-    if (Math.abs(dx) > DRAG_MOVE_CANCEL_PX || Math.abs(dy) > DRAG_MOVE_CANCEL_PX) {
-      cancelDragPress();
-    }
-    return;
-  }
-
-  // In drag mode: prevent scroll and update ghost + open an insertion gap.
-  if (e.cancelable) e.preventDefault();
-
-  if (dragState.ghostEl) {
-    const tx = dragState.ghostOriginX + dx;
-    const ty = dragState.ghostOriginY + dy;
-    dragState.ghostEl.style.transform = `translate(${tx}px, ${ty}px) scale(1.08)`;
-  }
-
-  // Determine insertion index from pointer Y and translate neighbors to open a gap
-  // (iOS-style insert-between behavior, not swap-on-overlap).
-  updateTargetFromPointer(e.clientY);
-}
-
-function updateTargetFromPointer(pointerY) {
-  const source = dragState.sourceEl;
-  const sourceIdx = dragState.fromIdx;
-  // Use initial rects cached at drag-start so in-progress translations don't skew the Y comparison
-  const rects = dragState.initialRects || [];
-  const nonSourceRects = rects.filter(r => r.el !== source);
-
-  // Gap k = "insert before non-source item k". Default to end if pointer is below all centers.
-  let targetIdx = nonSourceRects.length;
-  for (let i = 0; i < nonSourceRects.length; i++) {
-    const center = nonSourceRects[i].top + nonSourceRects[i].height / 2;
-    if (pointerY < center) {
-      targetIdx = i;
-      break;
-    }
-  }
-
-  dragState.targetIdx = targetIdx;
-
-  // Translate non-source items to visually open a gap at the insertion point.
-  //   Above source (domIdx < sourceIdx) and at/past insertion point: shift DOWN
-  //   Below source (domIdx > sourceIdx) and at/before insertion point: shift UP
-  const sourceHeight = source.offsetHeight;
-  rects.forEach((r, domIdx) => {
-    if (r.el === source) return;
-    let translation = 0;
-    if (domIdx < sourceIdx) {
-      if (domIdx >= targetIdx) translation = sourceHeight;
-    } else {
-      if (domIdx <= targetIdx) translation = -sourceHeight;
-    }
-    r.el.style.transform = translation ? `translateY(${translation}px)` : '';
-  });
-}
-
-function clearDragTranslations() {
-  elProgress.querySelectorAll('.exercise-group').forEach(el => {
-    el.style.transform = '';
-  });
-}
-
-// Tap-to-jump: short tap on an exercise label switches currentExercise to that index.
-// Fixes the "stuck on leg press rest timer when another lifter is on the machine" case --
-// the user needs to pivot to a different exercise without waiting out a rest countdown.
+// Tap-to-jump: short tap on an exercise switches currentExercise to that index.
+// Fixes the "stuck on rest timer when another lifter is on the machine" case --
+// the user needs to pivot to a different exercise without waiting out a countdown.
 function jumpToExercise(idx) {
   if (idx < 0 || idx >= workout.length) return;
   if (idx === currentExercise) return;
@@ -1720,56 +1549,6 @@ function jumpToExercise(idx) {
   saveState();
 
   if (settings.vibration && navigator.vibrate) navigator.vibrate(20);
-}
-
-function handleDocumentPointerUp(e) {
-  if (!dragState) return;
-  if (dragState.pointerId !== undefined && e.pointerId !== dragState.pointerId) return;
-
-  clearTimeout(dragState.longPressTimer);
-
-  if (dragState.dragging) {
-    const from = dragState.fromIdx;
-    const to = dragState.targetIdx;
-
-    // Cleanup visuals BEFORE reorder so the about-to-move element reads fresh
-    if (dragState.ghostEl) dragState.ghostEl.remove();
-    if (dragState.sourceEl) {
-      dragState.sourceEl.classList.remove('drag-dragging');
-      dragState.sourceEl.classList.remove('drag-pressed');
-    }
-    clearDragTargetHighlight();
-    clearDragTranslations();
-    document.body.classList.remove('reordering');
-
-    dragState = null;
-    if (from !== to) reorderExercise(from, to);
-    return;
-  }
-
-  // Wasn't a drag — short tap. Any tap on an exercise-group (except completed-dot
-  // edits, which were intercepted in pointerdown) jumps to that exercise so the user
-  // can pivot when a machine is taken without waiting out the current rest countdown.
-  const tapIdx = dragState.fromIdx;
-  if (dragState.sourceEl) dragState.sourceEl.classList.remove('drag-pressed');
-  dragState = null;
-  jumpToExercise(tapIdx);
-}
-
-function handleDocumentPointerCancel(e) {
-  if (!dragState) return;
-  if (dragState.pointerId !== undefined && e.pointerId !== dragState.pointerId) return;
-
-  clearTimeout(dragState.longPressTimer);
-  if (dragState.ghostEl) dragState.ghostEl.remove();
-  if (dragState.sourceEl) {
-    dragState.sourceEl.classList.remove('drag-dragging');
-    dragState.sourceEl.classList.remove('drag-pressed');
-  }
-  clearDragTargetHighlight();
-  clearDragTranslations();
-  document.body.classList.remove('reordering');
-  dragState = null;
 }
 
 // ============ SUMMARY ============
@@ -1976,16 +1755,70 @@ elNotesInput.addEventListener("input", () => saveState());
 elNavBack.addEventListener("click", back);
 elNavForward.addEventListener("click", forward);
 
-// Drag reorder — pointer events delegated on #progress, move/up/cancel on document
-// so a finger that leaves the source element still commits the drag correctly.
-elProgress.addEventListener("pointerdown", handleProgressPointerDown);
-document.addEventListener("pointermove", handleDocumentPointerMove, { passive: false });
-document.addEventListener("pointerup", handleDocumentPointerUp);
-document.addEventListener("pointercancel", handleDocumentPointerCancel);
-// Prevent iOS long-press context menu while dragging an exercise-group.
-elProgress.addEventListener("contextmenu", (e) => {
-  if (dragState) e.preventDefault();
+// ============ DRAG REORDER (SortableJS) + TAP-TO-JUMP ============
+// SortableJS handles long-press drag with iOS-style insert-with-gap behavior.
+// Short tap on an exercise (pre-long-press) fires the normal click event and
+// jumps to that exercise via event delegation below.
+const sortable = Sortable.create(elProgress, {
+  animation: 180,
+  easing: "cubic-bezier(0.2, 0, 0, 1)",
+  delay: 450,                 // long-press threshold (ms)
+  delayOnTouchOnly: true,     // mouse drags instantly; touch requires long-press
+  touchStartThreshold: 4,     // tiny finger wiggle doesn't cancel the press
+  forceFallback: true,        // bypass HTML5 DnD — required for iOS Safari
+  fallbackTolerance: 3,
+  fallbackOnBody: true,       // clone attaches to <body>, escapes overflow clipping
+  direction: "vertical",
+  draggable: ".exercise-group",
+  ghostClass: "sortable-ghost",
+  chosenClass: "sortable-chosen",
+  dragClass: "sortable-drag",
+
+  onChoose() {
+    // Block drag entirely if a modal is open
+    if (elEditModal.classList.contains("show") || elSettingsModal.classList.contains("show")) {
+      sortable.option("disabled", true);
+      queueMicrotask(() => sortable.option("disabled", false));
+      return;
+    }
+    if (settings.vibration && navigator.vibrate) navigator.vibrate(30);
+    document.body.classList.add("dragging-exercise");
+  },
+
+  onEnd(evt) {
+    // Delay removal so the synthetic click iOS fires after a long-press lift
+    // is suppressed by the click guard below.
+    setTimeout(() => document.body.classList.remove("dragging-exercise"), 50);
+    const from = evt.oldIndex;
+    const to = evt.newIndex;
+    if (from == null || to == null || from === to) return;
+    // SortableJS already moved the DOM node. reorderExercise() will re-render
+    // the progress list from the (now shuffled) workout array — but it also
+    // needs to run to remap currentExercise / setLogs / history.
+    reorderExercise(from, to);
+  },
 });
+
+// Short-tap-to-jump: SortableJS only captures the pointer after 450ms, so a
+// quick tap still fires a normal click. Delegate one handler on #progress.
+elProgress.addEventListener("click", (e) => {
+  // Suppress the synthetic click iOS may fire after a long-press release
+  if (document.body.classList.contains("dragging-exercise")) return;
+  // Block jumps while a modal is open
+  if (elEditModal.classList.contains("show") || elSettingsModal.classList.contains("show")) return;
+
+  const group = e.target.closest(".exercise-group");
+  if (!group || !elProgress.contains(group)) return;
+  // Completed-dot taps have their own handler (openEditModal) and call stopPropagation implicitly by being a separate element — still guard here for safety.
+  if (e.target.classList && e.target.classList.contains("dot") && e.target.classList.contains("completed")) return;
+
+  const idx = Number(group.dataset.exerciseIdx);
+  if (Number.isFinite(idx)) jumpToExercise(idx);
+});
+
+// iOS may show the native text-selection callout on long-press. Preventing
+// contextmenu blocks it without affecting taps or drags.
+elProgress.addEventListener("contextmenu", (e) => e.preventDefault());
 elCopy.addEventListener("click", () => {
   const text = buildSummary();
   navigator.clipboard.writeText(text).then(() => {
