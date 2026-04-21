@@ -1558,6 +1558,14 @@ function enterDragMode() {
   // ghost + body.reordering class permanently stuck.
   try { src.setPointerCapture(dragState.pointerId); } catch(e) {}
 
+  // Cache each exercise-group's pre-transform position/height so the pointer-Y
+  // comparison stays stable even as neighbors translate to open a gap.
+  const groups = [...elProgress.querySelectorAll('.exercise-group')];
+  dragState.initialRects = groups.map(g => {
+    const r = g.getBoundingClientRect();
+    return { el: g, top: r.top, height: g.offsetHeight };
+  });
+
   document.body.classList.add('reordering');
 }
 
@@ -1617,7 +1625,7 @@ function handleDocumentPointerMove(e) {
     return;
   }
 
-  // In drag mode: prevent scroll and update ghost + target highlight
+  // In drag mode: prevent scroll and update ghost + open an insertion gap.
   if (e.cancelable) e.preventDefault();
 
   if (dragState.ghostEl) {
@@ -1626,22 +1634,92 @@ function handleDocumentPointerMove(e) {
     dragState.ghostEl.style.transform = `translate(${tx}px, ${ty}px) scale(1.08)`;
   }
 
-  // Figure out which group the pointer is over.
-  // Temporarily ignore the ghost (already pointer-events: none) and the source (dragging class has pointer-events: none).
-  const hit = document.elementFromPoint(e.clientX, e.clientY);
-  const targetGroup = hit ? hit.closest('.exercise-group') : null;
+  // Determine insertion index from pointer Y and translate neighbors to open a gap
+  // (iOS-style insert-between behavior, not swap-on-overlap).
+  updateTargetFromPointer(e.clientY);
+}
 
-  clearDragTargetHighlight();
-  if (targetGroup && !targetGroup.classList.contains('drag-dragging')) {
-    const targetIdx = parseInt(targetGroup.dataset.exerciseIdx, 10);
-    if (!isNaN(targetIdx)) {
-      dragState.targetIdx = targetIdx;
-      targetGroup.classList.add('drag-target');
-      return;
+function updateTargetFromPointer(pointerY) {
+  const source = dragState.sourceEl;
+  const sourceIdx = dragState.fromIdx;
+  // Use initial rects cached at drag-start so in-progress translations don't skew the Y comparison
+  const rects = dragState.initialRects || [];
+  const nonSourceRects = rects.filter(r => r.el !== source);
+
+  // Gap k = "insert before non-source item k". Default to end if pointer is below all centers.
+  let targetIdx = nonSourceRects.length;
+  for (let i = 0; i < nonSourceRects.length; i++) {
+    const center = nonSourceRects[i].top + nonSourceRects[i].height / 2;
+    if (pointerY < center) {
+      targetIdx = i;
+      break;
     }
   }
-  // Not over a valid target — leave targetIdx at fromIdx so release is a no-op
-  dragState.targetIdx = dragState.fromIdx;
+
+  dragState.targetIdx = targetIdx;
+
+  // Translate non-source items to visually open a gap at the insertion point.
+  //   Above source (domIdx < sourceIdx) and at/past insertion point: shift DOWN
+  //   Below source (domIdx > sourceIdx) and at/before insertion point: shift UP
+  const sourceHeight = source.offsetHeight;
+  rects.forEach((r, domIdx) => {
+    if (r.el === source) return;
+    let translation = 0;
+    if (domIdx < sourceIdx) {
+      if (domIdx >= targetIdx) translation = sourceHeight;
+    } else {
+      if (domIdx <= targetIdx) translation = -sourceHeight;
+    }
+    r.el.style.transform = translation ? `translateY(${translation}px)` : '';
+  });
+}
+
+function clearDragTranslations() {
+  elProgress.querySelectorAll('.exercise-group').forEach(el => {
+    el.style.transform = '';
+  });
+}
+
+// Tap-to-jump: short tap on an exercise label switches currentExercise to that index.
+// Fixes the "stuck on leg press rest timer when another lifter is on the machine" case --
+// the user needs to pivot to a different exercise without waiting out a rest countdown.
+function jumpToExercise(idx) {
+  if (idx < 0 || idx >= workout.length) return;
+  if (idx === currentExercise) return;
+
+  pushHistory();
+
+  // Abort any running rest/flash so the jump is clean
+  cancelRestNotif();
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  stopFlash();
+
+  // Flush any pending log input (safety) before leaving current exercise
+  captureLog();
+  hideLogArea();
+  showRestRing(false);
+
+  // Land on first un-logged set of the target exercise; if all done, sit on the last
+  const targetEx = workout[idx];
+  const doneSets = new Set(setLogs.filter(l => l.exercise === idx).map(l => l.set));
+  let firstUnlogged = 0;
+  while (doneSets.has(firstUnlogged) && firstUnlogged < targetEx.sets) firstUnlogged++;
+  if (firstUnlogged >= targetEx.sets) firstUnlogged = targetEx.sets - 1;
+
+  currentExercise = idx;
+  currentSet = firstUnlogged;
+  state = "ready";
+
+  elTimer.textContent = "-:--";
+  elTimerLabel.textContent = "";
+  elBtn.textContent = "Set Done";
+  elBtn.className = "";
+  elSkip.style.display = "none";
+
+  renderExercise();
+  saveState();
+
+  if (settings.vibration && navigator.vibrate) navigator.vibrate(20);
 }
 
 function handleDocumentPointerUp(e) {
@@ -1661,6 +1739,7 @@ function handleDocumentPointerUp(e) {
       dragState.sourceEl.classList.remove('drag-pressed');
     }
     clearDragTargetHighlight();
+    clearDragTranslations();
     document.body.classList.remove('reordering');
 
     dragState = null;
@@ -1668,9 +1747,13 @@ function handleDocumentPointerUp(e) {
     return;
   }
 
-  // Wasn't a drag — just a quick press. Clear the press visual.
+  // Wasn't a drag — short tap. Any tap on an exercise-group (except completed-dot
+  // edits, which were intercepted in pointerdown) jumps to that exercise so the user
+  // can pivot when a machine is taken without waiting out the current rest countdown.
+  const tapIdx = dragState.fromIdx;
   if (dragState.sourceEl) dragState.sourceEl.classList.remove('drag-pressed');
   dragState = null;
+  jumpToExercise(tapIdx);
 }
 
 function handleDocumentPointerCancel(e) {
@@ -1684,6 +1767,7 @@ function handleDocumentPointerCancel(e) {
     dragState.sourceEl.classList.remove('drag-pressed');
   }
   clearDragTargetHighlight();
+  clearDragTranslations();
   document.body.classList.remove('reordering');
   dragState = null;
 }
