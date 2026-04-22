@@ -13,10 +13,12 @@
     background: #111;
     color: #ccc;
     min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 76px 20px 140px;
+    padding: 64px 20px 170px;
     -webkit-user-select: none;
     user-select: none;
   }
@@ -79,10 +81,13 @@
     position: relative;
     width: 184px;
     height: 184px;
-    margin: 24px 0 28px;
+    /* Auto margins center btn-wrap vertically in whatever space remains
+       between the timer-label above and the (fixed) bottom-bar below. */
+    margin: auto 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
   }
   #main-btn {
     width: 180px;
