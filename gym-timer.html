@@ -1152,14 +1152,17 @@ function renderProgress() {
 }
 
 function renderExercise() {
-  const ex = workout[currentExercise];
+  // When browsing, show the viewed set's context; otherwise current working.
+  const exIdx = isBrowsing() ? viewingExercise : currentExercise;
+  const setIdx = isBrowsing() ? viewingSet : currentSet;
+  const ex = workout[exIdx];
   elName.textContent = ex.name;
   // Order: Weight \u00b7 Set X/Y \u00b7 reps
-  elSet.textContent = ex.weight + "  \u00b7  Set " + (currentSet + 1) + "/" + ex.sets + "  \u00b7  " + ex.reps + " reps";
+  elSet.textContent = ex.weight + "  \u00b7  Set " + (setIdx + 1) + "/" + ex.sets + "  \u00b7  " + ex.reps + " reps";
   // Set-specific note takes priority, falls back to exercise note
   let noteText = "";
-  if (Array.isArray(ex.setNotes) && ex.setNotes[currentSet]) {
-    noteText = ex.setNotes[currentSet];
+  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) {
+    noteText = ex.setNotes[setIdx];
   } else if (ex.note) {
     noteText = ex.note;
   }
@@ -1359,10 +1362,15 @@ function applyState(notesValue) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
     elReturnPill.classList.add('visible');
+    elTimer.style.visibility = 'hidden';
+    elTimerLabel.style.visibility = 'hidden';
+    elLogArea.style.display = 'flex';
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
     elReturnPill.classList.remove('visible');
+    elTimer.style.visibility = '';
+    elTimerLabel.style.visibility = '';
   }
   // Sync log area UI (reps/notes/difficulty) with the active log entry.
   // Overrides per-branch elRepCount/elNotesInput values set above, ensuring
@@ -1618,16 +1626,22 @@ function cycleView(exIdx, setIdx) {
   }
   viewingExercise = exIdx;
   viewingSet = setIdx;
-  renderProgress();
+  renderExercise();
   elReturnPill.classList.toggle('visible', isBrowsing());
   if (isBrowsing()) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
     // Force log area visible so user can see/edit the viewed set's reps+notes+diff
     elLogArea.style.display = 'flex';
+    // Hide rest timer UI — irrelevant when reviewing a past set. Timer keeps
+    // running internally so actual rest tracking is unaffected.
+    elTimer.style.visibility = 'hidden';
+    elTimerLabel.style.visibility = 'hidden';
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
+    elTimer.style.visibility = '';
+    elTimerLabel.style.visibility = '';
   }
   syncLogArea();
   saveState();
@@ -1636,10 +1650,12 @@ function cycleView(exIdx, setIdx) {
 function returnToWorking() {
   viewingExercise = currentExercise;
   viewingSet = currentSet;
-  renderProgress();
+  renderExercise();
   elReturnPill.classList.remove('visible');
   elBtn.style.opacity = '';
   elBtn.style.pointerEvents = '';
+  elTimer.style.visibility = '';
+  elTimerLabel.style.visibility = '';
   // Restore log area visibility based on workout state (hidden unless resting/paused/finishing)
   if (state === "resting" || state === "paused" || state === "finishing") {
     elLogArea.style.display = 'flex';
