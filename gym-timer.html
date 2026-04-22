@@ -79,7 +79,7 @@
     position: relative;
     width: 184px;
     height: 184px;
-    margin-bottom: 20px;
+    margin: auto 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -209,14 +209,40 @@
   /* Bottom logging area */
   #log-area {
     display: none;
-    flex-direction: column;
-    align-items: center;
+    flex-direction: row;
+    align-items: stretch;
     justify-content: center;
     gap: 8px;
     margin-top: auto;
     padding: 10px 20px 12px;
     width: 100%;
-    max-width: 360px;
+    max-width: 400px;
+  }
+  #set-label-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-right: 8px;
+    border-right: 1px solid #333;
+    min-width: 22px;
+    flex-shrink: 0;
+  }
+  #set-label-text {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 11px;
+    font-weight: 700;
+    color: #888;
+    letter-spacing: 2px;
+    white-space: nowrap;
+  }
+  #log-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
   }
   .log-row {
     display: flex;
@@ -232,6 +258,29 @@
     justify-content: center;
     gap: 4px;
     width: 100%;
+  }
+  /* Timer shows a subtle diagonal slash (no text) while browsing a past set,
+     signalling rest-timer controls are not accessible in view mode. */
+  #timer-display.browsing { color: transparent; position: relative; }
+  #timer-display.browsing::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 26%;
+    right: 26%;
+    height: 1.5px;
+    background: #555;
+    transform: translateY(-50%) rotate(-15deg);
+    pointer-events: none;
+  }
+  #timer-label.browsing { color: transparent; }
+  /* Container for return-pill + progress, so return-pill can absolute-position
+     relative to the progress row (left side) without displacing dots. */
+  .progress-area {
+    position: relative;
+    width: 100%;
+    display: flex;
+    justify-content: center;
   }
   .diff-btn {
     flex: 1;
@@ -337,10 +386,10 @@
     width: 100%;
   }
   #return-pill {
-    position: fixed;
+    position: absolute;
     left: 14px;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-50%) translateX(-6px);
     z-index: 40;
     font-size: 10px;
     letter-spacing: 1.5px;
@@ -349,18 +398,19 @@
     border: 1px solid rgba(192, 57, 43, 0.55);
     border-radius: 999px;
     text-transform: uppercase;
-    padding: 10px 14px;
+    padding: 8px 12px;
     cursor: pointer;
     text-align: center;
     white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.22s ease;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   #return-pill.visible {
     opacity: 1;
     pointer-events: auto;
+    transform: translateY(-50%) translateX(0);
   }
   .exercise-group {
     display: flex;
@@ -754,25 +804,32 @@
 
 <div id="bottom-bar">
   <div id="log-area">
-    <div id="difficulty-row">
-      <button class="diff-btn" data-diff="1" aria-label="Easy">EASY</button>
-      <button class="diff-btn" data-diff="2" aria-label="Light">LIGHT</button>
-      <button class="diff-btn" data-diff="3" aria-label="Moderate">MOD</button>
-      <button class="diff-btn" data-diff="4" aria-label="Hard">HARD</button>
-      <button class="diff-btn" data-diff="5" aria-label="Maximum effort">MAX</button>
+    <div id="set-label-col">
+      <div id="set-label-text">S1</div>
     </div>
-    <div class="log-row">
-      <div id="rep-label">REPS</div>
-      <div id="rep-counter">
-        <button class="rep-btn" id="rep-minus" aria-label="Decrease reps">-</button>
-        <div id="rep-count" aria-live="polite">10</div>
-        <button class="rep-btn" id="rep-plus" aria-label="Increase reps">+</button>
+    <div id="log-content">
+      <div id="difficulty-row">
+        <button class="diff-btn" data-diff="1" aria-label="Easy">EASY</button>
+        <button class="diff-btn" data-diff="2" aria-label="Light">LIGHT</button>
+        <button class="diff-btn" data-diff="3" aria-label="Moderate">MOD</button>
+        <button class="diff-btn" data-diff="4" aria-label="Hard">HARD</button>
+        <button class="diff-btn" data-diff="5" aria-label="Maximum effort">MAX</button>
       </div>
-      <input type="text" id="notes-input" placeholder="notes..." inputmode="text" aria-label="Set notes">
+      <div class="log-row">
+        <div id="rep-label">REPS</div>
+        <div id="rep-counter">
+          <button class="rep-btn" id="rep-minus" aria-label="Decrease reps">-</button>
+          <div id="rep-count" aria-live="polite">10</div>
+          <button class="rep-btn" id="rep-plus" aria-label="Increase reps">+</button>
+        </div>
+        <input type="text" id="notes-input" placeholder="notes..." inputmode="text" aria-label="Set notes">
+      </div>
     </div>
   </div>
-  <div id="progress"></div>
-  <div id="return-pill" role="button" aria-label="Back to current set">&#8592; NOW</div>
+  <div class="progress-area">
+    <div id="return-pill" role="button" aria-label="Back to current set">&#8592; NOW</div>
+    <div id="progress"></div>
+  </div>
 </div>
 
 <div id="settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
@@ -928,19 +985,28 @@ function renderDifficulty(log) {
     btn.classList.toggle('selected', Number(btn.dataset.diff) === currentDiff);
   });
 }
+function renderSetLabel() {
+  if (!elSetLabelText) return;
+  const setIdx = isBrowsing() ? viewingSet : currentSet;
+  elSetLabelText.textContent = "S" + (setIdx + 1);
+}
 function syncLogArea() {
   const log = getActiveLogForEdit();
   if (log) {
     repCount = log.reps;
     elRepCount.textContent = log.reps;
     elNotesInput.value = log.note || "";
-  } else if (isBrowsing()) {
-    const ex = workout[viewingExercise];
+  } else {
+    // No active log (pre-first-Set-Done, or browsing a future set) — show
+    // default reps for the exercise being displayed so the row isn't empty.
+    const exIdx = isBrowsing() ? viewingExercise : currentExercise;
+    const ex = workout[exIdx];
     repCount = ex ? getMaxReps(ex.reps) : 0;
     elRepCount.textContent = repCount;
     elNotesInput.value = "";
   }
   renderDifficulty(log);
+  renderSetLabel();
 }
 let state = "ready";
 let timerInterval = null;
@@ -987,6 +1053,7 @@ const elSettingsClose = document.getElementById("settings-close");
 const elToggleAutoStart = document.getElementById("toggle-autostart");
 const elReturnPill = document.getElementById("return-pill");
 const elDifficultyRow = document.getElementById("difficulty-row");
+const elSetLabelText = document.getElementById("set-label-text");
 const elEditModal = document.getElementById("edit-modal");
 const elEditExercise = document.getElementById("edit-exercise");
 const elEditSet = document.getElementById("edit-set");
@@ -1293,7 +1360,7 @@ function applyState(notesValue) {
       elBtn.textContent = "Start Set";
       elBtn.className = "go";
       elSkip.style.display = "none";
-      hideLogArea();
+      elLogArea.style.display = "flex";
       startFlash();
       triggerAlertFeedback();
     } else {
@@ -1319,7 +1386,7 @@ function applyState(notesValue) {
     elBtn.textContent = "Start Set";
     elBtn.className = "go";
     elSkip.style.display = "none";
-    hideLogArea();
+    elLogArea.style.display = "flex";
     elNotesInput.value = notesValue;
     startFlash();
     triggerAlertFeedback();
@@ -1352,7 +1419,7 @@ function applyState(notesValue) {
     elBtn.textContent = "Set Done";
     elBtn.className = "";
     elSkip.style.display = "none";
-    hideLogArea();
+    elLogArea.style.display = "flex";
     elNotesInput.value = notesValue;
   } else {
     renderExercise();
@@ -1362,15 +1429,17 @@ function applyState(notesValue) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
     elReturnPill.classList.add('visible');
-    elTimer.style.visibility = 'hidden';
-    elTimerLabel.style.visibility = 'hidden';
+    elTimer.classList.add('browsing');
+    elTimerLabel.classList.add('browsing');
     elLogArea.style.display = 'flex';
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
     elReturnPill.classList.remove('visible');
-    elTimer.style.visibility = '';
-    elTimerLabel.style.visibility = '';
+    elTimer.classList.remove('browsing');
+    elTimerLabel.classList.remove('browsing');
+    // Keep log area visible in non-finished states (user can always see/edit notes)
+    if (state !== 'finished') elLogArea.style.display = 'flex';
   }
   // Sync log area UI (reps/notes/difficulty) with the active log entry.
   // Overrides per-branch elRepCount/elNotesInput values set above, ensuring
@@ -1476,7 +1545,8 @@ function restDone() {
   pushHistory();
   cancelRestNotif();
   captureLog();
-  hideLogArea();
+  // Log area stays visible across rest->ready/alert transition so user always
+  // has access to notes/reps/diff, even on the Start Set / Set Done screens.
   showRestRing(false);
 
   if (settings.autoStart) {
@@ -1496,6 +1566,8 @@ function restDone() {
     elSkip.style.display = "none";
     renderExercise();
   }
+  elLogArea.style.display = "flex";
+  syncLogArea();
   startFlash();
   updateNavButtons();
   // Defer audio/save so UI updates first (no perceptible lag)
@@ -1539,7 +1611,7 @@ function skipRest() {
   cancelRestNotif();
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   captureLog();
-  hideLogArea();
+  // Log area stays visible across skip (user still has notes/reps/diff UI)
   showRestRing(false);
   state = "ready";
   elTimer.textContent = "-:--";
@@ -1548,6 +1620,8 @@ function skipRest() {
   elBtn.className = "";
   elSkip.style.display = "none";
   renderExercise();
+  elLogArea.style.display = "flex";
+  syncLogArea();
   saveState();
 }
 
@@ -1633,15 +1707,15 @@ function cycleView(exIdx, setIdx) {
     elBtn.style.pointerEvents = 'none';
     // Force log area visible so user can see/edit the viewed set's reps+notes+diff
     elLogArea.style.display = 'flex';
-    // Hide rest timer UI — irrelevant when reviewing a past set. Timer keeps
-    // running internally so actual rest tracking is unaffected.
-    elTimer.style.visibility = 'hidden';
-    elTimerLabel.style.visibility = 'hidden';
+    // Replace timer UI with a subtle diagonal slash (no text) — rest-timer
+    // controls are inaccessible in view mode. Timer still runs internally.
+    elTimer.classList.add('browsing');
+    elTimerLabel.classList.add('browsing');
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
-    elTimer.style.visibility = '';
-    elTimerLabel.style.visibility = '';
+    elTimer.classList.remove('browsing');
+    elTimerLabel.classList.remove('browsing');
   }
   syncLogArea();
   saveState();
@@ -1654,10 +1728,10 @@ function returnToWorking() {
   elReturnPill.classList.remove('visible');
   elBtn.style.opacity = '';
   elBtn.style.pointerEvents = '';
-  elTimer.style.visibility = '';
-  elTimerLabel.style.visibility = '';
-  // Restore log area visibility based on workout state (hidden unless resting/paused/finishing)
-  if (state === "resting" || state === "paused" || state === "finishing") {
+  elTimer.classList.remove('browsing');
+  elTimerLabel.classList.remove('browsing');
+  // Log area is always visible except when workout is finished.
+  if (state !== 'finished') {
     elLogArea.style.display = 'flex';
   } else {
     elLogArea.style.display = 'none';
@@ -2126,7 +2200,6 @@ if (new URLSearchParams(location.search).has('reset')) {
 }
 
 elSkip.style.display = "none";
-hideLogArea();
 showRestRing(false);
 updateNavButtons();
 applySettingsToggles();
@@ -2134,6 +2207,9 @@ if (!restoreState()) {
   elTimer.textContent = "-:--";
   elTimerLabel.textContent = "";
   renderExercise();
+  // Log area is always visible except when workout is finished.
+  elLogArea.style.display = "flex";
+  syncLogArea();
 }
 </script>
 
