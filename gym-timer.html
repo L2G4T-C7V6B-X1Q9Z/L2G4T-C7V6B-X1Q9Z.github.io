@@ -54,7 +54,9 @@
     text-align: center;
     max-width: 300px;
     line-height: 1.45;
-    min-height: 16px;
+    /* Fixed height so 1/2/3-line notes don't shift the layout underneath. */
+    height: 48px;
+    overflow: hidden;
   }
   #timer-display {
     font-size: 76px;
@@ -78,16 +80,20 @@
 
   /* Main button + progress ring wrapper */
   .btn-wrap {
-    position: relative;
+    /* Positioned by JS (centerMainButton) so its vertical center sits exactly
+       at the midpoint of the timer-display bottom and the difficulty-row top,
+       ignoring timer-label / padding slop. Inline styles from JS override
+       these initial values. */
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     width: 184px;
     height: 184px;
-    /* Auto margins center btn-wrap vertically in whatever space remains
-       between the timer-label above and the (fixed) bottom-bar below. */
-    margin: auto 0;
+    margin: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
   }
   #main-btn {
     width: 180px;
@@ -392,11 +398,10 @@
     padding: 12px 24px 16px;
     width: 100%;
   }
-  #return-pill {
+  /* Side-pill buttons (absolute inside bottom-bar, left edge, fade+slide in). */
+  #return-pill, #set-current-btn {
     position: absolute;
     left: 14px;
-    top: 50%;
-    transform: translateY(-50%) translateX(-6px);
     z-index: 40;
     font-size: 10px;
     letter-spacing: 1.5px;
@@ -412,13 +417,18 @@
     -webkit-tap-highlight-color: transparent;
     opacity: 0;
     pointer-events: none;
+    transform: translateX(-6px);
     transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  #return-pill.visible {
+  #return-pill.visible, #set-current-btn.visible {
     opacity: 1;
     pointer-events: auto;
-    transform: translateY(-50%) translateX(0);
+    transform: translateX(0);
   }
+  /* NOW pill sits higher in the bottom-bar (log-area region). */
+  #return-pill { top: 24px; }
+  /* HERE pill sits in the progress-row region, below NOW. */
+  #set-current-btn { bottom: 32px; }
   .exercise-group {
     display: flex;
     flex-direction: column;
@@ -834,9 +844,10 @@
     </div>
   </div>
   <div class="progress-area">
-    <div id="return-pill" role="button" aria-label="Back to current set">&#8592; NOW</div>
     <div id="progress"></div>
   </div>
+  <div id="return-pill" role="button" aria-label="Back to current set">&#8592; NOW</div>
+  <div id="set-current-btn" role="button" aria-label="Set this as current set">&#8594; HERE</div>
 </div>
 
 <div id="settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
@@ -997,6 +1008,20 @@ function renderSetLabel() {
   const setIdx = isBrowsing() ? viewingSet : currentSet;
   elSetLabelText.textContent = "S" + (setIdx + 1);
 }
+// Position the main button so its vertical center sits at the midpoint of the
+// timer-display bottom and the difficulty-row top. This is computed from real
+// rendered coordinates so it stays accurate regardless of viewport size, note
+// length, or state. Called from init + renderExercise + resize.
+function centerMainButton() {
+  if (!elTimer || !elDifficultyRow || !elBtnWrap) return;
+  const timerRect = elTimer.getBoundingClientRect();
+  const diffRect = elDifficultyRow.getBoundingClientRect();
+  if (timerRect.height === 0 || diffRect.height === 0) return;
+  const midY = (timerRect.bottom + diffRect.top) / 2;
+  const btnH = elBtnWrap.offsetHeight || 184;
+  elBtnWrap.style.top = (midY - btnH / 2) + "px";
+  elBtnWrap.style.transform = "translateX(-50%)";
+}
 function syncLogArea() {
   const log = getActiveLogForEdit();
   if (log) {
@@ -1059,6 +1084,7 @@ const elSettingsModal = document.getElementById("settings-modal");
 const elSettingsClose = document.getElementById("settings-close");
 const elToggleAutoStart = document.getElementById("toggle-autostart");
 const elReturnPill = document.getElementById("return-pill");
+const elSetCurrentBtn = document.getElementById("set-current-btn");
 const elDifficultyRow = document.getElementById("difficulty-row");
 const elSetLabelText = document.getElementById("set-label-text");
 const elEditModal = document.getElementById("edit-modal");
@@ -1242,6 +1268,7 @@ function renderExercise() {
   }
   elNote.textContent = noteText;
   renderProgress();
+  requestAnimationFrame(centerMainButton);
 }
 
 function formatTime(seconds) {
@@ -1431,17 +1458,19 @@ function applyState(notesValue) {
   } else {
     renderExercise();
   }
-  // Disable main button + show return-pill while browsing
+  // Disable main button + show return/here pills while browsing
   if (isBrowsing()) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
     elReturnPill.classList.add('visible');
+    elSetCurrentBtn.classList.add('visible');
     elBtn.classList.add('browsing');
     elLogArea.style.display = 'flex';
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
     elReturnPill.classList.remove('visible');
+    elSetCurrentBtn.classList.remove('visible');
     elBtn.classList.remove('browsing');
     // Keep log area visible in non-finished states (user can always see/edit notes)
     if (state !== 'finished') elLogArea.style.display = 'flex';
@@ -1707,13 +1736,14 @@ function cycleView(exIdx, setIdx) {
   viewingSet = setIdx;
   renderExercise();
   elReturnPill.classList.toggle('visible', isBrowsing());
+  elSetCurrentBtn.classList.toggle('visible', isBrowsing());
   if (isBrowsing()) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
     // Force log area visible so user can see/edit the viewed set's reps+notes+diff
     elLogArea.style.display = 'flex';
-    // Replace timer UI with a subtle diagonal slash (no text) — rest-timer
-    // controls are inaccessible in view mode. Timer still runs internally.
+    // Diagonal slash across the main button signals "Set Done" is inaccessible
+    // in view mode. Rest-timer continues running internally.
     elBtn.classList.add('browsing');
   } else {
     elBtn.style.opacity = '';
@@ -1729,6 +1759,7 @@ function returnToWorking() {
   viewingSet = currentSet;
   renderExercise();
   elReturnPill.classList.remove('visible');
+  elSetCurrentBtn.classList.remove('visible');
   elBtn.style.opacity = '';
   elBtn.style.pointerEvents = '';
   elBtn.classList.remove('browsing');
@@ -1822,6 +1853,7 @@ function finishWorkout() {
   elSkip.style.display = "none";
   elProgress.style.display = "none";
   elReturnPill.classList.remove('visible');
+  elSetCurrentBtn.classList.remove('visible');
   elSettingsBtn.style.display = "none";
   elDone.style.display = "block";
   elSummary.innerHTML = buildSummaryHTML();
@@ -1972,6 +2004,23 @@ elDifficultyRow.addEventListener("click", (e) => {
   saveState();
 });
 elReturnPill.addEventListener("click", returnToWorking);
+elSetCurrentBtn.addEventListener("click", () => {
+  // Set the currently-viewed set as the new working position.
+  // Only functional while browsing (viewing != working).
+  if (!isBrowsing()) return;
+  pushHistory();
+  currentExercise = viewingExercise;
+  currentSet = viewingSet;
+  // viewing now equals working, so isBrowsing() is false.
+  elReturnPill.classList.remove('visible');
+  elSetCurrentBtn.classList.remove('visible');
+  elBtn.classList.remove('browsing');
+  elBtn.style.opacity = '';
+  elBtn.style.pointerEvents = '';
+  renderExercise();
+  syncLogArea();
+  saveState();
+});
 
 // ============ DRAG REORDER (SortableJS) + TAP-TO-JUMP ============
 // Long-press threshold (600ms) + wide touchStartThreshold (15px) keeps
@@ -2213,6 +2262,11 @@ if (!restoreState()) {
   elLogArea.style.display = "flex";
   syncLogArea();
 }
+// Center main button after initial layout settles, and on any resize.
+requestAnimationFrame(centerMainButton);
+setTimeout(centerMainButton, 50);
+window.addEventListener("resize", centerMainButton);
+window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
 </body>
