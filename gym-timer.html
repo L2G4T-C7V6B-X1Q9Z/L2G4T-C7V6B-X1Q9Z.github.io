@@ -398,13 +398,21 @@
     padding: 12px 24px 16px;
     width: 100%;
   }
-  /* NOW + SET pills stack tightly above the main button (inside .btn-wrap).
-     NOW sits right above main-btn; SET sits right above NOW.
-     Horizontally centered on the main button. Fade+slide in/out. */
-  #return-pill, #set-current-btn {
+  /* NOW + SET pills stacked vertically on the LEFT side of the progress row,
+     next to the exercise-name labels. Fade + slide-in from the left. */
+  .pills-stack {
     position: absolute;
-    left: 50%;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
     z-index: 40;
+    pointer-events: none;
+  }
+  #return-pill, #set-current-btn {
     font-size: 10px;
     letter-spacing: 1.5px;
     color: #c0392b;
@@ -412,25 +420,21 @@
     border: 1px solid rgba(192, 57, 43, 0.55);
     border-radius: 999px;
     text-transform: uppercase;
-    padding: 7px 14px;
+    padding: 6px 10px;
     cursor: pointer;
     text-align: center;
     white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
     opacity: 0;
     pointer-events: none;
-    transform: translateX(-50%) translateY(-4px);
+    transform: translateX(-8px);
     transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1), transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
   #return-pill.visible, #set-current-btn.visible {
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(0);
   }
-  /* NOW sits 10px above btn-wrap (its bottom edge is 10px above btn-wrap top). */
-  #return-pill { bottom: calc(100% + 10px); }
-  /* SET sits right above NOW with a tight 4px gap (stacked on top). */
-  #set-current-btn { bottom: calc(100% + 46px); }
   .exercise-group {
     display: flex;
     flex-direction: column;
@@ -811,8 +815,6 @@
 <div id="timer-display" role="timer" aria-live="polite" aria-atomic="true"></div>
 <div id="timer-label"></div>
 <div class="btn-wrap" id="btn-wrap">
-  <div id="set-current-btn" role="button" aria-label="Set this as current set">&darr; SET</div>
-  <div id="return-pill" role="button" aria-label="Back to current set">&larr; NOW</div>
   <button id="main-btn" aria-label="Set done or rest control">Set Done</button>
   <svg id="rest-ring" viewBox="0 0 184 184" aria-hidden="true">
     <circle id="rest-ring-track" cx="92" cy="92" r="88"></circle>
@@ -848,6 +850,10 @@
     </div>
   </div>
   <div class="progress-area">
+    <div class="pills-stack">
+      <div id="return-pill" role="button" aria-label="Back to current set">&larr; NOW</div>
+      <div id="set-current-btn" role="button" aria-label="Set this as current set">&darr; SET</div>
+    </div>
     <div id="progress"></div>
   </div>
 </div>
@@ -903,11 +909,11 @@ const workout = [
     name: "Chest Press Machine",
     sets: 3,
     reps: "8-12",
-    weight: "110 or 115 lbs (NEW)",
+    weight: "110 lbs (NEW)",
     rest: 180,
-    note: "PROGRESSION -- up one notch from 100. Last session: 100 x 12/12/10.5 (Apr 20) -- trigger met (12/12/10+). Pull pin up ONE, read the stamp to confirm whether it's 110 (+10 increment) or 115 (+15 increment). Full ROM (bar deep to chest, not shallow).",
+    note: "PROGRESSION -- up one notch from 100. Last session: 100 x 12/12/10.5 (Apr 20) -- trigger met (12/12/10+). Chest Press increment confirmed 10 lb. Full ROM (bar deep to chest, not shallow).",
     setNotes: [
-      "First set at 110 or 115. Feel it out. 8+ is green. If S1 is ugly, drop back to 100.",
+      "First set at 110. Feel it out. 8+ is green. If S1 is ugly, drop back to 100.",
       "Match S1. Controlled 2s eccentric. No rushed reps.",
       "Last set. Push to 0-1 RIR. Goal: 8+ across all 3."
     ]
@@ -1021,11 +1027,7 @@ function centerMainButton() {
   if (timerRect.height === 0 || diffRect.height === 0) return;
   const midY = (timerRect.bottom + diffRect.top) / 2;
   const btnH = elBtnWrap.offsetHeight || 184;
-  // Shift up by ~40px (roughly one pill-row height) so the NOW/SET stack
-  // above btn-wrap sits in the upper half of the mid-space instead of
-  // colliding with the timer.
-  const upShift = 40;
-  elBtnWrap.style.top = (midY - btnH / 2 - upShift) + "px";
+  elBtnWrap.style.top = (midY - btnH / 2) + "px";
   elBtnWrap.style.transform = "translateX(-50%)";
 }
 function syncLogArea() {
