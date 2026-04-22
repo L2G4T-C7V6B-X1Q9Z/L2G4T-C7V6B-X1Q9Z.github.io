@@ -1801,7 +1801,24 @@ function summaryDateStr() {
 function getTotalDuration() {
   const ts = setLogs.filter(l => l.timestamp).map(l => l.timestamp);
   if (ts.length < 2) return null;
-  return Math.max(...ts) - Math.min(...ts);
+  const raw = Math.max(...ts) - Math.min(...ts);
+  // S1 of the first-performed exercise has no "start" timestamp — only the
+  // Set Done press when it finished. That means its perform-time is missing
+  // from the raw max-min diff. Estimate it by averaging the gaps between
+  // consecutive sets in that same exercise (gap12 + gap23 / 2, etc.), then
+  // add that estimate to the raw total.
+  const logsWithTs = setLogs.filter(l => l.timestamp).slice().sort((a, b) => a.timestamp - b.timestamp);
+  const firstExIdx = logsWithTs[0].exercise;
+  const firstExLogs = setLogs
+    .filter(l => l.exercise === firstExIdx && l.timestamp)
+    .sort((a, b) => a.set - b.set);
+  if (firstExLogs.length < 2) return raw;
+  let gapSum = 0;
+  for (let i = 1; i < firstExLogs.length; i++) {
+    gapSum += firstExLogs[i].timestamp - firstExLogs[i - 1].timestamp;
+  }
+  const avgGap = gapSum / (firstExLogs.length - 1);
+  return raw + avgGap;
 }
 const DIFFICULTY_LABELS = ['', 'EASY', 'LIGHT', 'MOD', 'HARD', 'MAX'];
 function formatDifficulty(log) {
