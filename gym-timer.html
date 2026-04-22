@@ -1013,7 +1013,14 @@ function renderDifficulty(log) {
 }
 function renderSetLabel() {
   if (!elSetLabelText) return;
-  const setIdx = isBrowsing() ? viewingSet : currentSet;
+  // The label should show the set# of whatever log is actively being edited,
+  // not the cursor position. During rest after Set Done, the cursor points at
+  // the upcoming set (currentSet++) but the active log + log-area fields are
+  // for the set just completed. Using the active log keeps them in sync.
+  const activeLog = getActiveLogForEdit();
+  const setIdx = activeLog
+    ? activeLog.set
+    : (isBrowsing() ? viewingSet : currentSet);
   elSetLabelText.textContent = "S" + (setIdx + 1);
 }
 // Position the main button so its vertical center sits at the midpoint of
