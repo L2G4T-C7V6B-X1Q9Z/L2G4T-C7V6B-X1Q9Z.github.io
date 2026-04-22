@@ -209,14 +209,51 @@
   /* Bottom logging area */
   #log-area {
     display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: auto;
+    padding: 10px 20px 12px;
+    width: 100%;
+    max-width: 360px;
+  }
+  .log-row {
+    display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: center;
     gap: 16px;
-    margin-top: auto;
-    padding: 12px 20px;
     width: 100%;
-    max-width: 360px;
+  }
+  #difficulty-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+  }
+  .diff-btn {
+    flex: 1;
+    max-width: 68px;
+    background: transparent;
+    color: #777;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 6px 2px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .diff-btn:active { background: #1e1e1e; }
+  .diff-btn.selected {
+    background: #c0392b;
+    color: #fff;
+    border-color: #c0392b;
   }
   #rep-counter {
     display: flex;
@@ -300,15 +337,30 @@
     width: 100%;
   }
   #return-pill {
+    position: fixed;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 40;
     font-size: 10px;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
     color: #c0392b;
+    background: rgba(26, 26, 26, 0.94);
+    border: 1px solid rgba(192, 57, 43, 0.55);
+    border-radius: 999px;
     text-transform: uppercase;
-    padding: 6px 0;
+    padding: 10px 14px;
     cursor: pointer;
     text-align: center;
-    width: 100%;
+    white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+  #return-pill.visible {
+    opacity: 1;
+    pointer-events: auto;
   }
   .exercise-group {
     display: flex;
@@ -709,16 +761,25 @@
 
 <div id="bottom-bar">
   <div id="log-area">
-    <div id="rep-label">REPS</div>
-    <div id="rep-counter">
-      <button class="rep-btn" id="rep-minus" aria-label="Decrease reps">-</button>
-      <div id="rep-count" aria-live="polite">10</div>
-      <button class="rep-btn" id="rep-plus" aria-label="Increase reps">+</button>
+    <div id="difficulty-row">
+      <button class="diff-btn" data-diff="1" aria-label="Easy">EASY</button>
+      <button class="diff-btn" data-diff="2" aria-label="Moderate">MOD</button>
+      <button class="diff-btn" data-diff="3" aria-label="Hard">HARD</button>
+      <button class="diff-btn" data-diff="4" aria-label="Very hard">V.HARD</button>
+      <button class="diff-btn" data-diff="5" aria-label="Maximum effort">MAX</button>
     </div>
-    <input type="text" id="notes-input" placeholder="notes..." inputmode="text" aria-label="Set notes">
+    <div class="log-row">
+      <div id="rep-label">REPS</div>
+      <div id="rep-counter">
+        <button class="rep-btn" id="rep-minus" aria-label="Decrease reps">-</button>
+        <div id="rep-count" aria-live="polite">10</div>
+        <button class="rep-btn" id="rep-plus" aria-label="Increase reps">+</button>
+      </div>
+      <input type="text" id="notes-input" placeholder="notes..." inputmode="text" aria-label="Set notes">
+    </div>
   </div>
   <div id="progress"></div>
-  <div id="return-pill" style="display:none">BACK TO CURRENT</div>
+  <div id="return-pill" role="button" aria-label="Back to current set">&#8592; NOW</div>
 </div>
 
 <div id="settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
@@ -858,6 +919,36 @@ let viewingSet = 0;
 function isBrowsing() {
   return viewingExercise !== currentExercise || viewingSet !== currentSet;
 }
+// Returns the log entry to display/edit in the log area.
+// - Browsing: the viewed set's log (may be null for future sets)
+// - Working (during rest): currentLogEntry = just-completed set's log
+function getActiveLogForEdit() {
+  if (isBrowsing()) {
+    return setLogs.find(l => l.exercise === viewingExercise && l.set === viewingSet) || null;
+  }
+  return currentLogEntry || null;
+}
+function renderDifficulty(log) {
+  if (!elDifficultyRow) return;
+  const currentDiff = log ? log.difficulty : null;
+  elDifficultyRow.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.classList.toggle('selected', Number(btn.dataset.diff) === currentDiff);
+  });
+}
+function syncLogArea() {
+  const log = getActiveLogForEdit();
+  if (log) {
+    repCount = log.reps;
+    elRepCount.textContent = log.reps;
+    elNotesInput.value = log.note || "";
+  } else if (isBrowsing()) {
+    const ex = workout[viewingExercise];
+    repCount = ex ? getMaxReps(ex.reps) : 0;
+    elRepCount.textContent = repCount;
+    elNotesInput.value = "";
+  }
+  renderDifficulty(log);
+}
 let state = "ready";
 let timerInterval = null;
 let restRemaining = 0;
@@ -902,6 +993,7 @@ const elSettingsModal = document.getElementById("settings-modal");
 const elSettingsClose = document.getElementById("settings-close");
 const elToggleAutoStart = document.getElementById("toggle-autostart");
 const elReturnPill = document.getElementById("return-pill");
+const elDifficultyRow = document.getElementById("difficulty-row");
 const elEditModal = document.getElementById("edit-modal");
 const elEditExercise = document.getElementById("edit-exercise");
 const elEditSet = document.getElementById("edit-set");
@@ -1124,23 +1216,17 @@ function showRestRing(show, paused) {
 // ============ LOG AREA ============
 function showLogArea(exerciseIdx) {
   logExerciseIndex = exerciseIdx;
-  // Default reps to MAX of the rep range for the exercise
-  repCount = getMaxReps(workout[exerciseIdx].reps);
-  elRepCount.textContent = repCount;
-  elNotesInput.value = "";
   elNotesInput.placeholder = "notes...";
   elLogArea.style.display = "flex";
+  syncLogArea();
 }
 function hideLogArea() {
   elLogArea.style.display = "none";
 }
 function captureLog() {
-  if (currentLogEntry) {
-    const note = elNotesInput.value.trim();
-    currentLogEntry.reps = repCount;
-    currentLogEntry.note = note;
-    currentLogEntry = null;
-  }
+  // Reps/notes/difficulty are saved in real-time via input handlers.
+  // This just clears the active log reference at transition points.
+  currentLogEntry = null;
 }
 
 // ============ TIMER LOOP ============
@@ -1284,12 +1370,16 @@ function applyState(notesValue) {
   if (isBrowsing()) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
-    elReturnPill.style.display = 'block';
+    elReturnPill.classList.add('visible');
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
-    elReturnPill.style.display = 'none';
+    elReturnPill.classList.remove('visible');
   }
+  // Sync log area UI (reps/notes/difficulty) with the active log entry.
+  // Overrides per-branch elRepCount/elNotesInput values set above, ensuring
+  // UI matches whichever log is being edited (current working or viewed).
+  if (elLogArea.style.display === 'flex') syncLogArea();
   updateNavButtons();
 }
 function pushHistory() {
@@ -1323,8 +1413,9 @@ function setDone() {
   const logEntry = {
     exercise: currentExercise,
     set: currentSet,
-    reps: 0,
+    reps: getMaxReps(workout[currentExercise].reps),
     note: "",
+    difficulty: null,
     timestamp: Date.now()
   };
   setLogs.push(logEntry);
@@ -1540,7 +1631,7 @@ function cycleView(exIdx, setIdx) {
   viewingExercise = exIdx;
   viewingSet = setIdx;
   renderProgress();
-  elReturnPill.style.display = isBrowsing() ? 'block' : 'none';
+  elReturnPill.classList.toggle('visible', isBrowsing());
   if (isBrowsing()) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
@@ -1548,6 +1639,7 @@ function cycleView(exIdx, setIdx) {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
   }
+  syncLogArea();
   saveState();
 }
 
@@ -1555,9 +1647,10 @@ function returnToWorking() {
   viewingExercise = currentExercise;
   viewingSet = currentSet;
   renderProgress();
-  elReturnPill.style.display = 'none';
+  elReturnPill.classList.remove('visible');
   elBtn.style.opacity = '';
   elBtn.style.pointerEvents = '';
+  syncLogArea();
   saveState();
 }
 
@@ -1570,6 +1663,10 @@ function getTotalDuration() {
   if (ts.length < 2) return null;
   return Math.max(...ts) - Math.min(...ts);
 }
+const DIFFICULTY_LABELS = ['', 'EASY', 'MOD', 'HARD', 'V.HARD', 'MAX'];
+function formatDifficulty(log) {
+  return (log && log.difficulty) ? ' [' + DIFFICULTY_LABELS[log.difficulty] + ']' : '';
+}
 function buildSummary() {
   let text = dayType + " -- " + summaryDateStr() + "\n\n";
   for (let i = 0; i < workout.length; i++) {
@@ -1581,8 +1678,9 @@ function buildSummary() {
     for (let j = 0; j < ex.sets; j++) {
       const log = setLogs.find(l => l.exercise === i && l.set === j);
       if (log) {
+        const diff = formatDifficulty(log);
         const note = log.note ? " -- " + log.note : "";
-        text += "  S" + (j + 1) + ": " + log.reps + " reps" + note + "\n";
+        text += "  S" + (j + 1) + ": " + log.reps + " reps" + diff + note + "\n";
       } else {
         text += "  S" + (j + 1) + ": -\n";
       }
@@ -1604,8 +1702,9 @@ function buildSummaryHTML() {
     for (let j = 0; j < ex.sets; j++) {
       const log = setLogs.find(l => l.exercise === i && l.set === j);
       if (log) {
+        const diff = formatDifficulty(log);
         const note = log.note ? ' -- ' + log.note : '';
-        html += '<div class="set-line">S' + (j + 1) + ': <span class="set-note">' + log.reps + ' reps' + note + '</span></div>';
+        html += '<div class="set-line">S' + (j + 1) + ': <span class="set-note">' + log.reps + ' reps' + diff + note + '</span></div>';
       } else {
         html += '<div class="set-line">S' + (j + 1) + ': -</div>';
       }
@@ -1634,7 +1733,7 @@ function finishWorkout() {
   elBtnWrap.style.display = "none";
   elSkip.style.display = "none";
   elProgress.style.display = "none";
-  elReturnPill.style.display = "none";
+  elReturnPill.classList.remove('visible');
   elSettingsBtn.style.display = "none";
   elDone.style.display = "block";
   elSummary.innerHTML = buildSummaryHTML();
@@ -1744,20 +1843,84 @@ elSkip.addEventListener("click", (e) => {
 });
 elRepMinus.addEventListener("click", (e) => {
   e.stopPropagation();
-  if (repCount > 0) { repCount--; elRepCount.textContent = repCount; saveState(); }
+  const log = getActiveLogForEdit();
+  if (log) {
+    log.reps = Math.max(0, log.reps - 1);
+    elRepCount.textContent = log.reps;
+    if (log === currentLogEntry) repCount = log.reps;
+  } else if (repCount > 0) {
+    repCount--;
+    elRepCount.textContent = repCount;
+  }
+  saveState();
 });
 elRepPlus.addEventListener("click", (e) => {
   e.stopPropagation();
-  repCount++; elRepCount.textContent = repCount; saveState();
+  const log = getActiveLogForEdit();
+  if (log) {
+    log.reps += 1;
+    elRepCount.textContent = log.reps;
+    if (log === currentLogEntry) repCount = log.reps;
+  } else {
+    repCount++;
+    elRepCount.textContent = repCount;
+  }
+  saveState();
 });
-elNotesInput.addEventListener("input", () => saveState());
+elNotesInput.addEventListener("input", () => {
+  const log = getActiveLogForEdit();
+  if (log) log.note = elNotesInput.value;
+  saveState();
+});
+elDifficultyRow.addEventListener("click", (e) => {
+  const btn = e.target.closest('.diff-btn');
+  if (!btn) return;
+  const diff = Number(btn.dataset.diff);
+  if (!diff) return;
+  const log = getActiveLogForEdit();
+  if (!log) return;
+  log.difficulty = (log.difficulty === diff) ? null : diff;
+  renderDifficulty(log);
+  saveState();
+});
 elReturnPill.addEventListener("click", returnToWorking);
 
 // ============ DRAG REORDER (SortableJS) + TAP-TO-JUMP ============
-// Drag-reorder TEMPORARILY DISABLED 2026-04-22 — SortableJS was intercepting
-// short taps (tap-to-cycle wasn't firing) and the fallback clone was offset
-// from the finger. Tap-to-cycle via click delegation below still works.
-// Will rebuild drag UX properly later (likely with explicit drag handle).
+// Long-press threshold (600ms) + wide touchStartThreshold (15px) keeps
+// taps from accidentally triggering drag. fallbackOnBody:false anchors
+// the clone inside #progress so drag position matches the finger.
+// direction:'horizontal' matches the actual row layout.
+const sortable = Sortable.create(elProgress, {
+  animation: 180,
+  easing: "cubic-bezier(0.2, 0, 0, 1)",
+  delay: 600,
+  delayOnTouchOnly: true,
+  touchStartThreshold: 15,
+  forceFallback: true,
+  fallbackTolerance: 6,
+  fallbackOnBody: false,
+  direction: 'horizontal',
+  draggable: '.exercise-group',
+  ghostClass: "sortable-ghost",
+  chosenClass: "sortable-chosen",
+  dragClass: "sortable-drag",
+
+  onChoose() {
+    if (elEditModal.classList.contains("show") || elSettingsModal.classList.contains("show")) {
+      sortable.option("disabled", true);
+      queueMicrotask(() => sortable.option("disabled", false));
+      return;
+    }
+    document.body.classList.add("dragging-exercise");
+  },
+  onEnd(evt) {
+    setTimeout(() => document.body.classList.remove("dragging-exercise"), 50);
+    const from = evt.oldIndex;
+    const to = evt.newIndex;
+    if (from == null || to == null || from === to) return;
+    reorderExercise(from, to);
+  },
+});
 
 // Short-tap-to-jump: SortableJS only captures the pointer after 450ms, so a
 // quick tap still fires a normal click. Delegate one handler on #progress.
