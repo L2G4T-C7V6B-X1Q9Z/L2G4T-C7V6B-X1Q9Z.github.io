@@ -1623,6 +1623,8 @@ function cycleView(exIdx, setIdx) {
   if (isBrowsing()) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
+    // Force log area visible so user can see/edit the viewed set's reps+notes+diff
+    elLogArea.style.display = 'flex';
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
@@ -1638,6 +1640,12 @@ function returnToWorking() {
   elReturnPill.classList.remove('visible');
   elBtn.style.opacity = '';
   elBtn.style.pointerEvents = '';
+  // Restore log area visibility based on workout state (hidden unless resting/paused/finishing)
+  if (state === "resting" || state === "paused" || state === "finishing") {
+    elLogArea.style.display = 'flex';
+  } else {
+    elLogArea.style.display = 'none';
+  }
   syncLogArea();
   saveState();
 }
@@ -1910,46 +1918,38 @@ const sortable = Sortable.create(elProgress, {
   },
 });
 
-// Short-tap-to-jump via pointer events. SortableJS fallback mode can eat
-// synthetic click events on iOS, so we track pointerdown/pointerup ourselves
-// and fire the cycle if (a) no drag was initiated, (b) release was quick,
-// (c) finger barely moved. Dot taps are handled in the same handler.
+// Tap-to-cycle via RAW touch events (bypasses SortableJS's click suppression
+// on iOS). Click fallback for desktop mouse. Dedupe with lastTapTime so we
+// don't double-fire when iOS generates a synthetic click after touchend.
 let tapStart = null;
-elProgress.addEventListener("pointerdown", (e) => {
-  if (!e.isPrimary) return;
-  tapStart = { x: e.clientX, y: e.clientY, time: Date.now(), target: e.target };
-}, { passive: true });
-elProgress.addEventListener("pointerup", (e) => {
-  if (!tapStart) return;
-  const info = tapStart;
-  tapStart = null;
-  if (document.body.classList.contains("dragging-exercise")) return;
-  if (elEditModal.classList.contains("show") || elSettingsModal.classList.contains("show")) return;
-  if (Date.now() - info.time > 550) return;
-  if (Math.abs(e.clientX - info.x) > 10 || Math.abs(e.clientY - info.y) > 10) return;
+let lastTouchTapTime = 0;
 
-  // Dot tap? Jump directly to that exact set (or return to working if tapping
-  // the active dot while browsing).
-  const dotEl = info.target.classList && info.target.classList.contains("dot")
-    ? info.target
-    : (info.target.closest ? info.target.closest(".dot") : null);
+function handleTap(target) {
+  if (!target) return false;
+  if (document.body.classList.contains("dragging-exercise")) return false;
+  if (elEditModal.classList.contains("show") || elSettingsModal.classList.contains("show")) return false;
+
+  // Dot tap? Jump to that exact set (or return to working if tapping the
+  // active dot while browsing).
+  const dotEl = (target.classList && target.classList.contains("dot"))
+    ? target
+    : (target.closest ? target.closest(".dot") : null);
   if (dotEl && dotEl.dataset && dotEl.dataset.exerciseIdx != null) {
     const exIdx = Number(dotEl.dataset.exerciseIdx);
     const setIdx = Number(dotEl.dataset.setIdx);
-    if (!Number.isFinite(exIdx) || !Number.isFinite(setIdx)) return;
+    if (!Number.isFinite(exIdx) || !Number.isFinite(setIdx)) return false;
     if (exIdx === currentExercise && setIdx === currentSet && isBrowsing()) {
       returnToWorking();
     } else {
       cycleView(exIdx, setIdx);
     }
-    return;
+    return true;
   }
 
-  // Otherwise label/group tap → cycle sets within exercise
-  const group = info.target.closest(".exercise-group");
-  if (!group || !elProgress.contains(group)) return;
+  const group = target.closest ? target.closest(".exercise-group") : null;
+  if (!group || !elProgress.contains(group)) return false;
   const exIdx = Number(group.dataset.exerciseIdx);
-  if (!Number.isFinite(exIdx)) return;
+  if (!Number.isFinite(exIdx)) return false;
   if (exIdx === viewingExercise) {
     const ex = workout[exIdx];
     const nextSet = (viewingSet + 1) % ex.sets;
@@ -1957,6 +1957,47 @@ elProgress.addEventListener("pointerup", (e) => {
   } else {
     cycleView(exIdx, 0);
   }
+  return true;
+}
+
+elProgress.addEventListener("touchstart", (e) => {
+  if (e.touches.length !== 1) { tapStart = null; return; }
+  const t = e.touches[0];
+  tapStart = { x: t.clientX, y: t.clientY, time: Date.now(), target: e.target };
+}, { passive: true });
+
+elProgress.addEventListener("touchmove", (e) => {
+  if (!tapStart) return;
+  const t = e.touches[0];
+  if (!t) return;
+  if (Math.abs(t.clientX - tapStart.x) > 15 || Math.abs(t.clientY - tapStart.y) > 15) {
+    tapStart = null;  // scrolling/dragging, not a tap
+  }
+}, { passive: true });
+
+elProgress.addEventListener("touchend", (e) => {
+  if (!tapStart) return;
+  const info = tapStart;
+  tapStart = null;
+  if (Date.now() - info.time > 700) return;
+  if (e.changedTouches && e.changedTouches[0]) {
+    const t = e.changedTouches[0];
+    if (Math.abs(t.clientX - info.x) > 15 || Math.abs(t.clientY - info.y) > 15) return;
+  }
+  if (handleTap(info.target)) {
+    lastTouchTapTime = Date.now();
+    // Best-effort: suppress the synthetic click iOS generates next.
+    try { e.preventDefault(); } catch (_) {}
+  }
+}, { passive: false });
+
+elProgress.addEventListener("touchcancel", () => { tapStart = null; }, { passive: true });
+
+// Desktop mouse fallback. Skip if this click is the synthetic one following
+// a touch tap we already processed.
+elProgress.addEventListener("click", (e) => {
+  if (Date.now() - lastTouchTapTime < 500) return;
+  handleTap(e.target);
 });
 
 // iOS may show the native text-selection callout on long-press. Preventing
