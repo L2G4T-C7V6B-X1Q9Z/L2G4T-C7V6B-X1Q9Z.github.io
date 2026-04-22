@@ -772,11 +772,11 @@ const workout = [
     name: "Chest Press Machine",
     sets: 3,
     reps: "8-12",
-    weight: "105 lbs (NEW)",
+    weight: "110 or 115 lbs (NEW)",
     rest: 180,
-    note: "PROGRESSION -- up one notch from 100. Last session: 100 x 12/12/10.5 (Apr 20) -- trigger met (12/12/10+). Pull pin up ONE, read the stamp to confirm whether it's +10 or +15 lb. Full ROM (bar deep to chest, not shallow).",
+    note: "PROGRESSION -- up one notch from 100. Last session: 100 x 12/12/10.5 (Apr 20) -- trigger met (12/12/10+). Pull pin up ONE, read the stamp to confirm whether it's 110 (+10 increment) or 115 (+15 increment). Full ROM (bar deep to chest, not shallow).",
     setNotes: [
-      "First set at 105. Feel it out. 8+ is green. If S1 is ugly, drop back to 100.",
+      "First set at 110 or 115. Feel it out. 8+ is green. If S1 is ugly, drop back to 100.",
       "Match S1. Controlled 2s eccentric. No rushed reps.",
       "Last set. Push to 0-1 RIR. Goal: 8+ across all 3."
     ]
@@ -1754,47 +1754,10 @@ elNotesInput.addEventListener("input", () => saveState());
 elReturnPill.addEventListener("click", returnToWorking);
 
 // ============ DRAG REORDER (SortableJS) + TAP-TO-JUMP ============
-// SortableJS handles long-press drag with iOS-style insert-with-gap behavior.
-// Short tap on an exercise (pre-long-press) fires the normal click event and
-// jumps to that exercise via event delegation below.
-const sortable = Sortable.create(elProgress, {
-  animation: 180,
-  easing: "cubic-bezier(0.2, 0, 0, 1)",
-  delay: 450,                 // long-press threshold (ms)
-  delayOnTouchOnly: true,     // mouse drags instantly; touch requires long-press
-  touchStartThreshold: 4,     // tiny finger wiggle doesn't cancel the press
-  forceFallback: true,        // bypass HTML5 DnD — required for iOS Safari
-  fallbackTolerance: 3,
-  fallbackOnBody: true,       // clone attaches to <body>, escapes overflow clipping
-  direction: "vertical",
-  draggable: ".exercise-group",
-  ghostClass: "sortable-ghost",
-  chosenClass: "sortable-chosen",
-  dragClass: "sortable-drag",
-
-  onChoose() {
-    // Block drag entirely if a modal is open
-    if (elEditModal.classList.contains("show") || elSettingsModal.classList.contains("show")) {
-      sortable.option("disabled", true);
-      queueMicrotask(() => sortable.option("disabled", false));
-      return;
-    }
-    document.body.classList.add("dragging-exercise");
-  },
-
-  onEnd(evt) {
-    // Delay removal so the synthetic click iOS fires after a long-press lift
-    // is suppressed by the click guard below.
-    setTimeout(() => document.body.classList.remove("dragging-exercise"), 50);
-    const from = evt.oldIndex;
-    const to = evt.newIndex;
-    if (from == null || to == null || from === to) return;
-    // SortableJS already moved the DOM node. reorderExercise() will re-render
-    // the progress list from the (now shuffled) workout array — but it also
-    // needs to run to remap currentExercise / setLogs / history.
-    reorderExercise(from, to);
-  },
-});
+// Drag-reorder TEMPORARILY DISABLED 2026-04-22 — SortableJS was intercepting
+// short taps (tap-to-cycle wasn't firing) and the fallback clone was offset
+// from the finger. Tap-to-cycle via click delegation below still works.
+// Will rebuild drag UX properly later (likely with explicit drag handle).
 
 // Short-tap-to-jump: SortableJS only captures the pointer after 450ms, so a
 // quick tap still fires a normal click. Delegate one handler on #progress.
