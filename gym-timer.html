@@ -50,13 +50,17 @@
     font-size: 11px;
     color: #777;
     font-style: italic;
-    margin-bottom: 24px;
+    margin-bottom: 8px;
     text-align: center;
     max-width: 300px;
-    line-height: 1.45;
-    /* Fixed height so 1/2/3-line notes don't shift the layout underneath. */
-    height: 48px;
+    line-height: 1.35;
+    /* Fixed height so 1/2/3-line notes don't shift the layout underneath.
+       Flex-centered so 1-line notes don't leave dead space below. */
+    height: 34px;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   #timer-display {
     font-size: 76px;
@@ -520,17 +524,19 @@
     animation: mazda-edge 0.7s ease-out infinite;
   }
 
-  /* Just-completed dot echoes a white ghost rightward toward the next dot. */
+  /* Just-completed dot echoes a white ghost rightward toward the next dot.
+     Positioned via 50% + translate so it stays aligned with the dot's visual
+     center even when the dot has a border (e.g. .dot.cursor while browsing). */
   @keyframes echo-travel {
-    0%   { transform: translateX(0);    opacity: 0.85; }
-    80%  { opacity: 0; }
-    100% { transform: translateX(13px); opacity: 0; }
+    0%   { transform: translate(-50%, -50%) translateX(0);    opacity: 0.85; }
+    80%  { transform: translate(-50%, -50%) translateX(8px);  opacity: 0; }
+    100% { transform: translate(-50%, -50%) translateX(13px); opacity: 0; }
   }
   .dot.completed.echoing::after {
     content: "";
     position: absolute;
-    top: 0;
-    left: 0;
+    top: 50%;
+    left: 50%;
     width: 8px;
     height: 8px;
     border-radius: 50%;
