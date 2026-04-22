@@ -79,7 +79,7 @@
     position: relative;
     width: 184px;
     height: 184px;
-    margin: auto 0;
+    margin: 24px 0 28px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -259,21 +259,23 @@
     gap: 4px;
     width: 100%;
   }
-  /* Timer shows a subtle diagonal slash (no text) while browsing a past set,
-     signalling rest-timer controls are not accessible in view mode. */
-  #timer-display.browsing { color: transparent; position: relative; }
-  #timer-display.browsing::before {
+  /* Main button gets a 45deg diagonal slash while browsing a past set —
+     signals "Set Done" (and related actions) are inaccessible in view mode.
+     Timer text stays readable. Main-btn is given position:relative so the
+     pseudo-element anchors to it. */
+  #main-btn { position: relative; }
+  #main-btn.browsing::before {
     content: '';
     position: absolute;
     top: 50%;
-    left: 26%;
-    right: 26%;
-    height: 1.5px;
-    background: #555;
-    transform: translateY(-50%) rotate(-15deg);
+    left: 12%;
+    right: 12%;
+    height: 2px;
+    background: rgba(192, 57, 43, 0.7);
+    transform: translateY(-50%) rotate(-45deg);
     pointer-events: none;
+    z-index: 2;
   }
-  #timer-label.browsing { color: transparent; }
   /* Container for return-pill + progress, so return-pill can absolute-position
      relative to the progress row (left side) without displacing dots. */
   .progress-area {
@@ -1429,15 +1431,13 @@ function applyState(notesValue) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
     elReturnPill.classList.add('visible');
-    elTimer.classList.add('browsing');
-    elTimerLabel.classList.add('browsing');
+    elBtn.classList.add('browsing');
     elLogArea.style.display = 'flex';
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
     elReturnPill.classList.remove('visible');
-    elTimer.classList.remove('browsing');
-    elTimerLabel.classList.remove('browsing');
+    elBtn.classList.remove('browsing');
     // Keep log area visible in non-finished states (user can always see/edit notes)
     if (state !== 'finished') elLogArea.style.display = 'flex';
   }
@@ -1709,13 +1709,11 @@ function cycleView(exIdx, setIdx) {
     elLogArea.style.display = 'flex';
     // Replace timer UI with a subtle diagonal slash (no text) — rest-timer
     // controls are inaccessible in view mode. Timer still runs internally.
-    elTimer.classList.add('browsing');
-    elTimerLabel.classList.add('browsing');
+    elBtn.classList.add('browsing');
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
-    elTimer.classList.remove('browsing');
-    elTimerLabel.classList.remove('browsing');
+    elBtn.classList.remove('browsing');
   }
   syncLogArea();
   saveState();
@@ -1728,8 +1726,7 @@ function returnToWorking() {
   elReturnPill.classList.remove('visible');
   elBtn.style.opacity = '';
   elBtn.style.pointerEvents = '';
-  elTimer.classList.remove('browsing');
-  elTimerLabel.classList.remove('browsing');
+  elBtn.classList.remove('browsing');
   // Log area is always visible except when workout is finished.
   if (state !== 'finished') {
     elLogArea.style.display = 'flex';
