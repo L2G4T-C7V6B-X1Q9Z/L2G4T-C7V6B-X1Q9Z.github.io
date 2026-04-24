@@ -738,6 +738,14 @@
   }
 
   /* Done screen */
+  /* When finished, release the viewport lock so long summaries + copy button
+     are reachable via scroll. The lock exists to prevent accidental scroll
+     during an active workout -- irrelevant once finishWorkout() fires. */
+  body.finished {
+    height: auto;
+    overflow: auto;
+    padding-bottom: 60px;
+  }
   #workout-done {
     display: none;
     text-align: center;
@@ -1894,6 +1902,7 @@ function finishWorkout() {
   elSetCurrentBtn.classList.remove('visible');
   elSettingsBtn.style.display = "none";
   elDone.style.display = "block";
+  document.body.classList.add('finished');
   elSummary.innerHTML = buildSummaryHTML();
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
 }
