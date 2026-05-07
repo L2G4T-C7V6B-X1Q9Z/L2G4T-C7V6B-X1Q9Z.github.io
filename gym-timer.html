@@ -2521,10 +2521,15 @@ if (!restoreState()) {
   // Log area is always visible except when workout is finished.
   elLogArea.style.display = "flex";
   syncLogArea();
-  // Best-effort fire of workout-start cue. Browsers may block on iOS without user gesture;
-  // if blocked, other cues will work after first interaction.
+  // Best-effort fire of workout-start cue + first exercise name.
+  // Browsers may block on iOS without user gesture; if blocked, other cues
+  // will work after first interaction.
   const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
-  setTimeout(() => { VoiceCue.play(startClip); }, 250);
+  const firstExClip = exerciseClipName(workout[0] && workout[0].name);
+  setTimeout(() => {
+    const seq = firstExClip ? [startClip, firstExClip] : [startClip];
+    VoiceCue.playSequence(seq);
+  }, 250);
 }
 // Center main button after initial layout settles, and on any resize.
 requestAnimationFrame(centerMainButton);
