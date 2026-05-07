@@ -1284,10 +1284,16 @@ const VoiceCue = (() => {
     if (audioCtx.state === 'suspended') {
       try { audioCtx.resume(); } catch(e) {}
     }
-    // NOTE: tried navigator.audioSession.type = 'transient-solo' for ducking,
-    // but on iOS Safari it interrupts other apps' audio (stopping Spotify)
-    // instead of ducking. Removed. Web Audio default category mixes voice
-    // with background music at full volumes — voice gain=1.0 helps cut through.
+    // Explicitly set 'ambient' so the page's audio mixes with other apps
+    // (Spotify, Apple Music) without interrupting them. Required because iOS
+    // Safari can hold a sticky session category from a previous page load
+    // (e.g., a prior 'transient-solo' attempt). Setting 'ambient' explicitly
+    // overrides any sticky state. Falls through silently if the API is missing.
+    try {
+      if ('audioSession' in navigator) {
+        navigator.audioSession.type = 'ambient';
+      }
+    } catch(e) {}
     unlocked = true;
     // Decode any buffers that finished pre-fetching before unlock
     arrayBuffers.forEach((ab, name) => decodeIfReady(name));
