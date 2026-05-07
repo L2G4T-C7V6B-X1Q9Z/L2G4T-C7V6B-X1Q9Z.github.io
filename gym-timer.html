@@ -1458,8 +1458,34 @@ function renderExercise() {
     noteText = ex.note;
   }
   elNote.textContent = noteText;
+  fitNoteToBox();
   renderProgress();
   requestAnimationFrame(centerMainButton);
+}
+
+// Auto-shrink long exercise notes to fit the fixed 34px container.
+// Without this, 3-line notes (~45px tall at base font) get center-clipped on
+// both ends because the parent has overflow:hidden + flex centering.
+// We only shrink when scrollHeight overflows; short notes keep their CSS-
+// default sizing (so the visual hierarchy stays the same for 1-2 line cases).
+function fitNoteToBox() {
+  if (!elNote) return;
+  // Reset to CSS defaults so each render starts fresh
+  elNote.style.fontSize = '';
+  elNote.style.lineHeight = '';
+  if (!elNote.textContent) return;
+  const maxHeight = 34;
+  // Reading scrollHeight forces synchronous reflow / accurate measurement
+  if (elNote.scrollHeight <= maxHeight) return;
+  // Progressively shrink font + tighten line-height until the note fits
+  for (let fs = 10; fs >= 8; fs -= 0.5) {
+    elNote.style.fontSize = fs + 'px';
+    elNote.style.lineHeight = '1.22';
+    if (elNote.scrollHeight <= maxHeight) return;
+  }
+  // Worst case: leave at 8px / 1.15 line-height; clipping minor at this size
+  elNote.style.fontSize = '8px';
+  elNote.style.lineHeight = '1.15';
 }
 
 function formatTime(seconds) {
