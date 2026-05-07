@@ -1892,17 +1892,23 @@ function pauseRest() {
 function resumeRest() {
   captureLog();
   state = "resting";
-  restEndTime = Date.now() + restRemaining * 1000;
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
   elTimerLabel.textContent = "REST";
   showRestRing(true, false);
   renderProgress();
-  scheduleRestNotif(restRemaining * 1000);
-  saveState();
+
+  // Defer timer restart until the 'resumed' cue finishes playing.
+  // If voice is OFF, playSequence resolves immediately so timer restart is synchronous.
+  // If user pauses/skips during the cue, the state-check bails out cleanly.
   VoiceCue.cancel();
-  VoiceCue.play('resumed');
-  startCountdown();
+  VoiceCue.playSequence(['resumed']).then(() => {
+    if (state !== "resting") return;
+    restEndTime = Date.now() + restRemaining * 1000;
+    scheduleRestNotif(restRemaining * 1000);
+    saveState();
+    startCountdown();
+  });
 }
 
 function skipRest() {
@@ -1923,6 +1929,23 @@ function skipRest() {
   elLogArea.style.display = "flex";
   syncLogArea();
   saveState();
+
+  // Voice cue: same shape as restDone autoStart path. If skipping inter-exercise rest
+  // (currentSet === 0 of a freshly-advanced exercise), re-announce the upcoming exercise
+  // since the original "up-next + ex-name" chain was cancelled mid-flight.
+  {
+    const seq = ['rest-complete'];
+    const setStart = setStartClipFor(currentExercise, currentSet);
+    if (setStart) {
+      seq.push(setStart);
+    } else if (currentSet === 0) {
+      const isFinalExercise = (currentExercise === workout.length - 1);
+      const exClip = exerciseClipName(workout[currentExercise] && workout[currentExercise].name);
+      if (isFinalExercise) seq.push('final-exercise');
+      if (exClip) seq.push(exClip);
+    }
+    VoiceCue.playSequence(seq);
+  }
 }
 
 function acknowledgeAlert() {
