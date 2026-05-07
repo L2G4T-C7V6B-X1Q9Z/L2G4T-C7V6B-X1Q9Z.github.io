@@ -1284,16 +1284,10 @@ const VoiceCue = (() => {
     if (audioCtx.state === 'suspended') {
       try { audioCtx.resume(); } catch(e) {}
     }
-    // Set audio session to 'transient-solo' so iOS DUCKS (lowers volume of)
-    // other apps' audio (Spotify, Apple Music) during voice cue playback,
-    // then automatically restores it when the cue ends. Only available in
-    // Safari 17+; falls through silently on older browsers — voice will just
-    // play at full volume over music with no ducking.
-    try {
-      if ('audioSession' in navigator) {
-        navigator.audioSession.type = 'transient-solo';
-      }
-    } catch(e) {}
+    // NOTE: tried navigator.audioSession.type = 'transient-solo' for ducking,
+    // but on iOS Safari it interrupts other apps' audio (stopping Spotify)
+    // instead of ducking. Removed. Web Audio default category mixes voice
+    // with background music at full volumes — voice gain=1.0 helps cut through.
     unlocked = true;
     // Decode any buffers that finished pre-fetching before unlock
     arrayBuffers.forEach((ab, name) => decodeIfReady(name));
