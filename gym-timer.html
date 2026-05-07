@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>Gym Timer</title>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
@@ -882,6 +884,13 @@
       </div>
       <div class="toggle" id="toggle-autostart" role="switch"></div>
     </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Voice cues</div>
+        <div class="setting-sub">Spoken set/rest/exercise announcements</div>
+      </div>
+      <div class="toggle" id="toggle-voice" role="switch"></div>
+    </div>
     <button class="modal-close danger" id="settings-reset">Reset Workout</button>
     <button class="modal-close" id="settings-close">Close</button>
   </div>
@@ -983,7 +992,8 @@ const originalWorkout = workout.slice();
 // ============ SETTINGS ============
 const defaultSettings = {
   sound: true,
-  autoStart: true
+  autoStart: true,
+  voice: true
 };
 let settings = { ...defaultSettings };
 function loadSettings() {
@@ -1081,6 +1091,7 @@ let logExerciseIndex = 0;
 let wakeLock = null;
 let restNotifTimer = null;
 let audioCtx = null;
+let countdownFiredThresholds = new Set();
 
 let editingLog = null;
 let editRepCount = 0;
@@ -1112,6 +1123,7 @@ const elSettingsBtn = document.getElementById("settings-btn");
 const elSettingsModal = document.getElementById("settings-modal");
 const elSettingsClose = document.getElementById("settings-close");
 const elToggleAutoStart = document.getElementById("toggle-autostart");
+const elToggleVoice = document.getElementById("toggle-voice");
 const elReturnPill = document.getElementById("return-pill");
 const elSetCurrentBtn = document.getElementById("set-current-btn");
 const elDifficultyRow = document.getElementById("difficulty-row");
@@ -1204,6 +1216,156 @@ function playAlertSound() {
 }
 function triggerAlertFeedback() {
   playAlertSound();
+}
+
+// ============ VOICE CUES ============
+// HTMLAudioElement-based voice announcements. Files in /audio/, see voice-clip-list.md.
+// One Audio element per clip, preloaded on init. Sequences chain via the `ended` event.
+// All play() failures swallowed (iOS gesture restrictions etc) -- voice is nice-to-have.
+const VoiceCue = (() => {
+  const FILES = [
+    'start-upper', 'start-lower', 'received', 'set-2', 'set-3', 'final-set',
+    'rest-3min', 'rest-90sec', 'rest-60sec',
+    '1min-remaining', '30sec-remaining', '10sec-remaining',
+    'countdown-5', 'countdown-4', 'countdown-3', 'countdown-2', 'countdown-1', 'go',
+    'rest-complete', 'tap-to-start',
+    'exercise-complete', 'up-next', 'final-exercise',
+    'ex-chest-press', 'ex-lat-pulldown', 'ex-db-lat-raise', 'ex-db-curls',
+    'ex-leg-press', 'ex-leg-curl', 'ex-calf-raises', 'ex-face-pulls',
+    'ex-cable-row', 'ex-leg-extension', 'ex-incline-press', 'ex-overhead-press',
+    'ex-tricep-pushdown', 'ex-rear-delt-flyes', 'ex-hammer-curls',
+    'paused', 'resumed', 'final-set-logged', 'workout-complete', 'workout-reset'
+  ];
+  const clips = new Map();
+  let currentChain = null;
+  let initialized = false;
+
+  function init() {
+    if (initialized) return;
+    initialized = true;
+    FILES.forEach(name => {
+      const a = new Audio('audio/' + name + '.mp3');
+      a.preload = 'auto';
+      a.volume = 0.85;
+      a.playsInline = true;
+      try { a.load(); } catch(e) {}
+      clips.set(name, a);
+    });
+  }
+
+  function play(name) {
+    if (!settings.voice) return Promise.resolve();
+    const audio = clips.get(name);
+    if (!audio) return Promise.resolve();
+    try { audio.currentTime = 0; } catch(e) {}
+    return audio.play().catch(() => {});
+  }
+
+  function playSequence(names, gapMs) {
+    if (!settings.voice) return Promise.resolve();
+    if (gapMs == null) gapMs = 80;
+    cancel();
+    const chain = { cancelled: false };
+    currentChain = chain;
+    return names.reduce((p, name) => p.then(() => {
+      if (chain.cancelled) return;
+      return new Promise(resolve => {
+        const audio = clips.get(name);
+        if (!audio) { resolve(); return; }
+        const cleanup = () => {
+          audio.onended = null;
+          audio.onerror = null;
+        };
+        audio.onended = () => { cleanup(); setTimeout(resolve, gapMs); };
+        audio.onerror = () => { cleanup(); resolve(); };
+        try { audio.currentTime = 0; } catch(e) {}
+        audio.play().catch(() => { cleanup(); resolve(); });
+      });
+    }), Promise.resolve());
+  }
+
+  function cancel() {
+    if (currentChain) currentChain.cancelled = true;
+    currentChain = null;
+    clips.forEach(a => {
+      try { a.pause(); a.currentTime = 0; a.onended = null; } catch(e) {}
+    });
+  }
+
+  return { init, play, playSequence, cancel };
+})();
+
+// Map workout exercise names → audio clip names. Tolerant to naming variants.
+function exerciseClipName(name) {
+  if (!name) return null;
+  const map = {
+    "Chest Press Machine": "ex-chest-press",
+    "Chest Press": "ex-chest-press",
+    "Lat Pulldown": "ex-lat-pulldown",
+    "DB Lateral Raise": "ex-db-lat-raise",
+    "Dumbbell Lateral Raise": "ex-db-lat-raise",
+    "DB Curls": "ex-db-curls",
+    "Dumbbell Curls": "ex-db-curls",
+    "Leg Press": "ex-leg-press",
+    "Leg Curl": "ex-leg-curl",
+    "Leg Curl Machine": "ex-leg-curl",
+    "Leg Press Calf Raises": "ex-calf-raises",
+    "Calf Raises": "ex-calf-raises",
+    "Cable Face Pulls": "ex-face-pulls",
+    "Face Pulls": "ex-face-pulls",
+    "Cable Row": "ex-cable-row",
+    "Leg Extension": "ex-leg-extension",
+    "Incline Press": "ex-incline-press",
+    "Overhead Press": "ex-overhead-press",
+    "Tricep Pushdown": "ex-tricep-pushdown",
+    "Rear Delt Flyes": "ex-rear-delt-flyes",
+    "Hammer Curls": "ex-hammer-curls"
+  };
+  return map[name] || null;
+}
+
+function restClipForDuration(seconds) {
+  if (seconds === 180) return 'rest-3min';
+  if (seconds === 90) return 'rest-90sec';
+  if (seconds === 60) return 'rest-60sec';
+  return null;
+}
+
+// Set-N announcement at end of rest. Returns null if first set of new exercise (Up next handled it).
+function setStartClipFor(exIdx, setIdx) {
+  if (setIdx === 0) return null; // Up next + ex-name covers this case
+  const isFinal = (setIdx === workout[exIdx].sets - 1);
+  if (isFinal) return 'final-set';
+  if (setIdx === 1) return 'set-2';
+  if (setIdx === 2) return 'set-3';
+  return null; // Phase 2+ may reach set 3 (idx) → "set-4" not yet recorded
+}
+
+// Threshold-based countdown announcements (called from startCountdown).
+// Each threshold fires once per rest period; reset by setDone when new rest begins.
+function maybeFireCountdownCue(secCeil) {
+  if (countdownFiredThresholds.has(secCeil)) return;
+  const cues = {
+    60: '1min-remaining',
+    30: '30sec-remaining',
+    10: '10sec-remaining',
+    5: 'countdown-5',
+    4: 'countdown-4',
+    3: 'countdown-3',
+    2: 'countdown-2',
+    1: 'countdown-1'
+  };
+  const name = cues[secCeil];
+  if (!name) return;
+  // Skip remaining-N cues if total rest is at/below threshold (redundant with rest-start announcement)
+  if ((secCeil === 60 && restTotalSeconds <= 60) ||
+      (secCeil === 30 && restTotalSeconds <= 30) ||
+      (secCeil === 10 && restTotalSeconds <= 10)) {
+    countdownFiredThresholds.add(secCeil);
+    return;
+  }
+  countdownFiredThresholds.add(secCeil);
+  VoiceCue.play(name);
 }
 
 // ============ HELPERS ============
@@ -1364,7 +1526,9 @@ function startCountdown() {
       restDone();
     } else {
       restRemaining = remaining;
-      elTimer.textContent = formatTime(Math.ceil(remaining));
+      const secCeil = Math.ceil(remaining);
+      maybeFireCountdownCue(secCeil);
+      elTimer.textContent = formatTime(secCeil);
       updateRestRing();
     }
   }, 100);
@@ -1566,6 +1730,7 @@ function setDone() {
     elSkip.style.display = "none";
     showRestRing(false);
     renderProgress();
+    VoiceCue.playSequence(['received', 'final-set-logged']);
     requestAnimationFrame(() => { saveState(); });
     return;
   }
@@ -1592,7 +1757,25 @@ function setDone() {
   elBtn.className = "resting";
   renderExercise();
   showRestRing(true, false);
+  countdownFiredThresholds = new Set();
   startCountdown();
+
+  // Voice cue: "Received" then branch (exercise switch vs normal in-exercise rest)
+  {
+    let seq;
+    if (switchingExercise) {
+      const isFinalExercise = (currentExercise === workout.length - 1);
+      const exClip = exerciseClipName(workout[currentExercise].name);
+      seq = ['received', 'exercise-complete'];
+      seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
+      if (exClip) seq.push(exClip);
+      seq.push('rest-60sec');
+    } else {
+      const restClip = restClipForDuration(workout[finishedExercise].rest);
+      seq = restClip ? ['received', restClip] : ['received'];
+    }
+    VoiceCue.playSequence(seq);
+  }
 
   // Defer all expensive non-critical work to next frame so the UI updates immediately
   requestAnimationFrame(() => {
@@ -1633,6 +1816,17 @@ function restDone() {
   syncLogArea();
   startFlash();
   updateNavButtons();
+  // Voice cue: "Rest complete" + (set-N if autoStart, "Tap to start" if alert mode)
+  {
+    const seq = ['rest-complete'];
+    if (settings.autoStart) {
+      const setStart = setStartClipFor(currentExercise, currentSet);
+      if (setStart) seq.push(setStart);
+    } else {
+      seq.push('tap-to-start');
+    }
+    VoiceCue.playSequence(seq);
+  }
   // Defer audio/save so UI updates first (no perceptible lag)
   requestAnimationFrame(() => {
     triggerAlertFeedback();
@@ -1653,6 +1847,8 @@ function pauseRest() {
   showRestRing(true, true);
   renderProgress();
   saveState();
+  VoiceCue.cancel();
+  VoiceCue.play('paused');
 }
 
 function resumeRest() {
@@ -1667,6 +1863,8 @@ function resumeRest() {
   scheduleRestNotif(restRemaining * 1000);
   saveState();
   startCountdown();
+  VoiceCue.cancel();
+  VoiceCue.play('resumed');
 }
 
 function skipRest() {
@@ -1905,6 +2103,8 @@ function finishWorkout() {
   document.body.classList.add('finished');
   elSummary.innerHTML = buildSummaryHTML();
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+  VoiceCue.cancel();
+  VoiceCue.play('workout-complete');
 }
 
 // ============ EDIT MODAL ============
@@ -1953,6 +2153,8 @@ document.addEventListener("keydown", (e) => {
 function applySettingsToggles() {
   elToggleAutoStart.classList.toggle("on", !!settings.autoStart);
   elToggleAutoStart.setAttribute("aria-checked", !!settings.autoStart);
+  elToggleVoice.classList.toggle("on", !!settings.voice);
+  elToggleVoice.setAttribute("aria-checked", !!settings.voice);
 }
 function openSettings() {
   applySettingsToggles();
@@ -1973,8 +2175,12 @@ elSettingsClose.addEventListener("click", () => { resetConfirmReset(); closeSett
 elSettingsReset.addEventListener("click", () => {
   if (elSettingsReset.classList.contains('confirming')) {
     // Second tap -- actually reset
-    try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
-    location.reload();
+    VoiceCue.cancel();
+    VoiceCue.play('workout-reset');
+    setTimeout(() => {
+      try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+      location.reload();
+    }, 1500);
   } else {
     elSettingsReset.classList.add('confirming');
     elSettingsReset.textContent = 'Tap again to confirm';
@@ -1987,6 +2193,12 @@ elSettingsModal.addEventListener("click", (e) => {
 });
 elToggleAutoStart.addEventListener("click", () => {
   settings.autoStart = !settings.autoStart; saveSettings(); applySettingsToggles();
+});
+elToggleVoice.addEventListener("click", () => {
+  settings.voice = !settings.voice;
+  if (!settings.voice) VoiceCue.cancel();
+  saveSettings();
+  applySettingsToggles();
 });
 
 // ============ INPUT HANDLERS ============
@@ -2301,6 +2513,7 @@ elSkip.style.display = "none";
 showRestRing(false);
 updateNavButtons();
 applySettingsToggles();
+VoiceCue.init();
 if (!restoreState()) {
   elTimer.textContent = "-:--";
   elTimerLabel.textContent = "";
@@ -2308,6 +2521,10 @@ if (!restoreState()) {
   // Log area is always visible except when workout is finished.
   elLogArea.style.display = "flex";
   syncLogArea();
+  // Best-effort fire of workout-start cue. Browsers may block on iOS without user gesture;
+  // if blocked, other cues will work after first interaction.
+  const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
+  setTimeout(() => { VoiceCue.play(startClip); }, 250);
 }
 // Center main button after initial layout settles, and on any resize.
 requestAnimationFrame(centerMainButton);
