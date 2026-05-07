@@ -1193,11 +1193,42 @@ function initAudio() {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   } catch(e) {}
 }
+// Recover from a dead/suspended AudioContext. iOS Safari closes audio contexts
+// during long backgrounding -- the 3-min inter-exercise rests with the phone
+// in a pocket are well within the iOS reclamation window. Once .state is
+// 'closed', the context cannot be reopened, so we build a new one and
+// re-decode the voice cue buffers (which are bound to the dead context and
+// unusable after it dies).
+function recoverAudioCtx() {
+  // Path A: missing or dead context -- recreate from scratch.
+  if (!audioCtx || audioCtx.state === 'closed') {
+    if (audioCtx) { try { audioCtx.close(); } catch(e) {} }
+    audioCtx = null;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e) { return; }
+    // iOS sometimes loses the ambient session category across context death,
+    // which would let voice cues interrupt Spotify instead of mixing with it.
+    try {
+      if ('audioSession' in navigator) navigator.audioSession.type = 'ambient';
+    } catch(e) {}
+    // Decoded AudioBuffers from the dead context are unusable. Re-decode from
+    // the raw ArrayBuffers (those survive context death; AudioBuffers don't).
+    if (typeof VoiceCue !== 'undefined' && VoiceCue._afterContextRecreated) {
+      VoiceCue._afterContextRecreated();
+    }
+  }
+  // Path B: context is suspended (rest period, backgrounded tab) -- resume.
+  // resume() rejects silently if the context just transitioned to closed; the
+  // next caller will hit Path A and recreate.
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+}
 function playAlertSound() {
   try {
-    if (!audioCtx) initAudio();
+    recoverAudioCtx();
     if (!audioCtx) return;
-    if (audioCtx.state === 'suspended') audioCtx.resume();
     const now = audioCtx.currentTime;
     [0, 0.22].forEach(offset => {
       const osc = audioCtx.createOscillator();
@@ -1277,23 +1308,13 @@ const VoiceCue = (() => {
   }
 
   // Call from any user gesture (main button click) to unlock + decode.
+  // recoverAudioCtx() handles initAudio + resume + audioSession='ambient'
+  // (the latter overrides any sticky category from a prior page load that
+  // could otherwise interrupt Spotify/Apple Music instead of mixing with it).
   function unlock() {
     if (unlocked) return;
-    if (!audioCtx) initAudio();
+    recoverAudioCtx();
     if (!audioCtx) return;
-    if (audioCtx.state === 'suspended') {
-      try { audioCtx.resume(); } catch(e) {}
-    }
-    // Explicitly set 'ambient' so the page's audio mixes with other apps
-    // (Spotify, Apple Music) without interrupting them. Required because iOS
-    // Safari can hold a sticky session category from a previous page load
-    // (e.g., a prior 'transient-solo' attempt). Setting 'ambient' explicitly
-    // overrides any sticky state. Falls through silently if the API is missing.
-    try {
-      if ('audioSession' in navigator) {
-        navigator.audioSession.type = 'ambient';
-      }
-    } catch(e) {}
     unlocked = true;
     // Decode any buffers that finished pre-fetching before unlock
     arrayBuffers.forEach((ab, name) => decodeIfReady(name));
@@ -1301,10 +1322,8 @@ const VoiceCue = (() => {
 
   function play(name) {
     if (!settings.voice) return Promise.resolve();
+    recoverAudioCtx();
     if (!audioCtx || !unlocked) return Promise.resolve();
-    if (audioCtx.state === 'suspended') {
-      try { audioCtx.resume(); } catch(e) {}
-    }
     const buffer = decodedBuffers.get(name);
     if (!buffer) return Promise.resolve();
     return new Promise(resolve => {
@@ -1347,7 +1366,17 @@ const VoiceCue = (() => {
     currentSources = [];
   }
 
-  return { init, unlock, play, playSequence, cancel };
+  // Called by recoverAudioCtx() after a fresh AudioContext is built. Decoded
+  // AudioBuffers are bound to the dead context and unusable, but the raw
+  // ArrayBuffers survive -- re-decode from those. unlocked stays true: we
+  // already had a user gesture, so the new context just needs decoding.
+  function _afterContextRecreated() {
+    decodedBuffers.clear();
+    cancel();
+    arrayBuffers.forEach((ab, name) => decodeIfReady(name));
+  }
+
+  return { init, unlock, play, playSequence, cancel, _afterContextRecreated };
 })();
 
 // Map workout exercise names → audio clip names. Tolerant to naming variants.
@@ -2322,7 +2351,7 @@ elToggleVoice.addEventListener("click", () => {
 
 // ============ INPUT HANDLERS ============
 elBtn.addEventListener("click", () => {
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  recoverAudioCtx();
   VoiceCue.unlock();
   if (state === "ready") setDone();
   else if (state === "alert") acknowledgeAlert();
@@ -2605,6 +2634,11 @@ function restoreState() {
 // ============ VISIBILITY HANDLER ============
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  // iOS may have closed the AudioContext during backgrounding. Recover BEFORE
+  // any path below that fires audio (e.g. the expired-rest restDone() call).
+  // Recovery kicks off async re-decoding of voice buffers; by the time the
+  // user looks at the timer + decides to tap, decoding is usually done.
+  recoverAudioCtx();
   if (state === "resting" && restEndTime) {
     const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
     if (remaining <= 0) {
@@ -2624,6 +2658,13 @@ document.addEventListener("visibilitychange", () => {
   if (state !== "ready" && state !== "finished" && !wakeLock) {
     requestWakeLock();
   }
+});
+
+// pageshow fires when the page is restored from BFCache (iOS back/forward
+// nav, or Safari swiping back to the timer tab). AudioContexts get closed in
+// BFCache, so this is the canonical recovery point alongside visibilitychange.
+window.addEventListener("pageshow", () => {
+  recoverAudioCtx();
 });
 
 // ============ INIT ============
