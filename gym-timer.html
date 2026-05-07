@@ -1219,9 +1219,15 @@ function triggerAlertFeedback() {
 }
 
 // ============ VOICE CUES ============
-// HTMLAudioElement-based voice announcements. Files in /audio/, see voice-clip-list.md.
-// One Audio element per clip, preloaded on init. Sequences chain via the `ended` event.
-// All play() failures swallowed (iOS gesture restrictions etc) -- voice is nice-to-have.
+// Web Audio-based voice announcements. We play decoded mp3 buffers through the
+// existing audioCtx (AudioBufferSourceNode → GainNode → destination) so iOS
+// treats voice cues as "ambient" audio that mixes with Spotify/Apple Music,
+// rather than the "playback" category that HTMLAudioElement gets on iOS Safari
+// (which would interrupt and stop the user's music — this was the v1 bug).
+//
+// Pipeline: init() pre-fetches all 42 mp3s as ArrayBuffers (no audio context
+// needed). On first user gesture, unlock() resumes audioCtx and decodes the
+// buffers via decodeAudioData. Each play() creates a fresh BufferSourceNode.
 const VoiceCue = (() => {
   const FILES = [
     'start-upper', 'start-lower', 'received', 'set-2', 'set-3', 'final-set',
@@ -1236,28 +1242,78 @@ const VoiceCue = (() => {
     'ex-tricep-pushdown', 'ex-rear-delt-flyes', 'ex-hammer-curls',
     'paused', 'resumed', 'final-set-logged', 'workout-complete', 'workout-reset'
   ];
-  const clips = new Map();
-  let currentChain = null;
+  const arrayBuffers = new Map();   // raw, pre-decode
+  const decodedBuffers = new Map(); // post-decode, ready to play
   let initialized = false;
+  let unlocked = false;
+  let currentSources = [];
+  let currentChain = null;
 
   function init() {
     if (initialized) return;
     initialized = true;
+    // Pre-fetch all mp3 ArrayBuffers (no audio context needed yet).
+    // Decoding happens on first user gesture via unlock().
     FILES.forEach(name => {
-      const a = new Audio('audio/' + name + '.mp3');
-      a.preload = 'auto';
-      a.volume = 0.85;
-      try { a.load(); } catch(e) {}
-      clips.set(name, a);
+      fetch('audio/' + name + '.mp3')
+        .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+        .then(ab => { arrayBuffers.set(name, ab); decodeIfReady(name); })
+        .catch(() => {});
     });
+  }
+
+  function decodeIfReady(name) {
+    if (!unlocked || !audioCtx) return;
+    if (decodedBuffers.has(name)) return;
+    const ab = arrayBuffers.get(name);
+    if (!ab) return;
+    // .slice(0) creates a copy so the original ArrayBuffer isn't detached
+    // (some browsers detach the input buffer after decodeAudioData).
+    try {
+      audioCtx.decodeAudioData(ab.slice(0))
+        .then(buf => decodedBuffers.set(name, buf))
+        .catch(() => {});
+    } catch(e) {}
+  }
+
+  // Call from any user gesture (main button click) to unlock + decode.
+  function unlock() {
+    if (unlocked) return;
+    if (!audioCtx) initAudio();
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') {
+      try { audioCtx.resume(); } catch(e) {}
+    }
+    unlocked = true;
+    // Decode any buffers that finished pre-fetching before unlock
+    arrayBuffers.forEach((ab, name) => decodeIfReady(name));
   }
 
   function play(name) {
     if (!settings.voice) return Promise.resolve();
-    const audio = clips.get(name);
-    if (!audio) return Promise.resolve();
-    try { audio.currentTime = 0; } catch(e) {}
-    return audio.play().catch(() => {});
+    if (!audioCtx || !unlocked) return Promise.resolve();
+    if (audioCtx.state === 'suspended') {
+      try { audioCtx.resume(); } catch(e) {}
+    }
+    const buffer = decodedBuffers.get(name);
+    if (!buffer) return Promise.resolve();
+    return new Promise(resolve => {
+      try {
+        const source = audioCtx.createBufferSource();
+        const gain = audioCtx.createGain();
+        gain.gain.value = 0.85;
+        source.buffer = buffer;
+        source.connect(gain);
+        gain.connect(audioCtx.destination);
+        source.onended = () => {
+          const idx = currentSources.indexOf(source);
+          if (idx >= 0) currentSources.splice(idx, 1);
+          resolve();
+        };
+        currentSources.push(source);
+        source.start(0);
+      } catch(e) { resolve(); }
+    });
   }
 
   function playSequence(names, gapMs) {
@@ -1268,30 +1324,20 @@ const VoiceCue = (() => {
     currentChain = chain;
     return names.reduce((p, name) => p.then(() => {
       if (chain.cancelled) return;
-      return new Promise(resolve => {
-        const audio = clips.get(name);
-        if (!audio) { resolve(); return; }
-        const cleanup = () => {
-          audio.onended = null;
-          audio.onerror = null;
-        };
-        audio.onended = () => { cleanup(); setTimeout(resolve, gapMs); };
-        audio.onerror = () => { cleanup(); resolve(); };
-        try { audio.currentTime = 0; } catch(e) {}
-        audio.play().catch(() => { cleanup(); resolve(); });
-      });
+      return play(name).then(() => new Promise(r => setTimeout(r, gapMs)));
     }), Promise.resolve());
   }
 
   function cancel() {
     if (currentChain) currentChain.cancelled = true;
     currentChain = null;
-    clips.forEach(a => {
-      try { a.pause(); a.currentTime = 0; a.onended = null; a.onerror = null; } catch(e) {}
+    currentSources.forEach(s => {
+      try { s.stop(); s.disconnect(); } catch(e) {}
     });
+    currentSources = [];
   }
 
-  return { init, play, playSequence, cancel };
+  return { init, unlock, play, playSequence, cancel };
 })();
 
 // Map workout exercise names → audio clip names. Tolerant to naming variants.
@@ -2267,6 +2313,7 @@ elToggleVoice.addEventListener("click", () => {
 // ============ INPUT HANDLERS ============
 elBtn.addEventListener("click", () => {
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  VoiceCue.unlock();
   if (state === "ready") setDone();
   else if (state === "alert") acknowledgeAlert();
   else if (state === "resting") pauseRest();
