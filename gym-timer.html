@@ -1227,7 +1227,7 @@ const VoiceCue = (() => {
     'start-upper', 'start-lower', 'received', 'set-2', 'set-3', 'final-set',
     'rest-3min', 'rest-90sec', 'rest-60sec',
     '1min-remaining', '30sec-remaining', '10sec-remaining',
-    'countdown-5', 'countdown-4', 'countdown-3', 'countdown-2', 'countdown-1', 'go',
+    'countdown-5', 'countdown-4', 'countdown-3', 'countdown-2', 'countdown-1',
     'rest-complete', 'tap-to-start',
     'exercise-complete', 'up-next', 'final-exercise',
     'ex-chest-press', 'ex-lat-pulldown', 'ex-db-lat-raise', 'ex-db-curls',
@@ -1247,7 +1247,6 @@ const VoiceCue = (() => {
       const a = new Audio('audio/' + name + '.mp3');
       a.preload = 'auto';
       a.volume = 0.85;
-      a.playsInline = true;
       try { a.load(); } catch(e) {}
       clips.set(name, a);
     });
@@ -1288,7 +1287,7 @@ const VoiceCue = (() => {
     if (currentChain) currentChain.cancelled = true;
     currentChain = null;
     clips.forEach(a => {
-      try { a.pause(); a.currentTime = 0; a.onended = null; } catch(e) {}
+      try { a.pause(); a.currentTime = 0; a.onended = null; a.onerror = null; } catch(e) {}
     });
   }
 
@@ -1333,6 +1332,7 @@ function restClipForDuration(seconds) {
 
 // Set-N announcement at end of rest. Returns null if first set of new exercise (Up next handled it).
 function setStartClipFor(exIdx, setIdx) {
+  if (!workout[exIdx]) return null;
   if (setIdx === 0) return null; // Up next + ex-name covers this case
   const isFinal = (setIdx === workout[exIdx].sets - 1);
   if (isFinal) return 'final-set';
@@ -1568,13 +1568,15 @@ function snapshot() {
     setLogs: setLogs.map(l => ({...l})),
     repCount, logExerciseIndex,
     notes: elNotesInput.value,
-    currentLogEntryIdx: currentLogEntry ? setLogs.indexOf(currentLogEntry) : -1
+    currentLogEntryIdx: currentLogEntry ? setLogs.indexOf(currentLogEntry) : -1,
+    countdownFiredThresholds: [...countdownFiredThresholds]
   };
 }
 function applySnapshot(s) {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   cancelRestNotif();
   stopFlash();
+  VoiceCue.cancel();
 
   currentExercise = s.currentExercise;
   currentSet = s.currentSet;
@@ -1589,6 +1591,7 @@ function applySnapshot(s) {
   repCount = s.repCount;
   logExerciseIndex = s.logExerciseIndex;
   currentLogEntry = s.currentLogEntryIdx >= 0 ? setLogs[s.currentLogEntryIdx] : null;
+  countdownFiredThresholds = new Set(s.countdownFiredThresholds || []);
 
   // If restoring an expired resting state, restart the countdown with full rest period
   // (otherwise back from alert just bounces right back to alert)
@@ -1616,6 +1619,13 @@ function applyState(notesValue) {
       elLogArea.style.display = "flex";
       startFlash();
       triggerAlertFeedback();
+      {
+        const setStart = setStartClipFor(currentExercise, currentSet);
+        const seq = settings.autoStart
+          ? ['rest-complete', setStart].filter(Boolean)
+          : ['rest-complete', 'tap-to-start'];
+        VoiceCue.playSequence(seq);
+      }
     } else {
       restRemaining = remaining;
       renderExercise();
@@ -1747,7 +1757,7 @@ function setDone() {
   const isLastSet = finishedExercise >= workout.length - 1 && currentSet >= workout[finishedExercise].sets;
   if (isLastSet) {
     viewingExercise = currentExercise;
-    viewingSet = currentSet;
+    viewingSet = currentSet - 1;
     elBtn.textContent = "Finish";
     elBtn.className = "go";
     state = "finishing";
@@ -1795,7 +1805,8 @@ function setDone() {
       seq = ['received', 'exercise-complete'];
       seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
       if (exClip) seq.push(exClip);
-      seq.push('rest-60sec');
+      const switchRestClip = restClipForDuration(restRemaining);
+      if (switchRestClip) seq.push(switchRestClip);
     } else {
       const restClip = restClipForDuration(workout[finishedExercise].rest);
       seq = restClip ? ['received', restClip] : ['received'];
@@ -1814,6 +1825,7 @@ function setDone() {
 }
 
 function restDone() {
+  if (state !== "resting") return;
   pushHistory();
   cancelRestNotif();
   captureLog();
@@ -1888,13 +1900,14 @@ function resumeRest() {
   renderProgress();
   scheduleRestNotif(restRemaining * 1000);
   saveState();
-  startCountdown();
   VoiceCue.cancel();
   VoiceCue.play('resumed');
+  startCountdown();
 }
 
 function skipRest() {
   pushHistory();
+  VoiceCue.cancel();
   cancelRestNotif();
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   captureLog();
@@ -1943,6 +1956,7 @@ function reorderExercise(fromIdx, toIdx) {
   if (fromIdx < 0 || fromIdx >= workout.length) return;
   if (toIdx < 0 || toIdx >= workout.length) return;
 
+  VoiceCue.cancel();
   pushHistory();
 
   // If the edit modal is open on a log, its editingLog reference survives
@@ -2206,7 +2220,7 @@ elSettingsReset.addEventListener("click", () => {
     setTimeout(() => {
       try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
       location.reload();
-    }, 1500);
+    }, settings.voice ? 1500 : 200);
   } else {
     elSettingsReset.classList.add('confirming');
     elSettingsReset.textContent = 'Tap again to confirm';
@@ -2451,6 +2465,7 @@ function saveState() {
     repCount,
     notes: elNotesInput.value,
     logExerciseIndex,
+    countdownFiredThresholds: [...countdownFiredThresholds],
     // Persist any mid-session reorder so refreshes/background kills don't snap back
     workoutOrder: workout.map(ex => ex.name),
     history: history.map(h => ({...h, setLogs: h.setLogs.map(l => ({...l}))})),
@@ -2491,6 +2506,7 @@ function restoreState() {
     restEndTime = s.restEndTime;
     restRemaining = s.restRemaining;
     restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
+    countdownFiredThresholds = new Set(s.countdownFiredThresholds || []);
 
     history.length = 0;
     if (Array.isArray(s.history)) s.history.forEach(h => history.push(h));
@@ -2518,6 +2534,11 @@ document.addEventListener("visibilitychange", () => {
       restRemaining = remaining;
       elTimer.textContent = formatTime(remaining);
       updateRestRing();
+      // Threshold catch-up: any cue whose trigger second has already passed while backgrounded
+      // is suppressed, so it doesn't fire late as a stale announcement.
+      [60, 30, 10, 5, 4, 3, 2, 1].forEach(t => {
+        if (t > remaining) countdownFiredThresholds.add(t);
+      });
     }
   }
   if (state !== "ready" && state !== "finished" && !wakeLock) {
@@ -2553,6 +2574,8 @@ if (!restoreState()) {
   const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
   const firstExClip = exerciseClipName(workout[0] && workout[0].name);
   setTimeout(() => {
+    // Skip if user already advanced past the first set (race with setDone tap < 250ms after load)
+    if (state !== "ready" || currentExercise !== 0 || currentSet !== 0) return;
     const seq = firstExClip ? [startClip, firstExClip] : [startClip];
     VoiceCue.playSequence(seq);
   }, 250);
