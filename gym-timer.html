@@ -49,16 +49,16 @@
     text-align: center;
   }
   #exercise-note {
-    font-size: 11px;
-    color: #777;
+    font-size: 13px;
+    color: #888;
     font-style: italic;
     margin-bottom: 8px;
     text-align: center;
-    max-width: 300px;
+    max-width: 320px;
     line-height: 1.35;
     /* Fixed height so 1/2/3-line notes don't shift the layout underneath.
        Flex-centered so 1-line notes don't leave dead space below. */
-    height: 34px;
+    height: 40px;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -870,7 +870,6 @@
     </div>
     <div id="log-content">
       <div id="difficulty-row">
-        <button class="diff-btn" data-diff="1" aria-label="Easy">EASY</button>
         <button class="diff-btn" data-diff="2" aria-label="Light">LIGHT</button>
         <button class="diff-btn" data-diff="3" aria-label="Moderate">MOD</button>
         <button class="diff-btn" data-diff="4" aria-label="Hard">HARD</button>
@@ -1106,6 +1105,10 @@ function syncLogArea() {
   renderSetLabel();
 }
 let state = "ready";
+// Timestamp of "Start Workout" tap (pre-start → ready transition). Used by
+// getTotalDuration to anchor the timer at the actual session start instead of
+// extrapolating set 1's duration from later-set gaps. null until first tap.
+let workoutStartTime = null;
 let timerInterval = null;
 let restRemaining = 0;
 let restTotalSeconds = 0;
@@ -1523,12 +1526,14 @@ function exerciseClipName(name) {
     "Cable Face Pulls": "ex-face-pulls",
     "Face Pulls": "ex-face-pulls",
     "Cable Row": "ex-cable-row",
+    "Single-Arm DB Row": "ex-cable-row",
     "Leg Extension": "ex-leg-extension",
     "Incline Press": "ex-incline-press",
     "Overhead Press": "ex-overhead-press",
     "Tricep Pushdown": "ex-tricep-pushdown",
     "Rear Delt Flyes": "ex-rear-delt-flyes",
-    "Hammer Curls": "ex-hammer-curls"
+    "Hammer Curls": "ex-hammer-curls",
+    "DB Curls (HAMMER variant)": "ex-hammer-curls"
   };
   return map[name] || null;
 }
@@ -1774,6 +1779,7 @@ function startCountdown() {
 function snapshot() {
   return {
     currentExercise, currentSet, state,
+    workoutStartTime,
     restEndTime, restRemaining, restTotalSeconds,
     setLogs: setLogs.map(l => ({...l})),
     repCount, logExerciseIndex,
@@ -1793,6 +1799,7 @@ function applySnapshot(s) {
   viewingExercise = currentExercise;
   viewingSet = currentSet;
   state = s.state;
+  workoutStartTime = (typeof s.workoutStartTime === 'number') ? s.workoutStartTime : null;
   restEndTime = s.restEndTime;
   restRemaining = s.restRemaining;
   restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
@@ -1894,6 +1901,17 @@ function applyState(notesValue) {
     elSkip.style.display = "none";
     elLogArea.style.display = "flex";
     elNotesInput.value = notesValue;
+  } else if (state === "pre-start") {
+    // Initial state: workout hasn't begun. User taps "Start Workout" to play
+    // the day-name + first-exercise audio, record workoutStartTime, and
+    // transition to "ready". Log area hidden — there's nothing to log yet.
+    renderExercise();
+    elTimer.textContent = "-:--";
+    elTimerLabel.textContent = "";
+    elBtn.textContent = "Start Workout";
+    elBtn.className = "go";
+    elSkip.style.display = "none";
+    elLogArea.style.display = "none";
   } else {
     renderExercise();
   }
@@ -1943,6 +1961,20 @@ function forward() {
 function updateNavButtons() {}
 
 // ============ STATE TRANSITIONS ============
+// Pre-start → ready transition. Records workout start time so set 1's
+// duration is real (not extrapolated from later-set gaps) and plays the
+// day-type + first-exercise audio cue (user gesture unlocks audio on iOS).
+function startWorkout() {
+  workoutStartTime = Date.now();
+  state = "ready";
+  applyState("");
+  saveState();
+  const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
+  const firstExClip = exerciseClipName(workout[0] && workout[0].name);
+  const seq = [startClip, firstExClip].filter(Boolean);
+  if (seq.length) VoiceCue.playSequence(seq);
+}
+
 function setDone() {
   pushHistory();
   stopFlash();
@@ -2279,13 +2311,17 @@ function summaryDateStr() {
 }
 function getTotalDuration() {
   const ts = setLogs.filter(l => l.timestamp).map(l => l.timestamp);
+  if (ts.length === 0) return null;
+  const lastTs = Math.max(...ts);
+  // Preferred path: pre-start → ready tap recorded an explicit workout start.
+  // No extrapolation needed — set 1's duration is real.
+  if (workoutStartTime) return lastTs - workoutStartTime;
+  // Fallback for sessions started before pre-start existed (no workoutStartTime
+  // saved). S1 of the first-performed exercise has no "start" timestamp — only
+  // the Set Done press when it finished. Estimate it by averaging the gaps
+  // between consecutive sets in that same exercise.
   if (ts.length < 2) return null;
-  const raw = Math.max(...ts) - Math.min(...ts);
-  // S1 of the first-performed exercise has no "start" timestamp — only the
-  // Set Done press when it finished. That means its perform-time is missing
-  // from the raw max-min diff. Estimate it by averaging the gaps between
-  // consecutive sets in that same exercise (gap12 + gap23 / 2, etc.), then
-  // add that estimate to the raw total.
+  const raw = lastTs - Math.min(...ts);
   const logsWithTs = setLogs.filter(l => l.timestamp).slice().sort((a, b) => a.timestamp - b.timestamp);
   const firstExIdx = logsWithTs[0].exercise;
   const firstExLogs = setLogs
@@ -2474,7 +2510,8 @@ elToggleVoice.addEventListener("click", () => {
 elBtn.addEventListener("click", () => {
   recoverAudioCtx();
   VoiceCue.unlock();
-  if (state === "ready") setDone();
+  if (state === "pre-start") startWorkout();
+  else if (state === "ready") setDone();
   else if (state === "alert") acknowledgeAlert();
   else if (state === "resting") pauseRest();
   else if (state === "paused") resumeRest();
@@ -2663,7 +2700,7 @@ elCopy.addEventListener("click", () => {
 function saveState() {
   const s = {
     savedAt: Date.now(),
-    currentExercise, currentSet, state, restEndTime, restRemaining, restTotalSeconds,
+    currentExercise, currentSet, state, workoutStartTime, restEndTime, restRemaining, restTotalSeconds,
     viewingExercise, viewingSet,
     setLogs: setLogs.map(l => ({...l})),
     repCount,
@@ -2702,6 +2739,7 @@ function restoreState() {
     currentSet = s.currentSet;
     viewingExercise = (typeof s.viewingExercise === 'number') ? s.viewingExercise : currentExercise;
     viewingSet = (typeof s.viewingSet === 'number') ? s.viewingSet : currentSet;
+    workoutStartTime = (typeof s.workoutStartTime === 'number') ? s.workoutStartTime : null;
     repCount = s.repCount || 10;
     if (typeof s.logExerciseIndex === 'number') logExerciseIndex = s.logExerciseIndex;
     setLogs.length = 0;
@@ -2778,23 +2816,12 @@ updateNavButtons();
 applySettingsToggles();
 VoiceCue.init();
 if (!restoreState()) {
-  elTimer.textContent = "-:--";
-  elTimerLabel.textContent = "";
-  renderExercise();
-  // Log area is always visible except when workout is finished.
-  elLogArea.style.display = "flex";
-  syncLogArea();
-  // Best-effort fire of workout-start cue + first exercise name.
-  // Browsers may block on iOS without user gesture; if blocked, other cues
-  // will work after first interaction.
-  const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
-  const firstExClip = exerciseClipName(workout[0] && workout[0].name);
-  setTimeout(() => {
-    // Skip if user already advanced past the first set (race with setDone tap < 250ms after load)
-    if (state !== "ready" || currentExercise !== 0 || currentSet !== 0) return;
-    const seq = firstExClip ? [startClip, firstExClip] : [startClip];
-    VoiceCue.playSequence(seq);
-  }, 250);
+  // Fresh load (no saved state, or state TTL expired): enter pre-start.
+  // The user taps "Start Workout" to begin — that gesture unlocks audio
+  // on iOS, plays the day-type + first-exercise cue, and records
+  // workoutStartTime so set 1's duration is real (not extrapolated).
+  state = "pre-start";
+  applyState("");
 }
 // Center main button after initial layout settles, and on any resize.
 requestAnimationFrame(centerMainButton);
