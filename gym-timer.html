@@ -323,41 +323,70 @@
     color: #fff;
     border-color: #c0392b;
   }
-  #rep-counter {
+  /* Rep picker — horizontal scroll-snap wheel. Replaces +/- buttons.
+     Cells: 40px wide. Picker visible width: 160px (4 cells visible at edges, ~3 readable).
+     Center cell (snapped) gets is-active (red, big, bold). ±1 gets is-near (gray, medium).
+     Beyond that, dim + small. Edge fade via mask-image. */
+  .rep-picker {
+    position: relative;
+    width: 160px;
+    height: 56px;
+    flex-shrink: 0;
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 22%, black 78%, transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0%, black 22%, black 78%, transparent 100%);
+  }
+  .rep-picker__strip {
     display: flex;
     align-items: center;
-    gap: 10px;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 calc(50% - 20px); /* 20 = half of cell width 40, lets endpoints center */
+    overscroll-behavior-x: contain;
   }
-  .rep-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 1px solid #333;
-    background: transparent;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 18px;
-    font-weight: 400;
-    color: #999;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: all 0.15s;
+  .rep-picker__strip::-webkit-scrollbar { display: none; }
+  .rep-picker__num {
+    flex: 0 0 40px;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0;
-  }
-  .rep-btn:active {
-    transform: scale(0.9);
-    border-color: #c0392b;
-    color: #c0392b;
-  }
-  #rep-count {
-    font-size: 22px;
-    font-weight: 700;
-    color: #eee;
-    min-width: 30px;
-    text-align: center;
+    scroll-snap-align: center;
+    font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    font-weight: 400;
+    color: #444;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.18s, font-size 0.18s, font-weight 0.18s;
+  }
+  .rep-picker__num.is-near {
+    color: #888;
+    font-size: 17px;
+  }
+  .rep-picker__num.is-active {
+    color: #c0392b;
+    font-size: 26px;
+    font-weight: 700;
+  }
+  .rep-picker__indicator {
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 2px;
+    background: #c0392b;
+    border-radius: 1px;
+    pointer-events: none;
+    opacity: 0.55;
   }
   #rep-label {
     font-size: 9px;
@@ -692,14 +721,7 @@
     text-transform: uppercase;
     width: 40px;
   }
-  #edit-reps {
-    font-size: 22px;
-    font-weight: 700;
-    color: #eee;
-    min-width: 30px;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-  }
+  /* #edit-reps removed — edit modal uses .rep-picker (see above). */
   #edit-notes {
     flex: 1;
     padding: 8px 12px;
@@ -856,10 +878,9 @@
       </div>
       <div class="log-row">
         <div id="rep-label">REPS</div>
-        <div id="rep-counter">
-          <button class="rep-btn" id="rep-minus" aria-label="Decrease reps">-</button>
-          <div id="rep-count" aria-live="polite">10</div>
-          <button class="rep-btn" id="rep-plus" aria-label="Increase reps">+</button>
+        <div class="rep-picker" id="rep-picker" aria-label="Reps (swipe or tap to change)">
+          <div class="rep-picker__strip" id="rep-picker-strip" role="listbox"></div>
+          <div class="rep-picker__indicator"></div>
         </div>
         <input type="text" id="notes-input" placeholder="notes..." inputmode="text" aria-label="Set notes">
       </div>
@@ -902,9 +923,10 @@
     <div class="edit-subtitle" id="edit-set"></div>
     <div class="edit-row">
       <div class="edit-label">REPS</div>
-      <button class="rep-btn" id="edit-rep-minus" aria-label="Decrease reps">-</button>
-      <div id="edit-reps">0</div>
-      <button class="rep-btn" id="edit-rep-plus" aria-label="Increase reps">+</button>
+      <div class="rep-picker" id="edit-rep-picker" aria-label="Reps (swipe or tap to change)">
+        <div class="rep-picker__strip" id="edit-rep-picker-strip" role="listbox"></div>
+        <div class="rep-picker__indicator"></div>
+      </div>
     </div>
     <div class="edit-row">
       <div class="edit-label">NOTE</div>
@@ -1065,7 +1087,7 @@ function syncLogArea() {
   const log = getActiveLogForEdit();
   if (log) {
     repCount = log.reps;
-    elRepCount.textContent = log.reps;
+    repPicker.setValue(log.reps);
     elNotesInput.value = log.note || "";
   } else {
     // No active log (pre-first-Set-Done, or browsing a future set) — show
@@ -1073,7 +1095,7 @@ function syncLogArea() {
     const exIdx = isBrowsing() ? viewingExercise : currentExercise;
     const ex = workout[exIdx];
     repCount = ex ? getMaxReps(ex.reps) : 0;
-    elRepCount.textContent = repCount;
+    repPicker.setValue(repCount);
     elNotesInput.value = "";
   }
   renderDifficulty(log);
@@ -1116,9 +1138,6 @@ const elSummary = document.getElementById("summary");
 const elCopy = document.getElementById("copy-btn");
 const elLogArea = document.getElementById("log-area");
 const elNotesInput = document.getElementById("notes-input");
-const elRepCount = document.getElementById("rep-count");
-const elRepMinus = document.getElementById("rep-minus");
-const elRepPlus = document.getElementById("rep-plus");
 const elSettingsBtn = document.getElementById("settings-btn");
 const elSettingsModal = document.getElementById("settings-modal");
 const elSettingsClose = document.getElementById("settings-close");
@@ -1131,12 +1150,114 @@ const elSetLabelText = document.getElementById("set-label-text");
 const elEditModal = document.getElementById("edit-modal");
 const elEditExercise = document.getElementById("edit-exercise");
 const elEditSet = document.getElementById("edit-set");
-const elEditReps = document.getElementById("edit-reps");
 const elEditNotes = document.getElementById("edit-notes");
 const elEditCancel = document.getElementById("edit-cancel");
 const elEditSave = document.getElementById("edit-save");
-const elEditRepMinus = document.getElementById("edit-rep-minus");
-const elEditRepPlus = document.getElementById("edit-rep-plus");
+
+// ============ REP PICKER ============
+// Horizontal scroll-snap wheel that replaces the old +/- rep buttons.
+// Cells 0..50 inside a strip; the cell closest to the strip's center is the
+// "selected" value. Snaps on scroll-end via scroll-snap-type: x mandatory.
+// Tap any visible cell to smooth-scroll it to center. setValue(n) jumps
+// instantly without firing onChange (suppressChange flag prevents re-entry).
+function createRepPicker(stripEl, opts) {
+  const min = (opts && typeof opts.min === 'number') ? opts.min : 0;
+  const max = (opts && typeof opts.max === 'number') ? opts.max : 50;
+  const onChange = (opts && opts.onChange) || function() {};
+  for (let i = min; i <= max; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'rep-picker__num';
+    cell.dataset.value = String(i);
+    cell.textContent = i;
+    cell.setAttribute('role', 'option');
+    stripEl.appendChild(cell);
+  }
+  const cells = Array.from(stripEl.querySelectorAll('.rep-picker__num'));
+  let currentValue = min;
+  let suppressChange = false;
+  function findClosestValue() {
+    const stripRect = stripEl.getBoundingClientRect();
+    // If the picker is in a hidden container (display:none modal), rect is 0.
+    // Bail out and let the caller re-fire after the container becomes visible.
+    if (stripRect.width === 0) return currentValue;
+    const centerX = stripRect.left + stripRect.width / 2;
+    let closest = null;
+    let closestDist = Infinity;
+    for (const cell of cells) {
+      const r = cell.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const d = Math.abs(cx - centerX);
+      if (d < closestDist) { closestDist = d; closest = cell; }
+    }
+    return closest ? parseInt(closest.dataset.value, 10) : min;
+  }
+  function refreshActive() {
+    const newVal = findClosestValue();
+    for (const cell of cells) {
+      const v = parseInt(cell.dataset.value, 10);
+      cell.classList.toggle('is-active', v === newVal);
+      cell.classList.toggle('is-near', Math.abs(v - newVal) === 1);
+    }
+    if (newVal !== currentValue) {
+      currentValue = newVal;
+      if (!suppressChange) onChange(newVal);
+    }
+  }
+  let raf = null;
+  stripEl.addEventListener('scroll', () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => { raf = null; refreshActive(); });
+  }, { passive: true });
+  stripEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const cell = e.target.closest('.rep-picker__num');
+    if (!cell) return;
+    const target = cell.offsetLeft + cell.offsetWidth / 2 - stripEl.clientWidth / 2;
+    stripEl.scrollTo({ left: target, behavior: 'smooth' });
+  });
+  function setValue(n) {
+    n = Math.max(min, Math.min(max, n | 0));
+    const cell = cells[n - min];
+    if (!cell) return;
+    suppressChange = true;
+    // Direct scrollLeft assignment is instant + reliable on hidden->shown
+    // transitions (modal open). scrollIntoView quirks across browsers avoided.
+    const target = cell.offsetLeft + cell.offsetWidth / 2 - stripEl.clientWidth / 2;
+    stripEl.scrollLeft = target;
+    currentValue = n;
+    refreshActive();
+    requestAnimationFrame(() => { suppressChange = false; });
+  }
+  function getValue() { return currentValue; }
+  setValue(min);
+  return { setValue, getValue, refreshActive };
+}
+
+const repPicker = createRepPicker(document.getElementById("rep-picker-strip"), {
+  min: 0, max: 50,
+  onChange: function(newVal) {
+    // Mirrors the old +/- handler semantics: if there's an active log entry
+    // (browsing, or just-completed during rest), write into it; otherwise
+    // update the in-flight repCount for the upcoming set.
+    const log = getActiveLogForEdit();
+    if (log) {
+      log.reps = newVal;
+      if (log === currentLogEntry) repCount = newVal;
+    } else {
+      repCount = newVal;
+    }
+    saveState();
+  }
+});
+const editRepPicker = createRepPicker(document.getElementById("edit-rep-picker-strip"), {
+  min: 0, max: 50,
+  onChange: function(newVal) {
+    editRepCount = newVal;
+  }
+});
+// Position the main picker at the loose repCount (default 10). syncLogArea
+// will overwrite this once a working set / browsed log determines the value.
+repPicker.setValue(repCount);
 
 elDayTitle.textContent = dayType;
 document.title = "Gym - " + dayType;
@@ -1720,7 +1841,7 @@ function applyState(notesValue) {
       elBtn.className = "resting";
       elSkip.style.display = "flex";
       elLogArea.style.display = "flex";
-      elRepCount.textContent = repCount;
+      repPicker.setValue(repCount);
       elNotesInput.value = notesValue;
       showRestRing(true, false);
       requestWakeLock();
@@ -1746,7 +1867,7 @@ function applyState(notesValue) {
     elBtn.className = "paused";
     elSkip.style.display = "flex";
     elLogArea.style.display = "flex";
-    elRepCount.textContent = repCount;
+    repPicker.setValue(repCount);
     elNotesInput.value = notesValue;
     showRestRing(true, true);
     updateRestRing();
@@ -1758,7 +1879,7 @@ function applyState(notesValue) {
     elTimerLabel.textContent = "LOG YOUR LAST SET";
     elSkip.style.display = "none";
     elLogArea.style.display = "flex";
-    elRepCount.textContent = repCount;
+    repPicker.setValue(repCount);
     elNotesInput.value = notesValue;
   } else if (state === "ready") {
     renderExercise();
@@ -1790,7 +1911,7 @@ function applyState(notesValue) {
     if (state !== 'finished') elLogArea.style.display = 'flex';
   }
   // Sync log area UI (reps/notes/difficulty) with the active log entry.
-  // Overrides per-branch elRepCount/elNotesInput values set above, ensuring
+  // Overrides per-branch repPicker/elNotesInput values set above, ensuring
   // UI matches whichever log is being edited (current working or viewed).
   if (elLogArea.style.display === 'flex') syncLogArea();
   updateNavButtons();
@@ -2263,9 +2384,12 @@ function openEditModal(exerciseIdx, setIdx) {
   editRepCount = log.reps;
   elEditExercise.textContent = workout[exerciseIdx].name;
   elEditSet.textContent = "Set " + (setIdx + 1) + " \u00b7 " + workout[exerciseIdx].weight;
-  elEditReps.textContent = editRepCount;
   elEditNotes.value = log.note || "";
   elEditModal.classList.add("show");
+  // Picker scrollLeft only behaves correctly once the modal is laid out
+  // (display: none \u2192 visible). Defer one frame so getBoundingClientRect()
+  // returns real dimensions before we position the strip.
+  requestAnimationFrame(() => editRepPicker.setValue(editRepCount));
 }
 function closeEditModal() {
   elEditModal.classList.remove("show");
@@ -2280,13 +2404,6 @@ elEditSave.addEventListener("click", () => {
     saveState();
   }
   closeEditModal();
-});
-elEditRepMinus.addEventListener("click", () => {
-  if (editRepCount > 0) { editRepCount--; elEditReps.textContent = editRepCount; }
-});
-elEditRepPlus.addEventListener("click", () => {
-  editRepCount++;
-  elEditReps.textContent = editRepCount;
 });
 elEditModal.addEventListener("click", (e) => {
   if (e.target === elEditModal) closeEditModal();
@@ -2368,32 +2485,6 @@ elSkip.addEventListener("click", (e) => {
     skipRest();
     elSkip.classList.remove("pressed");
   }, 160);
-});
-elRepMinus.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const log = getActiveLogForEdit();
-  if (log) {
-    log.reps = Math.max(0, log.reps - 1);
-    elRepCount.textContent = log.reps;
-    if (log === currentLogEntry) repCount = log.reps;
-  } else if (repCount > 0) {
-    repCount--;
-    elRepCount.textContent = repCount;
-  }
-  saveState();
-});
-elRepPlus.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const log = getActiveLogForEdit();
-  if (log) {
-    log.reps += 1;
-    elRepCount.textContent = log.reps;
-    if (log === currentLogEntry) repCount = log.reps;
-  } else {
-    repCount++;
-    elRepCount.textContent = repCount;
-  }
-  saveState();
 });
 elNotesInput.addEventListener("input", () => {
   const log = getActiveLogForEdit();
