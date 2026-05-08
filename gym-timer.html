@@ -1448,12 +1448,21 @@ const VoiceCue = (() => {
     arrayBuffers.forEach((ab, name) => decodeIfReady(name));
   }
 
-  function play(name) {
-    if (!settings.voice) return Promise.resolve();
+  async function play(name) {
+    if (!settings.voice) return;
     recoverAudioCtx();
-    if (!audioCtx || !unlocked) return Promise.resolve();
+    if (!audioCtx || !unlocked) return;
+    // Wait briefly for the buffer to finish decoding if a play() races with
+    // the post-unlock decode pass (first cue right after a user gesture).
+    // Without this, the first audio in a sequence frequently silent-fails
+    // because decodeAudioData hasn't resolved yet.
+    let waited = 0;
+    while (!decodedBuffers.has(name) && waited < 500) {
+      await new Promise(r => setTimeout(r, 50));
+      waited += 50;
+    }
     const buffer = decodedBuffers.get(name);
-    if (!buffer) return Promise.resolve();
+    if (!buffer) return;
     return new Promise(resolve => {
       try {
         const source = audioCtx.createBufferSource();
