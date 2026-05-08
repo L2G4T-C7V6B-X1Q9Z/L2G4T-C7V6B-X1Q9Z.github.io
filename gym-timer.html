@@ -20,7 +20,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 64px 20px 170px;
+    padding: 28px 20px 170px;
     -webkit-user-select: none;
     user-select: none;
   }
@@ -29,7 +29,7 @@
     color: #888;
     letter-spacing: 4px;
     text-transform: uppercase;
-    margin-bottom: 24px;
+    margin-bottom: 14px;
     font-weight: 400;
     text-align: center;
   }
@@ -1074,13 +1074,17 @@ function renderSetLabel() {
 // room for the NOW + SET pills stacked above it inside .btn-wrap. Computed
 // from real rendered coordinates — stable across viewport size + state.
 function centerMainButton() {
-  if (!elTimer || !elDifficultyRow || !elBtnWrap) return;
-  const timerRect = elTimer.getBoundingClientRect();
+  if (!elTimer || !elTimerLabel || !elDifficultyRow || !elBtnWrap) return;
+  const labelRect = elTimerLabel.getBoundingClientRect();
   const diffRect = elDifficultyRow.getBoundingClientRect();
-  if (timerRect.height === 0 || diffRect.height === 0) return;
-  const midY = (timerRect.bottom + diffRect.top) / 2;
+  if (labelRect.height === 0 || diffRect.height === 0) return;
   const btnH = elBtnWrap.offsetHeight || 184;
-  elBtnWrap.style.top = (midY - btnH / 2) + "px";
+  // Position the ring's TOP 16px below the timer-label bottom so the REST/GO
+  // text is never clipped by the ring arc. Cap to fit above the difficulty
+  // row (with 8px breathing room) on shorter viewports.
+  const desiredTop = labelRect.bottom + 16;
+  const maxTop = diffRect.top - btnH - 8;
+  elBtnWrap.style.top = Math.min(desiredTop, maxTop) + "px";
   elBtnWrap.style.transform = "translateX(-50%)";
 }
 function syncLogArea() {
