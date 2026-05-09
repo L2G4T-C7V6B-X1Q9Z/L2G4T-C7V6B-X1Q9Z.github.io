@@ -960,7 +960,26 @@ const workout = [
       "Aim 11-12. S1 came in at 10 last session — push for 12 clean. 1-2 RIR.",
       "Match S1. Last session S2 was 9, slightly behind. Beat it.",
       "Last set. 0-1 RIR. **Need 10+ to keep trigger alive.** 12/12/10+ = jump to 265."
-    ]
+    ],
+    trigger: [12, 12, 10],
+    triggerWeight: "265 lbs",
+    adviceFor: function(setIdx, prev) {
+      if (setIdx === 1) {
+        const s1 = prev[0];
+        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1 hit 12 with gas left. Push 12+ here, S3=10+ flips 265. Trigger ALIVE.";
+        if (s1.reps >= 12) return "S1=12 " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". Match it, S3=10+ flips 265. Don't drop below 11.";
+        if (s1.reps === 11) return "S1=11 (1 short of trigger). Push 12 here, S3=10+ keeps 265 alive.";
+        if (s1.reps >= 9) return "S1=" + s1.reps + " (below 12). Trigger paused this session. Match S1, build for next.";
+        return "S1=" + s1.reps + " -- heavy first session. Form > reps. 265 deferred.";
+      }
+      if (setIdx === 2) {
+        const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
+        if (onTrack) return "TRIGGER ALIVE -- 10+ here flips 265 next Lower. Last sets are grit. Push.";
+        const minRep = Math.min(prev[0].reps, prev[1].reps);
+        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). Finish " + minRep + "+ with form. 265 next time.";
+      }
+      return null;
+    }
   },
   {
     name: "Leg Curl Machine",
@@ -973,7 +992,25 @@ const workout = [
       "Aim 10-12. **HARD only (1-2 RIR).** Pacing fix is the strategy — don't max S1, save it for S2/S3.",
       "Match or beat S1 (last session S2=9). If S1 paced right, S2 should hit 10+.",
       "Last set. 0-1 RIR. **S3 has been the wall for 3 sessions in a row (5/8/8).** Grit through. 10+ unlocks the 70 trigger."
-    ]
+    ],
+    trigger: [12, 12, 10],
+    triggerWeight: "70 lbs",
+    adviceFor: function(setIdx, prev) {
+      if (setIdx === 1) {
+        const s1 = prev[0];
+        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=12 with room left -- pacing perfect. Push 12 here. Trigger ALIVE.";
+        if (s1.reps >= 12) return "S1=12 " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". Match it. S3 wall is the real test.";
+        if (s1.reps === 11) return "S1=11. Push 12 here -- need it for the 70 jump. Pacing fix holding.";
+        if (s1.difficulty === 5) return "S1=" + s1.reps + " MAX -- too hot off the line. Pull S2 back to HARD, save S3.";
+        return "S1=" + s1.reps + ". Below trigger. Match S1, focus on full ROM + peak contraction.";
+      }
+      if (setIdx === 2) {
+        const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
+        if (onTrack) return "TRIGGER ALIVE -- 10+ here flips 70. **S3 has been the WALL (5/8/8 last 3 sessions).** GRIT THROUGH. Strict form, no momentum.";
+        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). S3 wall has held 3 sessions -- break the pattern. Force " + Math.max(8, Math.min(prev[0].reps, prev[1].reps)) + "+ with form.";
+      }
+      return null;
+    }
   },
   {
     name: "Leg Press Calf Raises",
@@ -986,7 +1023,25 @@ const workout = [
       "Aim 13-15. S1 hit 15 last time — match or beat. 1-2 RIR.",
       "Match S1 or within 1-2. Last session S2=12 (just below range). Push for 13+.",
       "Last set. 0-1 RIR. Last session S3=10 (below range). Build to 12+ before the 130 jump."
-    ]
+    ],
+    trigger: [13, 13, 12],
+    triggerWeight: "130 lbs",
+    adviceFor: function(setIdx, prev) {
+      if (setIdx === 1) {
+        const s1 = prev[0];
+        if (s1.reps >= 15) return "S1=" + s1.reps + " (top of range). Match here for retention pattern. 130 jump getting close.";
+        if (s1.reps >= 13) return "S1=" + s1.reps + " in target band. Push 13+ here. Building toward 130.";
+        if (s1.reps >= 12) return "S1=" + s1.reps + ". Below 13 target. Match S1, focus on full stretch + 1-sec pause.";
+        return "S1=" + s1.reps + " -- heavy. Match S1, full ROM > rep count.";
+      }
+      if (setIdx === 2) {
+        const s1 = prev[0], s2 = prev[1];
+        if (s1.reps >= 13 && s2.reps >= 13) return "S1+S2 both >=13 ✓ -- push 12+ here for 13/13/12+ retention. 130 jump UNLOCKED next Lower.";
+        if (Math.min(s1.reps, s2.reps) >= 12) return "Close to retention pattern (S1/S2=" + s1.reps + "/" + s2.reps + "). Push 12+ here, build for next session.";
+        return "S1/S2=" + s1.reps + "/" + s2.reps + ". 130 jump deferred. Match the lower set with form.";
+      }
+      return null;
+    }
   },
   {
     name: "Cable Face Pulls",
@@ -998,7 +1053,19 @@ const workout = [
     setNotes: [
       "Aim 18-20. Strict form -- pull to forehead, external rotation, no momentum. Last session S1=16, push higher.",
       "Last set. 0-1 RIR. **Need 18+ to keep trigger pursuit alive for 40.** Last session S2=15."
-    ]
+    ],
+    trigger: [18, 18],
+    triggerWeight: "40 lbs",
+    adviceFor: function(setIdx, prev) {
+      if (setIdx === 1) {
+        const s1 = prev[0];
+        if (s1.reps >= 18) return "S1=" + s1.reps + " >=18 ✓. Need 18+ here too for the 40 jump. Push, strict form.";
+        if (s1.reps >= 16) return "S1=" + s1.reps + " (close but below 18). Push 18+ here -- still alive for 40.";
+        if (s1.reps >= 14) return "S1=" + s1.reps + ". 35 still building. Match S1, no momentum.";
+        return "S1=" + s1.reps + " -- form's the priority. Match S1, build retention for next session.";
+      }
+      return null;
+    }
   },
 ];
 
@@ -1253,6 +1320,9 @@ const repPicker = createRepPicker(document.getElementById("rep-picker-strip"), {
     } else {
       repCount = newVal;
     }
+    // Refresh the next set's advice — dynamic notes feed off the prior set's
+    // logged reps. Cheap text-only update; doesn't disturb layout.
+    refreshSetNote();
     saveState();
   }
 });
@@ -1666,6 +1736,70 @@ function renderProgress() {
   }
 }
 
+// Dynamic set advice: returns a string tailored to the user's prior-set
+// performance in this exercise, or null to fall back to static setNotes.
+// Gated on previous sets being FULLY logged (reps + difficulty) so the
+// advice only appears once the user has actually committed a result, not
+// based on default reps. ex.adviceFor(setIdx, prevLogs, ex) is called when
+// defined; otherwise defaultAdvice() handles the generic trigger case
+// for any exercise that declares a `trigger` array + `triggerWeight`.
+function defaultAdvice(setIdx, prev, ex) {
+  if (!Array.isArray(ex.trigger) || setIdx === 0) return null;
+  if (setIdx >= ex.trigger.length) return null;
+  const reqHere = ex.trigger[setIdx];
+  const passingPrior = prev.every((log, i) => log.reps >= ex.trigger[i]);
+  const weightTag = ex.triggerWeight ? " for " + ex.triggerWeight : "";
+  if (passingPrior) {
+    if (setIdx === ex.trigger.length - 1) {
+      return "TRIGGER ALIVE -- " + reqHere + "+ here flips" + weightTag + " next session. Push, form first.";
+    }
+    return "On track for trigger" + weightTag + " -- push " + reqHere + "+ here.";
+  }
+  const failedAt = prev.findIndex((log, i) => log.reps < ex.trigger[i]);
+  return "Trigger out (S" + (failedAt + 1) + "=" + prev[failedAt].reps + ", needed " + ex.trigger[failedAt] + "). Match " + reqHere + " here, build for next session.";
+}
+
+function computeSetNote(exIdx, setIdx) {
+  const ex = workout[exIdx];
+  if (!ex) return "";
+  // Build prev-set logs in order. Only count a prior set as "logged" if BOTH
+  // reps and difficulty are committed -- prevents dynamic advice from firing
+  // off default reps before the user has actually graded the set.
+  const prevLogs = [];
+  let allLogged = true;
+  for (let i = 0; i < setIdx; i++) {
+    const log = setLogs.find(l => l.exercise === exIdx && l.set === i);
+    if (log && log.difficulty != null) {
+      prevLogs.push({ reps: log.reps, difficulty: log.difficulty });
+    } else {
+      allLogged = false;
+      break;
+    }
+  }
+  if (allLogged && prevLogs.length === setIdx && setIdx > 0) {
+    if (typeof ex.adviceFor === 'function') {
+      const dynamic = ex.adviceFor(setIdx, prevLogs, ex);
+      if (dynamic) return dynamic;
+    }
+    const generic = defaultAdvice(setIdx, prevLogs, ex);
+    if (generic) return generic;
+  }
+  // Static fallback (S1 always lands here; later sets land here pre-grading).
+  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) return ex.setNotes[setIdx];
+  return ex.note || "";
+}
+
+// Re-render JUST the exercise note. Cheaper than renderExercise() and
+// non-disruptive to layout (no centerMainButton churn). Called from rep
+// picker onChange + difficulty handler so set N's advice updates live as
+// the user grades set N-1 during rest.
+function refreshSetNote() {
+  const exIdx = isBrowsing() ? viewingExercise : currentExercise;
+  const setIdx = isBrowsing() ? viewingSet : currentSet;
+  elNote.textContent = computeSetNote(exIdx, setIdx);
+  fitNoteToBox();
+}
+
 function renderExercise() {
   // When browsing, show the viewed set's context; otherwise current working.
   const exIdx = isBrowsing() ? viewingExercise : currentExercise;
@@ -1674,13 +1808,9 @@ function renderExercise() {
   elName.textContent = ex.name;
   // Order: Weight \u00b7 Set X/Y \u00b7 reps
   elSet.textContent = ex.weight + "  \u00b7  Set " + (setIdx + 1) + "/" + ex.sets + "  \u00b7  " + ex.reps + " reps";
-  // Set-specific note takes priority, falls back to exercise note
-  let noteText = "";
-  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) {
-    noteText = ex.setNotes[setIdx];
-  } else if (ex.note) {
-    noteText = ex.note;
-  }
+  // Compute set-specific note (dynamic advice when prev sets are graded,
+  // static setNotes[] otherwise).
+  let noteText = computeSetNote(exIdx, setIdx);
   elNote.textContent = noteText;
   fitNoteToBox();
   renderProgress();
@@ -2550,6 +2680,9 @@ elDifficultyRow.addEventListener("click", (e) => {
   if (!log) return;
   log.difficulty = (log.difficulty === diff) ? null : diff;
   renderDifficulty(log);
+  // Refresh next set's advice — difficulty grade is the gate that triggers
+  // dynamic notes (computeSetNote requires diff != null on prior sets).
+  refreshSetNote();
   saveState();
 });
 elReturnPill.addEventListener("click", returnToWorking);
