@@ -262,13 +262,14 @@
     min-width: 0;
   }
   .log-row {
-    display: flex;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: center;
-    gap: 16px;
+    column-gap: 12px;
     width: 100%;
   }
+  .log-row > #rep-label { justify-self: end; }
+  .log-row > #notes-input { justify-self: stretch; }
   #difficulty-row {
     display: flex;
     flex-direction: row;
@@ -840,15 +841,17 @@
   }
   .build-stamp {
     position: fixed;
-    bottom: 4px;
-    left: 6px;
+    left: 4px;
+    bottom: 80px;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
     font-size: 9px;
-    color: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.10);
     font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
     pointer-events: none;
     user-select: none;
     z-index: 1;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.5px;
   }
 </style>
 </head>
@@ -1149,12 +1152,13 @@ function centerMainButton() {
   const diffRect = elDifficultyRow.getBoundingClientRect();
   if (labelRect.height === 0 || diffRect.height === 0) return;
   const btnH = elBtnWrap.offsetHeight || 184;
-  // Position the ring's TOP 16px below the timer-label bottom so the REST/GO
-  // text is never clipped by the ring arc. Cap to fit above the difficulty
-  // row (with 8px breathing room) on shorter viewports.
-  const desiredTop = labelRect.bottom + 16;
+  // Vertically center the button between timer-label bottom and difficulty-row
+  // top so it doesn't look top-heavy on tall phone viewports. Clamp to keep
+  // 16px clearance above (so REST/GO text isn't clipped) and 8px below.
+  const minTop = labelRect.bottom + 16;
   const maxTop = diffRect.top - btnH - 8;
-  elBtnWrap.style.top = Math.min(desiredTop, maxTop) + "px";
+  const centered = (labelRect.bottom + diffRect.top - btnH) / 2;
+  elBtnWrap.style.top = Math.max(minTop, Math.min(centered, maxTop)) + "px";
   elBtnWrap.style.transform = "translateX(-50%)";
 }
 function syncLogArea() {
@@ -3011,6 +3015,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">build 2026-05-12 16:50</div>
+<div class="build-stamp">rocket · 2026-05-12 17:05</div>
 </body>
 </html>
