@@ -49,16 +49,16 @@
     text-align: center;
   }
   #exercise-note {
-    font-size: 15px;
-    color: #999;
+    font-size: 18px;
+    color: #aaa;
     font-style: italic;
     margin-bottom: 8px;
     text-align: center;
-    max-width: 340px;
+    max-width: 360px;
     line-height: 1.4;
     /* Fixed height so 1/2/3-line notes don't shift the layout underneath.
        Flex-centered so 1-line notes don't leave dead space below. */
-    height: 48px;
+    height: 58px;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -229,7 +229,7 @@
     flex-direction: row;
     align-items: stretch;
     justify-content: center;
-    gap: 8px;
+    gap: 4px;
     margin-top: auto;
     padding: 10px 20px 12px;
     width: 100%;
@@ -239,9 +239,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-right: 8px;
+    padding-right: 4px;
     border-right: 1px solid #333;
-    min-width: 22px;
+    min-width: 20px;
     flex-shrink: 0;
   }
   #set-label-text {
@@ -273,7 +273,6 @@
   #difficulty-row {
     display: flex;
     flex-direction: row;
-    justify-content: center;
     gap: 4px;
     width: 100%;
   }
@@ -304,7 +303,6 @@
   }
   .diff-btn {
     flex: 1;
-    max-width: 68px;
     background: transparent;
     color: #777;
     border: 1px solid #333;
@@ -842,7 +840,7 @@
   .build-stamp {
     position: fixed;
     left: 4px;
-    bottom: 80px;
+    bottom: 50px;
     writing-mode: vertical-rl;
     transform: rotate(180deg);
     font-size: 10px;
@@ -1149,14 +1147,15 @@ function renderSetLabel() {
 function centerMainButton() {
   if (!elTimer || !elTimerLabel || !elDifficultyRow || !elBtnWrap) return;
   const timerRect = elTimer.getBoundingClientRect();
+  const labelRect = elTimerLabel.getBoundingClientRect();
   const diffRect = elDifficultyRow.getBoundingClientRect();
   if (timerRect.height === 0 || diffRect.height === 0) return;
   const btnH = elBtnWrap.offsetHeight || 184;
-  // Center the button vertically between the digital timer's bottom and the
-  // difficulty-row's top -- the actual visible bracket Soren cares about.
-  // (Old code used elTimerLabel.bottom, but timer-label is EMPTY pre-start
-  // while still occupying CSS height, which pulled the midpoint down.)
-  const minTop = timerRect.bottom + 8;
+  // Center between the timer DISPLAY's bottom and the difficulty row's top
+  // (visual midpoint of the bracket Soren cares about), but never let the
+  // button TOP rise above the timer-label bottom -- otherwise the button
+  // covers REST/GO/PAUSED text during a rest period.
+  const minTop = labelRect.bottom + 8;
   const maxTop = diffRect.top - btnH - 8;
   const centered = (timerRect.bottom + diffRect.top - btnH) / 2;
   elBtnWrap.style.top = Math.max(minTop, Math.min(centered, maxTop)) + "px";
@@ -3016,6 +3015,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">anvil · 2026-05-12 17:20</div>
+<div class="build-stamp">compass · 2026-05-12 17:30</div>
 </body>
 </html>
