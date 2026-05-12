@@ -1408,12 +1408,39 @@ function recoverAudioCtx() {
       VoiceCue._afterContextRecreated();
     }
   }
-  // Path B: context is suspended (rest period, backgrounded tab) -- resume.
-  // resume() rejects silently if the context just transitioned to closed; the
-  // next caller will hit Path A and recreate.
-  if (audioCtx.state === 'suspended') {
+  // Path B: context is suspended OR interrupted (iOS background) -- resume.
+  // 'interrupted' is the iOS-specific transitional state when the page is
+  // backgrounded; older code only checked 'suspended' and let interrupted
+  // contexts stay silent forever. resume() rejects silently if the context
+  // just transitioned to closed; the next caller will hit Path A and recreate.
+  if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
     audioCtx.resume().catch(() => {});
   }
+}
+
+// iOS requires a real USER gesture to resume an interrupted/suspended audio
+// context. visibilitychange is NOT a user gesture, so its resume() call often
+// silent-fails on iOS Safari -- the context stays interrupted, and audio
+// remains dead for the rest of the workout. Hooking ANY touchend/pointerdown
+// anywhere on the page guarantees the first real interaction after the user
+// returns to the tab unlocks audio.
+//
+// touchend > touchstart on iOS: autoplay-unlock criteria are only met when
+// the finger leaves the screen, not on initial touch.
+let _audioGestureRecoveryAttached = false;
+function attachGlobalAudioRecovery() {
+  if (_audioGestureRecoveryAttached) return;
+  _audioGestureRecoveryAttached = true;
+  const recover = () => {
+    if (audioCtx && (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted')) {
+      recoverAudioCtx();
+    } else if (!audioCtx) {
+      recoverAudioCtx();
+    }
+  };
+  ['touchend', 'pointerdown', 'mousedown', 'click', 'keydown'].forEach(ev => {
+    document.addEventListener(ev, recover, { capture: true, passive: true });
+  });
 }
 function playAlertSound() {
   try {
@@ -1525,6 +1552,13 @@ const VoiceCue = (() => {
     }
     const buffer = decodedBuffers.get(name);
     if (!buffer) return;
+    // Wait for the context to actually be running. resume() is async; without
+    // this, source.start(0) can fire into a still-suspended context and emit
+    // nothing -- the exact silent-fail Soren hits after backgrounding the tab.
+    if (audioCtx.state !== 'running') {
+      try { await audioCtx.resume(); } catch(e) {}
+    }
+    if (audioCtx.state !== 'running') return;
     return new Promise(resolve => {
       try {
         const source = audioCtx.createBufferSource();
@@ -2949,6 +2983,7 @@ showRestRing(false);
 updateNavButtons();
 applySettingsToggles();
 VoiceCue.init();
+attachGlobalAudioRecovery();
 if (!restoreState()) {
   // Fresh load (no saved state, or state TTL expired): enter pre-start.
   // The user taps "Start Workout" to begin — that gesture unlocks audio
