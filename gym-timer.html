@@ -229,7 +229,7 @@
     flex-direction: row;
     align-items: stretch;
     justify-content: center;
-    gap: 4px;
+    gap: 8px;
     margin-top: auto;
     padding: 10px 20px 12px;
     width: 100%;
@@ -239,9 +239,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-right: 4px;
+    padding-right: 8px;
     border-right: 1px solid #333;
-    min-width: 20px;
+    min-width: 22px;
     flex-shrink: 0;
   }
   #set-label-text {
@@ -1151,14 +1151,17 @@ function centerMainButton() {
   const diffRect = elDifficultyRow.getBoundingClientRect();
   if (timerRect.height === 0 || diffRect.height === 0) return;
   const btnH = elBtnWrap.offsetHeight || 184;
-  // Center between the timer DISPLAY's bottom and the difficulty row's top
-  // (visual midpoint of the bracket Soren cares about), but never let the
-  // button TOP rise above the timer-label bottom -- otherwise the button
-  // covers REST/GO/PAUSED text during a rest period.
+  // Center between timer-display bottom and difficulty-row top (visual
+  // midpoint), but:
+  //   - never rise above timer-label bottom + 8 (REST/GO/PAUSED clearance)
+  //   - never come within 24 of difficulty-row top (was 8 -- felt too tight)
+  // On compact viewports where the two clamps would cross, the bottom
+  // clearance wins because that's the gap Soren consistently flags.
   const minTop = labelRect.bottom + 8;
-  const maxTop = diffRect.top - btnH - 8;
+  const maxTop = diffRect.top - btnH - 24;
   const centered = (timerRect.bottom + diffRect.top - btnH) / 2;
-  elBtnWrap.style.top = Math.max(minTop, Math.min(centered, maxTop)) + "px";
+  const clamped = maxTop < minTop ? maxTop : Math.max(minTop, Math.min(centered, maxTop));
+  elBtnWrap.style.top = clamped + "px";
   elBtnWrap.style.transform = "translateX(-50%)";
 }
 function syncLogArea() {
@@ -3015,6 +3018,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">compass · 2026-05-12 17:30</div>
+<div class="build-stamp">glacier · 2026-05-12 17:45</div>
 </body>
 </html>
