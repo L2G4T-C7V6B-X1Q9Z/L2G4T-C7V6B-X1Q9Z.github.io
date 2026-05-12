@@ -49,16 +49,16 @@
     text-align: center;
   }
   #exercise-note {
-    font-size: 13px;
-    color: #888;
+    font-size: 15px;
+    color: #999;
     font-style: italic;
     margin-bottom: 8px;
     text-align: center;
-    max-width: 320px;
-    line-height: 1.35;
+    max-width: 340px;
+    line-height: 1.4;
     /* Fixed height so 1/2/3-line notes don't shift the layout underneath.
        Flex-centered so 1-line notes don't leave dead space below. */
-    height: 40px;
+    height: 48px;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -845,8 +845,8 @@
     bottom: 80px;
     writing-mode: vertical-rl;
     transform: rotate(180deg);
-    font-size: 9px;
-    color: rgba(255, 255, 255, 0.10);
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.32);
     font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
     pointer-events: none;
     user-select: none;
@@ -1148,16 +1148,17 @@ function renderSetLabel() {
 // from real rendered coordinates — stable across viewport size + state.
 function centerMainButton() {
   if (!elTimer || !elTimerLabel || !elDifficultyRow || !elBtnWrap) return;
-  const labelRect = elTimerLabel.getBoundingClientRect();
+  const timerRect = elTimer.getBoundingClientRect();
   const diffRect = elDifficultyRow.getBoundingClientRect();
-  if (labelRect.height === 0 || diffRect.height === 0) return;
+  if (timerRect.height === 0 || diffRect.height === 0) return;
   const btnH = elBtnWrap.offsetHeight || 184;
-  // Vertically center the button between timer-label bottom and difficulty-row
-  // top so it doesn't look top-heavy on tall phone viewports. Clamp to keep
-  // 16px clearance above (so REST/GO text isn't clipped) and 8px below.
-  const minTop = labelRect.bottom + 16;
+  // Center the button vertically between the digital timer's bottom and the
+  // difficulty-row's top -- the actual visible bracket Soren cares about.
+  // (Old code used elTimerLabel.bottom, but timer-label is EMPTY pre-start
+  // while still occupying CSS height, which pulled the midpoint down.)
+  const minTop = timerRect.bottom + 8;
   const maxTop = diffRect.top - btnH - 8;
-  const centered = (labelRect.bottom + diffRect.top - btnH) / 2;
+  const centered = (timerRect.bottom + diffRect.top - btnH) / 2;
   elBtnWrap.style.top = Math.max(minTop, Math.min(centered, maxTop)) + "px";
   elBtnWrap.style.transform = "translateX(-50%)";
 }
@@ -3015,6 +3016,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">rocket · 2026-05-12 17:05</div>
+<div class="build-stamp">shark · 2026-05-12 17:14</div>
 </body>
 </html>
