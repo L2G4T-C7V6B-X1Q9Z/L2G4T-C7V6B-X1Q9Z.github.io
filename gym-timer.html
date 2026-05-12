@@ -1562,8 +1562,14 @@ const VoiceCue = (() => {
     // the post-unlock decode pass (first cue right after a user gesture).
     // Without this, the first audio in a sequence frequently silent-fails
     // because decodeAudioData hasn't resolved yet.
+    // Wait up to 3s for the buffer to finish decoding. Old 500ms wasn't enough
+    // when the user taps Start Workout immediately after page load — 42 mp3
+    // fetches + decode passes race against the tap, and play() silently fails
+    // because the buffer isn't ready. Hitting Reset (location.reload + tap
+    // settling) used to be the only way to get audio working; bumping the
+    // patience window kills that workaround.
     let waited = 0;
-    while (!decodedBuffers.has(name) && waited < 500) {
+    while (!decodedBuffers.has(name) && waited < 3000) {
       await new Promise(r => setTimeout(r, 50));
       waited += 50;
     }
@@ -2660,20 +2666,14 @@ function resetConfirmReset() {
 elSettingsBtn.addEventListener("click", openSettings);
 elSettingsClose.addEventListener("click", () => { resetConfirmReset(); closeSettings(); });
 elSettingsReset.addEventListener("click", () => {
-  if (elSettingsReset.classList.contains('confirming')) {
-    // Second tap -- actually reset
-    VoiceCue.cancel();
-    VoiceCue.play('workout-reset');
-    setTimeout(() => {
-      try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
-      location.reload();
-    }, settings.voice ? 1500 : 200);
-  } else {
-    elSettingsReset.classList.add('confirming');
-    elSettingsReset.textContent = 'Tap again to confirm';
-    if (resetConfirmTimer) clearTimeout(resetConfirmTimer);
-    resetConfirmTimer = setTimeout(resetConfirmReset, 3000);
-  }
+  // Single-tap reset -- no confirm step. Modal is buried behind the gear icon
+  // so an accidental tap is already two-clicks deep.
+  VoiceCue.cancel();
+  VoiceCue.play('workout-reset');
+  setTimeout(() => {
+    try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+    location.reload();
+  }, settings.voice ? 1500 : 200);
 });
 elSettingsModal.addEventListener("click", (e) => {
   if (e.target === elSettingsModal) closeSettings();
@@ -3016,6 +3016,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">shark · 2026-05-12 17:14</div>
+<div class="build-stamp">anvil · 2026-05-12 17:20</div>
 </body>
 </html>
