@@ -1417,6 +1417,7 @@ function initAudio() {
 // 'closed', the context cannot be reopened, so we build a new one and
 // re-decode the voice cue buffers (which are bound to the dead context and
 // unusable after it dies).
+let _ctxGen = 0;
 function recoverAudioCtx() {
   // Path A: missing or dead context -- recreate from scratch.
   if (!audioCtx || audioCtx.state === 'closed') {
@@ -1425,11 +1426,7 @@ function recoverAudioCtx() {
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     } catch(e) { return; }
-    // iOS sometimes loses the ambient session category across context death,
-    // which would let voice cues interrupt Spotify instead of mixing with it.
-    try {
-      if ('audioSession' in navigator) navigator.audioSession.type = 'ambient';
-    } catch(e) {}
+    _ctxGen++;
     // Decoded AudioBuffers from the dead context are unusable. Re-decode from
     // the raw ArrayBuffers (those survive context death; AudioBuffers don't).
     if (typeof VoiceCue !== 'undefined' && VoiceCue._afterContextRecreated) {
@@ -1444,6 +1441,13 @@ function recoverAudioCtx() {
   if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
     audioCtx.resume().catch(() => {});
   }
+  // Re-assert ambient session category on EVERY recovery, not just Path A.
+  // iOS can revert the category during backgrounding without closing the context;
+  // if Path B handles recovery and ambient isn't re-asserted, voice cues would
+  // interrupt Spotify on the next play instead of mixing with it.
+  try {
+    if ('audioSession' in navigator) navigator.audioSession.type = 'ambient';
+  } catch(e) {}
 }
 
 // iOS requires a real USER gesture to resume an interrupted/suspended audio
@@ -1456,14 +1460,40 @@ function recoverAudioCtx() {
 // touchend > touchstart on iOS: autoplay-unlock criteria are only met when
 // the finger leaves the screen, not on initial touch.
 let _audioGestureRecoveryAttached = false;
+// Cues queued by code paths that fired pre-gesture (e.g. restDone from
+// visibilitychange). Drained on the next real user gesture, after the
+// audio context is recovered AND VoiceCue is unlocked.
+let pendingPostGestureCues = [];
 function attachGlobalAudioRecovery() {
   if (_audioGestureRecoveryAttached) return;
   _audioGestureRecoveryAttached = true;
   const recover = () => {
-    if (audioCtx && (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted')) {
+    // Broaden state check: 'closed' was missing -- audioCtx truthy + state 'closed'
+    // hit neither branch in the old code, so first-tap recovery silent-failed
+    // after iOS reclaimed the context.
+    if (!audioCtx || audioCtx.state === 'closed' ||
+        audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
       recoverAudioCtx();
-    } else if (!audioCtx) {
-      recoverAudioCtx();
+    }
+    // VoiceCue.unlock() is idempotent -- bails if already unlocked. The
+    // unlocked flag is IIFE-scoped and only flipped by elBtn click; without
+    // this call, any non-main-button gesture restores the context but leaves
+    // VoiceCue.play() gated and silent.
+    if (typeof VoiceCue !== 'undefined' && VoiceCue.unlock) {
+      VoiceCue.unlock();
+    }
+    // Keepalive previously only started from elBtn click. If page was reloaded
+    // mid-rest (state restored from localStorage), elBtn never fired, and the
+    // new context will re-suspend in ~30s of silence without keepalive. Start
+    // it on first gesture instead. Idempotent.
+    startAudioKeepalive();
+    // Drain any cues that were queued when audio wasn't ready.
+    if (pendingPostGestureCues.length && audioCtx && audioCtx.state === 'running') {
+      const drained = pendingPostGestureCues.slice();
+      pendingPostGestureCues.length = 0;
+      drained.forEach(seq => {
+        try { VoiceCue.playSequence(seq); } catch(e) {}
+      });
     }
   };
   ['touchend', 'pointerdown', 'mousedown', 'click', 'keydown'].forEach(ev => {
@@ -1567,10 +1597,27 @@ const VoiceCue = (() => {
     if (!ab) return;
     // .slice(0) creates a copy so the original ArrayBuffer isn't detached
     // (some browsers detach the input buffer after decodeAudioData).
+    // Capture the context generation so a decode that resolves AFTER the
+    // context has been recreated doesn't pollute the new decodedBuffers map.
+    const myGen = _ctxGen;
     try {
       audioCtx.decodeAudioData(ab.slice(0))
-        .then(buf => decodedBuffers.set(name, buf))
-        .catch(() => {});
+        .then(buf => {
+          if (myGen === _ctxGen) decodedBuffers.set(name, buf);
+        })
+        .catch(() => {
+          // Transient decode failure (iOS rejecting on a closing context, etc).
+          // Retry once on the current generation so the cue isn't lost for the
+          // session. If the context died again, the next _afterContextRecreated
+          // pass will pick it up.
+          if (myGen === _ctxGen && audioCtx && !decodedBuffers.has(name)) {
+            try {
+              audioCtx.decodeAudioData(ab.slice(0))
+                .then(buf => { if (myGen === _ctxGen) decodedBuffers.set(name, buf); })
+                .catch(() => {});
+            } catch(e) {}
+          }
+        });
     } catch(e) {}
   }
 
@@ -1740,6 +1787,11 @@ function maybeFireCountdownCue(secCeil) {
     countdownFiredThresholds.add(secCeil);
     return;
   }
+  // Only mark the threshold fired if audio is actually playable. Otherwise the
+  // next tick (100ms) gets another chance once the context recovers. Without
+  // this gate, every silent-fail during the tab-return recovery window would
+  // permanently suppress that countdown cue.
+  if (!audioCtx || audioCtx.state !== 'running') return;
   countdownFiredThresholds.add(secCeil);
   VoiceCue.play(name);
 }
@@ -2035,6 +2087,10 @@ function applySnapshot(s) {
   // (otherwise back from alert just bounces right back to alert)
   if (state === "resting" && restEndTime && restEndTime < Date.now()) {
     restEndTime = Date.now() + restRemaining * 1000;
+    // Fresh rest needs fresh countdown cues. Without this clear, the snapshot's
+    // already-fired thresholds (60/30/10/5/4/3/2/1) carry over and silence
+    // every cue during the restarted countdown.
+    countdownFiredThresholds = new Set();
   }
 
   applyState(s.notes || "");
@@ -2336,7 +2392,15 @@ function restDone() {
     } else {
       seq.push('tap-to-start');
     }
-    VoiceCue.playSequence(seq);
+    // If we landed here from visibilitychange while the audio context is still
+    // suspended (no user gesture since tab return), playSequence would silent-fail
+    // and the cue would be lost. Queue it instead; the global gesture-recovery
+    // handler drains the queue once a real touch unlocks audio.
+    if (audioCtx && audioCtx.state === 'running') {
+      VoiceCue.playSequence(seq);
+    } else {
+      pendingPostGestureCues.push(seq);
+    }
   }
   // Defer audio/save so UI updates first (no perceptible lag)
   requestAnimationFrame(() => {
@@ -2645,6 +2709,10 @@ function finishWorkout() {
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
   VoiceCue.cancel();
   VoiceCue.play('workout-complete');
+  if (_audioKeepaliveInterval) {
+    clearInterval(_audioKeepaliveInterval);
+    _audioKeepaliveInterval = null;
+  }
 }
 
 // ============ EDIT MODAL ============
@@ -2994,12 +3062,12 @@ function restoreState() {
 }
 
 // ============ VISIBILITY HANDLER ============
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible") return;
-  // iOS may have closed the AudioContext during backgrounding. Recover BEFORE
-  // any path below that fires audio (e.g. the expired-rest restDone() call).
-  // Recovery kicks off async re-decoding of voice buffers; by the time the
-  // user looks at the timer + decides to tap, decoding is usually done.
+// Shared handler for tab-return + BFCache restore. iOS may have closed the
+// AudioContext during backgrounding. Recover BEFORE any path below that fires
+// audio (e.g. the expired-rest restDone() call). Recovery kicks off async
+// re-decoding of voice buffers; by the time the user looks at the timer +
+// decides to tap, decoding is usually done.
+function handleResumeFromBackground() {
   recoverAudioCtx();
   if (state === "resting" && restEndTime) {
     const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
@@ -3015,18 +3083,27 @@ document.addEventListener("visibilitychange", () => {
       [60, 30, 10, 5, 4, 3, 2, 1].forEach(t => {
         if (t > remaining) countdownFiredThresholds.add(t);
       });
+      // Re-arm the keepalive in case it never started (page reload mid-rest)
+      // or was lost to a context recreation. Idempotent.
+      startAudioKeepalive();
     }
   }
   if (state !== "ready" && state !== "finished" && !wakeLock) {
     requestWakeLock();
   }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  handleResumeFromBackground();
 });
 
 // pageshow fires when the page is restored from BFCache (iOS back/forward
 // nav, or Safari swiping back to the timer tab). AudioContexts get closed in
 // BFCache, so this is the canonical recovery point alongside visibilitychange.
-window.addEventListener("pageshow", () => {
-  recoverAudioCtx();
+// Without the rest-expiry catch-up here, a BFCache restore during an expired
+// rest would leave the timer stuck at the pre-cache REST display until tap.
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted) handleResumeFromBackground();
 });
 
 // ============ INIT ============
