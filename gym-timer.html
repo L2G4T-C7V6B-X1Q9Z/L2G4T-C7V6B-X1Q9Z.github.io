@@ -761,13 +761,17 @@
   }
 
   /* Done screen */
-  /* When finished, release the viewport lock so long summaries + copy button
-     are reachable via scroll. The lock exists to prevent accidental scroll
-     during an active workout -- irrelevant once finishWorkout() fires. */
+  /* When finished, release the viewport lock so the summary scrolls AND pin
+     the copy button to the bottom of the viewport so it's always reachable.
+     Body-level scroll on iOS Safari + flex layout was unreliable (Wed May 13
+     report: long summary made copy button unreachable). Fix: fixed-position
+     copy button below, plus extra bottom padding to clear it. */
   body.finished {
     height: auto;
+    min-height: auto;
     overflow: auto;
-    padding-bottom: 60px;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 90px;
   }
   #workout-done {
     display: none;
@@ -834,6 +838,24 @@
   }
   #copy-btn:active { transform: scale(0.97); }
   #copy-btn.copied {
+    background: #1a1a1a;
+    color: #c0392b;
+  }
+  /* Pin copy button to viewport bottom when workout is done so it's always
+     visible regardless of summary length. The body.finished padding-bottom
+     of 90px ensures the last summary line isn't covered by this fixed btn. */
+  body.finished #copy-btn {
+    position: fixed;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 40px);
+    max-width: 340px;
+    z-index: 10;
+    box-shadow: 0 -10px 24px rgba(17, 17, 17, 0.9);
+  }
+  body.finished #copy-btn:active { transform: translateX(-50%) scale(0.97); }
+  body.finished #copy-btn.copied {
     background: #1a1a1a;
     color: #c0392b;
   }
@@ -3137,6 +3159,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">prism · 2026-05-12 19:53</div>
+<div class="build-stamp">prism · 2026-05-13 11:50</div>
 </body>
 </html>
