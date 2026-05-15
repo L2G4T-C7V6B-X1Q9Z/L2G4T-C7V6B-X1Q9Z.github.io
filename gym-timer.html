@@ -1769,6 +1769,7 @@ function exerciseClipName(name) {
     "DB Lateral Raise": "ex-db-lat-raise",
     "Dumbbell Lateral Raise": "ex-db-lat-raise",
     "DB Curls": "ex-db-curls",
+    "DB Curls (REGULAR/supinated)": "ex-db-curls",
     "Dumbbell Curls": "ex-db-curls",
     "Leg Press": "ex-leg-press",
     "Leg Curl": "ex-leg-curl",
@@ -1778,7 +1779,8 @@ function exerciseClipName(name) {
     "Cable Face Pulls": "ex-face-pulls",
     "Face Pulls": "ex-face-pulls",
     "Cable Row": "ex-cable-row",
-    "Single-Arm DB Row": "ex-cable-row",
+    "Cable Rope Row": "ex-cable-row",
+    "Single-Arm DB Row": "ex-single-arm-db-row",
     "Leg Extension": "ex-leg-extension",
     "Incline Press": "ex-incline-press",
     "Overhead Press": "ex-overhead-press",
@@ -2204,9 +2206,9 @@ function applyState(notesValue) {
         let seq;
         if (settings.autoStart) {
           seq = ['rest-complete', setStart].filter(Boolean);
+          // v2: weight NOT re-announced — same weight across all sets within an exercise
           const ex = workout[currentExercise];
           if (ex) {
-            seq.push(...weightClipsFor(ex));
             const posCue = setPositionCueFor(currentSet, ex.sets);
             if (posCue) seq.push(posCue);
           }
@@ -2488,16 +2490,15 @@ function restDone() {
   syncLogArea();
   startFlash();
   updateNavButtons();
-  // Voice cue: "Rest complete" + (set-N + weight + position cue if autoStart, "Tap to start" if alert mode)
+  // Voice cue: "Rest complete" + (set-N + position cue if autoStart, "Tap to start" if alert mode)
+  // v2: weight is NOT re-announced — same weight all sets of an exercise. Exercise transition handled it.
   {
     const seq = ['rest-complete'];
     if (settings.autoStart) {
       const setStart = setStartClipFor(currentExercise, currentSet);
       if (setStart) seq.push(setStart);
-      // v2: append weight + set-position cue for the upcoming set
       const ex = workout[currentExercise];
       if (ex) {
-        seq.push(...weightClipsFor(ex));
         const posCue = setPositionCueFor(currentSet, ex.sets);
         if (posCue) seq.push(posCue);
       }
@@ -2593,11 +2594,12 @@ function skipRest() {
       if (isFinalExercise) seq.push('final-exercise');
       if (exClip) seq.push(exClip);
     }
-    // v2: append weight + (rep range if set 0 / position cue if set 1+) for upcoming set
+    // v2: announce weight + rep range ONLY when re-entering an exercise at set 0 (skipped inter-exercise rest);
+    // for in-exercise sets (set 1+), weight is already known from prior announcement — just play position cue.
     const ex = workout[currentExercise];
     if (ex) {
-      seq.push(...weightClipsFor(ex));
       if (currentSet === 0) {
+        seq.push(...weightClipsFor(ex));
         const repClip = repRangeClipFor(ex.reps);
         if (repClip) seq.push(repClip);
       } else {
