@@ -981,119 +981,118 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Upper Day";
+const dayType = "Lower Day";
 
 const workout = [
   {
-    name: "Chest Press Machine",
+    name: "Leg Press",
     sets: 3,
     reps: "8-12",
-    weight: "110 lbs",
+    weight: "250 lbs",
     rest: 180,
-    note: "Tue May 12 = 12/9/6 (sandbag fix held S1, S2 failed by 3). S2 has been the bottleneck three sessions running. Trigger 12/12/10+ → 120 next Upper. Don't burn S2 capacity on S1.",
+    note: "Wed May 13 = 13/10/8 (clean baseline at 250 — S1 PR top of range, S2 short by 2 for trigger). Trigger 12/12/10+ → 265. **S1 MOD-HARD only, don't crash S2 again.**",
     setNotes: [
-      "Sandbag fix held last session — S1=12 HARD with gas. Repeat that pacing. Don't crash S2.",
-      "**S2 = trigger set.** Last 3 sessions: 9, 11, 9. Need 12+ to flip 120. Match S1 form.",
-      "Last set. 0-1 RIR. Need 10+ to flip 120 with S1+S2 in range."
+      "Wed S1=13 with capacity. Repeat that pacing — don't burn S2.",
+      "**S2 = trigger set.** Wed was 10 — need 12+ to flip 265. Match S1 form.",
+      "Last set. 0-1 RIR. Need 10+ to flip 265 with S1+S2 in range."
     ],
     trigger: [12, 12, 10],
-    triggerWeight: "120 lbs",
+    triggerWeight: "265 lbs",
     adviceFor: function(setIdx, prev) {
       if (setIdx === 1) {
         const s1 = prev[0];
-        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas -- pacing perfect. S2=12+ flips 120.";
+        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas -- pacing perfect. S2=12+ flips 265.";
         if (s1.reps >= 12) return "S1=" + s1.reps + " " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". S2=12 keeps trigger alive.";
         if (s1.reps >= 10) return "S1=" + s1.reps + " -- below trigger ceiling. Save form for S2.";
-        return "S1=" + s1.reps + ". Trigger out. Form > reps on S2/S3.";
+        return "S1=" + s1.reps + ". Trigger out. Form > reps on S2/S3. Knee check.";
       }
       if (setIdx === 2) {
         const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
-        if (onTrack) return "TRIGGER ALIVE -- S3=10+ flips 120. Bottleneck broken.";
-        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). S3 form first.";
+        if (onTrack) return "TRIGGER ALIVE -- S3=10+ flips 265.";
+        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). S3 form first. 250 stays.";
       }
       return null;
     }
   },
   {
-    name: "Cable Rope Row",
+    name: "Leg Curl Machine",
     sets: 3,
-    reps: "8-12",
-    weight: "100 lbs",
-    rest: 180,
-    note: "Tue May 12 established 100 lb working weight (35 DB LIGHT → 80 cable LIGHT → 100 cable 12 MAX). First full 3-set session at 100 today. **Use ROPE attachment** (no V-bar at gym). No bicep twang at any weight. Expect 12+ retention if pacing matches.",
+    reps: "10-12",
+    weight: "60 lbs",
+    rest: 120,
+    note: "⚠️ SPASM MONITOR DAY 2. Wed May 13 S3 ended at 0 reps — medial lower thigh spasm at 60 lbs. **Warm-up tender check FIRST. Any twinge during warm-up = drop to 50.** If clean, aim trigger 12/12/10+ → 70. Stack ×10 increments.",
     setNotes: [
-      "First time at 100 for 3 working sets. Aim 12+ MOD-HARD. Don't burn S2/S3 capacity.",
-      "**S2 = trigger reference.** Match S1 form. Expect slight drop.",
-      "Last set. 0-1 RIR. 10+ here flips 110 trigger next Upper."
+      "**WARM-UP CHECK first.** Light reps — any medial lower thigh twinge = drop to 50. If clean, aim 12 HARD.",
+      "**S2 = trigger set.** Watch for spasm recurrence. If pain-free, 12 keeps 70 alive.",
+      "Last set. 0-1 RIR. **STOP IMMEDIATELY if spasm returns** — don't push through. Need 10+ for 70."
     ],
     trigger: [12, 12, 10],
-    triggerWeight: "110 lbs",
+    triggerWeight: "70 lbs",
     adviceFor: function(setIdx, prev) {
       if (setIdx === 1) {
         const s1 = prev[0];
-        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas -- 110 trigger alive on S2.";
-        if (s1.reps >= 12) return "S1=" + s1.reps + " " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". S2=12 keeps 110 trigger alive.";
-        if (s1.reps >= 10) return "S1=" + s1.reps + " -- below trigger range. 100 stays, build form.";
-        return "S1=" + s1.reps + ". Stay at 100 next session.";
+        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=12 with gas -- spasm-free start. S2=12 flips 70.";
+        if (s1.reps >= 12) return "S1=12 " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". Watch for spasm. S2=12 needed.";
+        if (s1.reps >= 9) return "S1=" + s1.reps + " -- below trigger. Form + spasm watch.";
+        return "S1=" + s1.reps + ". Stay at 60 or drop. Form > reps.";
       }
       if (setIdx === 2) {
         const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
-        if (onTrack) return "TRIGGER ALIVE -- S3=10+ flips 110.";
-        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). 100 stays. S3 form first.";
+        if (onTrack) return "TRIGGER ALIVE -- S3=10+ flips 70. Spasm check before pushing.";
+        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). S3 form > reps. STOP if pain.";
       }
       return null;
     }
   },
   {
-    name: "DB Lateral Raise",
+    name: "Leg Press Calf Raises",
     sets: 3,
     reps: "12-15",
-    weight: "15 lbs",
+    weight: "130 lbs",
     rest: 90,
-    note: "Tue May 12 = 12/11/6 (pacing fix held S1 but S2 failed by 2 — needed 13+). Steep S2→S3 dropoff continues. Trigger 13/13/10+ → 17.5 next. **S1 MOD-HARD only — don't crash S2 again.**",
+    note: "**TRIGGER FLIPPED Wed (115+mod 13/14/13 → 130 today).** First session at 130 clean. Stack has no 120 — 130 is next clean increment. If too heavy, drop to 115+modifier and rebuild.",
     setNotes: [
-      "**S1 MOD-HARD only.** Do NOT burn capacity. Aim 12-13 with gas.",
-      "**S2 = trigger set.** Last two: 11, 12. Need 13+ to flip 17.5. Strict form.",
-      "Last set. 0-1 RIR. Last S3=6 (steep dropoff). Match S2 form, push 10+."
+      "First session at 130. Aim 12+ MOD-HARD. Expect retention drop from 115+mod baseline.",
+      "**S2 = trigger reference.** Match S1 form. Slight drop expected on +15 jump.",
+      "Last set. 0-1 RIR. 12+ here means 130 settles in fast."
     ],
-    trigger: [13, 13, 10],
-    triggerWeight: "17.5 lbs",
+    trigger: [13, 13, 12],
+    triggerWeight: "145 lbs",
     adviceFor: function(setIdx, prev) {
       if (setIdx === 1) {
         const s1 = prev[0];
-        if (s1.reps >= 13 && s1.difficulty <= 3) return "S1=" + s1.reps + " MOD-HARD -- pacing fix held. S2=13+ flips 17.5.";
-        if (s1.reps >= 13) return "S1=" + s1.reps + " " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". S2=13 keeps trigger alive.";
-        if (s1.reps === 12) return "S1=12. Trigger paused (need 13). Match S2 for partial.";
-        return "S1=" + s1.reps + ". Trigger out. Strict form S2/S3.";
+        if (s1.reps >= 13 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas on +15 jump -- excellent retention.";
+        if (s1.reps >= 13) return "S1=" + s1.reps + " -- in trigger range first session. Strong.";
+        if (s1.reps >= 12) return "S1=" + s1.reps + " -- expected drop on +15. 130 stays.";
+        return "S1=" + s1.reps + " (below 12). Consider 115+mod for S2/S3.";
       }
       if (setIdx === 2) {
         const onTrack = prev[0].reps >= 13 && prev[1].reps >= 13;
-        if (onTrack) return "TRIGGER ALIVE -- S3=10+ flips 17.5.";
-        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). S3 form first -- beat last S3=6.";
+        if (onTrack) return "TRIGGER ALIVE first session at 130 -- unreal. S3=12+ flips 145.";
+        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). 130 stays. S3 form first.";
       }
       return null;
     }
   },
   {
-    name: "DB Curls (REGULAR/supinated)",
+    name: "Cable Face Pulls",
     sets: 2,
-    reps: "8-12",
-    weight: "20 lbs",
-    rest: 90,
-    note: "**HAMMER OUT — regular/supinated only.** May 8 + May 12 confirmed: regular grip = NO nerve twang. Tue May 12 = 12/7. Trigger 12/12 → 22.5 next. Strict supinated grip, no hammer rotation, no thumbs-up.",
+    reps: "15-20",
+    weight: "35 lbs",
+    rest: 60,
+    note: "Wed May 13 = 20/12 (S2 regressed −4 vs Mon's 20/16). **Stay at 35, retry trigger push.** Trigger 18+/18+ → 40. Strict form: rope to nose, elbows high, slight pause at end ROM. S1 capacity proven, S2 = pacing issue.",
     setNotes: [
-      "Regular/supinated grip ONLY. Palms up. No hammer rotation. Aim 12 HARD. 1-2 RIR.",
-      "Last set. 0-1 RIR. **S2 = trigger set.** Need 12 to flip 22.5. Last S2=7 — push 5 more."
+      "Last S1=20 (top of range). Match strict form. Save capacity for S2.",
+      "Last set. 0-1 RIR. **Wed S2=12, Mon S2=16. Need 18+ to flip 40.** Strict form, no swing."
     ],
-    trigger: [12, 12],
-    triggerWeight: "22.5 lbs",
+    trigger: [18, 18],
+    triggerWeight: "40 lbs",
     adviceFor: function(setIdx, prev) {
       if (setIdx === 1) {
         const s1 = prev[0];
-        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas -- S2=12 flips 22.5.";
-        if (s1.reps >= 12) return "S1=" + s1.reps + " " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". S2=12 needed to flip.";
-        if (s1.reps >= 9) return "S1=" + s1.reps + ". Trigger out. S2 form > reps.";
-        return "S1=" + s1.reps + ". Stay at 20. Form first.";
+        if (s1.reps >= 20) return "S1=" + s1.reps + " ✓ top of range. S2=18+ flips 40.";
+        if (s1.reps >= 18) return "S1=" + s1.reps + " -- in trigger range. Match S2.";
+        return "S1=" + s1.reps + " (below 18). Trigger paused. S2 form > reps.";
       }
       return null;
     }
