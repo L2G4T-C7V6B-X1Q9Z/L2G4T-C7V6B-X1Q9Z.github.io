@@ -1582,17 +1582,37 @@ function triggerAlertFeedback() {
 // buffers via decodeAudioData. Each play() creates a fresh BufferSourceNode.
 const VoiceCue = (() => {
   const FILES = [
-    'start-upper', 'start-lower', 'received', 'set-2', 'set-3', 'final-set',
-    'rest-3min', 'rest-90sec', 'rest-60sec',
+    'start-upper', 'start-lower', 'received', 'set-2', 'set-3', 'set-4', 'final-set',
+    'rest-3min', 'rest-2min', 'rest-90sec', 'rest-60sec',
     '1min-remaining', '30sec-remaining', '10sec-remaining',
     'countdown-5', 'countdown-4', 'countdown-3', 'countdown-2', 'countdown-1',
     'rest-complete', 'tap-to-start',
     'exercise-complete', 'up-next', 'final-exercise',
     'ex-chest-press', 'ex-lat-pulldown', 'ex-db-lat-raise', 'ex-db-curls',
     'ex-leg-press', 'ex-leg-curl', 'ex-calf-raises', 'ex-face-pulls',
-    'ex-cable-row', 'ex-leg-extension', 'ex-incline-press', 'ex-overhead-press',
+    'ex-cable-row', 'ex-single-arm-db-row',
+    'ex-leg-extension', 'ex-incline-press', 'ex-overhead-press',
     'ex-tricep-pushdown', 'ex-rear-delt-flyes', 'ex-hammer-curls',
-    'paused', 'resumed', 'final-set-logged', 'workout-complete', 'workout-reset'
+    'paused', 'resumed', 'final-set-logged', 'workout-complete', 'workout-reset',
+    // v2 expansion — weight callouts (each clip = "[N] pounds" full phrase)
+    'wgt-10', 'wgt-12-5', 'wgt-15', 'wgt-17-5', 'wgt-20', 'wgt-22-5', 'wgt-25', 'wgt-27-5',
+    'wgt-30', 'wgt-32-5', 'wgt-35', 'wgt-40', 'wgt-45', 'wgt-50',
+    'wgt-55', 'wgt-60', 'wgt-65', 'wgt-70', 'wgt-75', 'wgt-80', 'wgt-85', 'wgt-90', 'wgt-95',
+    'wgt-100', 'wgt-105', 'wgt-110', 'wgt-115', 'wgt-120', 'wgt-125', 'wgt-130',
+    'wgt-135', 'wgt-140', 'wgt-145', 'wgt-150',
+    'wgt-200', 'wgt-215', 'wgt-220', 'wgt-235', 'wgt-250', 'wgt-265', 'wgt-280', 'wgt-295', 'wgt-310',
+    'wgt-plus-modifier',
+    // v2 expansion — RIR cues
+    'cue-rir-zero', 'cue-rir-zero-one', 'cue-rir-one-two', 'cue-rir-two-three', 'cue-rir-three-plus',
+    // v2 expansion — effort cues
+    'cue-go-hard', 'cue-go-mod', 'cue-max-effort', 'cue-save-reps',
+    // v2 expansion — set context + form cues
+    'cue-trigger-set', 'cue-last-set', 'cue-form-check', 'cue-slow-tempo', 'cue-strict-form',
+    'cue-no-hammer', 'cue-knee-check', 'cue-modifier-check',
+    // v2 expansion — rep range targets
+    'cue-aim-6-10', 'cue-aim-8-12', 'cue-aim-10-12', 'cue-aim-12-15', 'cue-aim-15-20',
+    // v2 expansion — batch 2 additions
+    'cue-warmup-set', 'cue-watch-knee', 'cue-pacing-fix', 'cue-trigger-hit', 'cue-personal-record', 'cue-full-rom'
   ];
   const arrayBuffers = new Map();   // raw, pre-decode
   const decodedBuffers = new Map(); // post-decode, ready to play
@@ -1772,6 +1792,7 @@ function exerciseClipName(name) {
 
 function restClipForDuration(seconds) {
   if (seconds === 180) return 'rest-3min';
+  if (seconds === 120) return 'rest-2min';
   if (seconds === 90) return 'rest-90sec';
   if (seconds === 60) return 'rest-60sec';
   return null;
@@ -1785,7 +1806,48 @@ function setStartClipFor(exIdx, setIdx) {
   if (isFinal) return 'final-set';
   if (setIdx === 1) return 'set-2';
   if (setIdx === 2) return 'set-3';
-  return null; // Phase 2+ may reach set 3 (idx) → "set-4" not yet recorded
+  if (setIdx === 3) return 'set-4';
+  return null;
+}
+
+// v2 expansion: map an exercise's weight string to its audio clip names.
+// Returns [] if no usable weight. Handles modifier suffix (e.g., "115 lbs + modifier").
+// Half-weights use dash-decimal slug: "22.5 lbs" → "wgt-22-5".
+function weightClipsFor(exerciseObj) {
+  if (!exerciseObj || !exerciseObj.weight) return [];
+  const w = String(exerciseObj.weight).toLowerCase();
+  const numMatch = w.match(/(\d+(?:\.\d+)?)/);
+  if (!numMatch) return [];
+  const slug = numMatch[1].replace('.', '-');
+  const result = ['wgt-' + slug];
+  if (w.includes('modifier')) result.push('wgt-plus-modifier');
+  return result;
+}
+
+// v2 expansion: map a rep range string like "8-12" to its rep-range cue clip.
+function repRangeClipFor(repsStr) {
+  if (!repsStr) return null;
+  const m = String(repsStr).match(/(\d+)\s*-\s*(\d+)/);
+  if (!m) return null;
+  const key = parseInt(m[1], 10) + '-' + parseInt(m[2], 10);
+  const map = {
+    '6-10':  'cue-aim-6-10',
+    '8-12':  'cue-aim-8-12',
+    '10-12': 'cue-aim-10-12',
+    '12-15': 'cue-aim-12-15',
+    '15-20': 'cue-aim-15-20'
+  };
+  return map[key] || null;
+}
+
+// v2 expansion: optional set-position coaching cue.
+// Set 1 (idx=1) of 3+ set exercise = "trigger set" (Soren's typical S2 trigger pattern).
+// Last set of any exercise = "max effort".
+// Returns null otherwise.
+function setPositionCueFor(setIdx, totalSets) {
+  if (totalSets >= 3 && setIdx === 1) return 'cue-trigger-set';
+  if (setIdx === totalSets - 1) return 'cue-max-effort';
+  return null;
 }
 
 // Threshold-based countdown announcements (called from startCountdown).
@@ -2139,9 +2201,18 @@ function applyState(notesValue) {
       triggerAlertFeedback();
       {
         const setStart = setStartClipFor(currentExercise, currentSet);
-        const seq = settings.autoStart
-          ? ['rest-complete', setStart].filter(Boolean)
-          : ['rest-complete', 'tap-to-start'];
+        let seq;
+        if (settings.autoStart) {
+          seq = ['rest-complete', setStart].filter(Boolean);
+          const ex = workout[currentExercise];
+          if (ex) {
+            seq.push(...weightClipsFor(ex));
+            const posCue = setPositionCueFor(currentSet, ex.sets);
+            if (posCue) seq.push(posCue);
+          }
+        } else {
+          seq = ['rest-complete', 'tap-to-start'];
+        }
         VoiceCue.playSequence(seq);
       }
     } else {
@@ -2273,6 +2344,12 @@ function startWorkout() {
   const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
   const firstExClip = exerciseClipName(workout[0] && workout[0].name);
   const seq = [startClip, firstExClip].filter(Boolean);
+  // v2: append weight + rep range for the first exercise of the workout
+  if (workout[0]) {
+    seq.push(...weightClipsFor(workout[0]));
+    const repClip = repRangeClipFor(workout[0].reps);
+    if (repClip) seq.push(repClip);
+  }
   if (seq.length) VoiceCue.playSequence(seq);
 }
 
@@ -2358,6 +2435,10 @@ function setDone() {
       seq = ['received', 'exercise-complete'];
       seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
       if (exClip) seq.push(exClip);
+      // v2: append weight + rep range for upcoming exercise
+      seq.push(...weightClipsFor(workout[currentExercise]));
+      const repClipSwitch = repRangeClipFor(workout[currentExercise].reps);
+      if (repClipSwitch) seq.push(repClipSwitch);
       const switchRestClip = restClipForDuration(restRemaining);
       if (switchRestClip) seq.push(switchRestClip);
     } else {
@@ -2407,12 +2488,19 @@ function restDone() {
   syncLogArea();
   startFlash();
   updateNavButtons();
-  // Voice cue: "Rest complete" + (set-N if autoStart, "Tap to start" if alert mode)
+  // Voice cue: "Rest complete" + (set-N + weight + position cue if autoStart, "Tap to start" if alert mode)
   {
     const seq = ['rest-complete'];
     if (settings.autoStart) {
       const setStart = setStartClipFor(currentExercise, currentSet);
       if (setStart) seq.push(setStart);
+      // v2: append weight + set-position cue for the upcoming set
+      const ex = workout[currentExercise];
+      if (ex) {
+        seq.push(...weightClipsFor(ex));
+        const posCue = setPositionCueFor(currentSet, ex.sets);
+        if (posCue) seq.push(posCue);
+      }
     } else {
       seq.push('tap-to-start');
     }
@@ -2504,6 +2592,18 @@ function skipRest() {
       const exClip = exerciseClipName(workout[currentExercise] && workout[currentExercise].name);
       if (isFinalExercise) seq.push('final-exercise');
       if (exClip) seq.push(exClip);
+    }
+    // v2: append weight + (rep range if set 0 / position cue if set 1+) for upcoming set
+    const ex = workout[currentExercise];
+    if (ex) {
+      seq.push(...weightClipsFor(ex));
+      if (currentSet === 0) {
+        const repClip = repRangeClipFor(ex.reps);
+        if (repClip) seq.push(repClip);
+      } else {
+        const posCue = setPositionCueFor(currentSet, ex.sets);
+        if (posCue) seq.push(posCue);
+      }
     }
     VoiceCue.playSequence(seq);
   }
