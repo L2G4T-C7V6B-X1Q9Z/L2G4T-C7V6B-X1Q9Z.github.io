@@ -1843,11 +1843,11 @@ function repRangeClipFor(repsStr) {
 }
 
 // v2 expansion: optional set-position coaching cue.
-// Set 1 (idx=1) of 3+ set exercise = "trigger set" (Soren's typical S2 trigger pattern).
+// Set 2 (idx=1) of 3+ set exercise = "go hard" (S2 is the trigger-flipping set).
 // Last set of any exercise = "max effort".
-// Returns null otherwise.
+// Returns null otherwise. "Trigger set" was tried but is too internal-jargony as a verbal cue.
 function setPositionCueFor(setIdx, totalSets) {
-  if (totalSets >= 3 && setIdx === 1) return 'cue-trigger-set';
+  if (totalSets >= 3 && setIdx === 1) return 'cue-go-hard';
   if (setIdx === totalSets - 1) return 'cue-max-effort';
   return null;
 }
