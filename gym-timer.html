@@ -1710,7 +1710,13 @@ const VoiceCue = (() => {
       try {
         const source = audioCtx.createBufferSource();
         const gain = audioCtx.createGain();
-        gain.gain.value = 1.0;
+        // 0.6 instead of 1.0 to keep voice cues subtle and avoid triggering iOS's
+        // auto-ducking heuristic, which can quiet Spotify/Apple Music even when the
+        // AudioContext is in 'ambient' category. Audible but doesn't dominate.
+        gain.gain.value = 0.6;
+        // Re-assert ambient session category right before playback — iOS sometimes
+        // resets it between recoverAudioCtx() and source.start(), causing ducking.
+        try { if ('audioSession' in navigator) navigator.audioSession.type = 'ambient'; } catch(e) {}
         source.buffer = buffer;
         source.connect(gain);
         gain.connect(audioCtx.destination);
