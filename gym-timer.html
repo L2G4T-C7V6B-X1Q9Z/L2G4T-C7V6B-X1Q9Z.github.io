@@ -2206,9 +2206,20 @@ function applyState(notesValue) {
         let seq;
         if (settings.autoStart) {
           seq = ['rest-complete', setStart].filter(Boolean);
-          // v2: weight NOT re-announced — same weight across all sets within an exercise
           const ex = workout[currentExercise];
-          if (ex) seq.push(...setPositionCuesFor(currentSet, ex.sets));
+          if (ex) {
+            if (currentSet === 0) {
+              // Entering set 1 of an exercise — full reminder (name + weight + reps)
+              const exClip = exerciseClipName(ex.name);
+              if (exClip) seq.push(exClip);
+              seq.push(...weightClipsFor(ex));
+              const repClip = repRangeClipFor(ex.reps);
+              if (repClip) seq.push(repClip);
+            } else {
+              // In-exercise set 2+ — position cues (effort + RIR)
+              seq.push(...setPositionCuesFor(currentSet, ex.sets));
+            }
+          }
         } else {
           seq = ['rest-complete', 'tap-to-start'];
         }
@@ -2488,14 +2499,27 @@ function restDone() {
   startFlash();
   updateNavButtons();
   // Voice cue: "Rest complete" + (set-N + position cue if autoStart, "Tap to start" if alert mode)
-  // v2: weight is NOT re-announced — same weight all sets of an exercise. Exercise transition handled it.
+  // v2: weight NOT re-announced for in-exercise sets, but DO re-announce exercise+weight+reps
+  // when rest ends at set 1 of a NEW exercise — the 60s inter-exercise rest is too long to leave silent.
   {
     const seq = ['rest-complete'];
     if (settings.autoStart) {
       const setStart = setStartClipFor(currentExercise, currentSet);
       if (setStart) seq.push(setStart);
       const ex = workout[currentExercise];
-      if (ex) seq.push(...setPositionCuesFor(currentSet, ex.sets));
+      if (ex) {
+        if (currentSet === 0) {
+          // Entering set 1 of an exercise — full reminder (name + weight + reps)
+          const exClip = exerciseClipName(ex.name);
+          if (exClip) seq.push(exClip);
+          seq.push(...weightClipsFor(ex));
+          const repClip = repRangeClipFor(ex.reps);
+          if (repClip) seq.push(repClip);
+        } else {
+          // In-exercise set 2+ — position cues (effort + RIR)
+          seq.push(...setPositionCuesFor(currentSet, ex.sets));
+        }
+      }
     } else {
       seq.push('tap-to-start');
     }
