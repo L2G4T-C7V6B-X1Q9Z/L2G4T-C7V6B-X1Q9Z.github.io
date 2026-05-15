@@ -1842,14 +1842,14 @@ function repRangeClipFor(repsStr) {
   return map[key] || null;
 }
 
-// v2 expansion: optional set-position coaching cue, RIR-based.
-// Set 2 (idx=1) of 3+ set exercise: 1-2 RIR (per Soren's program, 1-3 RIR on working sets).
-// Last set of any exercise: 0-1 RIR (per program, push last set to 0-1 RIR).
-// Returns null otherwise. Effort cues (go-hard / max-effort) deprecated in favor of RIR — more specific.
-function setPositionCueFor(setIdx, totalSets) {
-  if (totalSets >= 3 && setIdx === 1) return 'cue-rir-one-two';
-  if (setIdx === totalSets - 1) return 'cue-rir-zero-one';
-  return null;
+// v2 expansion: set-position coaching cues (returns array, may be empty).
+// Chains effort + RIR for richer dialogue per Soren's request.
+//   Set 2 (idx=1) of 3+ set exercise: "Go hard" + "One to two reps in reserve" (S2 = trigger, 1-2 RIR).
+//   Last set of any exercise:        "Max effort" + "Zero to one in the tank" (push to 0-1 RIR).
+function setPositionCuesFor(setIdx, totalSets) {
+  if (totalSets >= 3 && setIdx === 1) return ['cue-go-hard', 'cue-rir-one-two'];
+  if (setIdx === totalSets - 1)        return ['cue-max-effort', 'cue-rir-zero-one'];
+  return [];
 }
 
 // Threshold-based countdown announcements (called from startCountdown).
@@ -2208,10 +2208,7 @@ function applyState(notesValue) {
           seq = ['rest-complete', setStart].filter(Boolean);
           // v2: weight NOT re-announced — same weight across all sets within an exercise
           const ex = workout[currentExercise];
-          if (ex) {
-            const posCue = setPositionCueFor(currentSet, ex.sets);
-            if (posCue) seq.push(posCue);
-          }
+          if (ex) seq.push(...setPositionCuesFor(currentSet, ex.sets));
         } else {
           seq = ['rest-complete', 'tap-to-start'];
         }
@@ -2498,10 +2495,7 @@ function restDone() {
       const setStart = setStartClipFor(currentExercise, currentSet);
       if (setStart) seq.push(setStart);
       const ex = workout[currentExercise];
-      if (ex) {
-        const posCue = setPositionCueFor(currentSet, ex.sets);
-        if (posCue) seq.push(posCue);
-      }
+      if (ex) seq.push(...setPositionCuesFor(currentSet, ex.sets));
     } else {
       seq.push('tap-to-start');
     }
@@ -2603,8 +2597,7 @@ function skipRest() {
         const repClip = repRangeClipFor(ex.reps);
         if (repClip) seq.push(repClip);
       } else {
-        const posCue = setPositionCueFor(currentSet, ex.sets);
-        if (posCue) seq.push(posCue);
+        seq.push(...setPositionCuesFor(currentSet, ex.sets));
       }
     }
     VoiceCue.playSequence(seq);
