@@ -881,7 +881,7 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 </button>
 
-<h1 id="day-title">Lower Day</h1>
+<h1 id="day-title">Full Body A</h1>
 <div id="exercise-name"></div>
 <div id="set-info"></div>
 <div id="exercise-note"></div>
@@ -981,121 +981,90 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Lower Day";
+const dayType = "Full Body A";
 
+// ASNR26 Austin trip — Monday May 18 hotel session.
+// SUBMAXIMAL — NOT PRs. Maintenance, not progression. Hotel DBs to ~50 lb.
+// Triggers intentionally disabled — Apr-May progression resumes on return home.
 const workout = [
   {
-    name: "Leg Press",
+    name: "Chest Press",
     sets: 3,
-    reps: "8-12",
-    weight: "250 lbs",
-    rest: 180,
-    note: "Wed May 13 = 13/10/8 (clean baseline at 250 — S1 PR top of range, S2 short by 2 for trigger). Trigger 12/12/10+ → 265. **S1 MOD-HARD only, don't crash S2 again.**",
+    reps: "8-10",
+    weight: "40-45 lbs",
+    rest: 90,
+    note: "Hotel DB Chest Press (flat or bench, sub for chest press machine). SUBMAXIMAL — 1-3 RIR, NOT PRs. Bad joint angle on hotel bench at 40 lb is worse than 4 fewer reps.",
     setNotes: [
-      "Wed S1=13 with capacity. Repeat that pacing — don't burn S2.",
-      "**S2 = trigger set.** Wed was 10 — need 12+ to flip 265. Match S1 form.",
-      "Last set. 0-1 RIR. Need 10+ to flip 265 with S1+S2 in range."
+      "Groove form at 40 lb first. S1 = stable setup. 1-2 RIR. Drop weight if bench feels off.",
+      "Match S1 form. Hold 40 or step to 45 if first set felt easy.",
+      "0-1 RIR allowed on top set. Don't chase reps. Stop if joint angle wobbles."
     ],
-    trigger: [12, 12, 10],
-    triggerWeight: "265 lbs",
-    adviceFor: function(setIdx, prev) {
-      if (setIdx === 1) {
-        const s1 = prev[0];
-        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas -- pacing perfect. S2=12+ flips 265.";
-        if (s1.reps >= 12) return "S1=" + s1.reps + " " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". S2=12 keeps trigger alive.";
-        if (s1.reps >= 10) return "S1=" + s1.reps + " -- below trigger ceiling. Save form for S2.";
-        return "S1=" + s1.reps + ". Trigger out. Form > reps on S2/S3. Knee check.";
-      }
-      if (setIdx === 2) {
-        const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
-        if (onTrack) return "TRIGGER ALIVE -- S3=10+ flips 265.";
-        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). S3 form first. 250 stays.";
-      }
-      return null;
-    }
+    trigger: [],
+    triggerWeight: "n/a (maintenance)",
+    adviceFor: function(setIdx, prev) { return null; }
   },
   {
-    name: "Leg Curl Machine",
+    name: "Single-Arm DB Row",
     sets: 3,
     reps: "10-12",
-    weight: "60 lbs",
-    rest: 120,
-    note: "⚠️ SPASM MONITOR DAY 2. Wed May 13 S3 ended at 0 reps — medial lower thigh spasm at 60 lbs. **Warm-up tender check FIRST. Any twinge during warm-up = drop to 50.** If clean, aim trigger 12/12/10+ → 70. Stack ×10 increments.",
+    weight: "40-50 lbs",
+    rest: 90,
+    note: "1-arm DB Row off bench or stable surface (sub for lat pulldown). Reps per side. SUBMAXIMAL. Pick weight that lets you finish both sides clean — weak side calls the shot.",
     setNotes: [
-      "**WARM-UP CHECK first.** Light reps — any medial lower thigh twinge = drop to 50. If clean, aim 12 HARD.",
-      "**S2 = trigger set.** Watch for spasm recurrence. If pain-free, 12 keeps 70 alive.",
-      "Last set. 0-1 RIR. **STOP IMMEDIATELY if spasm returns** — don't push through. Need 10+ for 70."
+      "Both sides 10-12. Pick weight that weak side can hit 10 clean. S1 = form set.",
+      "Match S1. Stop the set when form breaks, not at the rep target.",
+      "Last set. 0-1 RIR per side. Form > reps."
     ],
-    trigger: [12, 12, 10],
-    triggerWeight: "70 lbs",
-    adviceFor: function(setIdx, prev) {
-      if (setIdx === 1) {
-        const s1 = prev[0];
-        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=12 with gas -- spasm-free start. S2=12 flips 70.";
-        if (s1.reps >= 12) return "S1=12 " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". Watch for spasm. S2=12 needed.";
-        if (s1.reps >= 9) return "S1=" + s1.reps + " -- below trigger. Form + spasm watch.";
-        return "S1=" + s1.reps + ". Stay at 60 or drop. Form > reps.";
-      }
-      if (setIdx === 2) {
-        const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
-        if (onTrack) return "TRIGGER ALIVE -- S3=10+ flips 70. Spasm check before pushing.";
-        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). S3 form > reps. STOP if pain.";
-      }
-      return null;
-    }
+    trigger: [],
+    triggerWeight: "n/a (maintenance)",
+    adviceFor: function(setIdx, prev) { return null; }
   },
   {
-    name: "Leg Press Calf Raises",
+    name: "Goblet Squat",
+    sets: 3,
+    reps: "10-12",
+    weight: "40-50 lbs",
+    rest: 120,
+    note: "Goblet Squat or DB Split Squat (sub for leg press). Hotel floor — flat ground only. SUBMAXIMAL. Don't try to match home leg press load — that's 6× what your shoulder can hold here.",
+    setNotes: [
+      "Goblet hold at chest. Slow descent, controlled bottom. S1 = depth + form groove.",
+      "Match S1 reps + depth. If shoulder fatigues holding DB, switch to split squat next set.",
+      "Last set. 0-1 RIR. Stop if knee tracking falters."
+    ],
+    trigger: [],
+    triggerWeight: "n/a (maintenance)",
+    adviceFor: function(setIdx, prev) { return null; }
+  },
+  {
+    name: "DB Lateral Raise",
     sets: 3,
     reps: "12-15",
-    weight: "130 lbs",
-    rest: 90,
-    note: "**TRIGGER FLIPPED Wed (115+mod 13/14/13 → 130 today).** First session at 130 clean. Stack has no 120 — 130 is next clean increment. If too heavy, drop to 115+modifier and rebuild.",
+    weight: "15 lbs",
+    rest: 60,
+    note: "Direct match to home programming. Current working weight = 15 lbs. SUBMAXIMAL — match home pacing, don't chase reps.",
     setNotes: [
-      "First session at 130. Aim 12+ MOD-HARD. Expect retention drop from 115+mod baseline.",
-      "**S2 = trigger reference.** Match S1 form. Slight drop expected on +15 jump.",
-      "Last set. 0-1 RIR. 12+ here means 130 settles in fast."
+      "Strict form. Slight forward lean OK. No swing. S1 = 12-15 with 1-2 RIR.",
+      "Match S1 form. Pause at top.",
+      "Last set. 0-1 RIR. Drop the weight if cheating starts."
     ],
-    trigger: [13, 13, 12],
-    triggerWeight: "145 lbs",
-    adviceFor: function(setIdx, prev) {
-      if (setIdx === 1) {
-        const s1 = prev[0];
-        if (s1.reps >= 13 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas on +15 jump -- excellent retention.";
-        if (s1.reps >= 13) return "S1=" + s1.reps + " -- in trigger range first session. Strong.";
-        if (s1.reps >= 12) return "S1=" + s1.reps + " -- expected drop on +15. 130 stays.";
-        return "S1=" + s1.reps + " (below 12). Consider 115+mod for S2/S3.";
-      }
-      if (setIdx === 2) {
-        const onTrack = prev[0].reps >= 13 && prev[1].reps >= 13;
-        if (onTrack) return "TRIGGER ALIVE first session at 130 -- unreal. S3=12+ flips 145.";
-        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). 130 stays. S3 form first.";
-      }
-      return null;
-    }
+    trigger: [],
+    triggerWeight: "n/a (maintenance)",
+    adviceFor: function(setIdx, prev) { return null; }
   },
   {
-    name: "Cable Face Pulls",
+    name: "DB Curls",
     sets: 2,
-    reps: "15-20",
-    weight: "35 lbs",
+    reps: "10-12",
+    weight: "20 lbs",
     rest: 60,
-    note: "Wed May 13 = 20/12 (S2 regressed −4 vs Mon's 20/16). **Stay at 35, retry trigger push.** Trigger 18+/18+ → 40. Strict form: rope to nose, elbows high, slight pause at end ROM. S1 capacity proven, S2 = pacing issue.",
+    note: "Direct match. Regular (supinated) DB curl, NOT hammer. Standing, both arms together or alternating. SUBMAXIMAL.",
     setNotes: [
-      "Last S1=20 (top of range). Match strict form. Save capacity for S2.",
-      "Last set. 0-1 RIR. **Wed S2=12, Mon S2=16. Need 18+ to flip 40.** Strict form, no swing."
+      "S1 = form set. Both arms, no swing. 1-2 RIR.",
+      "Last set. 0-1 RIR. 12 reps clean > 14 with body english."
     ],
-    trigger: [18, 18],
-    triggerWeight: "40 lbs",
-    adviceFor: function(setIdx, prev) {
-      if (setIdx === 1) {
-        const s1 = prev[0];
-        if (s1.reps >= 20) return "S1=" + s1.reps + " ✓ top of range. S2=18+ flips 40.";
-        if (s1.reps >= 18) return "S1=" + s1.reps + " -- in trigger range. Match S2.";
-        return "S1=" + s1.reps + " (below 18). Trigger paused. S2 form > reps.";
-      }
-      return null;
-    }
+    trigger: [],
+    triggerWeight: "n/a (maintenance)",
+    adviceFor: function(setIdx, prev) { return null; }
   },
 ];
 
