@@ -881,7 +881,7 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 </button>
 
-<h1 id="day-title">Upper</h1>
+<h1 id="day-title">Lower</h1>
 <div id="exercise-name"></div>
 <div id="set-info"></div>
 <div id="exercise-note"></div>
@@ -981,70 +981,72 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Upper";
+const dayType = "Lower";
 
-// ASNR26 Austin trip — Monday May 18 hotel session.
+// ASNR26 Austin trip — Tuesday May 19 hotel Lower Day (DB-only sub).
 // SUBMAXIMAL — NOT PRs. Maintenance, not progression. Hotel DBs to ~50 lb.
-// Triggers intentionally disabled — Apr-May progression resumes on return home.
+// ⚠️ LEG CURL SPASM FLAG — RDL sub goes LIGHT (35-40 lb), watch for knot signal.
+// Subs: Leg Press 250 → Goblet Squat 40-50 | Leg Curl 50 → DB RDL 35-40 LIGHT
+//       Leg Press Calf 130 → DB Calf Raise 40-50/hand | Face Pulls 35 → DB Reverse Fly 10-15
 const workout = [
   {
-    name: "Chest Press",
-    sets: 3,
-    reps: "8-10",
-    weight: "40-45 lbs",
-    rest: 90,
-    note: "Hotel DB Chest Press (flat or bench, sub for chest press machine). SUBMAXIMAL — 1-3 RIR, NOT PRs. Bad joint angle on hotel bench at 40 lb is worse than 4 fewer reps.",
-    setNotes: [
-      "Groove form at 40 lb first. S1 = stable setup. 1-2 RIR. Drop weight if bench feels off.",
-      "Match S1 form. Hold 40 or step to 45 if first set felt easy.",
-      "0-1 RIR allowed on top set. Don't chase reps. Stop if joint angle wobbles."
-    ],
-    trigger: [],
-    triggerWeight: "n/a (maintenance)",
-    adviceFor: function(setIdx, prev) { return null; }
-  },
-  {
-    name: "Single-Arm DB Row",
+    name: "Goblet Squat",
     sets: 3,
     reps: "10-12",
     weight: "40-50 lbs",
-    rest: 90,
-    note: "1-arm DB Row off bench or stable surface (sub for lat pulldown). Reps per side. SUBMAXIMAL. Pick weight that lets you finish both sides clean — weak side calls the shot.",
+    rest: 120,
+    note: "Goblet hold at chest (sub for Leg Press 250). Hotel floor — flat ground only. SUBMAXIMAL. Don't try to match home leg press load — DB at chest is 6× what your shoulder can hold here.",
     setNotes: [
-      "Both sides 10-12. Pick weight that weak side can hit 10 clean. S1 = form set.",
-      "Match S1. Stop the set when form breaks, not at the rep target.",
-      "Last set. 0-1 RIR per side. Form > reps."
+      "Goblet hold at chest. Slow descent, controlled bottom. S1 = depth + form groove. 1-2 RIR.",
+      "Match S1 reps + depth. If shoulder fatigues holding DB, switch to split squat next set.",
+      "Last set. 0-1 RIR. Stop if knee tracking falters."
     ],
     trigger: [],
     triggerWeight: "n/a (maintenance)",
     adviceFor: function(setIdx, prev) { return null; }
   },
   {
-    name: "DB Lateral Raise",
+    name: "DB Romanian Deadlift",
+    sets: 3,
+    reps: "10-12",
+    weight: "35-40 lbs",
+    rest: 90,
+    note: "⚠️ SPASM WATCH — Leg Curl 60→50 dropped Fri for knot signal at SAME tissue. RDL hits this tissue. GO LIGHT (35-40 lb), STOP at first knot sensation, SKIP exercise entirely if anything feels off in warm-up.",
+    setNotes: [
+      "Soft knees. Hinge at hips, push hips back, DBs travel close to legs. S1 = form set + tissue read. STOP if knot signal appears. 2-3 RIR.",
+      "Match S1 form. Slow eccentric. Hamstrings load before glutes.",
+      "Last set. 1-2 RIR (NOT 0). Form > reps."
+    ],
+    trigger: [],
+    triggerWeight: "n/a (maintenance — spasm watch)",
+    adviceFor: function(setIdx, prev) { return null; }
+  },
+  {
+    name: "DB Calf Raise",
     sets: 3,
     reps: "12-15",
-    weight: "15 lbs",
+    weight: "40-50 lbs/hand",
     rest: 60,
-    note: "Direct match to home programming. Current working weight = 15 lbs. SUBMAXIMAL — match home pacing, don't chase reps.",
+    note: "Standing DB calf raise (sub for Leg Press Calf 130). Two DBs at sides, balls of feet on stair/step if avail, otherwise flat ground. SUBMAXIMAL.",
     setNotes: [
-      "Strict form. Slight forward lean OK. No swing. S1 = 12-15 with 1-2 RIR.",
-      "Match S1 form. Pause at top.",
-      "Last set. 0-1 RIR. Drop the weight if cheating starts."
+      "S1 = form + ROM. Pause at top, controlled drop. 2-3 RIR.",
+      "Match S1 ROM. Calves recover fast — don't rush back-to-back.",
+      "Last set. 0-1 RIR. Pause at top each rep."
     ],
     trigger: [],
     triggerWeight: "n/a (maintenance)",
     adviceFor: function(setIdx, prev) { return null; }
   },
   {
-    name: "DB Curls",
+    name: "DB Reverse Fly",
     sets: 2,
-    reps: "10-12",
-    weight: "20 lbs",
+    reps: "15-20",
+    weight: "10-15 lbs",
     rest: 60,
-    note: "Direct match. Regular (supinated) DB curl, NOT hammer. Standing, both arms together or alternating. SUBMAXIMAL.",
+    note: "Bent-over or lying chest-down on bench (sub for Cable Face Pulls 35). Rear delt + scap retraction. Light, high reps, strict form.",
     setNotes: [
-      "S1 = form set. Both arms, no swing. 1-2 RIR.",
-      "Last set. 0-1 RIR. 12 reps clean > 14 with body english."
+      "Bent over ~45°, slight elbow bend, palms facing. Squeeze shoulder blades. S1 = form set. 2-3 RIR.",
+      "Last set. 0-1 RIR. Quality reps > weight."
     ],
     trigger: [],
     triggerWeight: "n/a (maintenance)",
