@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get Out — Saturday May 30, 2026</title>
+<style>
+  :root {
+    --v1:  #fff5f0;
+    --v2:  #fee0d2;
+    --v3:  #fcbba1;
+    --v4:  #fc9272;
+    --v5:  #fb6a4a;
+    --v6:  #ef3b2c;
+    --v7:  #cb181d;
+    --v8:  #a50f15;
+    --v9:  #75000d;
+    --v10: #4a0008;
+    --accent: #cb181d;
+    --gray-1: #444;
+    --gray-2: #666;
+    --gray-3: #888;
+    --gray-4: #ccc;
+    --gray-5: #f4f4f4;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #fff;
+    color: var(--gray-1);
+    line-height: 1.5;
+  }
+  header {
+    padding: 28px 32px 16px;
+    border-bottom: 1px solid var(--gray-4);
+  }
+  h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--gray-1);
+    letter-spacing: -0.01em;
+  }
+  h1 .accent { color: var(--accent); }
+  .subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--gray-2);
+  }
+  .changes {
+    margin: 14px 32px 0;
+    padding: 10px 14px;
+    border-left: 3px solid var(--accent);
+    background: var(--gray-5);
+    font-size: 12.5px;
+    color: var(--gray-1);
+  }
+  .changes strong { color: var(--accent); }
+  .formula, .legend {
+    margin: 14px 32px;
+    padding: 10px 14px;
+    background: var(--gray-5);
+    font-size: 12px;
+    color: var(--gray-2);
+  }
+  .formula code {
+    color: var(--gray-1);
+    font-weight: 600;
+    background: #fff;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+  .formula .defs {
+    margin-top: 6px;
+    color: var(--gray-3);
+  }
+  .legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .legend-label { color: var(--gray-3); margin-right: 4px; }
+  .legend-cell {
+    display: inline-block;
+    width: 26px;
+    height: 18px;
+    text-align: center;
+    font-size: 10px;
+    line-height: 18px;
+    font-weight: 600;
+  }
+  .table-wrap {
+    margin: 18px 32px 32px;
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    table-layout: fixed;
+  }
+  thead {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 5;
+  }
+  th {
+    text-align: left;
+    padding: 10px 8px;
+    border-bottom: 2px solid var(--gray-4);
+    font-weight: 600;
+    color: var(--gray-2);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  th.score-col, th.dim {
+    text-align: center;
+  }
+  th.rank { width: 36px; }
+  th.event { width: auto; }
+  th.dim { width: 52px; }
+  th.score-col { width: 64px; }
+  td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--gray-4);
+    vertical-align: top;
+  }
+  td.cell {
+    text-align: center;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  td.rank {
+    text-align: center;
+    font-weight: 600;
+    color: var(--gray-3);
+  }
+  .ev-title {
+    font-weight: 600;
+    color: var(--gray-1);
+    font-size: 14px;
+    line-height: 1.3;
+  }
+  .ev-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    margin-left: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 3px;
+    background: var(--accent);
+    color: #fff;
+    vertical-align: middle;
+  }
+  .ev-badge.verify { background: #888; }
+  .ev-meta {
+    font-size: 12px;
+    color: var(--gray-2);
+    margin-top: 3px;
+  }
+  .ev-blurb {
+    font-size: 12px;
+    color: var(--gray-3);
+    margin-top: 5px;
+    line-height: 1.4;
+  }
+  .ev-meta a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .ev-meta a:hover { text-decoration: underline; }
+  .v1  { background: var(--v1);  color: var(--gray-3); }
+  .v2  { background: var(--v2);  color: var(--gray-2); }
+  .v3  { background: var(--v3);  color: #5b1a0a; }
+  .v4  { background: var(--v4);  color: #4a0008; }
+  .v5  { background: var(--v5);  color: #fff; }
+  .v6  { background: var(--v6);  color: #fff; }
+  .v7  { background: var(--v7);  color: #fff; }
+  .v8  { background: var(--v8);  color: #fff; }
+  .v9  { background: var(--v9);  color: #fff; }
+  .v10 { background: var(--v10); color: #fff; }
+  footer {
+    padding: 24px 32px 40px;
+    border-top: 1px solid var(--gray-4);
+    font-size: 12px;
+    color: var(--gray-3);
+  }
+  footer details {
+    margin-top: 10px;
+  }
+  footer summary {
+    cursor: pointer;
+    color: var(--gray-2);
+    font-weight: 600;
+  }
+  footer ul {
+    margin: 8px 0 0 18px;
+    padding: 0;
+  }
+  footer li {
+    margin: 3px 0;
+  }
+  .stamp { color: var(--gray-3); margin-top: 14px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Get Out <span class="accent">—</span> Heatmap, Saturday May 30, 2026</h1>
+  <p class="subtitle">31 events scored on 6 dimensions. Latin / J-pop / dance taste-weighted. Crowd dimension prioritizes 20s-30s singles.</p>
+</header>
+
+<div class="changes">
+  <strong>Heads up.</strong> indyweek.com calendar didn't render (JS-only), so the catchall is missing alt-weekly listings. <strong>Cirque du Sol-Rave</strong> at The Fruit lists drag clowns among its performers — kept in the table (it's a 4-stage circus rave at heart, not a drag show) but flagged so you can decide. Pour House had two sold-out shows on the docket; both pulled.
+</div>
+
+<div class="formula">
+  <code>SCORE = (Vibe·4 + Crowd·3 + Meet·1.5 + Solo + Price + Near) ÷ 11.5</code>
+  <div class="defs">
+    Vibe = taste match · Crowd = young singles density · Meet = chance you actually talk to strangers · Solo = how weird it is to show up alone · $ = inverse cost · Near = inverse distance from Durham
+  </div>
+</div>
+
+<div class="legend">
+  <span class="legend-label">Heatmap scale</span>
+  <span class="legend-cell v1">1</span>
+  <span class="legend-cell v2">2</span>
+  <span class="legend-cell v3">3</span>
+  <span class="legend-cell v4">4</span>
+  <span class="legend-cell v5">5</span>
+  <span class="legend-cell v6">6</span>
+  <span class="legend-cell v7">7</span>
+  <span class="legend-cell v8">8</span>
+  <span class="legend-cell v9">9</span>
+  <span class="legend-cell v10">10</span>
+</div>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th class="rank">#</th>
+      <th class="event">Event</th>
+      <th class="dim">Vibe</th>
+      <th class="dim">Crowd</th>
+      <th class="dim">Meet</th>
+      <th class="dim">Solo</th>
+      <th class="dim">$</th>
+      <th class="dim">Near</th>
+      <th class="score-col">SCORE</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <tr>
+      <td class="rank">1</td>
+      <td>
+        <div class="ev-title">Cirque du Sol-Rave <span class="ev-badge verify">verify: drag clowns on bill</span></div>
+        <div class="ev-meta">Sat · 9:00 PM · The Fruit, Durham · $15–35 · <a href="https://www.eventbrite.com/e/cirque-du-sol-rave-tickets-1835912296099">tickets</a></div>
+        <div class="ev-blurb">4-stage circus-themed micro-fest with 40+ underground DJs, fire dancers, aerial acts, LED flow arts until 2 AM. Underground rave crowd, 21+ with limited 18+ tix.</div>
+      </td>
+      <td class="cell v8">8</td>
+      <td class="cell v9">9</td>
+      <td class="cell v9">9</td>
+      <td class="cell v8">8</td>
+      <td class="cell v7">7</td>
+      <td class="cell v10">10</td>
+      <td class="cell v8">8.5</td>
+    </tr>
+
+    <tr>
+      <td class="rank">2</td>
+      <td>
+        <div class="ev-title">Golden Age — Mettlesome Improv</div>
+        <div class="ev-meta">Sat · 9:00 PM · Mettlesome Theater (Golden Belt), Durham · $9 at the door · <a href="https://thisismettlesome.com/golden-age">info</a></div>
+        <div class="ev-blurb">Veteran Durham improvisers build a whole world of characters from your suggestions. Indie young-scene Durham crowd, late slot, cheap.</div>
+      </td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v5">5</td>
+      <td class="cell v8">8</td>
+      <td class="cell v9">9</td>
+      <td class="cell v10">10</td>
+      <td class="cell v8">7.5</td>
+    </tr>
+
+    <tr>
+      <td class="rank">3</td>
+      <td>
+        <div class="ev-title">King Britt presents Blacktronika (Night 2)</div>
+        <div class="ev-meta">Sat · 7:00 PM · BOOM Club, Durham · $36 · <a href="https://boom-club.org/events/blacktronika2">tickets</a></div>
+        <div class="ev-blurb">King Britt (Digable Planets OG DJ, Afro-tech / deep house / broken beat pioneer) pushing the future of Black electronic music with Trovarsi, Linafornia, Nelson Bandela.</div>
+      </td>
+      <td class="cell v8">8</td>
+      <td class="cell v7">7</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v6">6</td>
+      <td class="cell v10">10</td>
+      <td class="cell v7">7.4</td>
+    </tr>
+
+    <tr>
+      <td class="rank">4</td>
+      <td>
+        <div class="ev-title">NO CAP × BACKENDCHILD — Club RDU Memorial Weekend</div>
+        <div class="ev-meta">Sat · 10:00 PM · Club RDU, Durham · check venue · <a href="https://www.eventbrite.com/e/no-cap-aka-the-backendchild-x-club-rdu-memorial-weekend-tickets-1989686450735">tickets</a></div>
+        <div class="ev-blurb">Hip-hop / R&amp;B late-night Gemini bash with local artist BACKENDCHILD headlining. Runs until 2:30 AM. 21+ likely.</div>
+      </td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v7">7</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5</td>
+      <td class="cell v10">10</td>
+      <td class="cell v7">7.3</td>
+    </tr>
+
+    <tr>
+      <td class="rank">5</td>
+      <td>
+        <div class="ev-title">Aching Back Sunday (free hot dogs)</div>
+        <div class="ev-meta">Sat · 8:00 PM · Kings, Raleigh · $10 · <a href="https://www.kingsraleigh.com/shows/aching-back-sunday-2/">tickets</a></div>
+        <div class="ev-blurb">Pop-punk / emo live band night at Kings — "emo night but it's a live-ass band." Young punk regulars, late-20s bar crowd, hot dogs.</div>
+      </td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v9">9</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7.2</td>
+    </tr>
+
+    <tr>
+      <td class="rank">6</td>
+      <td>
+        <div class="ev-title">Dix Park Inter-Tribal Pow Wow</div>
+        <div class="ev-meta">Sat · 11:30 AM–6:30 PM · Harvey Hill, Dix Park, Raleigh · Free · <a href="https://dixpark.org/powwow">info</a></div>
+        <div class="ev-blurb">4th annual inter-tribal gathering — competition dancing, drumming, indigenous vendors and food. One of NC's largest pow wows.</div>
+      </td>
+      <td class="cell v7">7</td>
+      <td class="cell v7">7</td>
+      <td class="cell v6">6</td>
+      <td class="cell v8">8</td>
+      <td class="cell v10">10</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7.1</td>
+    </tr>
+
+    <tr>
+      <td class="rank">7</td>
+      <td>
+        <div class="ev-title">Laughs in Spanish — Bulldog Ensemble Theater</div>
+        <div class="ev-meta">Sat · 7:00 PM · Mettlesome Theater (Golden Belt), Durham · $11 (under-35) · <a href="https://bulldogdurham.org/spanish">tickets</a></div>
+        <div class="ev-blurb">Code-switching comedic play about a Miami art-world hustle — "witchy, rollicking, 90 minutes of fun." Diverse Durham theater crowd, younger skew.</div>
+      </td>
+      <td class="cell v7">7</td>
+      <td class="cell v7">7</td>
+      <td class="cell v4">4</td>
+      <td class="cell v7">7</td>
+      <td class="cell v9">9</td>
+      <td class="cell v10">10</td>
+      <td class="cell v7">7.0</td>
+    </tr>
+
+    <tr>
+      <td class="rank">8</td>
+      <td>
+        <div class="ev-title">The WHY PARTY (Cadeboyer × Qsticc)</div>
+        <div class="ev-meta">Sat · 10:30 PM · The Pinhook, Durham · check venue · <a href="https://thepinhook.com/events/">info</a></div>
+        <div class="ev-blurb">Late-night 21+ DJ party at Pinhook hosted by Cadeboyer and Qsticc. Genre unconfirmed but Pinhook's hip-hop / underground context suggests DJ-driven dance night.</div>
+      </td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v7">7</td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v10">10</td>
+      <td class="cell v7">7.0</td>
+    </tr>
+
+    <tr>
+      <td class="rank">9</td>
+      <td>
+        <div class="ev-title">Champagne Drip</div>
+        <div class="ev-meta">Sat · 9:00 PM · The Underground, Raleigh · $18–25 · <a href="https://www.jambase.com/show/champagne-drip-the-underground-20260530">tickets</a></div>
+        <div class="ev-blurb">LA producer fusing jungle / bass / 80s synths / melodic dubstep — Lost Lands-adjacent underground bass night. EDM heads, bass fans, 20s club crowd.</div>
+      </td>
+      <td class="cell v7">7</td>
+      <td class="cell v7">7</td>
+      <td class="cell v7">7</td>
+      <td class="cell v6">6</td>
+      <td class="cell v8">8</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">6.9</td>
+    </tr>
+
+    <tr>
+      <td class="rank">10</td>
+      <td>
+        <div class="ev-title">Around the World, Raleigh</div>
+        <div class="ev-meta">Sat · 11:00 AM–7:00 PM · Moore Square, Raleigh · Free · <a href="https://downtownraleigh.org/do/around-the-world-raleigh">info</a></div>
+        <div class="ev-blurb">Inaugural multicultural street fest — neighborhood zones for Africa, Asia, South America. Food trucks, crafts, live performances all day.</div>
+      </td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v10">10</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">6.7</td>
+    </tr>
+
+    <tr>
+      <td class="rank">11</td>
+      <td>
+        <div class="ev-title">Comedy Night at Weldon Mills</div>
+        <div class="ev-meta">Sat · 8:00 PM · Weldon Mills Distillery, Durham · check venue · <a href="https://www.eventbrite.com/d/nc--durham/comedy-night/">info</a></div>
+        <div class="ev-blurb">Stand-up at a sleek downtown bourbon bar a few blocks from DPAC. Young Durham professional bar crowd.</div>
+      </td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v5">5</td>
+      <td class="cell v7">7</td>
+      <td class="cell v7">7</td>
+      <td class="cell v10">10</td>
+      <td class="cell v7">6.7</td>
+    </tr>
+
+    <tr>
+      <td class="rank">12</td>
+      <td>
+        <div class="ev-title">Krimson and Kream Affair (Kappa Alpha Psi)</div>
+        <div class="ev-meta">Sat · 9:00 PM · Hilton Durham near Duke · check venue · <a href="https://www.eventbrite.com/e/the-krimson-and-kream-affair-tickets-1988803301211">tickets</a></div>
+        <div class="ev-blurb">Frat social affair with DJ, dress-up vibe. BGLO / Black Greek social crowd, mixed professional ages.</div>
+      </td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v7">7</td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v10">10</td>
+      <td class="cell v7">6.6</td>
+    </tr>
+
+    <tr>
+      <td class="rank">13</td>
+      <td>
+        <div class="ev-title">Spring Fling Soiree (DJ MOESKIENO)</div>
+        <div class="ev-meta">Sat · 4:00–8:00 PM · Split Raleigh (Glenwood) · check venue · <a href="https://www.eventbrite.com/e/spring-fling-soiree-tickets-1989221386716">tickets</a></div>
+        <div class="ev-blurb">Indoor-outdoor Glenwood day party — front porch and back patio, grown-and-sexy mix-and-mingle. Professional Black social crowd, 25–40.</div>
+      </td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">6.5</td>
+    </tr>
+
+    <tr>
+      <td class="rank">14</td>
+      <td>
+        <div class="ev-title">Withered w/ Xenobile, Aterra, Blix</div>
+        <div class="ev-meta">Sat · 8:30 PM · Local 506, Chapel Hill · check venue · <a href="https://local506.com/event/withered-with-xenobile-aterra-and-blix/local-506/">tickets</a></div>
+        <div class="ev-blurb">Withered = blackened doom-death — perplexing, punishing heaviness. All-ages, metal diehards.</div>
+      </td>
+      <td class="cell v7">7</td>
+      <td class="cell v6">6</td>
+      <td class="cell v4">4</td>
+      <td class="cell v6">6</td>
+      <td class="cell v8">8</td>
+      <td class="cell v8">8</td>
+      <td class="cell v6">6.4</td>
+    </tr>
+
+    <tr>
+      <td class="rank">15</td>
+      <td>
+        <div class="ev-title">Saturdays in Saxapahaw</div>
+        <div class="ev-meta">Sat · 5:00 PM · Haw River Ballroom (outdoor), Saxapahaw · Free · <a href="https://www.hawriverballroom.com/saturdays-in-saxapahaw">info</a></div>
+        <div class="ev-blurb">Free weekly outdoor concert series — local bands, farmers market, microbrews. ~40 min west of Durham. May 30 lineup not yet posted.</div>
+      </td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v10">10</td>
+      <td class="cell v3">3</td>
+      <td class="cell v6">6.3</td>
+    </tr>
+
+    <tr>
+      <td class="rank">16</td>
+      <td>
+        <div class="ev-title">Yasmin Williams</div>
+        <div class="ev-meta">Sat · 8:00 PM · Cat's Cradle Back Room, Carrboro · ~$25 · <a href="https://catscradle.com/event/yasmin-williams/cats-cradle-back-room/carrboro-north-carolina/">tickets</a></div>
+        <div class="ev-blurb">Acclaimed fingerstyle guitarist — layered percussive acoustic at the folk / classical / ambient intersection. Seated, attentive young-adult crowd.</div>
+      </td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v3">3</td>
+      <td class="cell v7">7</td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v6">6.2</td>
+    </tr>
+
+    <tr>
+      <td class="rank">17</td>
+      <td>
+        <div class="ev-title">ComedyWorx Musical Show</div>
+        <div class="ev-meta">Sat · 9:00 PM · ComedyWorx, Raleigh · ~$12–18 · <a href="https://www.comedyworx.com/upcoming-shows">info</a></div>
+        <div class="ev-blurb">Musical improv comedy — songs built from audience suggestions. Late-night, young-adult comedy fans.</div>
+      </td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">6</td>
+      <td class="cell v4">4</td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">6.0</td>
+    </tr>
+
+    <tr>
+      <td class="rank">18</td>
+      <td>
+        <div class="ev-title">Young the Giant w/ Cold War Kids + Almost Monday</div>
+        <div class="ev-meta">Sat · 6:30 PM · Red Hat Amphitheater, Raleigh · $54+ · <a href="https://www.redhatamphitheater.com/events/detail/young-the-giant">tickets</a></div>
+        <div class="ev-blurb">Outdoor amphitheater indie rock triple bill on the Victory Garden Tour. Mid-2010s indie nostalgia, mixed 25–40 crowd.</div>
+      </td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5</td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">5.8</td>
+    </tr>
+
+    <tr>
+      <td class="rank">19</td>
+      <td>
+        <div class="ev-title">SEANC × NOBLE All White Day Party</div>
+        <div class="ev-meta">Sat · 6:00–10:00 PM · Farotage Nation Lounge, Raleigh · check venue · <a href="https://www.eventbrite.com/e/seanc-district-41-and-noble-all-white-day-party-tickets-1987764295517">tickets</a></div>
+        <div class="ev-blurb">All-white dress code day party hosted by a state employees association and civic org. Civic / professional crowd, older demographic.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v5">5</td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">5.7</td>
+    </tr>
+
+    <tr>
+      <td class="rank">20</td>
+      <td>
+        <div class="ev-title">CaryLive! Season Opener</div>
+        <div class="ev-meta">Sat · 7:30 PM · Downtown Cary Park · Free · <a href="https://downtowncarypark.com/carylive">info</a></div>
+        <div class="ev-blurb">Free outdoor concert series season opener — performer TBA, runs 7:30–9:30 PM. Suburban families and couples.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v7">7</td>
+      <td class="cell v10">10</td>
+      <td class="cell v4">4</td>
+      <td class="cell v6">5.5</td>
+    </tr>
+
+    <tr>
+      <td class="rank">21</td>
+      <td>
+        <div class="ev-title">Nasher Museum gallery visit (Dis/orient: Asian Diaspora + 3 more)</div>
+        <div class="ev-meta">Sat · 10 AM–5 PM · Nasher Museum, Duke campus, Durham · Free · <a href="https://nasher.duke.edu/">info</a></div>
+        <div class="ev-blurb">Free world-class museum on Duke's campus — solid solo afternoon. Duke students, art-inclined adults, mixed ages.</div>
+      </td>
+      <td class="cell v4">4</td>
+      <td class="cell v4">4</td>
+      <td class="cell v4">4</td>
+      <td class="cell v9">9</td>
+      <td class="cell v10">10</td>
+      <td class="cell v10">10</td>
+      <td class="cell v5">5.5</td>
+    </tr>
+
+    <tr>
+      <td class="rank">22</td>
+      <td>
+        <div class="ev-title">Rookie of the Year (Ryan Dunson)</div>
+        <div class="ev-meta">Sat · 7:00 PM · Grog Alley, Raleigh · $10–40 · <a href="https://www.songkick.com/concerts/43179934-rookie-of-the-year-at-grog-alley">tickets</a></div>
+        <div class="ev-blurb">Acoustic pop singer-songwriter at a vintage tavern-themed downtown Raleigh bar. Casual bar regulars.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v4">4</td>
+      <td class="cell v6">6</td>
+      <td class="cell v9">9</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5.4</td>
+    </tr>
+
+    <tr>
+      <td class="rank">23</td>
+      <td>
+        <div class="ev-title">ComedyWorx Matinee</div>
+        <div class="ev-meta">Sat · 4:00 PM · ComedyWorx, Raleigh · ~$12–18 · <a href="https://www.comedyworx.com/upcoming-shows">info</a></div>
+        <div class="ev-blurb">Audience-driven improv competition format — affordable early-afternoon show on Hillsborough St.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v4">4</td>
+      <td class="cell v6">6</td>
+      <td class="cell v8">8</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5.3</td>
+    </tr>
+
+    <tr>
+      <td class="rank">24</td>
+      <td>
+        <div class="ev-title">In The End: Linkin Park Experience (w/ Echostone)</div>
+        <div class="ev-meta">Sat · 7:00 PM · The Ritz, Raleigh · ~$23 · <a href="https://www.jambase.com/show/in-the-end-the-linkin-park-experience-the-ritz-20260530">tickets</a></div>
+        <div class="ev-blurb">Linkin Park tribute at a mid-size Raleigh club. Late-millennial nu-metal nostalgia crowd, 25–40.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v4">4</td>
+      <td class="cell v6">6</td>
+      <td class="cell v8">8</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5.3</td>
+    </tr>
+
+    <tr>
+      <td class="rank">25</td>
+      <td>
+        <div class="ev-title">Lynn Blakey Celebration (w/ Chatham County Line, Tift Merritt, et al.)</div>
+        <div class="ev-meta">Sat · 8:00 PM · Cat's Cradle Main Room, Carrboro · $15 suggested · <a href="https://catscradle.com/event/lynn-blakey-a-celebration-of-her-life-and-music/cats-cradle/carrboro-north-carolina/">info</a></div>
+        <div class="ev-blurb">Memorial tribute / record release for late NC singer-songwriter. All-star NC Americana / indie-rock band. Local music community, older crowd.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v4">4</td>
+      <td class="cell v6">6</td>
+      <td class="cell v8">8</td>
+      <td class="cell v8">8</td>
+      <td class="cell v5">5.2</td>
+    </tr>
+
+    <tr>
+      <td class="rank">26</td>
+      <td>
+        <div class="ev-title">Lavell Crawford (Saul from Breaking Bad)</div>
+        <div class="ev-meta">Sat · 7:00 PM · Goodnights Comedy Club, Raleigh · ~$45–60 · <a href="https://www.goodnightscomedy.com/calendar">tickets</a></div>
+        <div class="ev-blurb">National headliner at Raleigh's main comedy club. Two shows tonight. Mixed-age mainstream comedy club crowd.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v6">6</td>
+      <td class="cell v3">3</td>
+      <td class="cell v7">7</td>
+      <td class="cell v4">4</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5.2</td>
+    </tr>
+
+    <tr>
+      <td class="rank">27</td>
+      <td>
+        <div class="ev-title">JC Currais (NBC, Conan)</div>
+        <div class="ev-meta">Sat · 7:30 PM · Room 861 at Goodnights, Raleigh · from ~$50 · <a href="https://seatgeek.com/jc-currais-tickets/comedy/2026-05-30-7-30-pm/18203738">tickets</a></div>
+        <div class="ev-blurb">Cuban-American headliner in Goodnights' smaller Room 861. Intimate room, mixed-age crowd.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v6">6</td>
+      <td class="cell v3">3</td>
+      <td class="cell v7">7</td>
+      <td class="cell v3">3</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5.1</td>
+    </tr>
+
+    <tr>
+      <td class="rank">28</td>
+      <td>
+        <div class="ev-title">Still. Moving — Rainbow Dance Co. in NCMA galleries (morning)</div>
+        <div class="ev-meta">Sat · 11:00 AM · NC Museum of Art, Raleigh · Free · <a href="https://ncartmuseum.org/event/still-moving-christa-oliver-interprets-a-work-from-the-peoples-collection/">info</a></div>
+        <div class="ev-blurb">Dancers interpreting paintings inside the galleries — unusual format, visually interesting, free.</div>
+      </td>
+      <td class="cell v4">4</td>
+      <td class="cell v4">4</td>
+      <td class="cell v4">4</td>
+      <td class="cell v8">8</td>
+      <td class="cell v10">10</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5.0</td>
+    </tr>
+
+    <tr>
+      <td class="rank">29</td>
+      <td>
+        <div class="ev-title">Still. Moving (afternoon repeat)</div>
+        <div class="ev-meta">Sat · 1:00 PM · NC Museum of Art, Raleigh · Free · <a href="https://ncartmuseum.org/event/still-moving-christa-oliver-interprets-a-work-from-the-peoples-collection-914/">info</a></div>
+        <div class="ev-blurb">Afternoon repeat of the dance-in-galleries performance.</div>
+      </td>
+      <td class="cell v4">4</td>
+      <td class="cell v4">4</td>
+      <td class="cell v4">4</td>
+      <td class="cell v8">8</td>
+      <td class="cell v10">10</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5.0</td>
+    </tr>
+
+    <tr>
+      <td class="rank">30</td>
+      <td>
+        <div class="ev-title">Durham Farmers' Market</div>
+        <div class="ev-meta">Sat · 8:00 AM · Durham Central Park Pavilion · Free · <a href="https://www.durhamfarmersmarket.com/">info</a></div>
+        <div class="ev-blurb">Chill local produce / artisan goods market — slow Saturday morning browse. Local regulars, families.</div>
+      </td>
+      <td class="cell v3">3</td>
+      <td class="cell v3">3</td>
+      <td class="cell v5">5</td>
+      <td class="cell v9">9</td>
+      <td class="cell v10">10</td>
+      <td class="cell v10">10</td>
+      <td class="cell v5">5.0</td>
+    </tr>
+
+    <tr>
+      <td class="rank">31</td>
+      <td>
+        <div class="ev-title">Guy Torry</div>
+        <div class="ev-meta">Sat · 6:30 PM · Raleigh Improv, Cary · from $27 + 2-item min, 21+ · <a href="https://improv.com/raleigh/comic/guy+torry/">tickets</a></div>
+        <div class="ev-blurb">National club circuit headliner. Two shows (6:30 / 9:00 PM). Mainstream suburban crowd.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v3">3</td>
+      <td class="cell v6">6</td>
+      <td class="cell v6">6</td>
+      <td class="cell v4">4</td>
+      <td class="cell v5">4.8</td>
+    </tr>
+
+    <tr>
+      <td class="rank">32</td>
+      <td>
+        <div class="ev-title">Hamilton — matinee</div>
+        <div class="ev-meta">Sat · 1:30 PM · DPAC, Durham · from $93 · <a href="https://www.hamiltondurham.org/">tickets</a></div>
+        <div class="ev-blurb">Broadway touring production. Hip-hop infused musical theater, formal seated show.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v2">2</td>
+      <td class="cell v5">5</td>
+      <td class="cell v2">2</td>
+      <td class="cell v10">10</td>
+      <td class="cell v5">4.8</td>
+    </tr>
+
+    <tr>
+      <td class="rank">33</td>
+      <td>
+        <div class="ev-title">Hamilton — evening</div>
+        <div class="ev-meta">Sat · 7:30 PM · DPAC, Durham · from $80 · <a href="https://www.hamiltondurham.org/">tickets</a></div>
+        <div class="ev-blurb">Same show, evening slot. Date-night couples, Broadway fans, dressed-up crowd.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v5">5</td>
+      <td class="cell v2">2</td>
+      <td class="cell v5">5</td>
+      <td class="cell v2">2</td>
+      <td class="cell v10">10</td>
+      <td class="cell v5">4.8</td>
+    </tr>
+
+    <tr>
+      <td class="rank">34</td>
+      <td>
+        <div class="ev-title">Ben Folds &amp; A Piano (w/ Lindsey Kraft)</div>
+        <div class="ev-meta">Sat · 8:00 PM · Meymandi Concert Hall, Raleigh · from ~$90 · <a href="https://www.martinmariettacenter.com/events/detail/ben-folds-a-piano-tour">tickets</a></div>
+        <div class="ev-blurb">Solo piano — witty alt-rock piano-pop in a formal concert hall with comedian Lindsey Kraft. 35–55 fan demographic.</div>
+      </td>
+      <td class="cell v5">5</td>
+      <td class="cell v4">4</td>
+      <td class="cell v3">3</td>
+      <td class="cell v6">6</td>
+      <td class="cell v3">3</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">4.5</td>
+    </tr>
+
+    <tr>
+      <td class="rank">35</td>
+      <td>
+        <div class="ev-title">UpClose Chamber Music: Durham Fellows + Jordan Bak (viola)</div>
+        <div class="ev-meta">Sat · 7:30 PM · CURRENT ArtSpace, Chapel Hill · $40 / $10 student · <a href="https://carolinaperformingarts.org/current-season/">info</a></div>
+        <div class="ev-blurb">Intimate chamber concert (Bunch, Britten, Mendelssohn) at a hip Chapel Hill arts space. Classical enthusiasts, older / educated.</div>
+      </td>
+      <td class="cell v4">4</td>
+      <td class="cell v3">3</td>
+      <td class="cell v3">3</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v8">8</td>
+      <td class="cell v4">4.4</td>
+    </tr>
+
+    <tr>
+      <td class="rank">36</td>
+      <td>
+        <div class="ev-title">Bearly Dead (Grateful Dead Tribute)</div>
+        <div class="ev-meta">Sat · 8:00 PM · Lincoln Theatre, Raleigh · $17–37 · <a href="https://lincolntheatre.com/event/bearly-dead-grateful-dead-tribute/lincoln-theatre/raleigh-north-carolina/">tickets</a></div>
+        <div class="ev-blurb">Grateful Dead tribute, jam band crowd. Deadheads, 40+, tie-dye.</div>
+      </td>
+      <td class="cell v4">4</td>
+      <td class="cell v3">3</td>
+      <td class="cell v4">4</td>
+      <td class="cell v6">6</td>
+      <td class="cell v7">7</td>
+      <td class="cell v6">6</td>
+      <td class="cell v4">4.3</td>
+    </tr>
+
+    <tr>
+      <td class="rank">37</td>
+      <td>
+        <div class="ev-title">Epic Film Scores (NC Symphony Summerfest)</div>
+        <div class="ev-meta">Sat · 8:00 PM · Koka Booth Amphitheatre, Cary · check venue · <a href="https://www.boothamphitheatre.com/events/detail/epic-film-scores">tickets</a></div>
+        <div class="ev-blurb">NC Symphony playing Chariots of Fire, LOTR, Titanic. Outdoor, crowd-friendly pops. Suburban families and couples.</div>
+      </td>
+      <td class="cell v4">4</td>
+      <td class="cell v4">4</td>
+      <td class="cell v4">4</td>
+      <td class="cell v6">6</td>
+      <td class="cell v5">5</td>
+      <td class="cell v4">4</td>
+      <td class="cell v4">4.3</td>
+    </tr>
+
+  </tbody>
+</table>
+</div>
+
+<footer>
+  <div><strong>Excluded:</strong> 4 events — Triangle Drag Show (Killjoy), POP THAT Party (pre-pride pink), Sapphic Dream Club, Pride Kickoff Drag Brunch. 2 events sold out (Pour House: Paul McCartney Listening Party, The Band Solstice w/ John Wood Band).</div>
+
+  <details>
+    <summary>Failed sources (collapsed)</summary>
+    <ul>
+      <li><strong>indyweek.com/events</strong> — JS-rendered, returned no events (HARD FAIL)</li>
+      <li>motorcomusic.com/events — 404 (Songkick confirmed no Motorco events May 30)</li>
+      <li>slimsraleigh.com — 404</li>
+      <li>hawriverballroom.com/events — 404 (Saturdays page loaded fine)</li>
+      <li>ruebeluxe.com — ECONNREFUSED</li>
+      <li>camraleigh.org — 404 (CAM Raleigh temporarily closed)</li>
+      <li>caryartsonline.org — ECONNREFUSED</li>
+      <li>nctrianglemusic.live — 403</li>
+      <li>thepinhook.com event detail pages — 404 (WHY PARTY confirmed via search snippet)</li>
+      <li>discoverdurham.com / visitraleigh.com — no date-filtered results</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>Notable verifies</summary>
+    <ul>
+      <li><strong>Cirque du Sol-Rave</strong> lists drag clowns among 40+ performers across 4 stages — included since core identity is circus rave, not drag show, but flagged so you can call it.</li>
+      <li><strong>Comedy Night at Weldon Mills</strong> — confirmed on Eventbrite, but venue's own events page doesn't list it. Cost unconfirmed. Worth a call: 919-238-4413.</li>
+      <li><strong>The WHY PARTY</strong> at Pinhook — title confirmed via Google snippet only; Pinhook event detail pages don't load.</li>
+      <li><strong>Saturdays in Saxapahaw</strong> — May 30 artist lineup not yet posted on their page.</li>
+      <li><strong>CaryLive!</strong> — performer TBA.</li>
+      <li>Lynn Blakey Celebration and the standalone "Chatham County Line" listing are the same show — CCL is part of the Blakey tribute lineup.</li>
+    </ul>
+  </details>
+
+  <div class="stamp">Generated 2026-05-24 · /getout · sorted by composite score · ColorBrewer Reds 10-class</div>
+</footer>
+
+</body>
+</html>
