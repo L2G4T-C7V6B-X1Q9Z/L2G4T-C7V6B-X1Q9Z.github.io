@@ -1095,6 +1095,35 @@ const workout = [
       return null;
     }
   },
+  {
+    name: "DB French Press",
+    sets: 3,
+    reps: "8-12",
+    weight: "35 lbs",
+    rest: 90,
+    note: "**NEW permanent slot (May 25)** — added after Fri May 22 face pulls substitute felt right. That sub session: 12x35 / 9x40 / 7x40 (cable initially occupied). Anchor 35 for the permanent slot. 1 DB held overhead with both hands, elbows tight, full stretch at bottom, 3s eccentric. Targets tricep long head (chest press hits medial/lateral, not long).",
+    setNotes: [
+      "First permanent session at 35. Anchor form: elbows in, full stretch, controlled eccentric. May 22 sub got 12 here at 35.",
+      "**S2 = the read** -- 10+ keeps trigger alive at 35. May 22 jumped to 40 too fast (got 9).",
+      "Last set. 0-1 RIR. Long-head focus. Strict form > reps."
+    ],
+    trigger: [12, 12, 10],
+    triggerWeight: "40 lbs",
+    adviceFor: function(setIdx, prev) {
+      if (setIdx === 1) {
+        const s1 = prev[0];
+        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas -- S2=12 + S3=10 flips 40.";
+        if (s1.reps >= 12) return "S1=" + s1.reps + ". Match on S2 = 40 next.";
+        return "S1=" + s1.reps + " (below 12). Form > reps S2/S3.";
+      }
+      if (setIdx === 2) {
+        const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
+        if (onTrack) return "Trigger alive -- S3=10+ flips 40.";
+        return "Trigger paused. Long head squeeze on S3.";
+      }
+      return null;
+    }
+  },
 ];
 
 const STATE_TTL_MS = 4 * 60 * 60 * 1000;
