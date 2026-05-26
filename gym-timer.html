@@ -986,141 +986,83 @@ const dayType = "Upper";
 const workout = [
   {
     name: "Chest Press Machine",
-    sets: 3,
+    sets: 2,
     reps: "8-12",
-    weight: "110 lbs",
+    weight: "90 lbs",
     rest: 180,
-    note: "Last (Thu May 21) = 11/9/7 [HARD/MAX/—]. First machine session post-Austin (Mon hotel DB submaximal). Total 27, flat vs May 14's 28. Trigger 12/12/10+ → 120. S1 short by 1 — push all 3 sets, sandbag cue retired.",
+    note: "**SICK-DAY REDUCED (May 25)** — 80% of working weight (was 110), 2 sets only, no trigger push. Sore throat + mild malaise. Form-focused, stop if symptoms worsen during.",
     setNotes: [
-      "May 21 S1=11 at HARD. One more rep flips trigger range. Controlled tempo, full ROM, drive through chest.",
-      "**S2 = the bottleneck.** May 21 was 9, May 14 was 10 — needs 12 to flip 120. This set is the whole game.",
-      "Last set. 0-1 RIR. May 21 was 7 — need 10+ to flip 120 with S1+S2 in range."
+      "Reduced intensity. Controlled tempo, full ROM, drive through chest. No max effort.",
+      "Last set. Push to 1-2 RIR, NOT 0. Don't chase reps tonight."
     ],
-    trigger: [12, 12, 10],
-    triggerWeight: "120 lbs",
+    trigger: [],
+    triggerWeight: "—",
     adviceFor: function(setIdx, prev) {
-      if (setIdx === 1) {
-        const s1 = prev[0];
-        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas -- S2=12 flips 120.";
-        if (s1.reps >= 12) return "S1=" + s1.reps + " " + (s1.difficulty === 4 ? "HARD" : "MAX") + ". S2=12 is the trigger -- go for it.";
-        if (s1.reps >= 10) return "S1=" + s1.reps + " -- below trigger ceiling. Save form for S2.";
-        return "S1=" + s1.reps + ". Trigger out. Form > reps on S2/S3.";
-      }
-      if (setIdx === 2) {
-        const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
-        if (onTrack) return "S2 BROKE THROUGH -- S3=10+ flips 120.";
-        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). 110 stays. S3 form first.";
-      }
       return null;
     }
   },
   {
     name: "Cable Rope Row",
-    sets: 3,
+    sets: 2,
     reps: "8-12",
-    weight: "110 lbs",
+    weight: "90 lbs",
     rest: 180,
-    note: "Last (Thu May 21) = 12/9/8 [HARD/MAX/MAX]. **Second session at 110** (trigger flipped May 14 from 100's 12/12/10). S1=12 on the +10 jump = strong retention. Trigger 12/12/10+ → 120. Replaced lat pulldown (R bicep nerve — supinated rope is safe).",
+    note: "**SICK-DAY REDUCED (May 25)** — 80% of working weight (was 110), 2 sets only, no trigger push. Form > volume.",
     setNotes: [
-      "May 21 S1=12 at HARD on the new weight. Match it — controlled, full pull, elbows wide, squeeze at the end.",
-      "**S2 = bottleneck.** May 21 was 9 — need 12 to keep trigger alive at 110. Drive elbows back, not arms.",
-      "Last set. 0-1 RIR. May 21 was 8 — need 10+ to flip 120 with S1+S2 in range."
+      "Reduced intensity. Controlled pull, full ROM, elbows wide, squeeze at end. No max effort.",
+      "Last set. Push to 1-2 RIR. Don't chase reps."
     ],
-    trigger: [12, 12, 10],
-    triggerWeight: "120 lbs",
+    trigger: [],
+    triggerWeight: "—",
     adviceFor: function(setIdx, prev) {
-      if (setIdx === 1) {
-        const s1 = prev[0];
-        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas -- S2=12 keeps trigger alive.";
-        if (s1.reps >= 12) return "S1=" + s1.reps + " -- matched May 21. S2=12 = trigger.";
-        return "S1=" + s1.reps + " (below 12). Trigger paused. Lat focus on S2.";
-      }
-      if (setIdx === 2) {
-        const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
-        if (onTrack) return "TRIGGER ALIVE -- S3=10+ flips 120.";
-        return "Trigger out (S1/S2=" + prev[0].reps + "/" + prev[1].reps + "). 110 stays. S3 form first.";
-      }
       return null;
     }
   },
   {
     name: "DB Lateral Raise",
-    sets: 3,
+    sets: 2,
     reps: "12-15",
-    weight: "15 lbs",
+    weight: "12.5 lbs",
     rest: 90,
-    note: "Last (Thu May 21) = 14/9/8 [HARD/MAX/—]. Total 31, down from May 14's 36. **'Tighter S1 pacing' cue RETIRED — descending reps on lateral raise are normal fatigue. Push all 3 sets.** Trigger 15/15/15 → 17.5.",
+    note: "**SICK-DAY REDUCED (May 25)** — 80% of working weight (was 15), 2 sets only. Drop to 10 lb DBs if 12.5s unavailable.",
     setNotes: [
-      "**No more S1 sandbag.** Push for 15 — full ROM, slight lean forward, pinky-up at the top.",
-      "S2 cratering off a hard S1 is normal fatigue on iso work. Push reps, don't pace.",
-      "Last set. 0-1 RIR. Squeeze every rep. Strict form, no swing."
+      "Reduced intensity. Strict form, slight forward lean, pinky-up. No swing, no max.",
+      "Last set. 1-2 RIR. Slow eccentric, squeeze every rep."
     ],
-    trigger: [15, 15, 15],
-    triggerWeight: "17.5 lbs",
+    trigger: [],
+    triggerWeight: "—",
     adviceFor: function(setIdx, prev) {
-      if (setIdx === 1) {
-        const s1 = prev[0];
-        if (s1.reps >= 15) return "S1=" + s1.reps + " ✓ top of range. Push S2 hard.";
-        return "S1=" + s1.reps + " -- push S2/S3 anyway. No sandbag protocol.";
-      }
-      if (setIdx === 2) {
-        return "Last set. Strict form > reps. Iso triggers climb slow.";
-      }
       return null;
     }
   },
   {
     name: "DB Curls (supinated)",
-    sets: 3,
+    sets: 2,
     reps: "8-12",
-    weight: "20 lbs",
+    weight: "15 lbs",
     rest: 150,
-    note: "**NEW PROTOCOL:** 3 sets (was 2), 2.5 min rest (was 90s). Last (Thu May 21) = 12/8 at 2 sets. S2 stuck 7-9 across 6 sessions — fix is rest + volume, not weight. **Supinated only — hammer twangs R musculocutaneous nerve.** Stop gating on trigger; build volume.",
+    note: "**SICK-DAY REDUCED (May 25)** — 80% of working weight (was 20), 2 sets only. Supinated grip only (no hammer — R bicep nerve).",
     setNotes: [
-      "Supinated grip — NO hammer (nerve). Full ROM, controlled eccentric, no swing.",
-      "**Long rest (2.5 min) before this set.** Last cycle's S2 stalled at 7-9 on 90s rest. With proper rest, target 10+.",
-      "Third set is new. 0-1 RIR. Strict — no momentum. Build the brachialis."
+      "Reduced intensity. Supinated grip, NO hammer. Full ROM, controlled eccentric, no swing.",
+      "Last set. 1-2 RIR. Strict — no momentum."
     ],
     adviceFor: function(setIdx, prev) {
-      if (setIdx === 1) {
-        const s1 = prev[0];
-        if (s1.reps >= 12) return "S1=" + s1.reps + " strong. Long rest now, push S2.";
-        return "S1=" + s1.reps + ". Long rest before S2 -- the protocol fix.";
-      }
-      if (setIdx === 2) {
-        const s2 = prev[1];
-        if (s2.reps >= 10) return "S2=" + s2.reps + " -- 2.5 min rest worked. Finish S3 strong.";
-        return "S2=" + s2.reps + ". Volume builds even short of trigger -- log it.";
-      }
       return null;
     }
   },
   {
-    name: "DB French Press",
-    sets: 3,
-    reps: "8-12",
-    weight: "35 lbs",
-    rest: 90,
-    note: "**NEW permanent slot (May 25)** — added after Fri May 22 face pulls substitute felt right. That sub session: 12x35 / 9x40 / 7x40 (cable initially occupied). Anchor 35 for the permanent slot. 1 DB held overhead with both hands, elbows tight, full stretch at bottom, 3s eccentric. Targets tricep long head (chest press hits medial/lateral, not long).",
+    name: "DB French Press (SKIP TONIGHT — sick day inaugural deferred)",
+    sets: 1,
+    reps: "—",
+    weight: "SKIP",
+    rest: 0,
+    note: "**SKIP TONIGHT (May 25).** Inaugural permanent session deferred. Setting anchor weight on a sick session = bad baseline data. Resume next clean Upper at 35 lbs.",
     setNotes: [
-      "First permanent session at 35. Anchor form: elbows in, full stretch, controlled eccentric. May 22 sub got 12 here at 35.",
-      "**S2 = the read** -- 10+ keeps trigger alive at 35. May 22 jumped to 40 too fast (got 9).",
-      "Last set. 0-1 RIR. Long-head focus. Strict form > reps."
+      "SKIP. Do not perform tonight."
     ],
-    trigger: [12, 12, 10],
-    triggerWeight: "40 lbs",
+    trigger: [],
+    triggerWeight: "—",
     adviceFor: function(setIdx, prev) {
-      if (setIdx === 1) {
-        const s1 = prev[0];
-        if (s1.reps >= 12 && s1.difficulty <= 3) return "S1=" + s1.reps + " with gas -- S2=12 + S3=10 flips 40.";
-        if (s1.reps >= 12) return "S1=" + s1.reps + ". Match on S2 = 40 next.";
-        return "S1=" + s1.reps + " (below 12). Form > reps S2/S3.";
-      }
-      if (setIdx === 2) {
-        const onTrack = prev[0].reps >= 12 && prev[1].reps >= 12;
-        if (onTrack) return "Trigger alive -- S3=10+ flips 40.";
-        return "Trigger paused. Long head squeeze on S3.";
-      }
       return null;
     }
   },
