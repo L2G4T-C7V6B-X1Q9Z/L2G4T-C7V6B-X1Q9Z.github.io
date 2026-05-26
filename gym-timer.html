@@ -1002,6 +1002,23 @@ const workout = [
     }
   },
   {
+    name: "Leg Press Calf Raises",
+    sets: 2,
+    reps: "12-15",
+    weight: "100 lbs",
+    rest: 90,
+    note: "**SICK-DAY REDUCED (May 26)** — ~77% of working weight (was 130). Use 100 lb or whatever is clean on the stack below 115. 2 sets only. Hold the +modifier setup until next clean Lower. Slotted right after Leg Press to keep the machine usage contiguous (no awkward re-occupy).",
+    setNotes: [
+      "Reduced intensity. Full stretch at bottom, full contraction at top, pause. No bouncing.",
+      "Last set. 1-2 RIR. Slow eccentric, squeeze every rep."
+    ],
+    trigger: [],
+    triggerWeight: "—",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
     name: "Leg Curl Machine",
     sets: 2,
     reps: "10-12",
@@ -1011,23 +1028,6 @@ const workout = [
     setNotes: [
       "Reduced intensity. Slow controlled curl, full ROM, no jerking. Stop if any medial thigh sensation.",
       "Last set. 1-2 RIR. Strict form, controlled eccentric."
-    ],
-    trigger: [],
-    triggerWeight: "—",
-    adviceFor: function(setIdx, prev) {
-      return null;
-    }
-  },
-  {
-    name: "Leg Press Calf Raises",
-    sets: 2,
-    reps: "12-15",
-    weight: "100 lbs",
-    rest: 90,
-    note: "**SICK-DAY REDUCED (May 26)** — ~77% of working weight (was 130). Use 100 lb or whatever is clean on the stack below 115. 2 sets only. Hold the +modifier setup until next clean Lower.",
-    setNotes: [
-      "Reduced intensity. Full stretch at bottom, full contraction at top, pause. No bouncing.",
-      "Last set. 1-2 RIR. Slow eccentric, squeeze every rep."
     ],
     trigger: [],
     triggerWeight: "—",
