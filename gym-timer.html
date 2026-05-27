@@ -881,7 +881,7 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 </button>
 
-<h1 id="day-title">Lower</h1>
+<h1 id="day-title">Upper</h1>
 <div id="exercise-name"></div>
 <div id="set-info"></div>
 <div id="exercise-note"></div>
@@ -981,73 +981,95 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Lower";
+const dayType = "Upper";
 
 const workout = [
   {
-    name: "Leg Press",
-    sets: 2,
+    name: "Chest Press Machine",
+    sets: 3,
     reps: "8-12",
-    weight: "200 lbs",
+    weight: "110 lbs",
     rest: 180,
-    note: "**SICK-DAY REDUCED (May 26)** — 80% of working weight (was 250), 2 sets only, no trigger push. Sore throat + malaise improving but not symptom-free. Form-focused, stop if symptoms worsen.",
+    note: "Last (May 21): 11/9/7 [HARD/MAX/—]. Sandbag fix: pace S1 at MOD-HARD, don't burn out before S2. Trigger 12/12/10+ → 120. The S2 rep PR is the goal — break the 9-rep ceiling.",
     setNotes: [
-      "Reduced intensity. Controlled tempo, full depth, drive through heels. No max effort.",
-      "Last set. Push to 1-2 RIR, NOT 0. Don't chase reps."
+      "S1: pace MOD-HARD, NOT max. Target 11-12 with reserve. Don't burn the tank.",
+      "S2: this is the one. Full 3-min rest. Push for 11-12 to break the 9-rep ceiling.",
+      "S3: max effort. Trigger needs >=10 here for 120 next session."
     ],
-    trigger: [],
-    triggerWeight: "—",
+    trigger: [12, 12, 10],
+    triggerWeight: "120 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Leg Press Calf Raises",
-    sets: 2,
+    name: "Cable Rope Row",
+    sets: 3,
+    reps: "8-12",
+    weight: "110 lbs",
+    rest: 180,
+    note: "Last (May 21): 12/9/8 [HARD/MAX/MAX] — first session at 110, strong S1 retention on the +10 jump. Trigger 12/12/10+ → 120. Replaced Lat Pulldown (R bicep nerve). Cable = no nerve issues.",
+    setNotes: [
+      "S1: smooth high pull, retract shoulder blades, no jerking. Aim 12.",
+      "S2: full 3-min rest. Push for 12 to clear the trigger pocket.",
+      "S3: max. Trigger needs >=10 here for 120 next session."
+    ],
+    trigger: [12, 12, 10],
+    triggerWeight: "120 lbs",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "DB Lateral Raise",
+    sets: 3,
     reps: "12-15",
-    weight: "100 lbs",
+    weight: "15 lbs",
     rest: 90,
-    note: "**SICK-DAY REDUCED (May 26)** — ~77% of working weight (was 130). Use 100 lb or whatever is clean on the stack below 115. 2 sets only. Hold the +modifier setup until next clean Lower. Slotted right after Leg Press to keep the machine usage contiguous (no awkward re-occupy).",
+    note: "Last (May 21): 14/9/8 [HARD/MAX/—]. \"Tighter S1 pacing\" cue retired — descending reps on a lateral raise are normal fatigue. Push all 3 sets. Trigger 15/15/15.",
     setNotes: [
-      "Reduced intensity. Full stretch at bottom, full contraction at top, pause. No bouncing.",
-      "Last set. 1-2 RIR. Slow eccentric, squeeze every rep."
+      "S1: clean form, slight forward lean, brief hold at top. Aim 14-15.",
+      "S2: max. Lateral fatigue is normal — push reps anyway.",
+      "S3: whatever's there. Cheat-rep last 1-2 OK if form holds."
     ],
-    trigger: [],
-    triggerWeight: "—",
+    trigger: [15, 15, 15],
+    triggerWeight: "17.5 or 20 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Leg Curl Machine",
-    sets: 2,
-    reps: "10-12",
-    weight: "40 lbs",
+    name: "DB Curls (supinated)",
+    sets: 3,
+    reps: "8-12",
+    weight: "20 lbs",
     rest: 150,
-    note: "**SICK-DAY REDUCED (May 26)** — 80% of working weight (was 50), 2 sets only. Tissue reset still active. STOP S1 immediately if any medial hamstring sensation or spasm (May 13 incident).",
+    note: "**SUPINATED ONLY — NO HAMMER (nerve protocol, confirmed May 8/12/14).** S2 stuck 7-9 reps across 6+ sessions. Fix: (1) rest 2.5 min before S2 (was 90s), (2) ADD 3rd set, (3) stop gating on the trigger — just push total reps.",
     setNotes: [
-      "Reduced intensity. Slow controlled curl, full ROM, no jerking. Stop if any medial thigh sensation.",
-      "Last set. 1-2 RIR. Strict form, controlled eccentric."
+      "S1: supinated grip, full ROM, controlled tempo. Aim 12. NO hammer — twang risk.",
+      "S2: FULL 2.5 min rest before this set. Push max — break the 8-rep ceiling.",
+      "S3: new 3rd set. Whatever's left. Total volume matters more than the trigger today."
     ],
-    trigger: [],
-    triggerWeight: "—",
+    trigger: [12, 12, 10],
+    triggerWeight: "22.5 or 25 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Cable Face Pulls",
-    sets: 2,
-    reps: "15-20",
-    weight: "30 lbs",
-    rest: 90,
-    note: "**SICK-DAY REDUCED (May 26)** — ~85% of working weight (was 35, trigger HIT for 40). Hold the 40-lb advance until next clean Lower. 2 sets only.",
+    name: "DB French Press",
+    sets: 3,
+    reps: "8-12",
+    weight: "35 lbs",
+    rest: 120,
+    note: "**NEW PERMANENT SLOT — INAUGURAL SESSION.** Added 2026-05-24. Anchored at 35 (May 22 sub jumped to 40 too fast). 1 DB held overhead with both hands, elbows tight to head, full stretch at bottom, 3-sec eccentric. Targets tricep long head (chest press hits medial/lateral, not long). Trigger 12/12/10+ → 40.",
     setNotes: [
-      "Reduced intensity. High elbows, pull rope to face, external rotation at end. No swing.",
-      "Last set. 1-2 RIR. Strict, squeeze rear delts."
+      "S1: 1 DB overhead, both hands gripping top plate. Elbows TIGHT to head. Full stretch at bottom.",
+      "S2: 3-sec eccentric every rep. Don't let elbows flare out.",
+      "S3: max effort. First session — learn the groove. Stop if the elbow joint feels off."
     ],
-    trigger: [],
-    triggerWeight: "—",
+    trigger: [12, 12, 10],
+    triggerWeight: "40 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
