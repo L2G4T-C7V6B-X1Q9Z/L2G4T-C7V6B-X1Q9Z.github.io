@@ -981,94 +981,95 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Upper";
+const dayType = "Lower";
 
 const workout = [
   {
-    name: "Chest Press Machine",
-    sets: 3,
+    name: "Leg Press",
+    sets: 4,
     reps: "8-12",
-    weight: "110 lbs",
+    weight: "250 lbs",
     rest: 180,
-    note: "Last (May 27): 12/11/6 [MOD/HARD/MAX], **S2 rep PR (9 → 11), sandbag fix validated**. Total 29 vs May 21's 27. Trigger 12/12/10+: S1 ✓, S2 short by 1, S3 short by 4. Stay 110, push S3.",
+    note: "**PHASE 2: 4 sets now (was 3).** Last (May 28, 3 sets): 10/10/8 [HARD/HARD/MAX] — mild regression vs May 22's 12/11/7, likely sick-week recovery tail. Stay 250, recover S1 to 12. The 4th set is new Phase 2 volume — pace S1-S2, leave gas for S3-S4.",
     setNotes: [
-      "S1: full ROM, pace MOD-HARD, controlled. Aim 12.",
-      "S2: full 3-min rest. Push for 12 to clear the bottleneck.",
-      "S3: max effort. Trigger needs >=10 here for 120 next session."
+      "S1: full depth, controlled, pace MOD-HARD. Aim 12 to recover the regression.",
+      "S2: full 3-min rest. Match or beat S1.",
+      "S3: push hard. Trigger needs >=10 here.",
+      "S4: NEW Phase 2 set. Max effort, empty the tank."
     ],
-    trigger: [12, 12, 10],
-    triggerWeight: "120 lbs",
+    trigger: [12, 12, 12, 10],
+    triggerWeight: "265 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Cable Rope Row",
-    sets: 3,
-    reps: "8-12",
-    weight: "120 lbs",
-    rest: 150,
-    note: "**+10 LB ADVANCE.** Trigger HIT May 27 at 110 (12/12/10 exactly). First session at 120. Expect 8-10 reps S1 retention on +10 jump. Rope attachment (no V-bar at this gym).",
-    setNotes: [
-      "S1: drive elbows back, squeeze scapula at end, slow eccentric. Aim 8-10 on the first session at new weight.",
-      "S2: full rest. Strict form, no body english.",
-      "S3: max. Below 8 reps is fine — first session is retention check."
-    ],
-    trigger: [12, 12, 10],
-    triggerWeight: "130 lbs",
-    adviceFor: function(setIdx, prev) {
-      return null;
-    }
-  },
-  {
-    name: "DB Lateral Raise",
+    name: "Leg Press Calf Raises",
     sets: 3,
     reps: "12-15",
-    weight: "15 lbs (drop to 10 for S3)",
+    weight: "130 lbs",
     rest: 90,
-    note: "Last (May 27): 15/9/9 @ 10 lb [HARD/MAX/MAX] — **S1 tied top of range (15)**. S2 cratered at 9 (deltoid fatigue signature). Drop set S3 at 10 lb = bonus volume after MMF. Stay 15.",
+    note: "Last (May 28): 13/13/9 [HARD/HARD/MAX] — **S2 +1 rep PR (12 → 13)**. Trigger 13/13/12+: S1+S2 hit, S3 short by 3. Stay 130, push S3. Slots right after Leg Press (same machine, contiguous use).",
     setNotes: [
-      "S1: strict form, controlled, slight forward lean. Aim 15 (top of range).",
-      "S2: full rest. Expect drop into 9-11 range due to deltoid fatigue — that's normal, not a programming gap.",
-      "S3: drop to 10 lb for bonus reps after MMF on 15."
+      "S1: full stretch at the bottom, pause + squeeze at the top. Aim 13-15.",
+      "S2: full rest. Match S1.",
+      "S3: max effort. Trigger needs >=12 here for the next jump."
     ],
-    trigger: [15, 15, 12],
-    triggerWeight: "17.5 or 20 lbs",
+    trigger: [13, 13, 12],
+    triggerWeight: "145 lbs or +modifier",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "DB Curls (supinated)",
+    name: "Leg Extension Machine",
     sets: 3,
     reps: "10-12",
-    weight: "20 lbs (drop to 15 for S3)",
-    rest: 150,
-    note: "Last (May 27): 12/9/9 @ 15 lb [HARD/MAX/MAX] — **S2 broke 8-rep ceiling (8 → 9), 6-session bottleneck cracked**. NO twang (supinated/regular only — hammer stays OUT). 2.5 min rest + 3rd set + drop-set-S3 protocol validated.",
+    weight: "60 lbs",
+    rest: 120,
+    note: "Last (May 28 INAUGURAL): 8/8/5 [MAX/MAX/MAX] — all below the 10-12 range, done 3rd in order (quads pre-fatigued). Stay 60 to settle the baseline (2-3 sessions in this slot) before deciding any order shift. STOP if any knee/patellar tendon weirdness. Targets rectus femoris (Leg Press misses it).",
     setNotes: [
-      "S1: supinated grip ONLY (no hammer — nerve protocol). Slow eccentric, no swing. Aim 12.",
-      "S2: 2.5 min rest. Push for 12+ to clear trigger. Stop immediately if any R bicep twang.",
-      "S3: drop to 15 lb. Squeeze every rep, bonus volume."
+      "S1: controlled, full ROM, squeeze at lockout, slow eccentric. Aim 10-12.",
+      "S2: full rest. Hold form.",
+      "S3: max effort. Settling the baseline, not chasing a trigger yet."
     ],
     trigger: [12, 12, 10],
-    triggerWeight: "22.5 or 25 lbs",
+    triggerWeight: "70 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "DB French Press",
+    name: "Leg Curl Machine",
     sets: 3,
-    reps: "8-12",
-    weight: "40 lbs (working)",
+    reps: "10-12",
+    weight: "50 lbs",
     rest: 120,
-    note: "Last (May 27 INAUGURAL): 12 @ 35 / 10 @ 40 / 7 @ 40 [LIGHT/HARD/MAX]. Working weight settled at 40. Skip the 35 warmup today, start at 40, chase S1 ≥12. 1 DB held overhead with both hands, elbows tight, 3s eccentric. Targets tricep long head (chest press misses long head).",
+    note: "Last (May 28): 12/12/8 [MOD/HARD/MAX] — **S2 +2 rep PR (10 → 12), no spasm 2 sessions running**. Tissue reset at 50 holding. Trigger 12/12/10+: S1+S2 hit, S3 short by 2. Push S3 >=10 for the climb back to 60. **STOP S1 immediately if any medial lower-thigh sensation.**",
     setNotes: [
-      "S1: 1 DB overhead, both hands, elbows tight to head, full ROM, 3s eccentric. Push for 12.",
-      "S2: full rest. Maintain form, no flaring.",
-      "S3: max effort. Trigger 12/12/10+ → 45 next."
+      "S1: slow controlled curl, no jerk. STOP immediately if any medial sensation. Aim 12.",
+      "S2: full rest. Match S1.",
+      "S3: max effort. Trigger needs >=10 here for 60 next."
     ],
     trigger: [12, 12, 10],
+    triggerWeight: "60 lbs",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "Cable Face Pulls",
+    sets: 3,
+    reps: "15-20",
+    weight: "40 lbs",
+    rest: 90,
+    note: "Last (May 28): 18/12/8 [HARD/HARD/MAX] — first session at +5 (35 → 40), S1 = 18 at top of range immediately. S2 -6 is a steep fade typical of a +5 jump. Trigger 18/18/15+: S1 hit, S2/S3 need to build. Stay 40. Rear-delt finisher.",
+    setNotes: [
+      "S1: high elbows, pull to forehead, squeeze rear delts. Aim 18-20.",
+      "S2: full rest. Build toward 18.",
+      "S3: max effort. Trigger needs S2/S3 to fill in at 40."
+    ],
+    trigger: [18, 18, 15],
     triggerWeight: "45 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
