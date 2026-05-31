@@ -983,94 +983,88 @@
 // ============ CONFIG ============
 const dayType = "Lower";
 
+// ⚠️ DELOAD WEEK (week of Jun 1) — 1st deload of the program, 8 wks in. Same weights, HALF the sets, 2-3 RIR everywhere. NO failure, NO trigger-chasing. Fatigue dissipation before full Phase 2 launches Jun 8. Low-stress window to learn the new Leg Extension + the LP→Calf→LE→LC→FP order fresh.
 const workout = [
   {
     name: "Leg Press",
-    sets: 4,
+    sets: 2,
     reps: "8-12",
     weight: "250 lbs",
     rest: 180,
-    note: "**PHASE 2: 4 sets now (was 3).** Last (May 28, 3 sets): 10/10/8 [HARD/HARD/MAX] — mild regression vs May 22's 12/11/7, likely sick-week recovery tail. Stay 250, recover S1 to 12. The 4th set is new Phase 2 volume — pace S1-S2, leave gas for S3-S4.",
+    note: "**DELOAD WEEK (1st of the program, 8 wks in).** Same 250, HALF sets (2, not 4), 2-3 RIR. Fatigue dissipation before full Phase 2 launches Jun 8. Do NOT push to failure, do NOT chase reps or a trigger. Easy bar speed.",
     setNotes: [
-      "S1: full depth, controlled, pace MOD-HARD. Aim 12 to recover the regression.",
-      "S2: full 3-min rest. Match or beat S1.",
-      "S3: push hard. Trigger needs >=10 here.",
-      "S4: NEW Phase 2 set. Max effort, empty the tank."
+      "S1: full depth, controlled, EASY. Stop with 2-3 reps still in the tank. Deload = recover, not test.",
+      "S2: full rest. Same — stop 2-3 short. Quads done for the day."
     ],
-    trigger: [12, 12, 12, 10],
-    triggerWeight: "265 lbs",
+    trigger: [12, 12],
+    triggerWeight: "hold (deload week)",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
     name: "Leg Press Calf Raises",
-    sets: 3,
+    sets: 2,
     reps: "12-15",
     weight: "130 lbs",
     rest: 90,
-    note: "Last (May 28): 13/13/9 [HARD/HARD/MAX] — **S2 +1 rep PR (12 → 13)**. Trigger 13/13/12+: S1+S2 hit, S3 short by 3. Stay 130, push S3. Slots right after Leg Press (same machine, contiguous use).",
+    note: "**DELOAD:** same 130, 2 sets (not 3), 2-3 RIR. Slots right after Leg Press (same machine). No trigger chasing this week.",
     setNotes: [
-      "S1: full stretch at the bottom, pause + squeeze at the top. Aim 13-15.",
-      "S2: full rest. Match S1.",
-      "S3: max effort. Trigger needs >=12 here for the next jump."
+      "S1: full stretch, pause + squeeze at the top. Stop 2-3 short of failure.",
+      "S2: full rest. Leave reps in the tank. Done."
     ],
-    trigger: [13, 13, 12],
-    triggerWeight: "145 lbs or +modifier",
+    trigger: [13, 13],
+    triggerWeight: "hold (deload week)",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
     name: "Leg Extension Machine",
-    sets: 3,
+    sets: 2,
     reps: "10-12",
     weight: "60 lbs",
     rest: 120,
-    note: "Last (May 28 INAUGURAL): 8/8/5 [MAX/MAX/MAX] — all below the 10-12 range, done 3rd in order (quads pre-fatigued). Stay 60 to settle the baseline (2-3 sessions in this slot) before deciding any order shift. STOP if any knee/patellar tendon weirdness. Targets rectus femoris (Leg Press misses it).",
+    note: "**DELOAD + still a NEW movement.** Same 60, 2 sets, 2-3 RIR. Use this low-stress week to DIAL THE FORM, not to max — full ROM, squeeze at lockout, slow eccentric. STOP if any knee/patellar tendon weirdness. Targets rectus femoris.",
     setNotes: [
-      "S1: controlled, full ROM, squeeze at lockout, slow eccentric. Aim 10-12.",
-      "S2: full rest. Hold form.",
-      "S3: max effort. Settling the baseline, not chasing a trigger yet."
+      "S1: controlled, full ROM, squeeze at lockout, slow eccentric. Groove the pattern. Stop 2-3 short.",
+      "S2: full rest. Clean reps, leave gas in the tank. Done."
     ],
-    trigger: [12, 12, 10],
-    triggerWeight: "70 lbs",
+    trigger: [12, 12],
+    triggerWeight: "hold (deload week)",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
     name: "Leg Curl Machine",
-    sets: 3,
+    sets: 2,
     reps: "10-12",
     weight: "50 lbs",
     rest: 120,
-    note: "Last (May 28): 12/12/8 [MOD/HARD/MAX] — **S2 +2 rep PR (10 → 12), no spasm 2 sessions running**. Tissue reset at 50 holding. Trigger 12/12/10+: S1+S2 hit, S3 short by 2. Push S3 >=10 for the climb back to 60. **STOP S1 immediately if any medial lower-thigh sensation.**",
+    note: "**DELOAD:** same 50, 2 sets, 2-3 RIR. **STOP S1 IMMEDIATELY if any medial lower-thigh sensation** (safety rule always applies, deload or not). No trigger chasing.",
     setNotes: [
-      "S1: slow controlled curl, no jerk. STOP immediately if any medial sensation. Aim 12.",
-      "S2: full rest. Match S1.",
-      "S3: max effort. Trigger needs >=10 here for 60 next."
+      "S1: slow controlled curl, no jerk. STOP immediately on any medial sensation. Otherwise stop 2-3 short.",
+      "S2: full rest. Clean reps, leave gas in the tank. Done."
     ],
-    trigger: [12, 12, 10],
-    triggerWeight: "60 lbs",
+    trigger: [12, 12],
+    triggerWeight: "hold (deload week)",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
     name: "Cable Face Pulls",
-    sets: 3,
+    sets: 1,
     reps: "15-20",
     weight: "40 lbs",
     rest: 90,
-    note: "Last (May 28): 18/12/8 [HARD/HARD/MAX] — first session at +5 (35 → 40), S1 = 18 at top of range immediately. S2 -6 is a steep fade typical of a +5 jump. Trigger 18/18/15+: S1 hit, S2/S3 need to build. Stay 40. Rear-delt finisher.",
+    note: "**DELOAD:** 1 set only (rear-delt finisher), same 40, 2-3 RIR. One easy set to close the session.",
     setNotes: [
-      "S1: high elbows, pull to forehead, squeeze rear delts. Aim 18-20.",
-      "S2: full rest. Build toward 18.",
-      "S3: max effort. Trigger needs S2/S3 to fill in at 40."
+      "S1: high elbows, pull to forehead, squeeze rear delts. Easy, controlled, stop a couple short. Deload Lower complete."
     ],
-    trigger: [18, 18, 15],
-    triggerWeight: "45 lbs",
+    trigger: [18],
+    triggerWeight: "hold (deload week)",
     adviceFor: function(setIdx, prev) {
       return null;
     }
