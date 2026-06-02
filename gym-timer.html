@@ -1555,6 +1555,10 @@ function triggerAlertFeedback() {
 // Pipeline: init() pre-fetches all 42 mp3s as ArrayBuffers (no audio context
 // needed). On first user gesture, unlock() resumes audioCtx and decodes the
 // buffers via decodeAudioData. Each play() creates a fresh BufferSourceNode.
+// Daily commentary cache-buster -- bumped each training morning so the phone
+// re-fetches today's per-set hype lines past the HTTP cache. Static bank clips
+// are never versioned (their content is fixed).
+const DAILY_BUILD_ID = '20260601a';
 const VoiceCue = (() => {
   const FILES = [
     'start-upper', 'start-lower', 'received', 'set-2', 'set-3', 'set-4', 'final-set',
@@ -1587,7 +1591,15 @@ const VoiceCue = (() => {
     // v2 expansion — rep range targets
     'cue-aim-6-10', 'cue-aim-8-12', 'cue-aim-10-12', 'cue-aim-12-15', 'cue-aim-15-20',
     // v2 expansion — batch 2 additions
-    'cue-warmup-set', 'cue-watch-knee', 'cue-pacing-fix', 'cue-trigger-hit', 'cue-personal-record', 'cue-full-rom'
+    'cue-warmup-set', 'cue-watch-knee', 'cue-pacing-fix', 'cue-trigger-hit', 'cue-personal-record', 'cue-full-rom',
+    // Daily per-set commentary slots (up to 6 exercises x 5 sets). Content is swapped
+    // each training morning; unused slots simply 404 on fetch and are skipped.
+    'daily-ex1-set1', 'daily-ex1-set2', 'daily-ex1-set3', 'daily-ex1-set4', 'daily-ex1-set5',
+    'daily-ex2-set1', 'daily-ex2-set2', 'daily-ex2-set3', 'daily-ex2-set4', 'daily-ex2-set5',
+    'daily-ex3-set1', 'daily-ex3-set2', 'daily-ex3-set3', 'daily-ex3-set4', 'daily-ex3-set5',
+    'daily-ex4-set1', 'daily-ex4-set2', 'daily-ex4-set3', 'daily-ex4-set4', 'daily-ex4-set5',
+    'daily-ex5-set1', 'daily-ex5-set2', 'daily-ex5-set3', 'daily-ex5-set4', 'daily-ex5-set5',
+    'daily-ex6-set1', 'daily-ex6-set2', 'daily-ex6-set3', 'daily-ex6-set4', 'daily-ex6-set5'
   ];
   const arrayBuffers = new Map();   // raw, pre-decode
   const decodedBuffers = new Map(); // post-decode, ready to play
@@ -1602,7 +1614,7 @@ const VoiceCue = (() => {
     // Pre-fetch all mp3 ArrayBuffers (no audio context needed yet).
     // Decoding happens on first user gesture via unlock().
     FILES.forEach(name => {
-      fetch('audio/' + name + '.mp3')
+      fetch('audio/' + name + '.mp3' + (name.indexOf('daily-') === 0 ? '?v=' + DAILY_BUILD_ID : ''))
         .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
         .then(ab => { arrayBuffers.set(name, ab); decodeIfReady(name); })
         .catch(() => {});
@@ -1735,7 +1747,8 @@ const VoiceCue = (() => {
     arrayBuffers.forEach((ab, name) => decodeIfReady(name));
   }
 
-  return { init, unlock, play, playSequence, cancel, _afterContextRecreated };
+  return { init, unlock, play, playSequence, cancel, _afterContextRecreated,
+           has: (name) => decodedBuffers.has(name) || arrayBuffers.has(name) };
 })();
 
 // Map workout exercise names → audio clip names. Tolerant to naming variants.
@@ -1780,8 +1793,19 @@ function restClipForDuration(seconds) {
 }
 
 // Set-N announcement at end of rest. Returns null if first set of new exercise (Up next handled it).
+// Returns today's per-set hype clip name for (exIdx,setIdx) IF it actually loaded,
+// else null. Null => the generic cues play (original behavior; e.g. rest days, or
+// any exercise/set without a daily line). VoiceCue is already defined above.
+function dailyClipFor(exIdx, setIdx) {
+  const n = 'daily-ex' + (exIdx + 1) + '-set' + (setIdx + 1);
+  return (typeof VoiceCue !== 'undefined' && VoiceCue.has && VoiceCue.has(n)) ? n : null;
+}
+
 function setStartClipFor(exIdx, setIdx) {
   if (!workout[exIdx]) return null;
+  // A daily hype line replaces the generic set-position cue (it already names the
+  // set, weight, and target). Suppress set-2/final-set when one exists.
+  if (dailyClipFor(exIdx, setIdx)) return null;
   if (setIdx === 0) return null; // Up next + ex-name covers this case
   const isFinal = (setIdx === workout[exIdx].sets - 1);
   if (isFinal) return 'final-set';
@@ -1826,6 +1850,8 @@ function repRangeClipFor(repsStr) {
 //   Set 2 (idx=1) of 3+ set exercise: "Go hard" + "One to two reps in reserve" (S2 = trigger, 1-2 RIR).
 //   Last set of any exercise:        "Max effort" + "Zero to one in the tank" (push to 0-1 RIR).
 function setPositionCuesFor(setIdx, totalSets) {
+  // Daily hype line carries its own effort/RIR coaching -- skip the generic cues.
+  if (dailyClipFor(currentExercise, setIdx)) return [];
   if (totalSets >= 3 && setIdx === 1) return ['cue-go-hard', 'cue-rir-one-two'];
   if (setIdx === totalSets - 1)        return ['cue-max-effort', 'cue-rir-zero-one'];
   return [];
@@ -2191,6 +2217,8 @@ function applyState(notesValue) {
         } else {
           seq = ['rest-complete', 'tap-to-start'];
         }
+        const _dc = dailyClipFor(currentExercise, currentSet);
+        if (_dc) seq.push(_dc);
         VoiceCue.playSequence(seq);
       }
     } else {
@@ -2322,8 +2350,12 @@ function startWorkout() {
   const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
   const firstExClip = exerciseClipName(workout[0] && workout[0].name);
   const seq = [startClip, firstExClip].filter(Boolean);
-  // v2: append weight + rep range for the first exercise of the workout
-  if (workout[0]) {
+  const _dcStart = dailyClipFor(0, 0);
+  if (_dcStart) {
+    // Daily hype line states the weight + target itself.
+    seq.push(_dcStart);
+  } else if (workout[0]) {
+    // v2: append weight + rep range for the first exercise of the workout
     seq.push(...weightClipsFor(workout[0]));
     const repClip = repRangeClipFor(workout[0].reps);
     if (repClip) seq.push(repClip);
@@ -2478,6 +2510,8 @@ function restDone() {
     } else {
       seq.push('tap-to-start');
     }
+    const _dc = dailyClipFor(currentExercise, currentSet);
+    if (_dc) seq.push(_dc);
     // If we landed here from visibilitychange while the audio context is still
     // suspended (no user gesture since tab return), playSequence would silent-fail
     // and the cue would be lost. Queue it instead; the global gesture-recovery
@@ -2581,6 +2615,8 @@ function skipRest() {
         seq.push(...setPositionCuesFor(currentSet, ex.sets));
       }
     }
+    const _dc = dailyClipFor(currentExercise, currentSet);
+    if (_dc) seq.push(_dc);
     VoiceCue.playSequence(seq);
   }
 }
