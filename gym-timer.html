@@ -1487,12 +1487,19 @@ function attachGlobalAudioRecovery() {
     // it on first gesture instead. Idempotent.
     startAudioKeepalive();
     // Drain any cues that were queued when audio wasn't ready.
-    if (pendingPostGestureCues.length && audioCtx && audioCtx.state === 'running') {
-      const drained = pendingPostGestureCues.slice();
-      pendingPostGestureCues.length = 0;
-      drained.forEach(seq => {
-        try { VoiceCue.playSequence(seq); } catch(e) {}
-      });
+    if (pendingPostGestureCues.length && audioCtx) {
+      // Resume FIRST, then drain once it's actually running. iOS resolves resume() on a
+      // later task, so the old synchronous `state === 'running'` check skipped the drain
+      // on the exact recovery gesture meant to flush it (phone-in-pocket through a rest).
+      // Only clear the queue after a confirmed resume, so a failed resume retries next gesture.
+      Promise.resolve(audioCtx.resume()).then(() => {
+        if (!audioCtx || audioCtx.state !== 'running') return;
+        const drained = pendingPostGestureCues.slice();
+        pendingPostGestureCues.length = 0;
+        drained.forEach(seq => {
+          try { VoiceCue.playSequence(seq); } catch(e) {}
+        });
+      }).catch(() => {});
     }
   };
   ['touchend', 'pointerdown', 'mousedown', 'click', 'keydown'].forEach(ev => {
@@ -1797,7 +1804,14 @@ function restClipForDuration(seconds) {
 // else null. Null => the generic cues play (original behavior; e.g. rest days, or
 // any exercise/set without a daily line). VoiceCue is already defined above.
 function dailyClipFor(exIdx, setIdx) {
-  const n = 'daily-ex' + (exIdx + 1) + '-set' + (setIdx + 1);
+  // Daily WAVs are authored each morning bound to the LOAD-TIME exercise order, so key them
+  // to the original position (via the never-mutated originalWorkout snapshot), not the live
+  // array index — otherwise after a drag-reorder a clip plays on the WRONG exercise and also
+  // suppresses that slot's correct generic cue.
+  if (!workout[exIdx]) return null;
+  const origIdx = originalWorkout.indexOf(workout[exIdx]);
+  if (origIdx < 0) return null;
+  const n = 'daily-ex' + (origIdx + 1) + '-set' + (setIdx + 1);
   return (typeof VoiceCue !== 'undefined' && VoiceCue.has && VoiceCue.has(n)) ? n : null;
 }
 
@@ -2044,22 +2058,22 @@ function renderExercise() {
   requestAnimationFrame(centerMainButton);
 }
 
-// Auto-shrink long exercise notes to fit the fixed 34px container.
-// Without this, 3-line notes (~45px tall at base font) get center-clipped on
-// both ends because the parent has overflow:hidden + flex centering.
-// We only shrink when scrollHeight overflows; short notes keep their CSS-
-// default sizing (so the visual hierarchy stays the same for 1-2 line cases).
+// Auto-shrink long exercise notes to fit the note box (CSS height:70px).
+// Bug (fixed): this targeted 34px while the box is 70px, so the fit condition was never
+// satisfied and EVERY note — even one-liners — fell through to the 8px floor. Now fits to
+// the ACTUAL box height; 1-2 line notes keep their default size, only true 3+ line
+// overflow shrinks (and steps down gently from near the default).
 function fitNoteToBox() {
   if (!elNote) return;
   // Reset to CSS defaults so each render starts fresh
   elNote.style.fontSize = '';
   elNote.style.lineHeight = '';
   if (!elNote.textContent) return;
-  const maxHeight = 34;
+  const maxHeight = elNote.clientHeight || 70;
   // Reading scrollHeight forces synchronous reflow / accurate measurement
   if (elNote.scrollHeight <= maxHeight) return;
   // Progressively shrink font + tighten line-height until the note fits
-  for (let fs = 10; fs >= 8; fs -= 0.5) {
+  for (let fs = 18; fs >= 8; fs -= 0.5) {
     elNote.style.fontSize = fs + 'px';
     elNote.style.lineHeight = '1.22';
     if (elNote.scrollHeight <= maxHeight) return;
@@ -2378,15 +2392,27 @@ function setDone() {
   const draftDiff = selectedDiffBtn ? Number(selectedDiffBtn.dataset.diff) : null;
   captureLog();
 
-  const logEntry = {
-    exercise: currentExercise,
-    set: currentSet,
-    reps: draftReps,
-    note: draftNote,
-    difficulty: draftDiff,
-    timestamp: Date.now()
-  };
-  setLogs.push(logEntry);
+  // Dedup: re-logging an already-logged (exercise,set) — e.g. after browsing back to a
+  // past set via the ↓SET pill — must UPDATE that log, not push a second one. Reads use
+  // setLogs.find (first match), so a duplicate would shadow the correction: the summary
+  // keeps the stale reps/difficulty while the fresh edit is unreachable (silent data loss).
+  let logEntry = setLogs.find(l => l.exercise === currentExercise && l.set === currentSet);
+  if (logEntry) {
+    logEntry.reps = draftReps;
+    logEntry.note = draftNote;
+    logEntry.difficulty = draftDiff;
+    logEntry.timestamp = Date.now();
+  } else {
+    logEntry = {
+      exercise: currentExercise,
+      set: currentSet,
+      reps: draftReps,
+      note: draftNote,
+      difficulty: draftDiff,
+      timestamp: Date.now()
+    };
+    setLogs.push(logEntry);
+  }
   currentLogEntry = logEntry;
 
   const finishedExercise = currentExercise;
@@ -2445,10 +2471,14 @@ function setDone() {
       seq = ['received', 'exercise-complete'];
       seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
       if (exClip) seq.push(exClip);
-      // v2: append weight + rep range for upcoming exercise
-      seq.push(...weightClipsFor(workout[currentExercise]));
-      const repClipSwitch = repRangeClipFor(workout[currentExercise].reps);
-      if (repClipSwitch) seq.push(repClipSwitch);
+      // v2: append weight + rep range for upcoming exercise — but skip when a set-1 daily
+      // clip exists for it (the daily hype states the weight/target itself; mirrors
+      // startWorkout's guard, else the weight double-announces with the daily clip).
+      if (!dailyClipFor(currentExercise, 0)) {
+        seq.push(...weightClipsFor(workout[currentExercise]));
+        const repClipSwitch = repRangeClipFor(workout[currentExercise].reps);
+        if (repClipSwitch) seq.push(repClipSwitch);
+      }
       const switchRestClip = restClipForDuration(restRemaining);
       if (switchRestClip) seq.push(switchRestClip);
     } else {
@@ -2608,9 +2638,11 @@ function skipRest() {
     const ex = workout[currentExercise];
     if (ex) {
       if (currentSet === 0) {
-        seq.push(...weightClipsFor(ex));
-        const repClip = repRangeClipFor(ex.reps);
-        if (repClip) seq.push(repClip);
+        if (!dailyClipFor(currentExercise, 0)) {
+          seq.push(...weightClipsFor(ex));
+          const repClip = repRangeClipFor(ex.reps);
+          if (repClip) seq.push(repClip);
+        }
       } else {
         seq.push(...setPositionCuesFor(currentSet, ex.sets));
       }
