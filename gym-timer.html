@@ -981,96 +981,94 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Upper";
+const dayType = "Lower";
 
-// UPPER session (Thu Jun 4) — Phase 2A, alternates off Wed Jun 3 Lower. 3 sets on compounds, last set 0-1 RIR. Order: Chest Press → Cable Rope Row → DB Lateral Raise → DB Curls (supinated, NO hammer) → DB French Press. Rest tweaks live: Chest Press 150s, French Press 90s. DB Curls SUPINATED/REGULAR ONLY — hammer twangs the R musculocutaneous nerve. ⚠️ French Press CRASHED on the 90s rest 6/2 (S2/S3 → 7/7), confounded by the ~1 AM session + sleep debt — today is the decider, but a muddy one (5 hrs sleep), so a lone crash won't condemn the 90s. Open advances: French Press S3 ≥10 → 45, DB LR S2 ≥12 (chronic bottleneck). Daily voice clips regenerated fresh for this Upper (the 6/2 Upper served stale Jun-1 cached cues — build id wasn't bumped; fixed here).
+// NORMAL Lower session (Fri Jun 5) — Phase 2A, alternates off Thu Jun 4 Upper. 3 sets on the established compounds (LP / Calf / LC), last set 0-1 RIR; Leg Extension advances to 70 but stays 2 sets @ 2-3 RIR (baseline locked at 60 on 6/3 with a clean 10/9; the 3rd set / full intensity waits for the Jun 8 Phase 2 launch). Order: LP → Calf → LE → LC → FP. TWO ADVANCES today (both triggered 6/3): Leg Extension 60 → 70, Cable Face Pulls 40 → 45. ⚠️ LEG PRESS: run EVERY set at normal controlled tempo — the 6/1 S2 of 7 was a stray 3-sec-eccentric voice cue NOT in the program; the clean-tempo 6/3 session proved true S2 is 10. Voice = prescription only, no invented tempo cues. ⚠️ LEG CURL: STOP instantly on any medial lower-thigh sensation (4 clean sessions at 50, spasm flag not fully cleared).
 const workout = [
   {
-    name: "Chest Press Machine",
+    name: "Leg Press",
     sets: 3,
     reps: "8-12",
-    weight: "110 lbs",
-    rest: 150,
-    note: "Last (6/2): 10/9/7 [MAX/MAX/MAX] — S3=7 finally cracked the ~1-month wall (6→7) ✓. S1/S2 down 2 each vs 5/29, but that was a ~1 AM session on the fresh 150s rest (fatigue + rest-cut, not strength loss). Trigger 12/12/10 for 120: S3 was the bottleneck and it's moving. Hold 110.",
+    weight: "250 lbs",
+    rest: 180,
+    note: "Last (6/3): 10/10/6 [MAX/MAX/MAX] — CLEAN-TEMPO session, the fix worked. S2 = 10 confirmed the 6/1 reading of 7 was tempo junk (true S2 is 10 at 250). S1 = 10 (6/1's 12 was a peak), S3 = 6 (−2, tank redistributed forward, all-MAX). Matches the 5/28 baseline on S1/S2 (10/10). Trigger 12/12/10 → 255. Hold 250, rebuild S3.",
     setNotes: [
-      "S1: full ROM, controlled — bank it, don't burn S3. Was 10, chase 12.",
-      "S2: full 2.5-min rest. Push for 12 to clear the bottleneck.",
-      "S3: LAST SET — the wall you just cracked (6→7). 0-1 RIR, push 8+ toward the 120 trigger."
+      "S1: full depth, normal controlled tempo, drive hard off the bottom. Was 10 — push toward 12. ~1-2 RIR.",
+      "S2: full rest. Normal tempo. Clean 10 held last time — chase 12.",
+      "S3: LAST SET — 0-1 RIR. Was 6 (dipped) — rebuild it, get 10+ for the 255 trigger."
     ],
     trigger: [12, 12, 10],
-    triggerWeight: "120 lbs",
+    triggerWeight: "255 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Cable Rope Row",
-    sets: 3,
-    reps: "8-12",
-    weight: "120 lbs",
-    rest: 150,
-    note: "Last (6/2): 12/9/8 [HARD/MAX/MAX] — S1=12 hit the top of the range (only HARD, room left); S2/S3 flat (9/8). Climbing fast (110→120 last cycle). Trigger 12/12/10 for 130. Rope attachment (no V-bar at this gym). Hold 120.",
-    setNotes: [
-      "S1: drive elbows back, squeeze scapula at the end, slow eccentric. Was 12 (top) — own it.",
-      "S2: full rest. Strict form, no body english. Stalled at 9 — break it.",
-      "S3: LAST SET — 0-1 RIR. Was 8, push 9+. Trigger 12/12/10 → 130."
-    ],
-    trigger: [12, 12, 10],
-    triggerWeight: "130 lbs",
-    adviceFor: function(setIdx, prev) {
-      return null;
-    }
-  },
-  {
-    name: "DB Lateral Raise",
+    name: "Leg Press Calf Raises",
     sets: 3,
     reps: "12-15",
-    weight: "15 lbs (drop to 10 for S3)",
+    weight: "130 lbs",
     rest: 90,
-    note: "Last (6/2): 15/9/3 @drop [HARD/MAX/MAX] — S1=15 top of range (HARD, room left), but S2 stuck at 9 (the chronic bottleneck) and S3=3 on the 10-drop. Sits right after the heavy row, so the delt's pre-fatigued. S2 ≥12 is the whole game for the 17.5 jump. Stay 15.",
+    note: "Last (6/3): 13/13/9 [MAX/MAX/MAX] — S2 +2 (11→13), S1 + S2 both 13 (the no-fade cue delivered). S3 = 9 (−1, the holdout). Slots right after Leg Press (same machine). Trigger 13/13/12: S1 ✓ S2 ✓, S3 short 3. Hold 130, chase S3 to 12 for 135.",
     setNotes: [
-      "S1: strict, controlled, slight forward lean. Was 15 (top) — hold it.",
-      "S2: full rest. THE chronic bottleneck (stuck at 9). Grind to 12 — expect delt fatigue from the row before it.",
-      "S3: drop to 10 lb — burn out clean reps after failure on 15."
+      "S1: full stretch, pause + hard squeeze at the top. Was 13 — hold it.",
+      "S2: full rest. Don't fade — held 13 last time, keep it there.",
+      "S3: LAST SET — THE holdout (stuck at 9). Chase 12 for the 135 trigger. 0-1 RIR."
     ],
-    trigger: [15, 15, 12],
-    triggerWeight: "17.5 or 20 lbs",
+    trigger: [13, 13, 12],
+    triggerWeight: "135 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "DB Curls (supinated)",
+    name: "Leg Extension Machine",
+    sets: 2,
+    reps: "10-12",
+    weight: "70 lbs",
+    rest: 120,
+    note: "Last (6/3): 10/9 @ 60 [HARD/MAX] — baseline LOCKED, earns the jump to 70 today. First session at 70 (up from 60), so expect a drop into the ~8-10 range. Still GROOVING (2 sets, 2-3 RIR) — the 3rd set / full intensity waits for the Jun 8 Phase 2 launch. STOP on any knee/patellar weirdness. Targets rectus femoris (the quad gap the leg press misses) — legs are the bring-up body part now.",
+    setNotes: [
+      "S1: full ROM, squeeze at lockout, slow eccentric. First reps at 70 — leave 2-3 in the tank (groove, not grind), expect ~8-10.",
+      "S2: full rest. Clean controlled reps, 2-3 RIR. Lock the new 70 — next Lower it earns a 3rd set or 80."
+    ],
+    trigger: [12, 12],
+    triggerWeight: "80 lbs or a 3rd set",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "Leg Curl Machine",
     sets: 3,
     reps: "10-12",
-    weight: "20 lbs (drop to 15 for S3)",
-    rest: 150,
-    note: "Last (6/2): 11/8/7 [MAX/MAX/MAX] — slight regression vs 5/29 (post-row bicep fatigue); NO twang, supinated protocol holding ✓. SUPINATED/REGULAR ONLY — hammer twangs the R musculocutaneous nerve, stays OUT. Stay 20.",
+    weight: "50 lbs",
+    rest: 120,
+    note: "Last (6/3): 9/7/7 [HARD/MAX/MAX], NO spasm ✓ (4th clean session). S3 REBUILT +3 (4→7) — the weak link recovered. S1 −3 (12→9, but only HARD = effort-capped + 4th-in-order fatigue), S2 flat (7). More even now (9/7/7). STOP S1 IMMEDIATELY on any medial lower-thigh sensation (safety rule, always on). Hold 50, rebuild S1.",
     setNotes: [
-      "S1: supinated grip ONLY (no hammer — nerve protocol). Slow eccentric, no swing. Aim 12.",
-      "S2: 2.5-min rest. Push for 12+ to clear the trigger. STOP instantly on any R-bicep twang.",
-      "S3: drop to 15 lb. Squeeze every rep, bonus volume."
+      "S1: slow controlled curl, no jerk. STOP instantly on any medial lower-thigh sensation. Otherwise rebuild — was 9, chase 12.",
+      "S2: full rest. Held 7 last time — chase 10+. Same stop rule.",
+      "S3: LAST SET — rebuilt to 7 (from 4) ✓. Beat it cleanly. STOP instantly on any medial twinge. Trigger 12/12/10 → 60."
     ],
     trigger: [12, 12, 10],
-    triggerWeight: "22.5 or 25 lbs",
+    triggerWeight: "60 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "DB French Press",
-    sets: 3,
-    reps: "8-12",
-    weight: "40 lbs (working)",
+    name: "Cable Face Pulls",
+    sets: 2,
+    reps: "15-20",
+    weight: "45 lbs",
     rest: 90,
-    note: "Last (6/2): 12/7/7 [HARD/MAX/MAX] — S2/S3 CRASHED (was 12/12/9 on 5/29). Prime suspect is the 90s rest cut (from 120s), confounded by the ~1 AM session + sleep debt. TODAY IS THE DECIDER — but a muddy test (5 hrs sleep), so don't pin a lone crash on the rest; if S2/S3 stay down here AND he's rested next Upper, revert to 120s. Trigger 12/12/10 for 45. 1 DB overhead, both hands, elbows tight, 3s eccentric. Long-head work the chest press misses.",
+    note: "Last (6/3): 18/18 @ 40 [HARD/MAX] — trigger HIT (gate was 18/18), earns the jump to 45 today. First session at 45, expect retention in the ~15-18 range. Rear-delt finisher, 2 sets. Chase S2 back toward 18 for the next jump to 50.",
     setNotes: [
-      "S1: 1 DB overhead, both hands, elbows tight to head, full ROM, 3s eccentric. Was 12 — hold it.",
-      "S2: full 1.5-min rest. The set that crashed — prove it was the late night, not the weight. Chase 12.",
-      "S3: LAST SET — was 7 (crashed from 9). Need 10+ here for the 45 advance. 0-1 RIR, send it."
+      "S1: high elbows, pull to your forehead, squeeze the rear delts and hold. First reps at 45 — expect ~15-18.",
+      "S2: LAST SET — chase the top of the range (toward 18). 0-1 RIR. Trigger 18/18 → 50. Lower done."
     ],
-    trigger: [12, 12, 10],
-    triggerWeight: "45 lbs",
+    trigger: [18, 18],
+    triggerWeight: "50 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
@@ -1783,6 +1781,7 @@ function exerciseClipName(name) {
     "Cable Rope Row": "ex-cable-row",
     "Single-Arm DB Row": "ex-single-arm-db-row",
     "Leg Extension": "ex-leg-extension",
+    "Leg Extension Machine": "ex-leg-extension",
     "Incline Press": "ex-incline-press",
     "Overhead Press": "ex-overhead-press",
     "Tricep Pushdown": "ex-tricep-pushdown",
