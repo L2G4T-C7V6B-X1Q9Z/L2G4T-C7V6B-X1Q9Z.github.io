@@ -1623,7 +1623,7 @@ const VoiceCue = (() => {
     // Pre-fetch all mp3 ArrayBuffers (no audio context needed yet).
     // Decoding happens on first user gesture via unlock().
     FILES.forEach(name => {
-      fetch('audio/' + name + '.wav' + (name.indexOf('daily-') === 0 ? '?v=' + DAILY_BUILD_ID : ''))
+      fetch('audio/' + name + '.mp3' + (name.indexOf('daily-') === 0 ? '?v=' + DAILY_BUILD_ID : ''))
         .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
         .then(ab => { arrayBuffers.set(name, ab); decodeIfReady(name); })
         .catch(() => {});
