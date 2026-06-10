@@ -11,68 +11,98 @@
 html, body { background:#060606; min-height:100%; }
 body {
   font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
-  color:#e8e8e8; padding:max(28px,env(safe-area-inset-top)) 20px 40px;
+  color:#e8e8e8; padding:max(28px,env(safe-area-inset-top)) 20px 48px;
   -webkit-tap-highlight-color:transparent;
 }
-.wrap { max-width:430px; margin:0 auto; }
+.wrap { max-width:440px; margin:0 auto; }
 h1 { font-size:13px; letter-spacing:.22em; color:#7e7e7e; font-weight:600; text-transform:uppercase; }
 h1 b { color:#e8e8e8; }
-.sub { font-size:11px; color:#6e6e6e; margin-top:6px; line-height:1.6; }
+.sub { font-size:11.5px; color:#6e6e6e; margin-top:7px; line-height:1.65; }
 .sub em { color:var(--red); font-style:normal; }
-.list { margin-top:26px; display:flex; flex-direction:column; gap:12px; }
+.grouphead {
+  margin:30px 0 12px; font-size:10.5px; letter-spacing:.2em; text-transform:uppercase;
+  color:#8a8a8a; font-weight:600; display:flex; align-items:center; gap:10px;
+}
+.grouphead::after { content:""; flex:1; height:1px; background:#222; }
+.list { display:flex; flex-direction:column; gap:12px; }
 a.card {
   display:block; text-decoration:none; color:inherit;
   background:linear-gradient(180deg,#171717,#101010);
   border:1px solid rgba(255,255,255,.07); border-radius:16px;
-  padding:16px 18px;
+  padding:15px 17px;
   transition:transform 160ms cubic-bezier(.34,1.45,.4,1), border-color 120ms ease;
 }
-a.card:active { transform:scale(.97); border-color:rgba(255,59,48,.4); }
-.name { font-size:17px; font-weight:700; letter-spacing:.12em; }
-.name .n { color:#555; font-size:11px; margin-right:10px; }
-.vibe { font-size:11px; color:#9c9c9c; margin-top:5px; line-height:1.55; }
-.tagrow { margin-top:9px; display:flex; gap:6px; flex-wrap:wrap; }
-.tag {
-  font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:#7e7e7e;
-  border:1px solid rgba(255,255,255,.09); border-radius:999px; padding:3px 8px;
-}
-.tag.hot { color:var(--red); border-color:rgba(255,59,48,.35); }
-.foot { margin-top:28px; font-size:10px; color:#555; line-height:1.7; }
+a.card:active { transform:scale(.975); border-color:rgba(255,59,48,.4); }
+.name { font-size:17px; font-weight:700; letter-spacing:.1em; display:flex; align-items:baseline; gap:10px; }
+.name .n { color:#555; font-size:11px; }
+.fave { color:var(--red); font-size:8.5px; letter-spacing:.14em; border:1px solid rgba(255,59,48,.4); border-radius:999px; padding:2px 7px; margin-left:auto; align-self:center; }
+.vibe { font-size:11.5px; color:#a2a2a2; margin-top:6px; line-height:1.55; }
+.spec { margin-top:9px; display:flex; flex-direction:column; gap:3px; }
+.spec div { font-size:10px; color:#7a7a7a; letter-spacing:.02em; }
+.spec b { color:#bdbdbd; font-weight:600; }
+.foot { margin-top:30px; font-size:10px; color:#555; line-height:1.7; }
 .foot b { color:#9c9c9c; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1><b>GYM TIMER</b> · CONCEPT LINEUP</h1>
-  <div class="sub">Five complete working timers on the same verified engine (advisor, voice, persistence identical — sessions don't cross between them). Tap one, run a fake set, feel it. <em>The live timer is untouched.</em></div>
+  <div class="sub">Ten complete working timers on the same verified engine (advisor, voice, logging math, persistence all identical — sessions don't cross between them). Tap one, run a fake set, feel the timer and the input. <em>Your live timer is untouched.</em></div>
+
+  <div class="grouphead">Round 2 · reinvented timers + inputs</div>
   <div class="list">
+    <a class="card" href="gym-timer-orbit.html">
+      <div class="name"><span class="n">06</span>ORBIT</div>
+      <div class="vibe">Aerospace HUD. A depleting orbital ring with a red satellite marker sweeping the edge.</div>
+      <div class="spec"><div><b>Timer:</b> orbital ring + sweeping satellite</div><div><b>Input:</b> turn a crown dial to your reps</div></div>
+    </a>
+    <a class="card" href="gym-timer-mercury.html">
+      <div class="name"><span class="n">07</span>MERCURY</div>
+      <div class="vibe">A scientific glass instrument. The whole screen is a column of red mercury that drains as you rest.</div>
+      <div class="spec"><div><b>Timer:</b> draining liquid level</div><div><b>Input:</b> drag the mercury up a thermometer scale</div></div>
+    </a>
+    <a class="card" href="gym-timer-pad.html">
+      <div class="name"><span class="n">08</span>PAD</div>
+      <div class="vibe">An MPC control surface. The big idea is the input: one thumb-press logs reps AND difficulty at once.</div>
+      <div class="spec"><div><b>Timer:</b> depleting LED ladder + 7-seg</div><div><b>Input:</b> 2D pad — x = reps, y = effort, one press</div></div>
+    </a>
+    <a class="card" href="gym-timer-solari.html">
+      <div class="name"><span class="n">09</span>SOLARI</div>
+      <div class="vibe">A vintage split-flap departure board. The countdown mechanically flips each second.</div>
+      <div class="spec"><div><b>Timer:</b> split-flap clock (flips)</div><div><b>Input:</b> flip tiles to set reps + difficulty</div></div>
+    </a>
+    <a class="card" href="gym-timer-pulse.html">
+      <div class="name"><span class="n">10</span>PULSE</div>
+      <div class="vibe">An ICU vitals monitor. A red EKG trace travels, tachys out near the end, flatlines at zero.</div>
+      <div class="spec"><div><b>Timer:</b> traveling EKG / oscilloscope trace</div><div><b>Input:</b> tap once per rep to count</div></div>
+    </a>
+  </div>
+
+  <div class="grouphead">Round 1 · the reskins</div>
+  <div class="list">
+    <a class="card" href="gym-timer-paper.html">
+      <div class="name"><span class="n">05</span>PAPER<span class="fave">YOU LIKED THIS</span></div>
+      <div class="vibe">Swiss broadsheet — zero chrome, pure typography and rules, a red drain-line under a headline countdown.</div>
+    </a>
+    <a class="card" href="gym-timer-mission.html">
+      <div class="name"><span class="n">03</span>MISSION<span class="fave">YOU LIKED THIS</span></div>
+      <div class="vibe">F1 pit-wall telemetry — all 5 exercises live on a data board, bracketed modules, scanline GO.</div>
+    </a>
     <a class="card" href="gym-timer-v4.html">
       <div class="name"><span class="n">01</span>INSTRUMENT</div>
-      <div class="vibe">The v4 baseline — precision stopwatch, soft-gray modules, light command bar, springy modern motion.</div>
-      <div class="tagrow"><span class="tag">balanced</span><span class="tag">big digits</span><span class="tag hot">current pick</span></div>
+      <div class="vibe">Precision stopwatch — soft-gray modules, light command bar, springy modern motion. The balanced baseline.</div>
     </a>
     <a class="card" href="gym-timer-liquid.html">
       <div class="name"><span class="n">02</span>LIQUID</div>
-      <div class="vibe">Premium-iOS fluid glass — breathing red glow, frosted capsules, everything springs. The Apple Fitness one.</div>
-      <div class="tagrow"><span class="tag">airy</span><span class="tag">frosted glass</span><span class="tag hot">most ambient</span></div>
-    </a>
-    <a class="card" href="gym-timer-mission.html">
-      <div class="name"><span class="n">03</span>MISSION</div>
-      <div class="vibe">F1 pit-wall telemetry — all 5 exercises live on a data board, bracketed modules, scanline GO. The dense one.</div>
-      <div class="tagrow"><span class="tag">data-dense</span><span class="tag">telemetry board</span><span class="tag hot">everything visible</span></div>
+      <div class="vibe">Premium-iOS fluid glass — breathing red glow, frosted capsules, everything springs.</div>
     </a>
     <a class="card" href="gym-timer-stack.html">
       <div class="name"><span class="n">04</span>STACK</div>
-      <div class="vibe">Card deck — each set is a card you throw away when done, grading tray slides over the card. The playful one.</div>
-      <div class="tagrow"><span class="tag">one thing at a time</span><span class="tag">throw animation</span><span class="tag hot">most animated</span></div>
-    </a>
-    <a class="card" href="gym-timer-paper.html">
-      <div class="name"><span class="n">05</span>PAPER</div>
-      <div class="vibe">Swiss broadsheet — zero chrome, pure typography and rules, red drain-line under a headline countdown. The refined one.</div>
-      <div class="tagrow"><span class="tag">typographic</span><span class="tag">minimal</span><span class="tag hot">most refined</span></div>
+      <div class="vibe">Card deck — each set is a card you throw away when done, grading tray slides over it.</div>
     </a>
   </div>
-  <div class="foot">All five bake <b>Wed Jun 10 UPPER</b> (CP 110 S4→90 · Row 120 · LR 15 · Curls 20 · FP 45). Pick one and say the word — it becomes <b>gym-timer.html</b> (same bookmark, same daily flip). · 2026-06-09</div>
+
+  <div class="foot">All ten bake <b>Wed Jun 10 UPPER</b> (CP 110 S4→90 · Row 120 · LR 15 · Curls 20 · FP 45). Pick one — and feel free to mix (e.g. "ORBIT's dial but MISSION's data board"). It becomes <b>gym-timer.html</b>, same bookmark, same daily flip. · 2026-06-10</div>
 </div>
 </body>
 </html>

@@ -1,0 +1,3866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#060606">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Gym Timer — PAD</title>
+<!-- The ONLY external resource — loaded NON-BLOCKING (media=print, flipped to all on
+     load) so a stalled/captive gym connection can never hang first paint. display=optional
+     means the fonts apply only when ready immediately (HTTP cache after first visit) and
+     never swap in mid-session — no live-countdown re-metric. The tuned fallback stacks
+     below keep the app fully usable and deliberately styled if this never loads. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Share+Tech+Mono&display=optional" rel="stylesheet" media="print" onload="this.media='all'">
+<style>
+/* ============ TOKENS ============ */
+:root {
+  --g0:#070707;            /* canvas (graphite black) */
+  --g1:#101010;            /* faceplate */
+  --g2:#171717;            /* module */
+  --g3:#202020;            /* control face */
+  --g4:#2c2c2c;            /* pressed / filled */
+  --hairline:#262626;
+  --edge:rgba(255,255,255,.045);
+  --groove:rgba(0,0,0,.55);   /* recessed machined well */
+  --txt:#e8e8e8;
+  --txt2:#9c9c9c;
+  --txt3:#6e6e6e;
+  --etch:#585858;
+  --red:#ff3b30;
+  --red-soft:#ff5a50;
+  --red-dim:rgba(255,59,48,.32);
+  --red-led:rgba(255,59,48,.14);   /* unlit LED ghost */
+  --red-wash:#2a0f0d;
+  --red-wash-bd:#5c1714;
+  --font-cond:"Barlow Condensed","Arial Narrow",Arial,system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --font-seg:"Share Tech Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+  --spring:cubic-bezier(.34,1.45,.4,1);
+  --r-lg:16px;
+  --r-md:12px;
+  --r-sm:8px;
+  --bd:rgba(255,255,255,.07);
+  /* The recessed-faceplate look: top inset highlight + bottom inset shadow = machined metal. */
+  --panel-grad:linear-gradient(180deg,#1a1a1a,#101010);
+  --ctl-grad:linear-gradient(180deg,#232323,#181818);
+  --well-grad:linear-gradient(180deg,#0c0c0c,#121212);
+  --elev:0 10px 28px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05);
+  --recess:inset 0 2px 5px rgba(0,0,0,.6), inset 0 -1px 0 rgba(255,255,255,.03);
+}
+/* ============ BASE ============ */
+* { margin:0; padding:0; box-sizing:border-box; }
+html { -webkit-text-size-adjust:100%; }
+html, body { height:100%; background:var(--g0); overscroll-behavior:none; }
+body {
+  font-family:var(--font-mono);
+  font-size:13.5px; line-height:1.5;
+  color:var(--txt);
+  -webkit-tap-highlight-color:transparent;
+  overflow:hidden;
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  touch-action:manipulation;
+}
+::selection { background:var(--g4); color:var(--txt); }
+button {
+  font:inherit; color:inherit; background:none; border:none; cursor:pointer;
+  touch-action:manipulation;
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent;
+}
+button:disabled { cursor:default; }
+:focus { outline:none; }
+:focus-visible { outline:1px solid var(--txt2); outline-offset:2px; }
+.num, .mono { font-family:var(--font-mono); font-variant-numeric:tabular-nums lining-nums; }
+.lbl {
+  font-family:var(--font-cond); font-weight:700; font-size:11px;
+  letter-spacing:.14em; text-transform:uppercase;
+  color:#7e7e7e;
+}
+/* Module = recessed faceplate panel with a hairline screw-edge. */
+.mod {
+  background:var(--panel-grad);
+  border:1px solid var(--bd);
+  border-radius:var(--r-lg);
+  box-shadow:var(--elev);
+}
+.hidden { display:none !important; }
+
+/* ============ APP FRAME ============ */
+#app {
+  position:fixed; inset:0;
+  height:100vh; height:100dvh;
+  background:
+    radial-gradient(120% 60% at 50% -10%, #131313 0%, var(--g0) 60%);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+  padding-top:env(safe-area-inset-top,0px);
+}
+@media (min-width:500px) {
+  #app {
+    left:50%; right:auto; transform:translateX(-50%);
+    width:430px;
+    border-left:1px solid var(--hairline);
+    border-right:1px solid var(--hairline);
+  }
+}
+#wash {
+  position:absolute; inset:0; background:var(--red);
+  opacity:0; pointer-events:none; z-index:90;
+}
+#wash.washing { animation:washout 280ms ease-out forwards; }
+@keyframes washout { 0%{opacity:.82;} 100%{opacity:0;} }
+
+/* ============ HEADER (56px) ============ */
+#hdr {
+  height:56px; flex:0 0 56px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 12px 0 14px;
+  border-bottom:1px solid var(--hairline);
+  background:var(--g1);
+  box-shadow:inset 0 1px 0 var(--edge), 0 1px 0 var(--groove);
+  position:relative; z-index:20;
+}
+#hdr-left { font-family:var(--font-cond); font-weight:700; font-size:13px; letter-spacing:.14em; color:#7e7e7e; text-transform:uppercase; white-space:nowrap; }
+#hdr-left .day { color:var(--txt2); }
+#hdr-right { display:flex; align-items:center; gap:2px; }
+#hdr-reg {
+  font-family:var(--font-mono); font-variant-numeric:tabular-nums lining-nums;
+  font-size:10px; color:var(--txt3); letter-spacing:.02em; white-space:nowrap;
+  margin-right:6px;
+}
+/* Tiny machined-LED status indicators */
+.pip-status { width:6px; height:6px; border-radius:50%; margin:0 3px; flex:0 0 auto; background:var(--g4); box-shadow:inset 0 1px 1px rgba(0,0,0,.6); }
+#pip-wake.held { background:var(--txt3); box-shadow:inset 0 1px 1px rgba(0,0,0,.6); }
+#pip-wake.lost { background:transparent; border:1px solid var(--red); }
+#pip-save { background:transparent; }
+#pip-save.fail { background:var(--red-dim); border:1px solid var(--red-wash-bd); box-shadow:0 0 6px rgba(255,59,48,.4); }
+#undo-btn, #gear-btn {
+  min-width:44px; min-height:44px;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--txt3);
+}
+#undo-btn { font-family:var(--font-cond); font-weight:700; font-size:10px; letter-spacing:.14em; }
+#undo-btn:disabled { opacity:.28; }
+#undo-btn:active:not(:disabled), #gear-btn:active { color:var(--txt2); transform:scale(.96); }
+#gear-btn svg { width:18px; height:18px; display:block; }
+
+/* ============ RAIL (64px) — pad bank strip ============ */
+#rail {
+  height:64px; flex:0 0 64px;
+  display:flex; align-items:stretch;
+  border-bottom:1px solid var(--hairline);
+  background:var(--g1);
+  position:relative; z-index:15;
+  touch-action:manipulation;
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+}
+.tile {
+  flex:1 1 0; min-width:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:7px; border-right:1px solid var(--hairline);
+  padding:4px 2px;
+}
+.tile:last-child { border-right:none; }
+.tile .ab {
+  font-family:var(--font-cond); font-weight:700; font-size:13px;
+  letter-spacing:.1em; color:var(--txt3);
+}
+.tile.cur .ab { color:var(--txt2); }
+.tile.donex .ab { color:var(--etch); }
+.tile .pips { display:flex; gap:5px; align-items:center; justify-content:center; }
+/* The set pips read as tiny square pad-LEDs */
+.pip { width:10px; height:10px; border-radius:2px; flex:0 0 auto; box-sizing:border-box; box-shadow:inset 0 1px 1px rgba(0,0,0,.5); }
+.pip.fut  { border:1.5px solid #3a3a3a; background:transparent; box-shadow:none; }
+.pip.done { background:var(--g4); }
+.pip.work { background:var(--red); box-shadow:0 0 7px rgba(255,59,48,.55); animation:pipbreathe 2.2s ease-in-out infinite; }
+@keyframes pipbreathe { 0%,100% { box-shadow:0 0 4px rgba(255,59,48,.35); } 50% { box-shadow:0 0 10px rgba(255,59,48,.7); } }
+.pip.view { border:2px solid var(--red); background:transparent; box-shadow:none; }
+
+/* ============ STAGE ============ */
+#stage { flex:1 1 auto; position:relative; overflow:hidden; min-height:0; }
+#stage-inner { position:absolute; inset:0; overflow:hidden; display:flex; flex-direction:column; }
+#stage-inner.scrolly { overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+.stage-enter .idle-wrap > *, .stage-enter .work-wrap > *, .stage-enter .rest-wrap > *,
+.stage-enter .browse-wrap > *, .stage-enter .done-wrap > * { animation:rise 320ms var(--ease-out) backwards; }
+.stage-enter .idle-wrap > :nth-child(2), .stage-enter .work-wrap > :nth-child(2), .stage-enter .rest-wrap > :nth-child(2),
+.stage-enter .browse-wrap > :nth-child(2), .stage-enter .done-wrap > :nth-child(2) { animation-delay:40ms; }
+.stage-enter .idle-wrap > :nth-child(3), .stage-enter .work-wrap > :nth-child(3), .stage-enter .rest-wrap > :nth-child(3),
+.stage-enter .browse-wrap > :nth-child(3), .stage-enter .done-wrap > :nth-child(3) { animation-delay:80ms; }
+.stage-enter .idle-wrap > :nth-child(4), .stage-enter .work-wrap > :nth-child(4), .stage-enter .rest-wrap > :nth-child(4),
+.stage-enter .browse-wrap > :nth-child(4), .stage-enter .done-wrap > :nth-child(4) { animation-delay:120ms; }
+.stage-enter .idle-wrap > :nth-child(5), .stage-enter .work-wrap > :nth-child(5), .stage-enter .rest-wrap > :nth-child(5),
+.stage-enter .browse-wrap > :nth-child(5), .stage-enter .done-wrap > :nth-child(5) { animation-delay:160ms; }
+.stage-enter .idle-wrap > :nth-child(6), .stage-enter .work-wrap > :nth-child(6), .stage-enter .rest-wrap > :nth-child(6),
+.stage-enter .browse-wrap > :nth-child(6), .stage-enter .done-wrap > :nth-child(6) { animation-delay:200ms; }
+.stage-enter .idle-wrap > :nth-child(7), .stage-enter .work-wrap > :nth-child(7), .stage-enter .rest-wrap > :nth-child(7),
+.stage-enter .browse-wrap > :nth-child(7), .stage-enter .done-wrap > :nth-child(7) { animation-delay:240ms; }
+@keyframes rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+.stage-ghost {
+  position:absolute; inset:0; z-index:5; pointer-events:none;
+  animation:ghostout 180ms ease forwards;
+  display:flex; flex-direction:column; overflow:hidden;
+  background:var(--g0);
+}
+@keyframes ghostout { to { opacity:0; transform:translate(var(--gx,0px),12px); } }
+
+/* ============ COMMIT BAR (72px) ============ */
+#commit {
+  flex:0 0 auto;
+  padding:8px 12px max(16px,env(safe-area-inset-bottom)) 12px;
+  background:var(--g1);
+  border-top:1px solid var(--hairline);
+  box-shadow:inset 0 1px 0 var(--edge);
+  position:relative; z-index:20;
+}
+#commit-btn {
+  width:100%; height:72px;
+  background:linear-gradient(180deg,#f2f2f2,#d7d7d7);
+  border:none;
+  border-radius:var(--r-lg);
+  box-shadow:0 10px 26px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.65);
+  font-family:var(--font-cond); font-weight:700; font-size:21px;
+  letter-spacing:.18em; text-transform:uppercase;
+  color:#0b0b0b;
+  position:relative;
+  transition:transform 160ms var(--spring), filter 120ms ease, background 120ms ease, color 120ms ease;
+}
+#commit-btn:active:not(:disabled) { transform:scale(.97); filter:brightness(.88); }
+#commit-btn.inert {
+  background:var(--g2); color:var(--txt3); letter-spacing:.14em; font-size:15px;
+  border:1px solid var(--bd); box-shadow:var(--recess);
+  pointer-events:none;
+}
+#commit-btn.go {
+  background:linear-gradient(180deg,#ff4b40,#e02e24); color:#fff; border:none;
+  box-shadow:0 10px 30px rgba(255,59,48,.25), inset 0 1px 0 rgba(255,255,255,.25);
+  animation:goglow 1.2s ease-in-out infinite;
+}
+@keyframes goglow { 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.012);} }
+#commit-btn.slash { background:var(--g2); color:var(--txt3); pointer-events:none; font-size:15px; border:1px solid var(--bd); box-shadow:var(--recess); }
+#commit-btn.slash::before {
+  content:''; position:absolute; left:10%; right:10%; top:50%;
+  height:1px; background:var(--hairline);
+  transform:rotate(-4deg);
+}
+#commit-btn.flash { animation:copyflash 120ms ease; }
+@keyframes copyflash { 0%{ box-shadow:inset 0 0 0 2px var(--txt2);} 100%{ box-shadow:inset 0 1px 0 var(--edge);} }
+
+/* ============ IDLE ============ */
+.idle-wrap { padding:22px 16px 28px; display:flex; flex-direction:column; gap:14px; }
+.day-hero {
+  font-family:var(--font-cond); font-weight:700; font-size:56px; line-height:1;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--txt);
+}
+.day-hero .rule { display:block; height:1px; background:var(--hairline); margin-top:10px; transform-origin:left; animation:ruledraw 400ms var(--ease-out); }
+@keyframes ruledraw { from { transform:scaleX(0);} to { transform:scaleX(1);} }
+.day-sub { margin-top:-6px; }
+.soft-banner {
+  background:var(--red-wash); border:1px solid var(--red-wash-bd); border-radius:var(--r-md);
+  color:var(--red); font-family:var(--font-cond); font-weight:700;
+  font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+  padding:9px 12px;
+}
+.brief { padding:12px 14px; }
+.brief .lbl { margin-bottom:6px; }
+.brief-text { font-size:12px; line-height:1.55; color:var(--txt2); white-space:pre-wrap; }
+.brief-text.clamped {
+  display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;
+}
+.brief-more {
+  min-height:44px; padding:0 4px; margin-top:2px;
+  font-family:var(--font-cond); font-weight:700; font-size:11px; letter-spacing:.14em;
+  color:var(--txt3); text-transform:uppercase;
+}
+.manifest { display:flex; flex-direction:column; }
+.man-row {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:11px 14px; border-bottom:1px solid var(--hairline);
+  animation:rise 240ms var(--ease-out) backwards;
+}
+.man-row:last-child { border-bottom:none; }
+.man-name {
+  font-family:var(--font-cond); font-weight:600; font-size:16px; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--txt2);
+  display:flex; align-items:center; gap:8px; min-width:0;
+}
+.man-name .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.man-spec {
+  font-family:var(--font-mono); font-variant-numeric:tabular-nums;
+  font-size:10.5px; color:var(--txt3); text-align:right;
+  white-space:normal; max-width:55%; flex:0 0 auto;
+}
+.man-spec .man-drop {
+  display:inline-block; padding:0 4px; margin-left:5px;
+  border:1px solid var(--bd); border-radius:var(--r-sm); background:var(--g2);
+  color:var(--txt2); white-space:nowrap;
+}
+.stop-chip {
+  flex:0 0 auto;
+  font-family:var(--font-cond); font-weight:700; font-size:9px; letter-spacing:.14em;
+  color:var(--red); background:var(--red-wash); border:1px solid var(--red-wash-bd);
+  border-radius:999px; padding:2px 7px;
+}
+.build-stamp { font-size:9px; color:var(--etch); text-align:center; letter-spacing:.1em; }
+
+/* ============ WORK ============ */
+.work-wrap { padding:14px 16px 12px; display:flex; flex-direction:column; gap:12px; flex:1 1 auto; min-height:0; }
+.work-hero { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; justify-content:center; gap:12px; }
+.ex-name {
+  font-family:var(--font-cond); font-weight:700; font-size:30px; line-height:1.05;
+  letter-spacing:.05em; text-transform:uppercase; color:var(--txt);
+  min-height:32px;
+}
+.weight-stack { display:flex; align-items:baseline; gap:10px; min-height:100px; }
+.weight-num {
+  font-family:var(--font-mono); font-weight:700; font-size:96px; line-height:1;
+  font-variant-numeric:tabular-nums lining-nums; letter-spacing:-.045em;
+  color:var(--txt);
+}
+.weight-unit { font-family:var(--font-cond); font-weight:600; font-size:16px; letter-spacing:.18em; color:var(--txt3); }
+.drop-tag {
+  font-family:var(--font-mono); font-size:11px; color:var(--txt2);
+  border:1px solid var(--bd); background:var(--ctl-grad); border-radius:var(--r-sm);
+  padding:3px 7px; white-space:nowrap;
+}
+.sub-reg { display:flex; align-items:baseline; gap:10px; min-height:26px; }
+.sub-reg .lbl { font-size:11px; }
+.srv {
+  font-family:var(--font-mono); font-weight:500; font-size:22px; line-height:1;
+  font-variant-numeric:tabular-nums lining-nums; color:var(--txt2);
+  margin-right:8px;
+}
+/* The injury STOP annunciator: an unmissable red strip with corner rivets */
+.stop-plate {
+  background:var(--red-wash); border:1px solid var(--red-wash-bd); border-radius:var(--r-md);
+  color:var(--red);
+  font-family:var(--font-cond); font-weight:700; font-size:13px;
+  letter-spacing:.12em; text-transform:uppercase;
+  padding:10px 12px; line-height:1.35;
+  box-shadow:inset 0 0 0 1px rgba(255,59,48,.08), 0 0 18px rgba(255,59,48,.1);
+}
+.advice { padding:12px 14px; display:flex; flex-direction:column; gap:6px; }
+.advice-text { font-family:var(--font-mono); font-size:13.5px; line-height:1.5; color:var(--txt2); }
+.advice-text.clamped { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.advice-more {
+  align-self:flex-start; min-height:44px; min-width:44px; padding:0 4px;
+  font-family:var(--font-cond); font-weight:700; font-size:11px; letter-spacing:.14em;
+  color:var(--txt3); text-transform:uppercase;
+}
+
+/* ============ REST ============ */
+.rest-wrap { padding:10px 16px 12px; display:flex; flex-direction:column; gap:11px; flex:1 1 auto; min-height:0; }
+/* Logged → dock collapses to a slim receipt. On tall screens, center the shorter
+   stack so the freed room reads as symmetric breathing space, never a bottom void.
+   Gated by min-height so small viewports stay top-aligned + scrollable (no clip). */
+@media (min-height:761px) { .rest-wrap:has(.receipt) { justify-content:center; } }
+
+/* --- LED LADDER + 7-SEG READOUT (rest timer hero) --- */
+.led-deck {
+  flex:0 0 auto;
+  display:flex; flex-direction:column; gap:9px;
+  padding:13px 14px 12px;
+  border-radius:var(--r-lg);
+  background:var(--well-grad);
+  border:1px solid var(--bd);
+  box-shadow:var(--recess);
+}
+.led-deck.alert { box-shadow:var(--recess), 0 0 26px rgba(255,59,48,.22); }
+/* The depleting segment ladder — discrete LED cells in a machined channel */
+.ladder {
+  display:flex; gap:3px; align-items:stretch;
+  height:18px;
+  padding:3px;
+  border-radius:6px;
+  background:linear-gradient(180deg,#060606,#0d0d0d);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.7);
+}
+.ladder .seg {
+  flex:1 1 0; min-width:0; border-radius:2px;
+  background:var(--red-led);
+  box-shadow:inset 0 0 0 1px rgba(255,59,48,.05);
+  transition:background 90ms linear, box-shadow 90ms linear, opacity 90ms linear;
+}
+.ladder .seg.lit {
+  background:linear-gradient(180deg,var(--red-soft),var(--red));
+  box-shadow:0 0 7px rgba(255,59,48,.6), inset 0 1px 0 rgba(255,255,255,.25);
+}
+/* the just-extinguished cell flickers as it dies */
+.ladder .seg.dying { animation:segflick 220ms ease-out; }
+@keyframes segflick { 0%{opacity:1;background:var(--red);} 35%{opacity:.25;} 70%{opacity:.7;} 100%{opacity:1;} }
+.led-deck.t10 .ladder .seg.lit { animation:laddpulse 1s ease-in-out infinite; }
+@keyframes laddpulse { 0%,100%{ box-shadow:0 0 6px rgba(255,59,48,.5), inset 0 1px 0 rgba(255,255,255,.25);} 50%{ box-shadow:0 0 13px rgba(255,59,48,.95), inset 0 1px 0 rgba(255,255,255,.35);} }
+.led-row { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; }
+.led-readout {
+  font-family:var(--font-seg); font-weight:400;
+  font-size:clamp(58px,18vw,104px); line-height:.92;
+  font-variant-numeric:tabular-nums lining-nums; letter-spacing:.02em;
+  color:var(--red);
+  text-shadow:0 0 14px rgba(255,59,48,.45);
+  display:inline-flex; align-items:baseline;
+}
+.led-readout.idle-glow { color:#c9cdd1; text-shadow:0 0 12px rgba(200,205,210,.18); }
+.led-readout.dimmed { opacity:.4; }
+.led-readout .colon { display:inline-block; padding:0 .02em; animation:colonfade 1s ease infinite; }
+.led-readout .ss { display:inline-block; animation:tickin 280ms var(--ease-out); }
+.led-readout.pulse { animation:segpulse 180ms ease; }
+.led-readout.alertpulse { animation:gopulse 1.1s ease-in-out infinite; }
+@keyframes colonfade { 0%,100%{opacity:1;} 55%{opacity:.28;} }
+@keyframes tickin { from { opacity:.35; transform:translateY(.07em); } to { opacity:1; transform:none; } }
+@keyframes segpulse { 0%{transform:scale(1);} 50%{transform:scale(1.025);} 100%{transform:scale(1);} }
+@keyframes gopulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.04);} }
+.led-meta { display:flex; flex-direction:column; align-items:flex-end; gap:3px; text-align:right; padding-bottom:6px; }
+.led-cap { font-family:var(--font-cond); font-weight:700; font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--txt3); white-space:nowrap; }
+.led-cap.t10 { color:var(--red); }
+.led-pct {
+  font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:10px;
+  color:var(--etch); letter-spacing:.06em;
+}
+
+.adjust-row { display:flex; gap:8px; min-height:48px; }
+.adjust-row button {
+  flex:1 1 0; min-height:48px;
+  background:var(--ctl-grad); border:1px solid var(--bd); border-radius:var(--r-md);
+  box-shadow:inset 0 1px 0 var(--edge), inset 0 -2px 4px rgba(0,0,0,.35);
+  font-family:var(--font-mono); font-variant-numeric:tabular-nums;
+  font-size:13px; color:var(--txt2); letter-spacing:.06em;
+  transition:transform 120ms var(--spring), background 120ms ease;
+}
+.adjust-row button:active { transform:scale(.94); background:var(--g4); color:var(--txt); box-shadow:var(--recess); }
+
+/* solution plate — next-set advisor strip */
+.plate { padding:12px 14px; display:flex; flex-direction:column; gap:6px; }
+.plate-kicker { font-size:11px; }
+.plate-line { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+.plate-band {
+  font-family:var(--font-mono); font-weight:700; font-size:40px; line-height:1;
+  font-variant-numeric:tabular-nums lining-nums; letter-spacing:-.02em;
+  color:var(--txt); min-height:40px;
+}
+.plate-band .band-unit { font-family:var(--font-cond); font-weight:600; font-size:14px; letter-spacing:.16em; color:var(--txt3); }
+.plate-token {
+  font-family:var(--font-mono); font-weight:500; font-size:15px;
+  font-variant-numeric:tabular-nums; color:var(--txt2);
+  border:1px solid var(--bd); border-radius:var(--r-sm); background:var(--ctl-grad);
+  padding:4px 9px; white-space:nowrap;
+}
+.plate-token.drop { color:var(--red); border-color:var(--red-wash-bd); background:var(--red-wash); }
+.plate-status { font-family:var(--font-mono); font-size:12.5px; line-height:1.5; color:var(--txt2); }
+.plate-status.alive { color:var(--red); }
+.plate-status .rate-prompt { color:var(--etch); display:block; margin-top:3px; font-size:11px; letter-spacing:.06em; }
+.flip-stamp {
+  border:1px solid var(--red); border-radius:var(--r-md); background:var(--red-wash);
+  color:var(--red);
+  font-family:var(--font-cond); font-weight:700; font-size:14px; letter-spacing:.12em;
+  text-transform:uppercase; text-align:center;
+  padding:12px 10px;
+  box-shadow:0 0 20px rgba(255,59,48,.14);
+  animation:stampdraw 300ms var(--ease-out);
+}
+.flip-stamp.soft { border-color:var(--hairline); background:var(--g2); color:var(--txt2); box-shadow:none; }
+@keyframes stampdraw { from { opacity:0; transform:scale(.98);} to { opacity:1; transform:none;} }
+
+/* ============ THE 2D LOGGING PAD (set-input hero) ============ */
+.pad-deck { display:flex; flex-direction:column; gap:7px; animation:dockin 180ms var(--ease-out); }
+@keyframes dockin { from { opacity:0; transform:translateY(6px);} to { opacity:1; transform:none;} }
+.pad-head { display:flex; align-items:center; gap:8px; }
+.pad-head .lbl { flex:1 1 auto; font-size:12px; color:var(--txt3); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* live read above the pad: "12 reps · HARD" */
+.pad-read {
+  font-family:var(--font-mono); font-variant-numeric:tabular-nums;
+  font-size:13px; color:var(--txt2); letter-spacing:.02em; white-space:nowrap;
+  flex:0 0 auto;
+}
+.pad-read b { color:var(--txt); font-weight:700; }
+.pad-read i { font-style:normal; color:var(--txt); font-family:var(--font-cond); font-weight:700; letter-spacing:.08em; }
+.pad-read.stopped b, .pad-read.stopped i { color:var(--red); }
+.pad-head .chip {
+  min-height:36px; padding:0 11px;
+  background:var(--ctl-grad); border:1px solid var(--bd); border-radius:var(--r-sm);
+  box-shadow:inset 0 1px 0 var(--edge);
+  font-family:var(--font-cond); font-weight:700; font-size:10px; letter-spacing:.12em;
+  color:var(--txt2); text-transform:uppercase; flex:0 0 auto;
+  transition:transform 120ms var(--spring), background 120ms ease;
+}
+.pad-head .chip:active { transform:scale(.93); background:var(--g4); }
+
+/* the pad body: a recessed rubberized well, the hero surface */
+.pad-wrap { display:flex; gap:7px; }
+.pad {
+  position:relative; flex:1 1 auto;
+  height:188px;
+  border-radius:14px;
+  background:
+    radial-gradient(140% 120% at 50% 0%, #161616 0%, #0b0b0b 70%);
+  border:1px solid var(--bd);
+  box-shadow:inset 0 3px 10px rgba(0,0,0,.7), inset 0 -1px 0 rgba(255,255,255,.03);
+  overflow:hidden;
+  touch-action:none;            /* gesture never scrolls the page */
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  cursor:crosshair;
+}
+.pad.readonly { cursor:default; opacity:.96; }
+.pad.armed { box-shadow:inset 0 3px 10px rgba(0,0,0,.7), 0 0 0 1px rgba(255,59,48,.22), 0 0 22px rgba(255,59,48,.12); }
+.pad.commit { animation:padcommit 240ms var(--ease-out); }
+@keyframes padcommit { 0%{ box-shadow:inset 0 3px 10px rgba(0,0,0,.7), 0 0 0 2px rgba(255,59,48,.5), 0 0 30px rgba(255,59,48,.4);} 100%{ box-shadow:inset 0 3px 10px rgba(0,0,0,.7);} }
+
+/* horizontal difficulty lanes (LIGHT bottom -> MAX top) */
+.pad-lanes { position:absolute; inset:0; pointer-events:none; }
+.pad-lane {
+  position:absolute; left:0; right:0;
+  border-top:1px dashed rgba(255,255,255,.05);
+  transition:background 140ms ease;
+}
+.pad-lane:first-child { border-top:none; }
+.pad-lane.hot { background:rgba(255,59,48,.07); }
+.pad-lane .lane-tag {
+  position:absolute; left:9px; top:50%; transform:translateY(-50%);
+  font-family:var(--font-cond); font-weight:700; font-size:9.5px; letter-spacing:.14em;
+  color:var(--etch); text-transform:uppercase;
+  transition:color 140ms ease;
+}
+.pad-lane.hot .lane-tag { color:var(--red); }
+.pad-lane .lane-num {
+  position:absolute; right:9px; top:50%; transform:translateY(-50%);
+  font-family:var(--font-mono); font-size:10px; color:#3a3a3a;
+}
+/* faint vertical guide = advisor's target reps */
+.pad-guide {
+  position:absolute; top:0; bottom:0; width:0;
+  border-left:1px dashed rgba(255,59,48,.4);
+  pointer-events:none;
+}
+.pad-guide::after {
+  content:'TGT'; position:absolute; top:4px; left:3px;
+  font-family:var(--font-cond); font-weight:700; font-size:8px; letter-spacing:.1em; color:var(--red-dim);
+}
+/* rep gridlines + axis numerals along the bottom */
+.pad-grid { position:absolute; top:0; bottom:0; width:1px; background:rgba(255,255,255,.035); pointer-events:none; }
+.pad-axisnum {
+  position:absolute; bottom:3px; transform:translateX(-50%);
+  font-family:var(--font-mono); font-size:9px; color:#3a3a3a; pointer-events:none;
+}
+.pad-xlabel {
+  position:absolute; bottom:3px; right:8px;
+  font-family:var(--font-cond); font-weight:700; font-size:9px; letter-spacing:.14em; color:var(--etch);
+  pointer-events:none;
+}
+/* the glowing puck that tracks the thumb */
+.pad-puck {
+  position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px;
+  border-radius:50%;
+  background:radial-gradient(circle at 50% 38%, #ff6a60 0%, var(--red) 55%, #b21f17 100%);
+  box-shadow:0 0 0 2px rgba(255,255,255,.12), 0 0 18px rgba(255,59,48,.7), inset 0 2px 4px rgba(255,255,255,.3);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-mono); font-weight:700; font-size:17px; color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,.5);
+  will-change:transform, left, top;
+  transition:left .07s cubic-bezier(.2,.9,.3,1), top .07s cubic-bezier(.2,.9,.3,1), transform 90ms var(--spring), opacity 120ms ease;
+  z-index:3;
+}
+.pad-puck.grabbed { transform:scale(1.12); box-shadow:0 0 0 2px rgba(255,255,255,.2), 0 0 26px rgba(255,59,48,.95), inset 0 2px 4px rgba(255,255,255,.35); }
+.pad-puck.read { background:radial-gradient(circle at 50% 38%, #4a4a4a 0%, #2e2e2e 60%, #1a1a1a 100%); box-shadow:0 0 0 2px var(--red), 0 0 14px rgba(255,59,48,.4); color:var(--red); }
+.pad-puck.empty { opacity:0; }
+/* crosshair guides from the puck to the edges while dragging */
+.pad-cross-h, .pad-cross-v { position:absolute; background:rgba(255,59,48,.28); pointer-events:none; z-index:2; opacity:0; transition:opacity 120ms ease; }
+.pad-cross-h { left:0; right:0; height:1px; }
+.pad-cross-v { top:0; bottom:0; width:1px; }
+.pad.dragging .pad-cross-h, .pad.dragging .pad-cross-v { opacity:1; }
+
+/* the dedicated STOP pad (0-STOP injury abort) — a small recessed kill button */
+.stop-pad {
+  flex:0 0 52px; align-self:stretch;
+  border-radius:14px;
+  background:linear-gradient(180deg,#2a0f0d,#1b0907);
+  border:1px solid var(--red-wash-bd);
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.6);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  color:var(--red);
+  transition:transform 120ms var(--spring), background 120ms ease, box-shadow 120ms ease;
+}
+.stop-pad:active { transform:scale(.94); background:linear-gradient(180deg,#3a1410,#220a08); box-shadow:0 0 16px rgba(255,59,48,.4), inset 0 2px 6px rgba(0,0,0,.6); }
+.stop-pad .dot { width:13px; height:13px; border-radius:50%; background:var(--red); box-shadow:0 0 9px rgba(255,59,48,.7); }
+.stop-pad .tx { font-family:var(--font-cond); font-weight:700; font-size:10px; letter-spacing:.06em; writing-mode:vertical-rl; transform:rotate(180deg); }
+.stop-pad.sel { background:linear-gradient(180deg,#ff4b40,#c81f15); border-color:transparent; }
+.stop-pad.sel .dot { background:#fff; box-shadow:0 0 9px rgba(255,255,255,.8); }
+.stop-pad.sel .tx { color:#fff; }
+
+.gate-cap { font-family:var(--font-mono); font-size:11px; letter-spacing:.05em; color:var(--txt3); text-align:center; min-height:14px; }
+.gate-cap.cleared { color:var(--txt2); }
+.gate-cap.out { color:var(--red); }
+
+/* committed-set receipt (collapsed dock) */
+.receipt {
+  width:100%; min-height:52px;
+  background:var(--panel-grad); border:1px solid var(--bd); border-radius:var(--r-md);
+  box-shadow:var(--elev);
+  font-family:var(--font-mono); font-variant-numeric:tabular-nums;
+  font-size:15px; color:var(--txt2); letter-spacing:.04em;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  animation:receiptin 360ms var(--ease-out);
+}
+@keyframes receiptin { 0%{opacity:0; transform:translateY(12px) scale(.96);} 60%{transform:translateY(-2px) scale(1.012);} 100%{opacity:1; transform:none;} }
+.receipt .led { width:7px; height:7px; border-radius:50%; background:var(--red); box-shadow:0 0 7px rgba(255,59,48,.6); flex:0 0 auto; }
+.receipt .pencil { color:var(--txt3); font-size:13px; }
+
+/* browse */
+.browse-bar { display:flex; align-items:center; justify-content:center; gap:8px; min-height:44px; }
+.mini-clock {
+  font-family:var(--font-seg); font-variant-numeric:tabular-nums; font-weight:400;
+  font-size:16px; color:var(--txt2);
+  border:1px solid var(--bd); background:var(--well-grad); border-radius:999px;
+  padding:6px 14px; min-height:36px; display:inline-flex; align-items:center;
+  box-shadow:var(--recess);
+}
+.mini-clock.t10 { color:var(--red); text-shadow:0 0 10px rgba(255,59,48,.5); }
+.pill {
+  min-height:44px; padding:0 16px;
+  border-radius:999px; border:1px solid var(--bd); background:var(--ctl-grad);
+  font-family:var(--font-cond); font-weight:700; font-size:11px; letter-spacing:.14em;
+  color:var(--txt2); text-transform:uppercase;
+  transition:transform 120ms var(--spring), background 120ms ease;
+}
+.pill:active { transform:scale(.94); background:var(--g4); }
+.pill.live { color:var(--red); border-color:var(--red-wash-bd); background:var(--red-wash); }
+.browse-wrap { padding:10px 16px; display:flex; flex-direction:column; gap:10px; flex:1 1 auto; min-height:0; }
+.browse-ctx { display:flex; flex-direction:column; gap:2px; }
+.browse-ctx .ex-name { font-size:24px; min-height:26px; }
+.browse-ctx .meta { font-family:var(--font-mono); font-size:12px; color:var(--txt3); font-variant-numeric:tabular-nums; }
+
+/* ============ DONE ============ */
+.done-wrap { padding:22px 16px 30px; display:flex; flex-direction:column; gap:14px; }
+.done-hero {
+  font-family:var(--font-seg); font-weight:400; font-size:74px; line-height:1;
+  font-variant-numeric:tabular-nums lining-nums; letter-spacing:.01em;
+  color:var(--red); text-align:center; text-shadow:0 0 16px rgba(255,59,48,.35);
+}
+.done-sub { text-align:center; font-size:11px; }
+.done-block { padding:12px 14px; display:flex; flex-direction:column; gap:7px; }
+.done-block .lbl { margin-bottom:2px; }
+.trig-row { display:flex; gap:10px; font-family:var(--font-mono); font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--txt2); }
+.trig-row .ab { color:var(--txt3); flex:0 0 36px; }
+.trig-row.flipped, .trig-row.flipped .ab { color:var(--red); }
+.soft-note { font-size:10.5px; color:var(--etch); }
+.done-ex {
+  display:flex; flex-direction:column; gap:3px;
+  padding:11px 14px; border-bottom:1px solid var(--hairline);
+  animation:rise 240ms var(--ease-out) backwards;
+}
+.done-ex:last-child { border-bottom:none; }
+.done-ex .top { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.done-ex .nm { font-family:var(--font-cond); font-weight:600; font-size:16px; letter-spacing:.04em; text-transform:uppercase; color:var(--txt2); }
+.done-ex .tm { font-family:var(--font-mono); font-size:10.5px; color:var(--txt3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.done-ex .wt { font-family:var(--font-mono); font-size:10.5px; color:var(--txt3); }
+.done-ex .sets { font-family:var(--font-mono); font-size:13px; color:var(--txt); font-variant-numeric:tabular-nums; line-height:1.6; }
+.done-rests { text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--txt3); }
+
+/* ============ SHEETS / TOAST ============ */
+#sheet-backdrop {
+  position:absolute; inset:0; background:rgba(0,0,0,.7); z-index:100;
+  animation:fadein 180ms ease;
+}
+@keyframes fadein { from{opacity:0;} to{opacity:1;} }
+#sheet {
+  position:absolute; left:0; right:0; bottom:0; z-index:110;
+  background:linear-gradient(180deg,#161616,#0f0f0f); border-top:1px solid var(--bd);
+  border-radius:22px 22px 0 0;
+  box-shadow:0 -18px 50px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06);
+  max-height:72%; display:flex; flex-direction:column;
+  padding:14px 16px max(16px,env(safe-area-inset-bottom)) 16px;
+  animation:sheetup 300ms var(--spring);
+}
+@keyframes sheetup { from { transform:translateY(24px); opacity:0; } to { transform:none; opacity:1; } }
+#sheet-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+#sheet-title { font-family:var(--font-cond); font-weight:700; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#7e7e7e; }
+#sheet-x { min-height:44px; min-width:44px; font-family:var(--font-cond); font-weight:700; font-size:11px; letter-spacing:.14em; color:var(--txt3); }
+#sheet-body { overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0; }
+.sheet-note-text { font-size:12.5px; color:var(--txt2); line-height:1.55; white-space:pre-wrap; margin-bottom:10px; }
+.sheet-sec { margin-bottom:12px; }
+.sheet-sec .lbl { margin-bottom:4px; }
+.note-input {
+  width:100%; min-height:48px; padding:10px 12px;
+  background:#0a0a0a; border:1px solid var(--bd); border-radius:var(--r-md);
+  font-family:var(--font-mono); font-size:16px; color:var(--txt);
+  outline:none; caret-color:var(--txt2);
+  -webkit-user-select:auto; user-select:auto;
+}
+.note-input:focus { border-color:var(--g4); }
+.note-input::placeholder { color:var(--etch); }
+.sheet-row {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:12px 0; border-bottom:1px solid var(--hairline); min-height:56px;
+}
+.sheet-row:last-child { border-bottom:none; }
+.sheet-row .t { font-family:var(--font-cond); font-weight:600; font-size:15px; letter-spacing:.05em; text-transform:uppercase; color:var(--txt2); }
+.sheet-row .s { font-size:10px; color:var(--txt3); margin-top:1px; font-family:var(--font-mono); }
+.tgl {
+  width:52px; height:30px; border-radius:15px; background:var(--g3);
+  border:1px solid var(--hairline); position:relative; flex:0 0 auto;
+  transition:background 140ms ease;
+}
+.tgl::before { content:''; position:absolute; inset:-8px; }
+.tgl .knob {
+  position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%;
+  background:var(--txt3); transition:left 140ms ease, background 140ms ease;
+}
+.tgl.on { background:var(--g4); }
+.tgl.on .knob { left:25px; background:var(--txt); }
+.sheet-btn {
+  width:100%; min-height:52px; margin-top:8px;
+  background:var(--ctl-grad); border:1px solid var(--bd); border-radius:var(--r-md);
+  font-family:var(--font-cond); font-weight:700; font-size:13px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--txt2);
+  transition:transform 160ms var(--spring), background 120ms ease;
+}
+.sheet-btn:active:not(:disabled) { transform:scale(.98); background:var(--g4); }
+.sheet-btn:disabled { opacity:.32; }
+.order-row { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--hairline); }
+.order-row:last-child { border-bottom:none; }
+.order-row .onm { flex:1 1 auto; font-family:var(--font-cond); font-weight:600; font-size:15px; letter-spacing:.04em; text-transform:uppercase; color:var(--txt2); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.order-row .oab { flex:0 0 36px; font-family:var(--font-mono); font-size:11px; color:var(--txt3); }
+.order-btn {
+  flex:0 0 56px; min-height:56px;
+  background:var(--ctl-grad); border:1px solid var(--bd); border-radius:var(--r-md);
+  font-size:18px; color:var(--txt2);
+  transition:transform 160ms var(--spring), background 120ms ease;
+}
+.order-btn:active:not(:disabled) { transform:scale(.94); background:var(--g4); }
+.order-btn:disabled { opacity:.25; }
+#toast {
+  position:absolute; left:50%; bottom:120px; transform:translateX(-50%);
+  background:var(--ctl-grad); border:1px solid var(--bd); border-radius:999px;
+  box-shadow:0 10px 30px rgba(0,0,0,.55);
+  font-family:var(--font-mono); font-size:11.5px; color:var(--txt2);
+  padding:9px 14px; white-space:nowrap;
+  opacity:0; pointer-events:none; z-index:130;
+  transition:opacity 300ms ease;
+}
+#toast.show { opacity:1; }
+
+/* ============ COMPACT VIEWPORTS ============ */
+@media (max-height:760px) {
+  .led-readout { font-size:clamp(52px,16vw,90px); }
+  .led-deck { padding:10px 12px; gap:7px; }
+  .ladder { height:15px; }
+  .weight-num { font-size:72px; }
+  .weight-stack { min-height:76px; }
+  .work-wrap, .rest-wrap, .browse-wrap { gap:7px; padding-top:8px; }
+  .plate { padding:9px 12px; gap:4px; }
+  .plate-band { font-size:32px; min-height:32px; }
+  .pad-deck { gap:6px; }
+  .pad { height:150px; }
+  .pad-puck { width:42px; height:42px; margin:-21px 0 0 -21px; }
+  .stop-pad { flex-basis:48px; }
+  .adjust-row { min-height:44px; }
+  .adjust-row button { min-height:44px; }
+  .day-hero { font-size:44px; }
+  .done-hero { font-size:60px; }
+}
+@media (max-height:670px) {
+  .pad { height:128px; }
+}
+
+/* ============ REDUCED MOTION ============ */
+@media (prefers-reduced-motion:reduce) {
+  *, *::before, *::after { animation-duration:120ms !important; transition-duration:120ms !important; }
+  #wash { display:none; }
+  .led-readout.pulse { animation:none; }
+  .led-readout .colon, .led-readout .ss, .led-readout.alertpulse { animation:none; }
+  .ladder .seg.dying { animation:none; }
+  .led-deck.t10 .ladder .seg.lit { animation:none; }
+  .pip.work, #commit-btn.go { animation:none; }
+  .pad-puck { transition:opacity 120ms ease; }
+  .stage-ghost { animation-duration:120ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="wash" aria-hidden="true"></div>
+
+  <header id="hdr">
+    <div id="hdr-left"></div>
+    <div id="hdr-right">
+      <span id="hdr-reg" aria-label="Session registers"></span>
+      <span id="pip-wake" class="pip-status" aria-hidden="true"></span>
+      <span id="pip-save" class="pip-status" aria-hidden="true"></span>
+      <button id="undo-btn" data-action="undo" aria-label="Undo last step" disabled>UNDO</button>
+      <button id="gear-btn" data-action="gear" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav id="rail" aria-label="Exercises"></nav>
+
+  <main id="stage"><div id="stage-inner"></div></main>
+
+  <div id="commit"><button id="commit-btn"></button></div>
+
+  <div id="sheet-backdrop" class="hidden"></div>
+  <section id="sheet" class="hidden" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div id="sheet-head">
+      <div id="sheet-title"></div>
+      <button id="sheet-x" data-action="sheet-close" aria-label="Close sheet">CLOSE</button>
+    </div>
+    <div id="sheet-body"></div>
+  </section>
+
+  <div id="toast" aria-live="polite"></div>
+</div>
+
+<script id="app-script">
+"use strict";
+// ============ CONFIG ============
+const dayType = "Upper";
+
+// UPPER session (Wed Jun 10) — PHASE 2 FULL LAUNCH, session 2. Compounds (Chest Press, Cable Rope Row) at 4 sets; isolations (DB Lateral Raise, DB Curls, DB French Press) at 3. Chest Press S4 = standing drop to 90 (autoregulation worked 6/8). Order: Chest Press → Cable Rope Row → DB Lateral Raise → DB Curls (supinated, NO hammer) → DB French Press. Rest: CP/Row/Curls 150s, LR/FP 90s. ⚠️ 6/8 was a 4-hr-sleep SOFT read — the "was X" numbers are soft floors, chase the 6/4 rested marks. Backoffs wired: Chest Press 95 / Cable Row 100 / French Press 40 (reactive drop-calls if reps crater); LR + Curls defer to their structural S3 drops. Dynamic advisor live (commit 4cd7a70) — the static notes below are the first look; the timer recomputes each set's target from your ACTUAL prior-set reps. Voice = ElevenLabs static bank, workout-agnostic — no regen, build id unchanged.
+const workout = [
+  {
+    name: "Chest Press Machine",
+    sets: 4,
+    reps: "8-12",
+    weight: "110 lbs (S4 → 90)",
+    rest: 150,
+    note: "Last (6/8, 4-hr sleep = SOFT): 12/9/6 + S4 8@90 [MAX from S2 on] — S1=12 (top) even short-slept; S3=6 is the same ~1-month wall; the S4 drop to 90 → 8 reps (back in range) WORKED and is now the standing plan. Rested ref (6/4): 12/10/5. The S3 wall is the whole game — chase 8+. Trigger 12/12/10/10 → 120. Hold 110.",
+    setNotes: [
+      "S1: full ROM, controlled, MOD pace — bank it without burning the back sets. Was 12 (top) on no sleep — hold the top. ~2 RIR.",
+      "S2: full 2.5-min rest. Was 9 (soft) — rested you does 10-12. Chase it.",
+      "S3: the chronic wall (5-7 for ~a month; 6 last time). Push 8+ — this is the gate on the 120 trigger.",
+      "S4: DROP to 90 (standing plan — 8 clean reps 6/8, back in range). 0-1 RIR, no junk grinding."
+    ],
+    trigger: [12, 12, 10, 10],
+    triggerWeight: "120 lbs",
+    backoff: "95",
+    dropLastSet: true,
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "Cable Rope Row",
+    sets: 4,
+    reps: "8-12",
+    weight: "120 lbs",
+    rest: 150,
+    note: "Last (6/8, SOFT): 9/9/8/8 [HARD/MAX/MAX/MAX] — consistent but low-end; S1=9 vs 12 rested (6/4) = the sleep, not strength loss. Rope attachment (no V-bar at this gym). Hold 120. Trigger 12/12/10/10 → 130.",
+    setNotes: [
+      "S1: drive elbows back, squeeze the scapula, slow eccentric. Was 9 on no sleep — rested baseline is 12. Take it back.",
+      "S2: full rest. Strict, no body english. Was 9 — chase 10-12.",
+      "S3: was 8 — hold 8+, 1-2 RIR.",
+      "S4: last set — 0-1 RIR, clean. Was 8. Drop call goes to 100 if reps crater."
+    ],
+    trigger: [12, 12, 10, 10],
+    triggerWeight: "130 lbs",
+    backoff: "100",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "DB Lateral Raise",
+    sets: 3,
+    reps: "12-15",
+    weight: "15 lbs (drop to 10 for S3)",
+    rest: 90,
+    note: "Last (6/8, SOFT): 13/10/8@10 [MAX/MAX/MAX] — S2 back to 10 on the short night; the 6/4 break to 11 stands as the rested mark. S2 ≥12 = the 17.5/20 jump, one good set away. Sits after the heavy row (delt pre-fatigued). Stay 15.",
+    setNotes: [
+      "S1: strict, controlled, slight forward lean. Was 13 — chase 15 (top).",
+      "S2: THE bottleneck — rested best is 11, chase 12 for the jump. Expect row pre-fatigue.",
+      "S3: drop to 10 lb — clean burnout reps after 15 fails."
+    ],
+    trigger: [15, 15, 12],
+    triggerWeight: "17.5 or 20 lbs",
+    dropLastSet: true,
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "DB Curls (supinated)",
+    sets: 3,
+    reps: "10-12",
+    weight: "20 lbs (drop to 15 for S3)",
+    rest: 150,
+    note: "Last (6/8, SOFT): 12/8/8@15 [MAX/MAX/MAX] — S1=12 held the top even short-slept; S2 dipped to 8 (was 10 rested 6/4). NO twang 6/8 ✓. SUPINATED/REGULAR ONLY — hammer twangs the R musculocutaneous nerve, stays OUT. Next jump 20 → 25 (no 22.5 at this gym). Trigger 12/12/10 → 25. Stay 20.",
+    setNotes: [
+      "S1: supinated grip ONLY (nerve protocol). Slow eccentric, no swing. Was 12 — hold the top.",
+      "S2: 2.5-min rest. Rested mark is 10 — chase 12 to clear the trigger. STOP instantly on any R-bicep twang.",
+      "S3: drop to 15 lb. Squeeze every rep — bonus volume."
+    ],
+    trigger: [12, 12, 10],
+    triggerWeight: "25 lbs",
+    dropLastSet: true,
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "DB French Press",
+    sets: 3,
+    reps: "8-12",
+    weight: "45 lbs",
+    rest: 90,
+    note: "45 LOCKED — first session 6/8: 12/9/5 on 4-hr sleep, S1=12 at only HARD (room left) = strong even soft; S2/S3 were back-set fatigue. 1 DB overhead, both hands, elbows tight, 3s eccentric. 90s rest confirmed. Trigger 12/12/10 → 50.",
+    setNotes: [
+      "S1: elbows tight to the head, full ROM, 3s eccentric. Was 12 HARD on no sleep — own the top, 1-2 RIR.",
+      "S2: 90s rest. Was 9 — push 10+.",
+      "S3: last set — 0-1 RIR. Was 5 (soft); rested you clears 8+. Trigger needs 10."
+    ],
+    trigger: [12, 12, 10],
+    triggerWeight: "50 lbs",
+    backoff: "40",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+];
+
+const STATE_TTL_MS = 4 * 60 * 60 * 1000;
+// Optional per-exercise config field (engine-side documentation — NOT part of the daily
+// flip block above):
+//   stopCue: "R-BICEP TWANG = STOP INSTANTLY"
+// When present, it overrides the automatic /⚠|STOP/i sentence extraction that arms the
+// red STOP annunciator. The app is fully functional when the field is absent.
+const UNDO_MAX = 30;
+const COUNTDOWN_THRESHOLDS = [60, 30, 10, 5, 4, 3, 2, 1];
+const DIFFICULTY_LABELS = ['', 'EASY', 'LIGHT', 'MOD', 'HARD', 'MAX'];
+
+// Snapshot the original workout order so reorder can be persisted/restored by exercise
+// name. Never mutated; lookup source when rehydrating a reordered state from storage.
+const originalWorkout = workout.slice();
+
+// ============ SETTINGS ============
+const defaultSettings = { sound: true, autoStart: true, voice: true };
+let settings = { ...defaultSettings };
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem('gtpad-settings');
+    if (raw) settings = { ...defaultSettings, ...JSON.parse(raw) };
+  } catch (e) {}
+  // Sound is not user-disableable; the legacy haptics key is intentionally extinct.
+  settings.sound = true;
+  delete settings.vibration;
+}
+function saveSettings() {
+  try { localStorage.setItem('gtpad-settings', JSON.stringify(settings)); } catch (e) {}
+}
+loadSettings();
+
+// ============ SESSION BRIEFING (self-parsed from this script's own text) ============
+// The single-line session comment that the daily flip writes directly above the workout
+// array doubles as the IDLE-screen briefing. Parsed from the script element's own
+// textContent; if the pattern is missing the briefing module is simply skipped.
+let sessionComment = '';
+(function parseSessionComment() {
+  try {
+    const sc = document.getElementById('app-script');
+    const src = sc ? sc.textContent : '';
+    const m = src.match(/\/\/([^\n]+)\n\s*const workout\s*=\s*\[/);
+    if (m) sessionComment = m[1].trim();
+  } catch (e) {}
+})();
+// Soft-day flag — EXPLICIT, set true by the daily flip ONLY when today's session itself
+// is run under a soft read (sick / short sleep). The old /soft/i sniff over the brief
+// misfired whenever the brief merely MENTIONED a prior soft session (like today's, which
+// references the 6/8 soft read on a rested day) — so a rested day inherited the soft-day
+// downgrades (banner, muted flip stamp, asterisked summary, suppressed trigger cue).
+const softDay = false;
+const SOFT_NOTE = 'soft read — coach confirms flips';
+
+// ============ SMALL HELPERS ============
+function byId(id) { return document.getElementById(id); }
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function getMaxReps(repsStr) {
+  const m = String(repsStr || '').match(/(\d+)\s*-\s*(\d+)/);
+  return m ? parseInt(m[2], 10) : (parseInt(repsStr, 10) || 10);
+}
+function formatTime(seconds) {
+  // Always ceil (handles floats from precise pause/resume math).
+  const total = Math.max(0, Math.ceil(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+function formatClock(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+function formatDurCompact(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m + 'm' + String(s).padStart(2, '0') + 's';
+}
+function dateLabelUpper() {
+  const d = new Date();
+  const wd = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const mo = d.toLocaleDateString('en-US', { month: 'short' });
+  return (wd + ' ' + mo + ' ' + d.getDate()).toUpperCase();
+}
+function summaryDateStr() {
+  const d = new Date();
+  const wd = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const mo = d.toLocaleDateString('en-US', { month: 'short' });
+  return wd + ' ' + mo + ' ' + d.getDate();
+}
+const ABBREV_MAP = {
+  'Chest Press Machine': 'CP', 'Chest Press': 'CP', 'Incline Press': 'IP',
+  'Cable Rope Row': 'ROW', 'Cable Row': 'ROW', 'Single-Arm DB Row': 'ROW',
+  'Lat Pulldown': 'LAT',
+  'DB Lateral Raise': 'LR', 'Dumbbell Lateral Raise': 'LR',
+  'DB Curls (supinated)': 'CRL', 'DB Curls': 'CRL', 'Dumbbell Curls': 'CRL',
+  'Hammer Curls': 'HAM',
+  'DB French Press': 'FRP', 'Tricep Pushdown': 'TRI',
+  'Cable Face Pulls': 'FP', 'Face Pulls': 'FP',
+  'Rear Delt Flyes': 'RD',
+  'Leg Press': 'LP', 'Leg Press Calf Raises': 'CLF', 'Calf Raises': 'CLF',
+  'Leg Curl Machine': 'LC', 'Leg Curl': 'LC',
+  'Leg Extension': 'LE', 'Leg Extension Machine': 'LE',
+  'Overhead Press': 'OHP'
+};
+function abbrevFor(name) {
+  if (ABBREV_MAP[name]) return ABBREV_MAP[name];
+  const words = String(name || '').replace(/\(.*?\)/g, '').trim().split(/\s+/)
+    .filter(w => !/^(db|dumbbell|cable|machine)$/i.test(w));
+  const ab = words.map(w => w[0] || '').join('').toUpperCase().slice(0, 3);
+  return ab || '?';
+}
+function mainWeightNum(ex) {
+  const m = String(ex && ex.weight || '').match(/(\d+(?:\.\d+)?)/);
+  return m ? m[1] : null;
+}
+// Structural drop parsed from the weight parenthetical, e.g.
+// "110 lbs (S4 → 90)" → {setIdx:3, w:"90"}; "15 lbs (drop to 10 for S3)" → {setIdx:2, w:"10"}.
+function structuralDrop(ex) {
+  const m = String(ex && ex.weight || '').match(/\(([^)]*)\)/);
+  if (!m) return null;
+  const p = m[1];
+  // Only parentheticals that LOOK like a drop spec participate. Without this gate, a
+  // numeric modifier/plate note ("+15 modifier", "2x45 plates") on a dropLastSet
+  // exercise would fabricate a bogus final-set drop from its last number.
+  if (!/drop|→|->|\bto\b|S\d/i.test(p)) return null;
+  const sm = p.match(/S(\d+)/i);
+  let w = null;
+  const arrow = p.match(/(?:→|->|\bto\b)\s*(\d+(?:\.\d+)?)/i);
+  if (arrow) w = arrow[1];
+  else {
+    const nums = p.match(/(\d+(?:\.\d+)?)/g);
+    if (nums && nums.length) w = nums[nums.length - 1];
+  }
+  let setIdx = sm ? (parseInt(sm[1], 10) - 1) : (ex.dropLastSet ? ex.sets - 1 : null);
+  if (w == null || setIdx == null || setIdx < 0 || setIdx >= ex.sets) return null;
+  return { setIdx: setIdx, w: w };
+}
+function dropTagLabel(ex) {
+  const d = structuralDrop(ex);
+  return d ? ('S' + (d.setIdx + 1) + ' → ' + d.w) : null;
+}
+// STOP annunciator source: optional ex.stopCue, else the first sentence matching
+// /⚠|STOP/i across note + setNotes.
+function stopCueFor(ex) {
+  if (!ex) return null;
+  if (ex.stopCue) return String(ex.stopCue);
+  const texts = [ex.note || ''].concat(Array.isArray(ex.setNotes) ? ex.setNotes : []);
+  for (const t of texts) {
+    if (!/⚠|STOP/i.test(t)) continue;
+    const sentences = String(t).match(/[^.!?]*[.!?]+|[^.!?]+$/g) || [String(t)];
+    for (const s of sentences) {
+      if (/⚠|STOP/i.test(s)) {
+        return s.trim().replace(/^[—\-·:\s]+/, '').replace(/[.…\s]+$/, '');
+      }
+    }
+  }
+  return null;
+}
+
+// ============ STATE ============
+const setLogs = [];
+let currentExercise = 0;
+let currentSet = 0;
+let viewingExercise = 0;
+let viewingSet = 0;
+let state = 'pre-start';
+let workoutStartTime = null;     // Start tap timestamp — anchors S1 + total duration
+let timerInterval = null;
+let restRemaining = 0;
+let restTotalSeconds = 0;
+let restEndTime = null;
+let currentLogEntry = null;      // just-completed set's log during rest (active-log rule)
+let logExerciseIndex = 0;
+let dockCollapsed = false;       // grading dock receipt state (live rest only)
+let wakeLock = null;
+let wakeHeld = false;
+let saveFailed = false;
+let audioCtx = null;
+let countdownFiredThresholds = new Set();
+let lastPaintedSec = null;
+// Trigger flips latch once per exercise, keyed by NAME so reorder can't shift them.
+let triggerFlips = {};
+let flipStampExName = null;      // stamp shown for the remainder of the current rest
+// Rest adjustment bookkeeping for the summary "Rests:" line.
+let skippedRests = 0;
+let extendedRests = 0;
+let restAdjustedThisRest = false;
+// Header EST: recomputed at set boundaries only.
+let estMinutes = null;
+let observedSetTimes = [];
+let lastSetStartAt = null;
+// PAD: number of LED ladder segments currently lit, tracked for the flicker-on-change
+// guard inside paintRestVisuals (the integer-second guard owns the cadence; this owns
+// the discrete-segment transition).
+let lastLitSegs = null;
+const LADDER_SEGMENTS = 24;
+// Undo engine. NOT named `history`: window.history must stay reachable for the
+// ?reset=1 URL self-strip (replaceState) — a script-scoped `history` shadows it.
+const undoStack = [];
+const redoStack = [];
+
+function isBrowsing() {
+  return viewingExercise !== currentExercise || viewingSet !== currentSet;
+}
+// Returns the log entry to display/edit in the grading dock.
+//  - Browsing: the viewed set's log (may be null for future sets)
+//  - Working (during rest): currentLogEntry = just-completed set's log
+function getActiveLogForEdit() {
+  if (isBrowsing()) {
+    return setLogs.find(l => l.exercise === viewingExercise && l.set === viewingSet) || null;
+  }
+  return currentLogEntry || null;
+}
+function findLog(exIdx, setIdx) {
+  return setLogs.find(l => l.exercise === exIdx && l.set === setIdx) || null;
+}
+function totalSets() {
+  return workout.reduce((a, ex) => a + ex.sets, 0);
+}
+function captureLog() {
+  // Edits are written to the log in real time; this just clears the active-log
+  // reference at transition points (rest end / skip / acknowledge / finish).
+  currentLogEntry = null;
+}
+
+// ============ DOM ============
+const elApp = byId('app');
+const elWash = byId('wash');
+const elHdrLeft = byId('hdr-left');
+const elHdrReg = byId('hdr-reg');
+const elPipWake = byId('pip-wake');
+const elPipSave = byId('pip-save');
+const elUndoBtn = byId('undo-btn');
+const elRail = byId('rail');
+const elStage = byId('stage');
+const elStageInner = byId('stage-inner');
+const elCommit = byId('commit-btn');
+const elSheet = byId('sheet');
+const elSheetBackdrop = byId('sheet-backdrop');
+const elSheetTitle = byId('sheet-title');
+const elSheetBody = byId('sheet-body');
+const elToast = byId('toast');
+
+// ============ WAKE LOCK ============
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeHeld = true;
+      wakeLock.addEventListener('release', () => {
+        wakeLock = null;
+        wakeHeld = false;
+        renderPips();
+      });
+      renderPips();
+    }
+  } catch (e) { wakeHeld = false; renderPips(); }
+}
+function releaseWakeLock() {
+  try { if (wakeLock) wakeLock.release(); } catch (e) {}
+  wakeLock = null;
+  wakeHeld = false;
+  renderPips();
+}
+function isActiveState() {
+  return state === 'ready' || state === 'alert' || state === 'resting' ||
+         state === 'paused' || state === 'finishing';
+}
+function renderPips() {
+  if (!elPipWake) return;
+  elPipWake.classList.toggle('held', wakeHeld);
+  elPipWake.classList.toggle('lost', !wakeHeld && isActiveState());
+  elPipSave.classList.toggle('fail', saveFailed);
+}
+
+// ============ AUDIO CONTEXT ============
+function initAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) {}
+}
+// Recover from a dead/suspended AudioContext. iOS Safari closes audio contexts during
+// long backgrounding — a 3-min rest with the phone pocketed is well within the iOS
+// reclamation window. Once .state is 'closed', the context cannot be reopened, so we
+// build a new one and re-decode the voice cue buffers (which are bound to the dead
+// context and unusable after it dies).
+let _ctxGen = 0;
+function recoverAudioCtx() {
+  // Path A: missing or dead context — recreate from scratch.
+  if (!audioCtx || audioCtx.state === 'closed') {
+    if (audioCtx) { try { audioCtx.close(); } catch (e) {} }
+    audioCtx = null;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) { return; }
+    _ctxGen++;
+    // Decoded AudioBuffers from the dead context are unusable. Re-decode from the raw
+    // ArrayBuffers (those survive context death; AudioBuffers don't).
+    if (typeof VoiceCue !== 'undefined' && VoiceCue._afterContextRecreated) {
+      VoiceCue._afterContextRecreated();
+    }
+  }
+  // Path B: context is suspended OR interrupted (iOS background) — resume.
+  // 'interrupted' is the iOS-specific transitional state when the page is backgrounded;
+  // checking only 'suspended' leaves interrupted contexts silent forever. resume()
+  // rejects silently if the context just transitioned to closed; the next caller hits
+  // Path A and recreates.
+  if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+    audioCtx.resume().catch(() => {});
+  }
+  // Re-assert the ambient session category on EVERY recovery, not just Path A. iOS can
+  // revert the category during backgrounding without closing the context; without this,
+  // cues would interrupt Spotify on the next play instead of mixing with it.
+  try {
+    if ('audioSession' in navigator) navigator.audioSession.type = 'ambient';
+  } catch (e) {}
+}
+
+// iOS requires a real USER gesture to resume an interrupted/suspended audio context.
+// visibilitychange is NOT a user gesture, so its resume() call often silent-fails on
+// iOS Safari. Hooking ANY touchend/pointerdown anywhere on the page guarantees the
+// first real interaction after the user returns to the tab unlocks audio.
+// touchend > touchstart on iOS: autoplay-unlock criteria are only met when the finger
+// LEAVES the screen, not on initial touch.
+let _audioGestureRecoveryAttached = false;
+// Cues queued by code paths that fired pre-gesture (e.g. restDone from
+// visibilitychange). Drained on the next real user gesture, after the audio context is
+// recovered AND VoiceCue is unlocked.
+let pendingPostGestureCues = [];
+function attachGlobalAudioRecovery() {
+  if (_audioGestureRecoveryAttached) return;
+  _audioGestureRecoveryAttached = true;
+  const recover = () => {
+    // State check includes 'closed' (a real prior bug: truthy ctx + state 'closed' hit
+    // neither branch and first-tap recovery silent-failed after iOS reclaimed the ctx).
+    if (!audioCtx || audioCtx.state === 'closed' ||
+        audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+      recoverAudioCtx();
+    }
+    // VoiceCue.unlock() is idempotent — bails if already unlocked. Without this call,
+    // any non-commit-button gesture restores the context but leaves play() gated.
+    if (typeof VoiceCue !== 'undefined' && VoiceCue.unlock) {
+      VoiceCue.unlock();
+    }
+    // Keepalive must also start from non-button gestures: a page reloaded mid-rest
+    // (state restored from storage) never fires the commit button, and the fresh
+    // context will re-suspend in ~30s of silence without it. Idempotent. Guarded on
+    // 'finished' — finishWorkout stops the keepalive and the done screen must not
+    // resurrect a battery-burning interval on its next tap (e.g. COPY SUMMARY).
+    if (state !== 'finished') startAudioKeepalive();
+    // Drain any cues that were queued when audio wasn't ready. Resume FIRST, then drain
+    // once it's actually running — iOS resolves resume() on a later task, so a
+    // synchronous state check here used to skip the drain on the exact recovery gesture
+    // meant to flush it (phone-in-pocket through a rest). The queue is cleared only
+    // after a confirmed resume, so a failed resume retries on the next gesture.
+    if (pendingPostGestureCues.length && audioCtx) {
+      Promise.resolve(audioCtx.resume()).then(() => {
+        if (!audioCtx || audioCtx.state !== 'running') return;
+        const drained = pendingPostGestureCues.slice();
+        pendingPostGestureCues.length = 0;
+        drained.forEach(seq => {
+          try { VoiceCue.playSequence(seq); } catch (e) {}
+        });
+      }).catch(() => {});
+    }
+  };
+  ['touchend', 'pointerdown', 'mousedown', 'click', 'keydown'].forEach(ev => {
+    document.addEventListener(ev, recover, { capture: true, passive: true });
+  });
+}
+
+// Audio keepalive: iOS Safari auto-suspends inactive AudioContexts after ~30s of
+// silence, and every rest period exceeds that. A 0-gain oscillator every 15s counts as
+// "activity" and keeps the context running through 90–150s rests.
+let _audioKeepaliveInterval = null;
+function startAudioKeepalive() {
+  if (_audioKeepaliveInterval) return;
+  _audioKeepaliveInterval = setInterval(() => {
+    if (!audioCtx || audioCtx.state !== 'running') return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0;
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.01);
+    } catch (e) {}
+  }, 15000);
+}
+function stopAudioKeepalive() {
+  if (_audioKeepaliveInterval) {
+    clearInterval(_audioKeepaliveInterval);
+    _audioKeepaliveInterval = null;
+  }
+}
+// Rest-expiry double beep (880Hz sine x2). Works independently of the voice-clip
+// pipeline and the voice toggle — the alert of last resort when clips are dead.
+function playAlertSound() {
+  try {
+    recoverAudioCtx();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    [0, 0.22].forEach(offset => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now + offset);
+      gain.gain.setValueAtTime(0.0001, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.4, now + offset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18);
+      osc.start(now + offset);
+      osc.stop(now + offset + 0.2);
+    });
+  } catch (e) {}
+}
+function triggerAlertFeedback() {
+  playAlertSound();
+}
+
+// ============ VOICE CUES ============
+// Web Audio-based voice announcements: decoded mp3 buffers play through audioCtx
+// (AudioBufferSourceNode → GainNode → destination) so iOS treats voice cues as
+// "ambient" audio that MIXES with Spotify/Apple Music, rather than the "playback"
+// category an <audio> element gets on iOS Safari (which interrupts and stops the
+// user's music — the original v1 bug).
+//
+// Pipeline: init() pre-fetches all mp3s as raw ArrayBuffers (no audio context needed).
+// On first user gesture, unlock() resumes audioCtx and decodes the buffers via
+// decodeAudioData. Each play() creates a fresh BufferSourceNode.
+// Daily commentary cache-buster — bumped when daily clips are regenerated so the phone
+// re-fetches past the HTTP cache. Static bank clips are never versioned.
+const DAILY_BUILD_ID = '20260604a';
+const VoiceCue = (() => {
+  const FILES = [
+    'start-upper', 'start-lower', 'received', 'set-2', 'set-3', 'set-4', 'final-set',
+    'rest-3min', 'rest-2min', 'rest-90sec', 'rest-60sec',
+    '1min-remaining', '30sec-remaining', '10sec-remaining',
+    'countdown-5', 'countdown-4', 'countdown-3', 'countdown-2', 'countdown-1',
+    'rest-complete', 'tap-to-start',
+    'exercise-complete', 'up-next', 'final-exercise',
+    'ex-chest-press', 'ex-lat-pulldown', 'ex-db-lat-raise', 'ex-db-curls',
+    'ex-leg-press', 'ex-leg-curl', 'ex-calf-raises', 'ex-face-pulls',
+    'ex-cable-row', 'ex-single-arm-db-row',
+    'ex-leg-extension', 'ex-incline-press', 'ex-overhead-press',
+    'ex-tricep-pushdown', 'ex-rear-delt-flyes', 'ex-hammer-curls',
+    'paused', 'resumed', 'final-set-logged', 'workout-complete', 'workout-reset',
+    // weight callouts (each clip = "[N] pounds" full phrase)
+    'wgt-10', 'wgt-12-5', 'wgt-15', 'wgt-17-5', 'wgt-20', 'wgt-22-5', 'wgt-25', 'wgt-27-5',
+    'wgt-30', 'wgt-32-5', 'wgt-35', 'wgt-40', 'wgt-45', 'wgt-50',
+    'wgt-55', 'wgt-60', 'wgt-65', 'wgt-70', 'wgt-75', 'wgt-80', 'wgt-85', 'wgt-90', 'wgt-95',
+    'wgt-100', 'wgt-105', 'wgt-110', 'wgt-115', 'wgt-120', 'wgt-125', 'wgt-130',
+    'wgt-135', 'wgt-140', 'wgt-145', 'wgt-150',
+    'wgt-200', 'wgt-215', 'wgt-220', 'wgt-235', 'wgt-250', 'wgt-265', 'wgt-280', 'wgt-295', 'wgt-310',
+    'wgt-plus-modifier',
+    // RIR cues
+    'cue-rir-zero', 'cue-rir-zero-one', 'cue-rir-one-two', 'cue-rir-two-three', 'cue-rir-three-plus',
+    // effort cues
+    'cue-go-hard', 'cue-go-mod', 'cue-max-effort', 'cue-save-reps',
+    // set context + form cues
+    'cue-trigger-set', 'cue-last-set', 'cue-form-check', 'cue-slow-tempo', 'cue-strict-form',
+    'cue-no-hammer', 'cue-knee-check', 'cue-modifier-check',
+    // rep range targets
+    'cue-aim-6-10', 'cue-aim-8-12', 'cue-aim-10-12', 'cue-aim-12-15', 'cue-aim-15-20',
+    // batch 2 additions
+    'cue-warmup-set', 'cue-watch-knee', 'cue-pacing-fix', 'cue-trigger-hit', 'cue-personal-record', 'cue-full-rom',
+    // Daily per-set commentary slots (up to 6 exercises x 5 sets). Unused slots simply
+    // 404 on fetch and are skipped (under the static ElevenLabs bank they ALL 404 —
+    // by design; generic cues cover every slot).
+    'daily-ex1-set1', 'daily-ex1-set2', 'daily-ex1-set3', 'daily-ex1-set4', 'daily-ex1-set5',
+    'daily-ex2-set1', 'daily-ex2-set2', 'daily-ex2-set3', 'daily-ex2-set4', 'daily-ex2-set5',
+    'daily-ex3-set1', 'daily-ex3-set2', 'daily-ex3-set3', 'daily-ex3-set4', 'daily-ex3-set5',
+    'daily-ex4-set1', 'daily-ex4-set2', 'daily-ex4-set3', 'daily-ex4-set4', 'daily-ex4-set5',
+    'daily-ex5-set1', 'daily-ex5-set2', 'daily-ex5-set3', 'daily-ex5-set4', 'daily-ex5-set5',
+    'daily-ex6-set1', 'daily-ex6-set2', 'daily-ex6-set3', 'daily-ex6-set4', 'daily-ex6-set5'
+  ];
+  const arrayBuffers = new Map();   // raw, pre-decode
+  const decodedBuffers = new Map(); // post-decode, ready to play
+  // Per-file fetch status: 'pending' | 'loaded' | 'failed'. Lets play() skip
+  // known-404 clips INSTANTLY instead of stalling a whole sequence on the 3s decode
+  // poll, while a fetch still in flight keeps the poll (first-cue-after-fast-tap fix).
+  const fileStatus = new Map();
+  let initialized = false;
+  let unlocked = false;
+  let currentSources = [];
+  let currentChain = null;
+
+  function init() {
+    if (initialized) return;
+    initialized = true;
+    // Pre-fetch all mp3 ArrayBuffers (no audio context needed yet). Decoding happens
+    // on first user gesture via unlock(). 404s mark 'failed' and stay silent.
+    FILES.forEach(name => {
+      fileStatus.set(name, 'pending');
+      fetch('audio/' + name + '.mp3' + (name.indexOf('daily-') === 0 ? '?v=' + DAILY_BUILD_ID : ''))
+        .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+        .then(ab => { arrayBuffers.set(name, ab); fileStatus.set(name, 'loaded'); decodeIfReady(name); })
+        .catch(() => { fileStatus.set(name, 'failed'); });
+    });
+  }
+
+  function decodeIfReady(name) {
+    if (!unlocked || !audioCtx) return;
+    if (decodedBuffers.has(name)) return;
+    const ab = arrayBuffers.get(name);
+    if (!ab) return;
+    // .slice(0) creates a copy so the original ArrayBuffer isn't detached (some
+    // browsers detach the input buffer after decodeAudioData). Capture the context
+    // generation so a decode resolving AFTER the context has been recreated doesn't
+    // pollute the new decodedBuffers map.
+    const myGen = _ctxGen;
+    try {
+      audioCtx.decodeAudioData(ab.slice(0))
+        .then(buf => {
+          if (myGen === _ctxGen) decodedBuffers.set(name, buf);
+        })
+        .catch(() => {
+          // Transient decode failure (iOS rejecting on a closing context, etc).
+          // Retry once on the current generation so the cue isn't lost for the
+          // session. If the context died again, the next _afterContextRecreated
+          // pass picks it up.
+          if (myGen === _ctxGen && audioCtx && !decodedBuffers.has(name)) {
+            try {
+              audioCtx.decodeAudioData(ab.slice(0))
+                .then(buf => { if (myGen === _ctxGen) decodedBuffers.set(name, buf); })
+                .catch(() => {});
+            } catch (e) {}
+          }
+        });
+    } catch (e) {}
+  }
+
+  // Call from any user gesture to unlock + decode. recoverAudioCtx() handles
+  // context creation + resume + audioSession='ambient'. unlocked stays true forever
+  // after — context recreation re-decodes but never re-gates.
+  function unlock() {
+    if (unlocked) return;
+    recoverAudioCtx();
+    if (!audioCtx) return;
+    unlocked = true;
+    arrayBuffers.forEach((ab, name) => decodeIfReady(name));
+  }
+
+  async function play(name) {
+    if (!settings.voice) return;
+    recoverAudioCtx();
+    if (!audioCtx || !unlocked) return;
+    // Instant skip for clips that are known-missing (404'd) or not in FILES at all.
+    // This kills the prior behavior where a missing clip stalled its sequence for the
+    // full 3s decode poll.
+    const st = fileStatus.get(name);
+    if (st === undefined || st === 'failed') return;
+    // Wait up to 3s for fetch+decode to finish — a 500ms window was not enough when
+    // Start is tapped immediately after page load (fetch/decode race made the first
+    // cue silent-fail; Reset-then-reload used to be the only workaround). Bail early
+    // the moment the fetch is marked failed.
+    let waited = 0;
+    while (!decodedBuffers.has(name) && waited < 3000) {
+      if (fileStatus.get(name) === 'failed') return;
+      await new Promise(r => setTimeout(r, 50));
+      waited += 50;
+    }
+    const buffer = decodedBuffers.get(name);
+    if (!buffer) return;
+    // Wait for the context to actually be running. resume() is async; without this,
+    // source.start(0) can fire into a still-suspended context and emit nothing.
+    if (audioCtx.state !== 'running') {
+      try { await audioCtx.resume(); } catch (e) {}
+    }
+    if (audioCtx.state !== 'running') return;
+    return new Promise(resolve => {
+      try {
+        const source = audioCtx.createBufferSource();
+        const gain = audioCtx.createGain();
+        gain.gain.value = 1.0;
+        // Re-assert the ambient session category right before playback — iOS sometimes
+        // resets it between recoverAudioCtx() and source.start(), causing ducking.
+        try { if ('audioSession' in navigator) navigator.audioSession.type = 'ambient'; } catch (e) {}
+        source.buffer = buffer;
+        source.connect(gain);
+        gain.connect(audioCtx.destination);
+        source.onended = () => {
+          const idx = currentSources.indexOf(source);
+          if (idx >= 0) currentSources.splice(idx, 1);
+          resolve();
+        };
+        currentSources.push(source);
+        source.start(0);
+      } catch (e) { resolve(); }
+    });
+  }
+
+  function playSequence(names, gapMs) {
+    if (!settings.voice) return Promise.resolve();
+    if (gapMs == null) gapMs = 80;
+    cancel();
+    const chain = { cancelled: false };
+    currentChain = chain;
+    return names.reduce((p, name) => p.then(() => {
+      if (chain.cancelled) return;
+      return play(name).then(() => new Promise(r => setTimeout(r, gapMs)));
+    }), Promise.resolve());
+  }
+
+  function cancel() {
+    if (currentChain) currentChain.cancelled = true;
+    currentChain = null;
+    currentSources.forEach(s => {
+      try { s.stop(); s.disconnect(); } catch (e) {}
+    });
+    currentSources = [];
+  }
+
+  // Called by recoverAudioCtx() after a fresh AudioContext is built. Decoded
+  // AudioBuffers are bound to the dead context and unusable, but the raw ArrayBuffers
+  // survive — re-decode from those. unlocked stays true: we already had a user
+  // gesture, so the new context just needs decoding.
+  function _afterContextRecreated() {
+    decodedBuffers.clear();
+    cancel();
+    arrayBuffers.forEach((ab, name) => decodeIfReady(name));
+  }
+
+  return { init, unlock, play, playSequence, cancel, _afterContextRecreated,
+           has: (name) => decodedBuffers.has(name) || arrayBuffers.has(name) };
+})();
+
+// ============ CUE SELECTORS ============
+// Map workout exercise names → audio clip names. Tolerant to naming variants.
+function exerciseClipName(name) {
+  if (!name) return null;
+  const map = {
+    "Chest Press Machine": "ex-chest-press",
+    "Chest Press": "ex-chest-press",
+    "Lat Pulldown": "ex-lat-pulldown",
+    "DB Lateral Raise": "ex-db-lat-raise",
+    "Dumbbell Lateral Raise": "ex-db-lat-raise",
+    "DB Curls": "ex-db-curls",
+    "DB Curls (REGULAR/supinated)": "ex-db-curls",
+    "DB Curls (supinated)": "ex-db-curls",
+    "Dumbbell Curls": "ex-db-curls",
+    "Leg Press": "ex-leg-press",
+    "Leg Curl": "ex-leg-curl",
+    "Leg Curl Machine": "ex-leg-curl",
+    "Leg Press Calf Raises": "ex-calf-raises",
+    "Calf Raises": "ex-calf-raises",
+    "Cable Face Pulls": "ex-face-pulls",
+    "Face Pulls": "ex-face-pulls",
+    "Cable Row": "ex-cable-row",
+    "Cable Rope Row": "ex-cable-row",
+    "Single-Arm DB Row": "ex-single-arm-db-row",
+    "Leg Extension": "ex-leg-extension",
+    "Leg Extension Machine": "ex-leg-extension",
+    "Incline Press": "ex-incline-press",
+    "Overhead Press": "ex-overhead-press",
+    "Tricep Pushdown": "ex-tricep-pushdown",
+    "Rear Delt Flyes": "ex-rear-delt-flyes",
+    "Hammer Curls": "ex-hammer-curls",
+    "DB Curls (HAMMER variant)": "ex-hammer-curls"
+  };
+  return map[name] || null;
+}
+
+function restClipForDuration(seconds) {
+  if (seconds === 180) return 'rest-3min';
+  if (seconds === 120) return 'rest-2min';
+  if (seconds === 90) return 'rest-90sec';
+  if (seconds === 60) return 'rest-60sec';
+  return null; // 150s deliberately silent
+}
+
+// Returns the per-set daily hype clip name for (exIdx,setIdx) IF it actually loaded,
+// else null (generic cues play). Daily clips are authored bound to the LOAD-TIME
+// exercise order, so key them to the original position via the never-mutated
+// originalWorkout snapshot — after a reorder a clip must not play on the WRONG
+// exercise nor suppress the wrong slot's generic cue.
+function dailyClipFor(exIdx, setIdx) {
+  if (!workout[exIdx]) return null;
+  const origIdx = originalWorkout.indexOf(workout[exIdx]);
+  if (origIdx < 0) return null;
+  const n = 'daily-ex' + (origIdx + 1) + '-set' + (setIdx + 1);
+  return (typeof VoiceCue !== 'undefined' && VoiceCue.has && VoiceCue.has(n)) ? n : null;
+}
+
+// Set-N announcement at end of rest. Null on the first set of a new exercise (the
+// up-next chain covered it) and when a daily hype line exists for the slot (it already
+// names the set, weight, and target).
+function setStartClipFor(exIdx, setIdx) {
+  if (!workout[exIdx]) return null;
+  if (dailyClipFor(exIdx, setIdx)) return null;
+  if (setIdx === 0) return null;
+  const isFinal = (setIdx === workout[exIdx].sets - 1);
+  if (isFinal) return 'final-set';
+  if (setIdx === 1) return 'set-2';
+  if (setIdx === 2) return 'set-3';
+  if (setIdx === 3) return 'set-4';
+  return null;
+}
+
+// Map an exercise's weight string to its audio clip names. Returns [] if no usable
+// weight. Handles modifier suffix; half-weights use dash-decimal slug ("22.5" → wgt-22-5).
+function weightClipsFor(exerciseObj) {
+  if (!exerciseObj || !exerciseObj.weight) return [];
+  const w = String(exerciseObj.weight).toLowerCase();
+  const numMatch = w.match(/(\d+(?:\.\d+)?)/);
+  if (!numMatch) return [];
+  const slug = numMatch[1].replace('.', '-');
+  const result = ['wgt-' + slug];
+  if (w.includes('modifier')) result.push('wgt-plus-modifier');
+  return result;
+}
+
+// Map a rep range string like "8-12" to its rep-range cue clip.
+function repRangeClipFor(repsStr) {
+  if (!repsStr) return null;
+  const m = String(repsStr).match(/(\d+)\s*-\s*(\d+)/);
+  if (!m) return null;
+  const key = parseInt(m[1], 10) + '-' + parseInt(m[2], 10);
+  const map = {
+    '6-10':  'cue-aim-6-10',
+    '8-12':  'cue-aim-8-12',
+    '10-12': 'cue-aim-10-12',
+    '12-15': 'cue-aim-12-15',
+    '15-20': 'cue-aim-15-20'
+  };
+  return map[key] || null;
+}
+
+// Set-position coaching cues (returns array, may be empty). Takes the exercise index
+// explicitly (the prior version read the global working cursor — wrong while the
+// chain describes a different exercise).
+//   Set 2 (idx=1) of a 3+-set exercise: "Go hard" + "1-2 reps in reserve".
+//   Last set of any exercise: "Max effort" + "0-1 in the tank".
+// A daily hype line carries its own effort/RIR coaching — skip the generic cues.
+function setPositionCuesFor(exIdx, setIdx, totalSetsCount) {
+  if (dailyClipFor(exIdx, setIdx)) return [];
+  if (totalSetsCount >= 3 && setIdx === 1) return ['cue-go-hard', 'cue-rir-one-two'];
+  if (setIdx === totalSetsCount - 1)        return ['cue-max-effort', 'cue-rir-zero-one'];
+  return [];
+}
+
+// New v4 wiring (existing clip, has()-gated): "Trigger set, send it!" appended to the
+// rest-announce chain when the UPCOMING set is the final trigger gate, the trigger is
+// still alive on reps, and no daily clip owns the slot.
+function maybeAppendTriggerSetCue(seq, exIdx, setIdx) {
+  const ex = workout[exIdx];
+  if (!ex || !Array.isArray(ex.trigger)) return;
+  if (setIdx !== ex.trigger.length - 1) return;
+  if (dailyClipFor(exIdx, setIdx)) return;
+  if (!isTriggerAliveOnReps(exIdx, setIdx)) return;
+  if (!VoiceCue.has('cue-trigger-set')) return;
+  seq.push('cue-trigger-set');
+}
+
+// Threshold-based countdown announcements (called from the 100ms rest tick). Each
+// threshold fires once per rest period; the set is rebuilt by setDone and renormalized
+// after any restEndTime mutation.
+function maybeFireCountdownCue(secCeil) {
+  if (countdownFiredThresholds.has(secCeil)) return;
+  const cues = {
+    60: '1min-remaining',
+    30: '30sec-remaining',
+    10: '10sec-remaining',
+    5: 'countdown-5',
+    4: 'countdown-4',
+    3: 'countdown-3',
+    2: 'countdown-2',
+    1: 'countdown-1'
+  };
+  const name = cues[secCeil];
+  if (!name) return;
+  // Skip remaining-N cues when total rest is at/below the threshold (redundant with
+  // the rest-start announcement).
+  if ((secCeil === 60 && restTotalSeconds <= 60) ||
+      (secCeil === 30 && restTotalSeconds <= 30) ||
+      (secCeil === 10 && restTotalSeconds <= 10)) {
+    countdownFiredThresholds.add(secCeil);
+    return;
+  }
+  // Only mark the threshold fired if audio is actually playable. Otherwise the next
+  // 100ms tick retries once the context recovers — without this gate, every
+  // silent-fail during the tab-return recovery window would permanently suppress that
+  // countdown cue. Countdown clips are played INDIVIDUALLY per second boundary (never
+  // as a sequence) — the cadence keys to the dead-air-trimmed clips.
+  if (!audioCtx || audioCtx.state !== 'running') return;
+  countdownFiredThresholds.add(secCeil);
+  VoiceCue.play(name);
+}
+
+// After ANY restEndTime mutation (+30 / −15 / background return):
+// fired = { t : t > ceil(remaining) }. −15 never announces a stale threshold, +30
+// re-arms (and re-fires) everything below the new remaining, and a background return
+// pre-marks every passed threshold so nothing announces late. Deliberately NOT run on
+// pause/resume.
+function renormalizeCountdownThresholds() {
+  const remaining = restEndTime ? Math.max(0, (restEndTime - Date.now()) / 1000) : 0;
+  const c = Math.ceil(remaining);
+  countdownFiredThresholds = new Set(COUNTDOWN_THRESHOLDS.filter(t => t > c));
+}
+
+// ============ ADVISOR ============
+// Dynamic per-set advice: computes a REALISTIC rep target for the upcoming set from
+// the user's ACTUAL last-set reps + effort, and calls a weight drop when reps fall
+// below the range. difficulty = stored 1-5 scale (3 MOD, 4 HARD, 5 MAX).
+// ex.backoff (optional) = the weight to drop to; ex.dropLastSet = last set is already
+// a structural drop (defer to its static note there).
+// Structured return: { kind, band:[lo,hi]|null, weightCall:{verb:'HOLD'|'DROP', w}|null,
+// prose } — prose is byte-identical to the v3 advisor strings (parity-harness checked).
+function dynamicRepAdviceStruct(setIdx, prev, ex) {
+  if (!prev || !prev.length || setIdx < 1) return null;
+  if (ex.dropLastSet && setIdx === ex.sets - 1) return null;
+  var rng = String(ex.reps || "").match(/(\d+)\D+(\d+)/);
+  if (!rng) return null;
+  var lo = +rng[1], hi = +rng[2];
+  var last = prev[prev.length - 1];
+  var r = last.reps;
+  if (typeof r !== "number" || isNaN(r)) return null;
+  var d = +last.difficulty || 0;
+  var maxed = d >= 5;
+  var roomLeft = d > 0 && d <= 3;
+  var wm = String(ex.weight).match(/(\d+(?:\.\d+)?)/);
+  var w = wm ? wm[1] : "the weight";
+  var bo = ex.backoff || null;
+  var L = "S" + setIdx;
+  var aimHi = Math.min(lo + 2, hi);
+  var pLo, pHi;
+  if (maxed) { pLo = Math.max(r - 2, 1); pHi = Math.max(r - 1, 1); }
+  else if (roomLeft) { pLo = r; pHi = Math.min(r + 2, hi); }
+  else { pLo = Math.max(r - 1, 1); pHi = r; }
+  if (r <= 0) {
+    return { kind: 'stopped', band: null, weightCall: null,
+             prose: L + " stopped early. Reset, go by feel this set." };
+  }
+  if (r < lo && maxed) {
+    return bo
+      ? { kind: 'drop', band: [lo, aimHi], weightCall: { verb: 'DROP', w: bo },
+          prose: L + " was " + r + ", under " + lo + "-" + hi + ". Drop to " + bo + ", aim " + lo + "-" + aimHi + "." }
+      : { kind: 'drop-notch', band: [lo, aimHi], weightCall: null,
+          prose: L + " was " + r + ", under " + lo + ". Grind " + lo + "+ or drop a notch." };
+  }
+  if (r <= lo && maxed) {
+    return bo
+      ? { kind: 'floor', band: [pLo, pHi], weightCall: { verb: 'HOLD', w: w },
+          prose: L + " hit the floor (" + r + " at max). Hold " + w + " for ~" + pLo + "-" + pHi + ", or drop to " + bo + " for " + lo + "-" + aimHi + "." }
+      : { kind: 'floor', band: [pLo, pHi], weightCall: { verb: 'HOLD', w: w },
+          prose: L + " at the floor (" + r + "). ~" + pLo + "-" + pHi + " here, that's the set." };
+  }
+  if (r >= hi && roomLeft) {
+    return { kind: 'bump', band: [hi - 1, hi], weightCall: { verb: 'HOLD', w: w },
+             prose: L + " hit " + r + " (top) with room. Bump the weight next session. Here: " + (hi - 1) + "-" + hi + "." };
+  }
+  if (roomLeft) {
+    return { kind: 'push', band: [pLo, pHi], weightCall: { verb: 'HOLD', w: w },
+             prose: L + " was " + r + " with room. Push " + pLo + "-" + pHi + ", hold " + w + "." };
+  }
+  return { kind: 'default', band: [pLo, pHi], weightCall: { verb: 'HOLD', w: w },
+           prose: L + " was " + r + (maxed ? " at max" : "") + ". Aim " + pLo + "-" + pHi + ", hold " + w + "."
+                + (bo ? " Under " + lo + "? Drop to " + bo + "." : "") };
+}
+function dynamicRepAdvice(setIdx, prev, ex) {
+  const s = dynamicRepAdviceStruct(setIdx, prev, ex);
+  return s ? s.prose : null;
+}
+
+function defaultAdvice(setIdx, prev, ex) {
+  if (!Array.isArray(ex.trigger) || setIdx === 0) return null;
+  if (setIdx >= ex.trigger.length) return null;
+  const reqHere = ex.trigger[setIdx];
+  const passingPrior = prev.every((log, i) => log.reps >= ex.trigger[i]);
+  const weightTag = ex.triggerWeight ? " for " + ex.triggerWeight : "";
+  if (passingPrior) {
+    if (setIdx === ex.trigger.length - 1) {
+      return "TRIGGER ALIVE -- " + reqHere + "+ here flips" + weightTag + " next session. Push, form first.";
+    }
+    return "On track for trigger" + weightTag + " -- push " + reqHere + "+ here.";
+  }
+  const failedAt = prev.findIndex((log, i) => log.reps < ex.trigger[i]);
+  return "Trigger out (S" + (failedAt + 1) + "=" + prev[failedAt].reps + ", needed " + ex.trigger[failedAt] + "). Match " + reqHere + " here, build for next session.";
+}
+
+// Build prev-set logs in order. Only count a prior set as "logged" when BOTH reps and
+// difficulty are committed — dynamic advice must not fire off default reps before the
+// user has actually graded the set.
+function gradedPrevLogs(exIdx, setIdx) {
+  const prevLogs = [];
+  for (let i = 0; i < setIdx; i++) {
+    const log = findLog(exIdx, i);
+    if (log && log.difficulty != null) {
+      prevLogs.push({ reps: log.reps, difficulty: log.difficulty });
+    } else {
+      return null;
+    }
+  }
+  return prevLogs;
+}
+
+// Advice precedence per set: adviceFor hook → dynamicRepAdvice → defaultAdvice →
+// setNotes[setIdx] → ex.note → ''. S1 and any-ungraded-prior always static.
+function computeSetNote(exIdx, setIdx) {
+  const ex = workout[exIdx];
+  if (!ex) return "";
+  const prevLogs = gradedPrevLogs(exIdx, setIdx);
+  if (prevLogs && prevLogs.length === setIdx && setIdx > 0) {
+    if (typeof ex.adviceFor === 'function') {
+      const dynamic = ex.adviceFor(setIdx, prevLogs, ex);
+      if (dynamic) return dynamic;
+    }
+    const reactive = dynamicRepAdvice(setIdx, prevLogs, ex);
+    if (reactive) return reactive;
+    const generic = defaultAdvice(setIdx, prevLogs, ex);
+    if (generic) return generic;
+  }
+  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) return ex.setNotes[setIdx];
+  return ex.note || "";
+}
+
+// Structured advice for the solution plate (band + HOLD/DROP token). Mirrors the
+// computeSetNote gating exactly; null when the advisor can't fire.
+function computeStructuredAdvice(exIdx, setIdx) {
+  const ex = workout[exIdx];
+  if (!ex || setIdx === 0) return null;
+  const prevLogs = gradedPrevLogs(exIdx, setIdx);
+  if (!prevLogs || prevLogs.length !== setIdx) return null;
+  return dynamicRepAdviceStruct(setIdx, prevLogs, ex);
+}
+
+// ============ TRIGGER TRACKING ============
+// Reps-only alive check for sets 0..uptoSetIdx-1 (used by the cue-trigger-set wiring
+// and the DONE/summary outcome recompute).
+function isTriggerAliveOnReps(exIdx, uptoSetIdx) {
+  const ex = workout[exIdx];
+  if (!ex || !Array.isArray(ex.trigger)) return false;
+  const n = Math.min(uptoSetIdx, ex.trigger.length);
+  for (let i = 0; i < n; i++) {
+    const log = findLog(exIdx, i);
+    if (!log || typeof log.reps !== 'number' || log.reps < ex.trigger[i]) return false;
+  }
+  return true;
+}
+// Full latch condition: ALL trigger-covered sets logged AND graded AND reps >= trigger[i].
+function triggerConditionMet(exIdx) {
+  const ex = workout[exIdx];
+  if (!ex || !Array.isArray(ex.trigger) || !ex.trigger.length) return false;
+  for (let i = 0; i < ex.trigger.length; i++) {
+    const log = findLog(exIdx, i);
+    if (!log || typeof log.reps !== 'number' || log.difficulty == null) return false;
+    if (log.reps < ex.trigger[i]) return false;
+  }
+  return true;
+}
+// Flip latch: evaluated on every log write. An exercise flips when the full condition
+// above holds. Grading is required so the optimistic stepper prefill written at Set
+// Done can't flip the trigger before the user has committed actual reps. Latches once
+// per exercise (by name); persists across unrelated activity — but a gate-set EDIT that
+// breaks the condition (stepping reps back down, clearing a mis-tapped grade) UN-latches
+// it, so a fat-fingered flip is correctable in place instead of poisoning the summary.
+function evaluateTriggerFlip(exIdx) {
+  const ex = workout[exIdx];
+  if (!ex || !Array.isArray(ex.trigger) || !ex.trigger.length) return;
+  if (triggerFlips[ex.name]) {
+    if (!triggerConditionMet(exIdx)) {
+      delete triggerFlips[ex.name];
+      if (flipStampExName === ex.name) flipStampExName = null;
+      saveState();
+    }
+    return;
+  }
+  if (!triggerConditionMet(exIdx)) return;
+  triggerFlips[ex.name] = true;
+  flipStampExName = ex.name;
+  if (!softDay) {
+    VoiceCue.playSequence(['cue-trigger-hit']);
+  }
+  saveState();
+}
+// Outcome for the DONE block + summary: latch ∪ recompute.
+//  {st:'flipped'|'out'|'open', detail}
+// Asymmetric by design: 'out' is decided on reps alone (sub-trigger reps are decisive
+// either way), but 'flipped' requires every gate set GRADED — an untouched Set Done
+// prefill (rep-range top / advisor band-high) can meet the gate numerically, and a
+// reps-only recompute would print a fabricated "CLEARED → next weight" into the
+// summary Soren pastes into tracker.md. Mirrors the latch's grading gate.
+function triggerOutcome(exIdx) {
+  const ex = workout[exIdx];
+  if (!ex || !Array.isArray(ex.trigger) || !ex.trigger.length) return null;
+  if (triggerFlips[ex.name]) return { st: 'flipped' };
+  let allConfirmed = true;
+  for (let i = 0; i < ex.trigger.length; i++) {
+    const log = findLog(exIdx, i);
+    if (!log || typeof log.reps !== 'number') { allConfirmed = false; continue; }
+    if (log.reps < ex.trigger[i]) {
+      return { st: 'out', setIdx: i, reps: log.reps, req: ex.trigger[i] };
+    }
+    if (log.difficulty == null) allConfirmed = false; // passing-but-ungraded = unconfirmed
+  }
+  if (allConfirmed) return { st: 'flipped' };
+  return { st: 'open' };
+}
+// Gate caption under the dock stepper, only when the trigger covers this set.
+// Until the set is graded the reps are an optimistic prefill, not user input — the
+// caption must not assert a pass (or a miss) off a guess.
+function gateCaptionFor(exIdx, setIdx, reps, graded) {
+  const ex = workout[exIdx];
+  if (!ex || !Array.isArray(ex.trigger) || setIdx >= ex.trigger.length) return null;
+  const req = ex.trigger[setIdx];
+  if (typeof reps !== 'number') return null;
+  if (!graded) return 'GATE AT ' + req + ' — CONFIRM REPS + GRADE';
+  if (reps >= req) return 'GATE CLEARED';
+  return (req - reps) + ' SHORT — TRIGGER OUT';
+}
+// PAD: a coarse class for the gate caption so the readout can color-cue it.
+function gateCaptionClass(exIdx, setIdx, reps, graded) {
+  const ex = workout[exIdx];
+  if (!ex || !Array.isArray(ex.trigger) || setIdx >= ex.trigger.length) return '';
+  const req = ex.trigger[setIdx];
+  if (typeof reps !== 'number') return '';
+  if (!graded) return '';
+  return reps >= req ? 'cleared' : 'out';
+}
+
+// ============ EST (header register) ============
+// Recomputed at set boundaries ONLY: sum of remaining configured rests + remaining
+// sets x median observed set time (default 40s). Hidden until 2 completed sets.
+function medianSetTime() {
+  if (!observedSetTimes.length) return 40;
+  const a = observedSetTimes.slice().sort((x, y) => x - y);
+  const mid = Math.floor(a.length / 2);
+  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+}
+function recomputeEst() {
+  if (state === 'finished' || state === 'finishing') { estMinutes = null; return; }
+  let secs = 0;
+  let remainingSets = 0;
+  for (let i = currentExercise; i < workout.length; i++) {
+    const ex = workout[i];
+    const startSet = (i === currentExercise) ? currentSet : 0;
+    const setsLeft = Math.max(0, ex.sets - startSet);
+    remainingSets += setsLeft;
+    // rests between remaining sets within the exercise
+    if (setsLeft > 1) secs += (setsLeft - 1) * (ex.rest || 90);
+    // inter-exercise rest to the next exercise
+    if (i < workout.length - 1 && setsLeft > 0) secs += 60;
+  }
+  // The live rest is the boundary INTO the upcoming set — the loop above only counts
+  // gaps among sets at/after the upcoming one, so this is a pure addition.
+  if (state === 'resting' && restEndTime) {
+    secs += Math.max(0, (restEndTime - Date.now()) / 1000);
+  } else if (state === 'paused') {
+    secs += Math.max(0, restRemaining);
+  }
+  secs += remainingSets * medianSetTime();
+  estMinutes = Math.max(0, Math.ceil(secs / 60));
+}
+
+// ============ REST BOOKKEEPING ============
+let restKind = 'intra'; // 'intra' (within exercise) | 'inter' (60s UP NEXT boundary)
+function countLogs(exIdx) {
+  return setLogs.filter(l => l.exercise === exIdx).length;
+}
+function restTargetLabel() {
+  const ex = workout[currentExercise];
+  if (!ex) return '';
+  return restKind === 'inter' ? abbrevFor(ex.name) + ' S1' : 'S' + (currentSet + 1);
+}
+
+// ============ REST TICK (wall-clock; 100ms; textContent + transforms only) ============
+function startCountdown() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(tickRest, 100);
+  paintRestVisuals(Math.max(0, (restEndTime - Date.now()) / 1000));
+}
+function tickRest() {
+  if (state !== 'resting' || !restEndTime) return;
+  const remaining = Math.max(0, (restEndTime - Date.now()) / 1000);
+  if (remaining <= 0) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    paintRestVisuals(0);
+    restDone();
+  } else {
+    restRemaining = remaining;
+    maybeFireCountdownCue(Math.ceil(remaining));
+    paintRestVisuals(remaining);
+  }
+}
+function digitsMarkup(txt) {
+  // mm / blinking colon / rolling seconds — spans so CSS can animate the tick.
+  const s = String(txt);
+  const i = s.lastIndexOf(':');
+  if (i < 0) return escapeHtml(s);
+  return '<span class="mm">' + escapeHtml(s.slice(0, i)) + '</span>' +
+    '<span class="colon">:</span>' +
+    '<span class="ss">' + escapeHtml(s.slice(i + 1)) + '</span>';
+}
+// PAD REST VISUALIZATION ----------------------------------------------------------
+// Drives the SAME wall-clock `remaining` into: (1) a red LED ladder that depletes
+// segment-by-segment (discrete cells, flicker on each extinguish), and (2) a glowing
+// 7-segment MM:SS readout. The integer-second guard (lastPaintedSec) owns the readout
+// cadence; a separate lit-segment guard (lastLitSegs) owns the discrete ladder steps so
+// a segment only re-paints when its count actually changes (no 10Hz churn). Last 10s:
+// the deck flips .t10 (readout red + ladder pulse). Mini-clock kept for browse view.
+function paintRestVisuals(remaining) {
+  const secCeil = Math.ceil(remaining);
+  const t10 = (secCeil <= 10 || state === 'alert');
+  // -- 7-seg readout --
+  const d = byId('rest-digits');
+  if (d) {
+    const txt = (state === 'alert') ? 'GO' : formatTime(remaining);
+    if (d.dataset.t !== txt) {
+      d.dataset.t = txt;
+      d.innerHTML = digitsMarkup(txt); // 1Hz tiny-node swap; re-arms the .ss tick animation
+    }
+    d.classList.toggle('idle-glow', !t10 && state !== 'alert');
+    if (secCeil !== lastPaintedSec) {
+      if (secCeil <= 5 && secCeil >= 1 && state === 'resting') {
+        d.classList.remove('pulse');
+        void d.offsetWidth;
+        d.classList.add('pulse');
+      }
+    }
+  }
+  // -- deck (t10 owner of ladder pulse + readout red) --
+  const deck = byId('led-deck');
+  if (deck) {
+    deck.classList.toggle('t10', t10);
+    deck.classList.toggle('alert', state === 'alert');
+  }
+  const cap = byId('led-cap');
+  if (cap) cap.classList.toggle('t10', t10);
+  // -- LED ladder: lit-segment count from the fraction remaining --
+  const lad = byId('ladder');
+  if (lad) {
+    const frac = restTotalSeconds > 0 ? Math.max(0, Math.min(1, remaining / restTotalSeconds)) : 0;
+    // In alert (GO at zero) the ladder is fully dark.
+    const lit = (state === 'alert') ? 0 : Math.ceil(frac * LADDER_SEGMENTS);
+    if (lit !== lastLitSegs) {
+      const segs = lad.children;
+      for (let i = 0; i < segs.length; i++) {
+        const wasLit = segs[i].classList.contains('lit');
+        const nowLit = i < lit;
+        if (wasLit && !nowLit) {
+          // this cell just died — flicker it once (skipped under reduced-motion via CSS)
+          segs[i].classList.remove('lit');
+          segs[i].classList.remove('dying');
+          void segs[i].offsetWidth;
+          segs[i].classList.add('dying');
+        } else if (!wasLit && nowLit) {
+          segs[i].classList.add('lit');
+          segs[i].classList.remove('dying');
+        }
+      }
+      lastLitSegs = lit;
+    }
+  }
+  // -- live percent readout --
+  const pct = byId('led-pct');
+  if (pct && restTotalSeconds > 0) {
+    const p = Math.round(Math.max(0, Math.min(1, remaining / restTotalSeconds)) * 100);
+    const ptxt = (state === 'alert') ? '0%' : p + '%';
+    if (pct.dataset.p !== ptxt) { pct.dataset.p = ptxt; pct.textContent = ptxt; }
+  }
+  // -- mini clock (browse) — same-value guard --
+  const mc = byId('mini-clock');
+  if (mc) {
+    const mcTxt = formatTime(remaining);
+    if (mc.textContent !== mcTxt) mc.textContent = mcTxt;
+    mc.classList.toggle('t10', secCeil <= 10);
+  }
+  lastPaintedSec = secCeil;
+}
+function triggerWash() {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  elWash.classList.remove('washing');
+  void elWash.offsetWidth;
+  elWash.classList.add('washing');
+}
+
+// ============ UNDO ENGINE ============
+function snapshot() {
+  return {
+    currentExercise, currentSet, state, workoutStartTime,
+    restEndTime, restRemaining, restTotalSeconds, restKind,
+    setLogs: setLogs.map(l => ({ ...l })),
+    logExerciseIndex, dockCollapsed,
+    skippedRests, extendedRests, restAdjustedThisRest,
+    estMinutes, lastSetStartAt,
+    currentLogEntryIdx: currentLogEntry ? setLogs.indexOf(currentLogEntry) : -1,
+    countdownFiredThresholds: [...countdownFiredThresholds],
+    // Trigger state rides the snapshot so UNDO of the latching edit rolls the flip back.
+    triggerFlips: { ...triggerFlips },
+    flipStampExName
+  };
+}
+function applySnapshot(s) {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  VoiceCue.cancel();
+  currentExercise = s.currentExercise;
+  currentSet = s.currentSet;
+  viewingExercise = currentExercise;
+  viewingSet = currentSet;
+  state = s.state;
+  workoutStartTime = (typeof s.workoutStartTime === 'number') ? s.workoutStartTime : null;
+  restEndTime = s.restEndTime;
+  restRemaining = s.restRemaining;
+  restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
+  restKind = s.restKind || 'intra';
+  setLogs.length = 0;
+  (s.setLogs || []).forEach(l => setLogs.push(l));
+  logExerciseIndex = s.logExerciseIndex || 0;
+  dockCollapsed = !!s.dockCollapsed;
+  skippedRests = s.skippedRests || 0;
+  extendedRests = s.extendedRests || 0;
+  restAdjustedThisRest = !!s.restAdjustedThisRest;
+  estMinutes = (typeof s.estMinutes === 'number') ? s.estMinutes : null;
+  lastSetStartAt = (typeof s.lastSetStartAt === 'number') ? s.lastSetStartAt : null;
+  currentLogEntry = (s.currentLogEntryIdx >= 0 && setLogs[s.currentLogEntryIdx]) ? setLogs[s.currentLogEntryIdx] : null;
+  countdownFiredThresholds = new Set(s.countdownFiredThresholds || []);
+  triggerFlips = s.triggerFlips ? { ...s.triggerFlips } : {};
+  flipStampExName = s.flipStampExName || null;
+  lastLitSegs = null;
+  // Restarting an EXPIRED resting snapshot: re-anchor at the saved remaining AND clear
+  // the fired-threshold set — otherwise the restarted rest inherits every threshold as
+  // already fired and counts down silent.
+  if (state === 'resting' && restEndTime && restEndTime < Date.now()) {
+    restEndTime = Date.now() + restRemaining * 1000;
+    countdownFiredThresholds = new Set();
+  }
+  if (state === 'resting' && restEndTime) startCountdown();
+  render();
+  saveState();
+}
+function pushHistory(snap) {
+  undoStack.push(snap || snapshot());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack.length = 0;
+  if (elUndoBtn) elUndoBtn.disabled = false;
+}
+function describeSnapshot(s) {
+  const ex = workout[s.currentExercise];
+  const ab = ex ? abbrevFor(ex.name) : '?';
+  const st = String(s.state || '').toUpperCase().replace(/-/g, ' ');
+  return st + ' · ' + ab + ' S' + (Math.min(s.currentSet, ex ? ex.sets - 1 : s.currentSet) + 1);
+}
+function undoStep() {
+  if (undoStack.length === 0) return;
+  redoStack.push(snapshot());
+  if (redoStack.length > UNDO_MAX) redoStack.shift();
+  const s = undoStack.pop();
+  applySnapshot(s);
+  showToast('RESTORED → ' + describeSnapshot(s));
+}
+function redoStep() {
+  if (redoStack.length === 0) return;
+  undoStack.push(snapshot());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  const s = redoStack.pop();
+  applySnapshot(s);
+  showToast('REDONE → ' + describeSnapshot(s));
+}
+let toastTimer = null;
+function showToast(text) {
+  elToast.textContent = text;
+  elToast.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { elToast.classList.remove('show'); toastTimer = null; }, 2000);
+}
+
+// ============ REORDER ============
+function transformExerciseIdx(ei, fromIdx, toIdx) {
+  if (ei === fromIdx) return toIdx;
+  if (fromIdx < ei && ei <= toIdx) return ei - 1;
+  if (toIdx <= ei && ei < fromIdx) return ei + 1;
+  return ei;
+}
+function reorderExercise(fromIdx, toIdx) {
+  if (fromIdx === toIdx) return;
+  if (fromIdx < 0 || fromIdx >= workout.length) return;
+  if (toIdx < 0 || toIdx >= workout.length) return;
+  VoiceCue.cancel();
+  pushHistory();
+  const moved = workout.splice(fromIdx, 1)[0];
+  workout.splice(toIdx, 0, moved);
+  // Remap every live exercise-index reference: both cursors, the log binding, every
+  // set log, AND every undo/redo snapshot — splice math via transformExerciseIdx.
+  const remap = (ei) => transformExerciseIdx(ei, fromIdx, toIdx);
+  currentExercise = remap(currentExercise);
+  logExerciseIndex = remap(logExerciseIndex);
+  viewingExercise = remap(viewingExercise);
+  setLogs.forEach(l => { l.exercise = remap(l.exercise); });
+  const remapSnapshot = (snap) => {
+    if (typeof snap.currentExercise === 'number') snap.currentExercise = remap(snap.currentExercise);
+    if (typeof snap.logExerciseIndex === 'number') snap.logExerciseIndex = remap(snap.logExerciseIndex);
+    if (Array.isArray(snap.setLogs)) snap.setLogs.forEach(l => { l.exercise = remap(l.exercise); });
+  };
+  undoStack.forEach(remapSnapshot);
+  redoStack.forEach(remapSnapshot);
+  recomputeEst();
+  render();
+  saveState();
+}
+
+// ============ PERSISTENCE ============
+function cloneSnap(h) {
+  return { ...h, setLogs: (h.setLogs || []).map(l => ({ ...l })),
+           countdownFiredThresholds: (h.countdownFiredThresholds || []).slice() };
+}
+function saveState() {
+  const s = {
+    savedAt: Date.now(),
+    currentExercise, currentSet, state, workoutStartTime,
+    restEndTime, restRemaining, restTotalSeconds, restKind,
+    viewingExercise, viewingSet,
+    setLogs: setLogs.map(l => ({ ...l })),
+    logExerciseIndex, dockCollapsed,
+    countdownFiredThresholds: [...countdownFiredThresholds],
+    triggerFlips: { ...triggerFlips },
+    flipStampExName,
+    skippedRests, extendedRests, restAdjustedThisRest,
+    estMinutes, observedSetTimes: observedSetTimes.slice(), lastSetStartAt,
+    currentLogEntryIdx: currentLogEntry ? setLogs.indexOf(currentLogEntry) : -1,
+    workoutOrder: workout.map(ex => ex.name),
+    undoStack: undoStack.map(cloneSnap),
+    redoStack: redoStack.map(cloneSnap)
+  };
+  try {
+    localStorage.setItem('gtpad-state', JSON.stringify(s));
+    if (saveFailed) { saveFailed = false; renderPips(); }
+  } catch (e) {
+    // Surface the failure instead of swallowing it — the header save pip goes red.
+    if (!saveFailed) { saveFailed = true; renderPips(); }
+  }
+}
+function restoreState() {
+  try {
+    const raw = localStorage.getItem('gtpad-state');
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    if (s.savedAt && (Date.now() - s.savedAt > STATE_TTL_MS)) {
+      try { localStorage.removeItem('gtpad-state'); } catch (e) {}
+      return false;
+    }
+    // Reapply the saved reorder BEFORE anything else reads workout[]. Matched by NAME
+    // against the frozen originalWorkout; any mismatch (a new day's config) silently
+    // drops the stale order — the safe behavior.
+    if (Array.isArray(s.workoutOrder) && s.workoutOrder.length === workout.length) {
+      const byName = new Map(originalWorkout.map(ex => [ex.name, ex]));
+      const reordered = s.workoutOrder.map(name => byName.get(name));
+      if (reordered.every(ex => ex)) {
+        workout.length = 0;
+        reordered.forEach(ex => workout.push(ex));
+      }
+    }
+    currentExercise = s.currentExercise || 0;
+    currentSet = s.currentSet || 0;
+    viewingExercise = (typeof s.viewingExercise === 'number') ? s.viewingExercise : currentExercise;
+    viewingSet = (typeof s.viewingSet === 'number') ? s.viewingSet : currentSet;
+    workoutStartTime = (typeof s.workoutStartTime === 'number') ? s.workoutStartTime : null;
+    if (typeof s.logExerciseIndex === 'number') logExerciseIndex = s.logExerciseIndex;
+    setLogs.length = 0;
+    (s.setLogs || []).forEach(l => setLogs.push(l));
+    state = s.state || 'pre-start';
+    restEndTime = s.restEndTime;
+    restRemaining = s.restRemaining || 0;
+    restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
+    restKind = s.restKind || 'intra';
+    dockCollapsed = !!s.dockCollapsed;
+    countdownFiredThresholds = new Set(s.countdownFiredThresholds || []);
+    triggerFlips = s.triggerFlips || {};
+    flipStampExName = s.flipStampExName || null;
+    skippedRests = s.skippedRests || 0;
+    extendedRests = s.extendedRests || 0;
+    restAdjustedThisRest = !!s.restAdjustedThisRest;
+    estMinutes = (typeof s.estMinutes === 'number') ? s.estMinutes : null;
+    observedSetTimes = Array.isArray(s.observedSetTimes) ? s.observedSetTimes : [];
+    lastSetStartAt = (typeof s.lastSetStartAt === 'number') ? s.lastSetStartAt : null;
+    undoStack.length = 0;
+    if (Array.isArray(s.undoStack)) s.undoStack.forEach(h => undoStack.push(h));
+    redoStack.length = 0;
+    if (Array.isArray(s.redoStack)) s.redoStack.forEach(h => redoStack.push(h));
+    if (state === 'resting' || state === 'paused' || state === 'finishing') {
+      if (s.currentLogEntryIdx >= 0 && setLogs[s.currentLogEntryIdx]) {
+        currentLogEntry = setLogs[s.currentLogEntryIdx];
+      } else {
+        const lastLog = setLogs[setLogs.length - 1];
+        if (lastLog) currentLogEntry = lastLog;
+      }
+    }
+    if (state === 'resting' && restEndTime) {
+      const remaining = (restEndTime - Date.now()) / 1000;
+      if (remaining <= 0) {
+        // Expired mid-reload: catch up through restDone — its cue chain queues into
+        // pendingPostGestureCues when audio isn't running yet (pre-gesture reload) and
+        // drains on the first touch.
+        render();
+        restDone();
+        if (isActiveState()) requestWakeLock();
+        return true;
+      }
+      restRemaining = remaining;
+      startCountdown();
+    }
+    if (state === 'alert') triggerAlertFeedback();
+    render();
+    if (isActiveState()) requestWakeLock();
+    return true;
+  } catch (e) { return false; }
+}
+
+// ============ DURATIONS ============
+function getExerciseDuration(exerciseIdx) {
+  const logs = setLogs.filter(l => l.exercise === exerciseIdx && l.timestamp);
+  if (logs.length === 0) return null;
+  if (logs.length === 1) return 0;
+  const first = Math.min(...logs.map(l => l.timestamp));
+  const last = Math.max(...logs.map(l => l.timestamp));
+  return last - first;
+}
+function firstPerformedExercise() {
+  let best = null, bestTs = Infinity;
+  setLogs.forEach(l => {
+    if (l.timestamp && l.timestamp < bestTs) { bestTs = l.timestamp; best = l.exercise; }
+  });
+  return best;
+}
+// First-performed exercise anchors at the Start tap so S1's duration is real; the
+// rest keep the legacy span-of-timestamps math.
+function exerciseDurationForSummary(i, firstExIdx) {
+  const logs = setLogs.filter(l => l.exercise === i && l.timestamp);
+  if (!logs.length) return null;
+  const last = Math.max(...logs.map(l => l.timestamp));
+  if (i === firstExIdx && workoutStartTime) return last - workoutStartTime;
+  return getExerciseDuration(i);
+}
+function getTotalDuration() {
+  const ts = setLogs.filter(l => l.timestamp).map(l => l.timestamp);
+  if (ts.length === 0) return null;
+  const lastTs = Math.max(...ts);
+  // Preferred path: the Start tap recorded an explicit workout start — S1 is real.
+  if (workoutStartTime) return lastTs - workoutStartTime;
+  // Legacy fallback: estimate S1's duration by averaging the gaps between consecutive
+  // sets of the first-performed exercise.
+  if (ts.length < 2) return null;
+  const raw = lastTs - Math.min(...ts);
+  const logsWithTs = setLogs.filter(l => l.timestamp).slice().sort((a, b) => a.timestamp - b.timestamp);
+  const firstExIdx = logsWithTs[0].exercise;
+  const firstExLogs = setLogs
+    .filter(l => l.exercise === firstExIdx && l.timestamp)
+    .sort((a, b) => a.set - b.set);
+  if (firstExLogs.length < 2) return raw;
+  let gapSum = 0;
+  for (let i = 1; i < firstExLogs.length; i++) {
+    gapSum += firstExLogs[i].timestamp - firstExLogs[i - 1].timestamp;
+  }
+  const avgGap = gapSum / (firstExLogs.length - 1);
+  return raw + avgGap;
+}
+
+// ============ RENDER SYSTEM ============
+let lastStageKey = null;
+function stageKeyOf() {
+  const b = isBrowsing() ? ('b' + viewingExercise + ':' + viewingSet) : 'live';
+  return state + '|' + currentExercise + ':' + currentSet + '|' + b;
+}
+function render(dir) {
+  renderHeader();
+  renderRail();
+  renderCommit();
+  const key = stageKeyOf();
+  const html = buildStage();
+  if (key !== lastStageKey) {
+    swapStage(html, dir || 0);
+    lastStageKey = key;
+  } else {
+    elStageInner.innerHTML = html;
+  }
+  // After any stage (re)build the ladder loses its lit-segment classes — force a
+  // repaint by clearing the guard so the next paintRestVisuals relights from scratch.
+  lastLitSegs = null;
+  if (state === 'resting' || state === 'paused' || state === 'alert') {
+    const live = (state === 'resting' && restEndTime) ? Math.max(0, (restEndTime - Date.now()) / 1000) : restRemaining;
+    paintRestVisuals(live);
+  }
+  // Bind the 2D logging pad's pointer handlers whenever a pad is present in the DOM.
+  bindPad();
+  // Scroll is granted in EVERY state: the rest-stage stack overflows real phone
+  // viewports, and with overflow:hidden the logging pad would be clipped off the
+  // screen — the core post-set logging interaction must stay reachable.
+  // overscroll-behavior:contain on .scrolly keeps inner scrolling from chaining into
+  // pull-to-refresh.
+  elStageInner.classList.toggle('scrolly',
+    state === 'finished' || state === 'pre-start' || state === 'ready' ||
+    state === 'resting' || state === 'paused' || state === 'alert' ||
+    state === 'finishing' || isBrowsing());
+}
+function swapStage(html, dir) {
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduce && elStageInner.childNodes.length) {
+    const ghost = elStageInner.cloneNode(true);
+    ghost.removeAttribute('id');
+    ghost.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+    ghost.className = 'stage-ghost';
+    ghost.style.setProperty('--gx', dir > 0 ? '-16px' : dir < 0 ? '16px' : '0px');
+    elStage.appendChild(ghost);
+    setTimeout(() => { try { ghost.remove(); } catch (e) {} }, 280);
+  }
+  elStageInner.innerHTML = html;
+  elStageInner.classList.remove('stage-enter');
+  void elStageInner.offsetWidth;
+  elStageInner.classList.add('stage-enter');
+}
+let _lastHdrLeftHTML = null;
+function renderHeader() {
+  // Cached: this string only changes at a date rollover, but renderHeader runs on the
+  // 1Hz tick — rebuilding identical innerHTML every second churns nodes for nothing.
+  const left = '<span class="day">' + escapeHtml(dayType.toUpperCase()) + '</span> · ' + dateLabelUpper();
+  if (left !== _lastHdrLeftHTML) {
+    elHdrLeft.innerHTML = left;
+    _lastHdrLeftHTML = left;
+  }
+  let reg = 'S ' + setLogs.length + '/' + totalSets();
+  if (workoutStartTime) {
+    const endTs = (state === 'finished') ? (lastLogTimestamp() || Date.now()) : Date.now();
+    reg += ' · ' + formatClock(endTs - workoutStartTime);
+  }
+  if (estMinutes != null && setLogs.length >= 2 && isActiveState() && state !== 'finishing') {
+    reg += ' · +' + estMinutes + 'M';
+  }
+  elHdrReg.textContent = reg;
+  elUndoBtn.disabled = undoStack.length === 0;
+  renderPips();
+}
+function lastLogTimestamp() {
+  let t = null;
+  setLogs.forEach(l => { if (l.timestamp && (!t || l.timestamp > t)) t = l.timestamp; });
+  return t;
+}
+function renderRail() {
+  if (state === 'finished') { elRail.classList.add('hidden'); return; }
+  elRail.classList.remove('hidden');
+  let html = '';
+  workout.forEach((ex, i) => {
+    let pips = '';
+    for (let j = 0; j < ex.sets; j++) {
+      const logged = !!findLog(i, j);
+      const isWork = (i === currentExercise && j === currentSet &&
+                      state !== 'finishing' && state !== 'finished');
+      const isView = isBrowsing() && i === viewingExercise && j === viewingSet;
+      let cls = 'pip ' + (isWork ? 'work' : (logged ? 'done' : 'fut'));
+      if (isView) cls += ' view';
+      pips += '<span class="' + cls + '"></span>';
+    }
+    const exDone = countLogs(i) >= ex.sets;
+    const tileCls = 'tile' + (i === currentExercise ? ' cur' : (exDone ? ' donex' : ''));
+    html += '<div class="' + tileCls + '" data-ex="' + i + '" role="button" aria-label="' + escapeHtml(ex.name) + '">' +
+      '<span class="ab">' + escapeHtml(abbrevFor(ex.name)) + '</span>' +
+      '<span class="pips">' + pips + '</span></div>';
+  });
+  elRail.innerHTML = html;
+}
+function renderCommit() {
+  const b = elCommit;
+  b.classList.remove('inert', 'go', 'slash');
+  b.disabled = false;
+  if (state !== 'finished' && isBrowsing()) {
+    b.classList.add('slash');
+    b.disabled = true;
+    b.textContent = 'BROWSING';
+    return;
+  }
+  switch (state) {
+    case 'pre-start': b.textContent = 'START'; break;
+    case 'ready': b.textContent = 'SET DONE'; break;
+    case 'alert': b.classList.add('go'); b.textContent = 'GO — TAP'; break;
+    case 'resting':
+      b.classList.add('inert'); b.disabled = true;
+      b.textContent = 'RESTING · ' + restTargetLabel() + ' NEXT';
+      break;
+    case 'paused':
+      b.classList.add('inert'); b.disabled = true;
+      b.textContent = 'PAUSED';
+      break;
+    case 'finishing': b.textContent = 'FINISH'; break;
+    case 'finished': b.textContent = 'COPY SUMMARY'; break;
+    default: b.textContent = '';
+  }
+}
+
+// ============ STAGE BUILDERS ============
+function buildStage() {
+  if (state === 'finished') return buildDone();
+  if (isBrowsing()) return buildBrowse();
+  if (state === 'pre-start') return buildIdle();
+  if (state === 'ready') return buildWork();
+  if (state === 'finishing') return buildFinishing();
+  return buildRest(); // resting / paused / alert
+}
+function buildIdle() {
+  let manifest = '';
+  workout.forEach((ex, i) => {
+    const stop = stopCueFor(ex);
+    // Spec uses the bare weight number — the full parenthetical ("(DROP TO 15 FOR S3)")
+    // made the nowrap spec column eat the exercise name entirely at 390px. Structural
+    // drops surface as a compact chip via dropTagLabel instead.
+    const w = mainWeightNum(ex);
+    const tag = dropTagLabel(ex);
+    const spec = (w != null ? w + ' LBS' : escapeHtml(String(ex.weight).toUpperCase())) + ' · ' +
+      ex.sets + '×' + escapeHtml(String(ex.reps)) + ' · ' + ex.rest + 'S';
+    manifest += '<div class="man-row" style="animation-delay:' + (40 + i * 50) + 'ms">' +
+      '<div class="man-name"><span class="nm">' + escapeHtml(ex.name) + '</span>' +
+      (stop ? '<span class="stop-chip">STOP</span>' : '') + '</div>' +
+      '<div class="man-spec">' + spec +
+      (tag ? '<span class="man-drop">' + escapeHtml(tag) + '</span>' : '') + '</div></div>';
+  });
+  const brief = sessionComment
+    ? ('<div class="mod brief"><div class="lbl">SESSION BRIEF</div>' +
+       '<div class="brief-text clamped" id="brief-text">' + escapeHtml(sessionComment) + '</div>' +
+       '<button class="brief-more" data-action="brief-expand" id="brief-more">EXPAND</button></div>')
+    : '';
+  return '<div class="idle-wrap">' +
+    '<div class="day-hero">' + escapeHtml(dayType) + '<span class="rule"></span></div>' +
+    '<div class="day-sub lbl">' + dateLabelUpper() + ' · ' + workout.length + ' EXERCISES · ' + totalSets() + ' SETS</div>' +
+    (softDay ? '<div class="soft-banner">SOFT READ — COACH CONFIRMS FLIPS</div>' : '') +
+    brief +
+    '<div class="mod manifest">' + manifest + '</div>' +
+    '<div class="build-stamp">PAD · V4 ENGINE · 2026-06-09</div>' +
+    '</div>';
+}
+function buildWork() {
+  const ex = workout[currentExercise];
+  if (!ex) return '';
+  const w = mainWeightNum(ex);
+  const tag = dropTagLabel(ex);
+  const stop = stopCueFor(ex);
+  const note = computeSetNote(currentExercise, currentSet);
+  return '<div class="work-wrap">' +
+    '<div class="work-hero">' +
+      '<div class="ex-name">' + escapeHtml(ex.name) + '</div>' +
+      '<div class="weight-stack">' +
+        '<span class="weight-num">' + escapeHtml(w != null ? w : '—') + '</span>' +
+        '<span class="weight-unit">LBS</span>' +
+        (tag ? '<span class="drop-tag">' + escapeHtml(tag) + '</span>' : '') +
+      '</div>' +
+      '<div class="sub-reg">' +
+        '<span class="lbl">SET</span><span class="srv">' + (currentSet + 1) + '/' + ex.sets + '</span>' +
+        '<span class="lbl">REPS</span><span class="srv">' + escapeHtml(String(ex.reps)) + '</span>' +
+      '</div>' +
+    '</div>' +
+    (stop ? '<div class="stop-plate">' + escapeHtml(stop) + '</div>' : '') +
+    '<div class="mod advice">' +
+      '<div class="advice-text clamped" id="work-advice">' + escapeHtml(note) + '</div>' +
+      '<button class="advice-more" data-action="more-advice">MORE</button>' +
+    '</div>' +
+    '</div>';
+}
+function buildRest() {
+  const isAlert = (state === 'alert');
+  const isPaused = (state === 'paused');
+  const live = (state === 'resting' && timerInterval && restEndTime);
+  const remaining = live ? Math.max(0, (restEndTime - Date.now()) / 1000) : restRemaining;
+  const secCeil = Math.ceil(remaining);
+  const t10now = (secCeil <= 10 || isAlert);
+  const frac = restTotalSeconds > 0 ? Math.max(0, Math.min(1, remaining / restTotalSeconds)) : 0;
+  const upEx = workout[currentExercise];
+  let cap;
+  if (isAlert) cap = 'REST OVER → ' + restTargetLabel();
+  else if (isPaused) cap = 'PAUSED · ' + restTargetLabel();
+  else cap = (restKind === 'inter' ? 'UP NEXT ' : 'REST ') + formatTime(restTotalSeconds) + ' → ' + restTargetLabel();
+  const digitsTxt = isAlert ? 'GO' : formatTime(remaining);
+  const readoutCls = 'led-readout' + (isPaused ? ' dimmed' : '') + (isAlert ? ' alertpulse' : '') + (!t10now && !isAlert ? ' idle-glow' : '');
+  const stop = stopCueFor(upEx);
+  const lgEdit = getActiveLogForEdit();
+  // Build the LED ladder cells (lit/unlit driven live by paintRestVisuals via render()).
+  const litNow = isAlert ? 0 : Math.ceil(frac * LADDER_SEGMENTS);
+  let segHTML = '';
+  for (let i = 0; i < LADDER_SEGMENTS; i++) {
+    segHTML += '<span class="seg' + (i < litNow ? ' lit' : '') + '"></span>';
+  }
+  const pctTxt = isAlert ? '0%' : (restTotalSeconds > 0 ? Math.round(frac * 100) + '%' : '');
+  let html = '<div class="rest-wrap">' +
+    '<div class="led-deck' + (t10now ? ' t10' : '') + (isAlert ? ' alert' : '') + '" id="led-deck">' +
+      '<div class="ladder" id="ladder" aria-hidden="true">' + segHTML + '</div>' +
+      '<div class="led-row">' +
+        '<div class="' + readoutCls + '" id="rest-digits" role="timer" aria-live="polite" aria-atomic="true">' + digitsMarkup(digitsTxt) + '</div>' +
+        '<div class="led-meta">' +
+          '<div class="led-cap' + (t10now ? ' t10' : '') + '" id="led-cap">' + escapeHtml(cap) + '</div>' +
+          '<div class="led-pct" id="led-pct">' + escapeHtml(pctTxt) + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  if (!isAlert) {
+    html += '<div class="adjust-row">' +
+      '<button data-action="adj-minus" aria-label="Shorten rest by 15 seconds">−15</button>' +
+      '<button data-action="adj-plus" aria-label="Extend rest by 30 seconds">+30</button>' +
+      '<button data-action="adj-skip">SKIP</button>' +
+      '<button data-action="adj-pause">' + (isPaused ? 'RESUME' : 'PAUSE') + '</button>' +
+      '</div>';
+  }
+  if (stop) html += '<div class="stop-plate">' + escapeHtml(stop) + '</div>';
+  html += '<div id="plate-zone">' + plateZoneHTML() + '</div>';
+  html += '<div id="dock-zone">' + dockZoneHTML() + '</div>';
+  html += '</div>';
+  return html;
+}
+function plateZoneHTML() {
+  // The flip stamp owns the plate area for the rest's remainder (never a blocking overlay).
+  if (flipStampExName) {
+    if (softDay) return '<div class="flip-stamp soft">GATE CLEARED (SOFT — COACH CONFIRMS)</div>';
+    const fex = workout.find(e => e.name === flipStampExName);
+    const tw = fex && fex.triggerWeight ? String(fex.triggerWeight).toUpperCase() : '';
+    return '<div class="flip-stamp">TRIGGER FLIPPED — LOAD ' + escapeHtml(tw) + ' NEXT SESSION</div>';
+  }
+  if (state === 'finishing') return '';
+  return solutionPlateHTML(currentExercise, currentSet, restKind === 'inter' ? 'UP NEXT' : 'NEXT');
+}
+function solutionPlateHTML(exIdx, setIdx, prefix) {
+  const ex = workout[exIdx];
+  if (!ex) return '';
+  const struct = computeStructuredAdvice(exIdx, setIdx);
+  const drop = structuralDrop(ex);
+  const kicker = (prefix || 'NEXT') + ' · S' + (setIdx + 1) + '/' + ex.sets + ' · ' + ex.name.toUpperCase();
+  let bandTxt;
+  if (struct && struct.band) {
+    bandTxt = struct.band[0] + '–' + struct.band[1];
+  } else {
+    const m = String(ex.reps || '').match(/(\d+)\s*-\s*(\d+)/);
+    bandTxt = m ? (m[1] + '–' + m[2]) : String(ex.reps || '');
+  }
+  let tokenCls = 'plate-token', tokenTxt;
+  if (drop && drop.setIdx === setIdx) {
+    tokenCls += ' drop'; tokenTxt = 'DROP → ' + drop.w;
+  } else if (struct && struct.weightCall && struct.weightCall.verb === 'DROP') {
+    tokenCls += ' drop'; tokenTxt = 'DROP → ' + struct.weightCall.w;
+  } else {
+    const w = (struct && struct.weightCall) ? struct.weightCall.w : mainWeightNum(ex);
+    tokenTxt = 'HOLD ' + (w != null ? w : '—');
+  }
+  const note = computeSetNote(exIdx, setIdx);
+  const alive = /^TRIGGER ALIVE/.test(note);
+  let status = escapeHtml(note);
+  if (setIdx > 0 && !struct) {
+    // Advisor gated on an ungraded prior set — surface the most recent one.
+    let ungraded = null;
+    for (let i = setIdx - 1; i >= 0; i--) {
+      const lg = findLog(exIdx, i);
+      if (!lg || lg.difficulty == null) { ungraded = i; break; }
+    }
+    if (ungraded != null && findLog(exIdx, ungraded)) {
+      status += '<span class="rate-prompt">RATE S' + (ungraded + 1) + ' TO COMPUTE →</span>';
+    }
+  }
+  return '<div class="mod plate">' +
+    '<div class="plate-kicker lbl">' + escapeHtml(kicker) + '</div>' +
+    '<div class="plate-line">' +
+      '<div class="plate-band" id="plate-band">' + escapeHtml(bandTxt) + ' <span class="band-unit">REPS</span></div>' +
+      '<span class="' + tokenCls + '" id="plate-token">' + escapeHtml(tokenTxt) + '</span>' +
+    '</div>' +
+    '<div class="plate-status' + (alive ? ' alive' : '') + '" id="plate-status">' + status + '</div>' +
+    '</div>';
+}
+// ============ THE 2D LOGGING PAD ============
+// Maps the advisor's target reps to a centered window across the pad's X axis. The
+// window is [center-RANGE_HALF .. center+RANGE_HALF], clamped into 0..40, so the puck
+// lands on the most-likely rep with room either side without ever leaving 0-40.
+const PAD_RANGE_HALF = 8;
+const PAD_REP_MAX = 40;
+function padRepWindow(exIdx, setIdx) {
+  // Center = advisor band-high if computable, else rep-range top (matches prefill).
+  let center = 10;
+  const ex = workout[exIdx];
+  if (ex) {
+    center = getMaxReps(ex.reps);
+    if (setIdx > 0) {
+      const prevLogs = gradedPrevLogs(exIdx, setIdx);
+      if (prevLogs && prevLogs.length === setIdx) {
+        const s = dynamicRepAdviceStruct(setIdx, prevLogs, ex);
+        if (s && s.band) center = s.band[1];
+      }
+    }
+  }
+  center = Math.max(0, Math.min(PAD_REP_MAX, center));
+  let lo = center - PAD_RANGE_HALF;
+  let hi = center + PAD_RANGE_HALF;
+  // Shift the window so it fits inside 0..40 while staying the same width.
+  if (lo < 0) { hi -= lo; lo = 0; }
+  if (hi > PAD_REP_MAX) { lo -= (hi - PAD_REP_MAX); hi = PAD_REP_MAX; }
+  lo = Math.max(0, lo); hi = Math.min(PAD_REP_MAX, hi);
+  if (hi <= lo) hi = lo + 1;
+  return { lo, hi, center };
+}
+// x-fraction (0..1) -> rep within the window. snap to nearest integer.
+function padXToRep(frac, win) {
+  const r = win.lo + frac * (win.hi - win.lo);
+  return Math.max(0, Math.min(PAD_REP_MAX, Math.round(r)));
+}
+// rep -> x-fraction within the window (for placing the puck / target guide).
+function padRepToX(rep, win) {
+  if (win.hi <= win.lo) return 0.5;
+  return Math.max(0, Math.min(1, (rep - win.lo) / (win.hi - win.lo)));
+}
+// y-fraction (0..1, 0=top) -> difficulty band 2..5. Top lane = MAX (5), bottom = LIGHT (2).
+const PAD_DIFFS = [5, 4, 3, 2]; // top -> bottom
+function padYToDiff(frac) {
+  let idx = Math.floor(frac * PAD_DIFFS.length);
+  idx = Math.max(0, Math.min(PAD_DIFFS.length - 1, idx));
+  return PAD_DIFFS[idx];
+}
+// difficulty -> y-fraction center of its lane (for placing the puck vertically).
+function padDiffToY(diff) {
+  const idx = PAD_DIFFS.indexOf(diff);
+  if (idx < 0) return 0.5;
+  return (idx + 0.5) / PAD_DIFFS.length;
+}
+function dockZoneHTML() {
+  const log = getActiveLogForEdit();
+  if (!log) return '';
+  const ex = workout[log.exercise];
+  if (!ex) return '';
+  const label = abbrevFor(ex.name) + ' S' + (log.set + 1);
+  // Collapsed receipt (live rest only, once graded) — the committed-set chit.
+  if (dockCollapsed && !isBrowsing() && log.difficulty != null) {
+    return '<button class="receipt" data-action="receipt-expand" aria-label="Edit logged set">' +
+      '<span class="led"></span>' +
+      escapeHtml(label + ' · ' + String(log.reps) + ' [' + DIFFICULTY_LABELS[log.difficulty] + ']') +
+      ' <span class="pencil">✎</span></button>';
+  }
+  const readonly = isBrowsing() && log.difficulty == null; // viewing a future/ungraded slot
+  const win = padRepWindow(log.exercise, log.set);
+  const graded = log.difficulty != null;
+  const gate = gateCaptionFor(log.exercise, log.set, log.reps, graded);
+  const gateCls = gateCaptionClass(log.exercise, log.set, log.reps, graded);
+  // live read line
+  const stopped = (log.reps === 0 && log.difficulty == null);
+  const diffTxt = graded ? DIFFICULTY_LABELS[log.difficulty] : '—';
+  const readCls = 'pad-read' + (stopped ? ' stopped' : '');
+  const readHTML = stopped
+    ? '<span class="pad-read stopped"><i>STOP</i> · 0 reps</span>'
+    : '<span class="' + readCls + '"><b>' + escapeHtml(String(log.reps)) + '</b> reps · <i>' + escapeHtml(diffTxt) + '</i></span>';
+  // lanes (top MAX -> bottom LIGHT)
+  let lanes = '';
+  PAD_DIFFS.forEach((dv, i) => {
+    const top = (i / PAD_DIFFS.length * 100).toFixed(3);
+    const h = (100 / PAD_DIFFS.length).toFixed(3);
+    const hot = (log.difficulty === dv);
+    lanes += '<div class="pad-lane' + (hot ? ' hot' : '') + '" data-diff="' + dv + '" style="top:' + top + '%;height:' + h + '%">' +
+      '<span class="lane-tag">' + DIFFICULTY_LABELS[dv] + '</span>' +
+      '<span class="lane-num">' + dv + '</span></div>';
+  });
+  // rep gridlines + axis numerals (a few across the window)
+  let grids = '';
+  const span = win.hi - win.lo;
+  // pick ~5 tick reps across the window
+  const tickStep = Math.max(1, Math.round(span / 4));
+  for (let rep = win.lo; rep <= win.hi; rep += tickStep) {
+    const xf = padRepToX(rep, win) * 100;
+    grids += '<div class="pad-grid" style="left:' + xf.toFixed(2) + '%"></div>';
+    grids += '<div class="pad-axisnum" style="left:' + xf.toFixed(2) + '%">' + rep + '</div>';
+  }
+  // advisor target guide = band-high / rep top -> the window center
+  const tgtX = padRepToX(win.center, win) * 100;
+  const guide = '<div class="pad-guide" style="left:' + tgtX.toFixed(2) + '%"></div>';
+  // puck position: from the current log values
+  const puckX = padRepToX(log.reps, win) * 100;
+  const puckY = (graded ? padDiffToY(log.difficulty) : 0.5) * 100;
+  const puckCls = 'pad-puck' + (readonly ? ' read' : '') + (stopped ? ' empty' : '') + (!graded && !readonly ? '' : '');
+  const puck = '<div class="' + puckCls + '" id="pad-puck" style="left:' + puckX.toFixed(2) + '%;top:' + puckY.toFixed(2) + '%">' +
+    escapeHtml(String(log.reps)) + '</div>';
+  const crossH = '<div class="pad-cross-h" id="pad-cross-h" style="top:' + puckY.toFixed(2) + '%"></div>';
+  const crossV = '<div class="pad-cross-v" id="pad-cross-v" style="left:' + puckX.toFixed(2) + '%"></div>';
+  const padCls = 'pad' + (readonly ? ' readonly' : '');
+  // The STOP corner pad doubles as a grade=null/reps=0 kill switch. Selected when stopped.
+  const stopPad = '<button class="stop-pad' + (stopped ? ' sel' : '') + '" data-action="rep-zero" aria-label="Zero stop, injury abort">' +
+    '<span class="dot"></span><span class="tx">STOP</span></button>';
+  return '<div class="pad-deck">' +
+    '<div class="pad-head">' +
+      '<span class="lbl">' + escapeHtml(label) + ' · LOG</span>' +
+      readHTML +
+      '<button class="chip" data-action="note-open">NOTE' + (log.note ? ' ●' : '') + '</button>' +
+    '</div>' +
+    '<div class="pad-wrap">' +
+      '<div class="' + padCls + '" id="log-pad" data-ex="' + log.exercise + '" data-set="' + log.set + '">' +
+        '<div class="pad-lanes">' + lanes + '</div>' +
+        grids + guide + crossH + crossV + puck +
+        '<span class="pad-xlabel">REPS →</span>' +
+      '</div>' +
+      stopPad +
+    '</div>' +
+    '<div class="gate-cap ' + gateCls + '" id="gate-cap">' + escapeHtml(gate || (readonly ? 'TAP PAD TO LOG THIS SET' : 'DRAG: ← REPS →   ↑ EFFORT ↑')) + '</div>' +
+    '</div>';
+}
+function buildBrowse() {
+  const exIdx = viewingExercise, setIdx = viewingSet;
+  const ex = workout[exIdx];
+  if (!ex) return '';
+  const restRunning = (state === 'resting' || state === 'paused');
+  const live = (state === 'resting' && timerInterval && restEndTime);
+  const remaining = live ? Math.max(0, (restEndTime - Date.now()) / 1000) : restRemaining;
+  let html = '<div class="browse-wrap">';
+  html += '<div class="browse-bar">' +
+    (restRunning ? '<span class="mini-clock' + (Math.ceil(remaining) <= 10 ? ' t10' : '') + '" id="mini-clock">' + formatTime(remaining) + '</span>' : '') +
+    '<button class="pill" data-action="set-current" aria-label="Make this the working set">↓ SET</button>' +
+    '<button class="pill live" data-action="return-live" aria-label="Return to the working set">● LIVE</button>' +
+    '</div>';
+  html += '<div class="browse-ctx">' +
+    '<div class="ex-name">' + escapeHtml(ex.name) + '</div>' +
+    '<div class="meta">S' + (setIdx + 1) + '/' + ex.sets + ' · ' + escapeHtml(String(ex.weight).toUpperCase()) + ' · ' + escapeHtml(String(ex.reps)) + ' REPS</div>' +
+    '</div>';
+  html += '<div id="dock-zone">' + dockZoneHTML() + '</div>';
+  html += '<div id="plate-zone">' + solutionPlateHTML(exIdx, setIdx, 'VIEW') + '</div>';
+  html += '</div>';
+  return html;
+}
+function buildFinishing() {
+  let html = '<div class="rest-wrap">' +
+    '<div class="led-deck" id="led-deck-fin" style="align-items:center;text-align:center">' +
+      '<div class="ex-name" style="text-align:center;width:100%">ALL SETS DONE</div>' +
+      '<div class="led-cap" style="width:100%">LOG YOUR LAST SET → FINISH</div>' +
+    '</div>';
+  html += '<div id="plate-zone">' + plateZoneHTML() + '</div>';
+  html += '<div id="dock-zone">' + dockZoneHTML() + '</div>';
+  html += '</div>';
+  return html;
+}
+function buildDone() {
+  const total = getTotalDuration();
+  const heroTxt = total ? formatClock(total) : '–:––';
+  const firstExIdx = firstPerformedExercise();
+  let html = '<div class="done-wrap">';
+  html += '<div class="done-hero">' + heroTxt + '</div>';
+  html += '<div class="done-sub lbl">' + escapeHtml(dayType.toUpperCase()) + ' · ' + dateLabelUpper() + ' · ' +
+    totalSets() + ' SETS' + (softDay ? ' · SOFT READ' : '') + '</div>';
+  const trigRows = [];
+  workout.forEach((ex, i) => {
+    const oc = triggerOutcome(i);
+    if (!oc) return;
+    const ab = abbrevFor(ex.name);
+    if (oc.st === 'flipped') {
+      trigRows.push('<div class="trig-row flipped"><span class="ab">' + escapeHtml(ab) + '</span><span>' +
+        escapeHtml('FLIPPED → ' + String(ex.triggerWeight || '').toUpperCase() + (softDay ? ' *' : '')) + '</span></div>');
+    } else if (oc.st === 'out') {
+      trigRows.push('<div class="trig-row"><span class="ab">' + escapeHtml(ab) + '</span><span>' +
+        escapeHtml('OUT S' + (oc.setIdx + 1) + ' (' + oc.reps + '<' + oc.req + ')') + '</span></div>');
+    } else {
+      trigRows.push('<div class="trig-row"><span class="ab">' + escapeHtml(ab) + '</span><span>—</span></div>');
+    }
+  });
+  if (trigRows.length) {
+    html += '<div class="mod done-block"><div class="lbl">TRIGGER OUTCOMES</div>' + trigRows.join('') +
+      (softDay ? '<div class="soft-note">*' + escapeHtml(SOFT_NOTE) + '</div>' : '') + '</div>';
+  }
+  html += '<div class="mod manifest">';
+  workout.forEach((ex, i) => {
+    const drop = structuralDrop(ex);
+    const cells = [];
+    for (let j = 0; j < ex.sets; j++) {
+      const log = findLog(i, j);
+      if (!log) { cells.push('?'); continue; }
+      let c = String(log.reps);
+      if (log.difficulty) c += ' [' + DIFFICULTY_LABELS[log.difficulty] + ']';
+      if (drop && drop.setIdx === j) c += ' @' + drop.w;
+      cells.push(c);
+    }
+    const dur = exerciseDurationForSummary(i, firstExIdx);
+    html += '<div class="done-ex" style="animation-delay:' + (i * 60) + 'ms">' +
+      '<div class="top"><span class="nm">' + escapeHtml(ex.name) + '</span>' +
+      '<span class="tm">' + (dur && dur > 0 ? formatDurCompact(dur) : '—') + '</span></div>' +
+      '<div class="wt">' + escapeHtml(String(ex.weight).toUpperCase()) + '</div>' +
+      '<div class="sets">' + escapeHtml(cells.join(' · ')) + '</div>' +
+      '</div>';
+  });
+  html += '</div>';
+  if (skippedRests || extendedRests) {
+    const bits = [];
+    if (skippedRests) bits.push(skippedRests + ' SKIPPED');
+    if (extendedRests) bits.push(extendedRests + ' EXTENDED');
+    html += '<div class="done-rests">RESTS · ' + bits.join(' · ') + '</div>';
+  }
+  html += '<div class="build-stamp">PAD · V4 ENGINE · 2026-06-09</div></div>';
+  return html;
+}
+// Surgical text-only refresh of the advice surfaces (refreshSetNote parity): runs on
+// every pad rep change and difficulty commit so the NEXT set's advice updates live
+// while grading the previous one mid-rest. Rebuilds the plate zone; the dock/pad is
+// refreshed by its own caller paths (so an in-progress drag isn't yanked out).
+function refreshSetNote() {
+  const pz = byId('plate-zone');
+  if (pz) {
+    pz.innerHTML = isBrowsing()
+      ? solutionPlateHTML(viewingExercise, viewingSet, 'VIEW')
+      : plateZoneHTML();
+  }
+  const wa = byId('work-advice');
+  if (wa) wa.textContent = computeSetNote(currentExercise, currentSet);
+  const log = getActiveLogForEdit();
+  if (log) {
+    const gc = byId('gate-cap');
+    if (gc) {
+      const graded = log.difficulty != null;
+      gc.textContent = gateCaptionFor(log.exercise, log.set, log.reps, graded) ||
+        (isBrowsing() && !graded ? 'TAP PAD TO LOG THIS SET' : 'DRAG: ← REPS →   ↑ EFFORT ↑');
+      gc.className = 'gate-cap ' + gateCaptionClass(log.exercise, log.set, log.reps, graded);
+    }
+  }
+}
+// Surgical update of the live read line + puck label + gate caption while a write
+// happens (drag-commit, stepless tap, STOP). No full dock rebuild during a drag.
+function refreshPadReadout(log, repPreview, diffPreview) {
+  const reps = (repPreview != null) ? repPreview : log.reps;
+  const graded = (diffPreview != null) ? true : (log.difficulty != null);
+  const diff = (diffPreview != null) ? diffPreview : log.difficulty;
+  const stopped = (reps === 0 && diff == null && diffPreview == null && log.difficulty == null);
+  const rd = byId('log-pad') ? byId('log-pad').closest('.pad-deck') : null;
+  const readEl = rd ? rd.querySelector('.pad-read') : null;
+  if (readEl) {
+    if (stopped) {
+      readEl.className = 'pad-read stopped';
+      readEl.innerHTML = '<i>STOP</i> · 0 reps';
+    } else {
+      readEl.className = 'pad-read';
+      readEl.innerHTML = '<b>' + escapeHtml(String(reps)) + '</b> reps · <i>' + escapeHtml(diff != null ? DIFFICULTY_LABELS[diff] : '—') + '</i>';
+    }
+  }
+  const gc = byId('gate-cap');
+  if (gc) {
+    gc.textContent = gateCaptionFor(log.exercise, log.set, reps, graded) || 'DRAG: ← REPS →   ↑ EFFORT ↑';
+    gc.className = 'gate-cap ' + gateCaptionClass(log.exercise, log.set, reps, graded);
+  }
+}
+
+// ============ THE PAD: POINTER WIRING ============
+// One thumb on the pad: x -> reps (advisor-centered window), y -> difficulty band.
+// Live preview as the thumb moves; LIFT commits BOTH reps and difficulty in one
+// gesture, funneling into the exact same engine writes the donor's stepper + chips did.
+let _padDrag = null;
+function bindPad() {
+  const pad = byId('log-pad');
+  if (!pad || pad._bound) return;
+  pad._bound = true;
+  const puck = byId('pad-puck');
+  const crossH = byId('pad-cross-h');
+  const crossV = byId('pad-cross-v');
+  const exIdx = Number(pad.dataset.ex);
+  const setIdx = Number(pad.dataset.set);
+  // Read-only when browsing an ungraded/future slot — tap REPOINTS via ↓SET semantics
+  // is handled by the pill; here a tap on a read-only pad does nothing destructive.
+  const isReadOnly = pad.classList.contains('readonly');
+
+  function laneEls() { return pad.querySelectorAll('.pad-lane'); }
+  function setHotLane(diff) {
+    laneEls().forEach(le => le.classList.toggle('hot', Number(le.dataset.diff) === diff));
+  }
+  function place(frac_x, frac_y, reps, diff) {
+    const xpct = (frac_x * 100).toFixed(2) + '%';
+    const ypct = (frac_y * 100).toFixed(2) + '%';
+    if (puck) {
+      puck.style.left = xpct;
+      puck.style.top = ypct;
+      puck.textContent = String(reps);
+      puck.classList.remove('empty');
+    }
+    if (crossH) crossH.style.top = ypct;
+    if (crossV) crossV.style.left = xpct;
+  }
+  function fromEvent(e) {
+    const rect = pad.getBoundingClientRect();
+    let fx = (e.clientX - rect.left) / rect.width;
+    let fy = (e.clientY - rect.top) / rect.height;
+    fx = Math.max(0, Math.min(1, fx));
+    fy = Math.max(0, Math.min(1, fy));
+    return { fx, fy };
+  }
+
+  function onDown(e) {
+    if (isReadOnly) return;
+    if (e.button != null && e.button !== 0) return;
+    const log = getActiveLogForEdit();
+    if (!log) return;
+    e.preventDefault();
+    try { pad.setPointerCapture(e.pointerId); } catch (err) {}
+    const win = padRepWindow(log.exercise, log.set);
+    const { fx, fy } = fromEvent(e);
+    const reps = padXToRep(fx, win);
+    const diff = padYToDiff(fy);
+    _padDrag = { log, win, reps, diff, active: true };
+    pad.classList.add('dragging');
+    if (puck) puck.classList.add('grabbed');
+    setHotLane(diff);
+    // snap puck to the rep tick + lane center so the read is honest
+    place(padRepToX(reps, win), padDiffToY(diff), reps, diff);
+    refreshPadReadout(log, reps, diff);
+  }
+  function onMove(e) {
+    if (!_padDrag || !_padDrag.active) return;
+    e.preventDefault();
+    const { fx, fy } = fromEvent(e);
+    const reps = padXToRep(fx, _padDrag.win);
+    const diff = padYToDiff(fy);
+    const laneChanged = (diff !== _padDrag.diff);
+    _padDrag.reps = reps;
+    _padDrag.diff = diff;
+    if (laneChanged) setHotLane(diff);
+    place(padRepToX(reps, _padDrag.win), padDiffToY(diff), reps, diff);
+    refreshPadReadout(_padDrag.log, reps, diff);
+  }
+  function onUp(e) {
+    if (!_padDrag || !_padDrag.active) return;
+    e.preventDefault();
+    try { pad.releasePointerCapture(e.pointerId); } catch (err) {}
+    const { reps, diff } = _padDrag;
+    _padDrag.active = false;
+    _padDrag = null;
+    pad.classList.remove('dragging');
+    if (puck) puck.classList.remove('grabbed');
+    commitPad(reps, diff);
+  }
+  function onCancel() {
+    if (!_padDrag) return;
+    _padDrag.active = false;
+    _padDrag = null;
+    pad.classList.remove('dragging');
+    if (puck) puck.classList.remove('grabbed');
+    // Re-render to restore the committed state's puck position.
+    const dz = byId('dock-zone');
+    if (dz) { dz.innerHTML = dockZoneHTML(); bindPadAfterSwap(); }
+  }
+  pad.addEventListener('pointerdown', onDown);
+  pad.addEventListener('pointermove', onMove);
+  pad.addEventListener('pointerup', onUp);
+  pad.addEventListener('pointercancel', onCancel);
+}
+// dock-zone was replaced via innerHTML — re-bind the fresh pad node.
+function bindPadAfterSwap() {
+  const pad = byId('log-pad');
+  if (pad) pad._bound = false;
+  bindPad();
+}
+// THE COMMIT: writes BOTH reps and difficulty to the active log in one shot, exactly
+// like the donor's rep-stepper + difficulty-chip handlers, then evaluates the trigger
+// flip, collapses the dock to a receipt, refreshes the advisor, and persists.
+function commitPad(reps, diff) {
+  const log = getActiveLogForEdit();
+  if (!log) return;
+  // 1) reps -> .reps, clamp 0-40 (mirrors the donor rep handler)
+  log.reps = Math.max(0, Math.min(40, Number(reps) || 0));
+  // 2) difficulty -> 2/3/4/5 (mirrors the donor difficulty handler; pad never sets null
+  //    here — the STOP pad owns the 0/null injury path)
+  log.difficulty = diff;
+  // 3) flip latch on the same write
+  evaluateTriggerFlip(log.exercise);
+  // 4) collapse to receipt when live-resting + graded (donor dockCollapsed semantics)
+  if (log.difficulty != null && !isBrowsing()) dockCollapsed = true;
+  // 5) re-render the dock zone (receipt or refreshed pad), commit-pulse the pad
+  const dz = byId('dock-zone');
+  if (dz) {
+    dz.innerHTML = dockZoneHTML();
+    bindPadAfterSwap();
+    // brief commit flash on the freshly-rendered pad (if still showing a pad)
+    const freshPad = byId('log-pad');
+    if (freshPad) { freshPad.classList.add('commit'); setTimeout(() => { try { freshPad.classList.remove('commit'); } catch (e) {} }, 260); }
+  }
+  // 6) advisor + persist
+  refreshSetNote();
+  saveState();
+}
+
+// ============ SHEETS ============
+let sheetKind = null;
+function openSheet(kind, title, bodyHTML) {
+  sheetKind = kind;
+  elSheetTitle.textContent = title;
+  elSheetBody.innerHTML = bodyHTML;
+  elSheet.classList.remove('hidden');
+  elSheetBackdrop.classList.remove('hidden');
+}
+function closeSheet() {
+  sheetKind = null;
+  elSheet.classList.add('hidden');
+  elSheetBackdrop.classList.add('hidden');
+  elSheetBody.innerHTML = '';
+}
+function openNoteSheet() {
+  const log = getActiveLogForEdit();
+  if (!log) return;
+  const ex = workout[log.exercise];
+  openSheet('note', abbrevFor(ex.name) + ' S' + (log.set + 1) + ' — NOTE',
+    '<input class="note-input" id="note-input" type="text" inputmode="text" placeholder="notes..." value="' +
+    escapeHtml(log.note || '') + '" aria-label="Set notes">' +
+    '<button class="sheet-btn" data-action="sheet-close">DONE</button>');
+  // Deliberately never auto-focused — focus pops the keyboard mid-workout.
+}
+function openAdviceSheet() {
+  const exIdx = isBrowsing() ? viewingExercise : currentExercise;
+  const setIdx = isBrowsing() ? viewingSet : currentSet;
+  const ex = workout[exIdx];
+  if (!ex) return;
+  let body = '<div class="sheet-sec"><div class="lbl">THIS SET</div><div class="sheet-note-text">' +
+    escapeHtml(computeSetNote(exIdx, setIdx)) + '</div></div>';
+  if (ex.note) {
+    body += '<div class="sheet-sec"><div class="lbl">EXERCISE NOTE</div><div class="sheet-note-text">' +
+      escapeHtml(ex.note) + '</div></div>';
+  }
+  if (Array.isArray(ex.setNotes) && ex.setNotes.length) {
+    body += '<div class="sheet-sec"><div class="lbl">SET NOTES</div>';
+    ex.setNotes.forEach((n) => {
+      body += '<div class="sheet-note-text">' + escapeHtml(n) + '</div>';
+    });
+    body += '</div>';
+  }
+  openSheet('advice', ex.name.toUpperCase() + ' — NOTES', body);
+}
+function orderSheetBodyHTML() {
+  let body = '';
+  workout.forEach((ex, i) => {
+    body += '<div class="order-row">' +
+      '<span class="oab">' + escapeHtml(abbrevFor(ex.name)) + '</span>' +
+      '<span class="onm">' + escapeHtml(ex.name) + '</span>' +
+      '<button class="order-btn" data-action="order-up" data-idx="' + i + '" aria-label="Move up"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+      '<button class="order-btn" data-action="order-down" data-idx="' + i + '" aria-label="Move down"' + (i === workout.length - 1 ? ' disabled' : '') + '>▼</button>' +
+      '</div>';
+  });
+  return body;
+}
+function openOrderSheet() { openSheet('order', 'EXERCISE ORDER', orderSheetBodyHTML()); }
+function gearSheetBodyHTML() {
+  return '<div class="sheet-row"><div><div class="t">Auto-start next set</div><div class="s">skip the GO acknowledge step</div></div>' +
+    '<button class="tgl' + (settings.autoStart ? ' on' : '') + '" data-action="toggle-autostart" role="switch" aria-checked="' + !!settings.autoStart + '"><span class="knob"></span></button></div>' +
+    '<div class="sheet-row"><div><div class="t">Voice cues</div><div class="s">spoken set / rest / exercise announcements</div></div>' +
+    '<button class="tgl' + (settings.voice ? ' on' : '') + '" data-action="toggle-voice" role="switch" aria-checked="' + !!settings.voice + '"><span class="knob"></span></button></div>' +
+    '<button class="sheet-btn" data-action="order-open">REORDER EXERCISES</button>' +
+    '<button class="sheet-btn" data-action="redo"' + (redoStack.length ? '' : ' disabled') + '>REDO</button>' +
+    '<button class="sheet-btn" data-action="reset">RESET WORKOUT</button>' +
+    '<div class="build-stamp" style="margin-top:10px">PAD · V4 ENGINE · 2026-06-09</div>';
+}
+function openGearSheet() { openSheet('gear', 'SETTINGS', gearSheetBodyHTML()); }
+
+// ============ TRANSITIONS ============
+// Dock prefill = the advisor's predicted band-high for the set when computable, else
+// the rep-range top.
+function prefillRepsFor(exIdx, setIdx) {
+  const ex = workout[exIdx];
+  if (!ex) return 10;
+  if (setIdx > 0) {
+    const prevLogs = gradedPrevLogs(exIdx, setIdx);
+    if (prevLogs && prevLogs.length === setIdx) {
+      const s = dynamicRepAdviceStruct(setIdx, prevLogs, ex);
+      if (s && s.band) return Math.max(0, Math.min(40, s.band[1]));
+    }
+  }
+  return Math.max(0, Math.min(40, getMaxReps(ex.reps)));
+}
+// START is ONE gesture: audio recovery + unlock + keepalive happen in the commit
+// handler; this adds the wake lock and the session start + cue chain.
+function startSession() {
+  requestWakeLock();
+  startWorkout();
+}
+function startWorkout() {
+  workoutStartTime = Date.now();
+  lastSetStartAt = Date.now();
+  state = 'ready';
+  recomputeEst();
+  render();
+  saveState();
+  const startClip = dayType.toLowerCase().includes('upper') ? 'start-upper' : 'start-lower';
+  const firstExClip = exerciseClipName(workout[0] && workout[0].name);
+  const seq = [startClip, firstExClip].filter(Boolean);
+  const _dcStart = dailyClipFor(0, 0);
+  if (_dcStart) {
+    // The daily hype line states the weight + target itself.
+    seq.push(_dcStart);
+  } else if (workout[0]) {
+    seq.push(...weightClipsFor(workout[0]));
+    const repClip = repRangeClipFor(workout[0].reps);
+    if (repClip) seq.push(repClip);
+  }
+  if (seq.length) VoiceCue.playSequence(seq);
+}
+function setDone() {
+  if (isBrowsing()) return; // commit is disabled while browsing; belt and braces
+  pushHistory();
+  if (lastSetStartAt) {
+    const dt = (Date.now() - lastSetStartAt) / 1000;
+    if (dt >= 5 && dt <= 900) observedSetTimes.push(dt);
+    lastSetStartAt = null;
+  }
+  const finishedExercise = currentExercise;
+  const finishedSet = currentSet;
+  const prefill = prefillRepsFor(finishedExercise, finishedSet);
+  captureLog();
+  // Dedup: re-logging an already-logged (exercise,set) — the ↓SET redo flow — UPDATES
+  // that log, never pushes a second one. find()-based reads mean a duplicate would
+  // silently shadow the correction. Existing reps/note/difficulty are kept (they were
+  // live-edited into the log); only the timestamp refreshes.
+  let logEntry = setLogs.find(l => l.exercise === finishedExercise && l.set === finishedSet);
+  if (logEntry) {
+    logEntry.timestamp = Date.now();
+  } else {
+    logEntry = {
+      exercise: finishedExercise,
+      set: finishedSet,
+      reps: prefill,
+      note: '',
+      difficulty: null,
+      timestamp: Date.now()
+    };
+    setLogs.push(logEntry);
+  }
+  currentLogEntry = logEntry;
+  dockCollapsed = false;
+  flipStampExName = null;
+  restAdjustedThisRest = false;
+  logExerciseIndex = finishedExercise;
+  // Evaluated on every log write; the graded-gate inside means the optimistic prefill
+  // alone can never latch a flip.
+  evaluateTriggerFlip(finishedExercise);
+
+  currentSet++;
+  const isLastSet = finishedExercise >= workout.length - 1 && currentSet >= workout[finishedExercise].sets;
+  if (isLastSet) {
+    // Stay pinned on the final set: viewing == working, the dock binds to the last log.
+    currentSet = workout[finishedExercise].sets - 1;
+    viewingExercise = currentExercise;
+    viewingSet = currentSet;
+    state = 'finishing';
+    recomputeEst();
+    render();
+    VoiceCue.playSequence(['received', 'final-set-logged']);
+    saveState();
+    return;
+  }
+  const switchingExercise = currentSet >= workout[currentExercise].sets;
+  if (switchingExercise) {
+    currentExercise++;
+    currentSet = 0;
+  }
+  viewingExercise = currentExercise;
+  viewingSet = currentSet;
+  state = 'resting';
+  restKind = switchingExercise ? 'inter' : 'intra'; // inter-exercise = hard-coded 60s UP NEXT
+  restRemaining = switchingExercise ? 60 : workout[finishedExercise].rest;
+  restTotalSeconds = restRemaining;
+  restEndTime = Date.now() + restRemaining * 1000;
+  countdownFiredThresholds = new Set();
+  lastPaintedSec = null;
+  lastLitSegs = null;
+  startCountdown();
+  recomputeEst();
+  render();
+  // Voice: "Received" then branch (exercise switch vs normal in-exercise rest).
+  {
+    let seq;
+    if (switchingExercise) {
+      const isFinalExercise = (currentExercise === workout.length - 1);
+      const exClip = exerciseClipName(workout[currentExercise].name);
+      seq = ['received', 'exercise-complete'];
+      seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
+      if (exClip) seq.push(exClip);
+      // Weight + rep range for the upcoming exercise — skipped when a set-1 daily clip
+      // exists for it (the daily line states the weight/target itself; otherwise the
+      // weight double-announces).
+      if (!dailyClipFor(currentExercise, 0)) {
+        seq.push(...weightClipsFor(workout[currentExercise]));
+        const repClipSwitch = repRangeClipFor(workout[currentExercise].reps);
+        if (repClipSwitch) seq.push(repClipSwitch);
+      }
+      const switchRestClip = restClipForDuration(restRemaining);
+      if (switchRestClip) seq.push(switchRestClip);
+    } else {
+      const restClip = restClipForDuration(workout[finishedExercise].rest);
+      seq = restClip ? ['received', restClip] : ['received'];
+    }
+    VoiceCue.playSequence(seq);
+  }
+  // Defer non-critical work to the next frame so the UI updates immediately.
+  requestAnimationFrame(() => {
+    initAudio();
+    requestWakeLock();
+    saveState();
+  });
+}
+function restDone() {
+  if (state !== 'resting') return; // re-entrancy guard: tick + visibility can both reach here
+  {
+    // Undo boundary: at expiry the live restRemaining is ≤0.1s — restoring that
+    // snapshot re-fires restDone on the first tick (duplicate cue chain, redo wiped,
+    // UNDO can never cross the boundary). Clamp the snapshot's remaining to a usable
+    // floor; applySnapshot's expired-rest branch re-anchors restEndTime from it.
+    const snap = snapshot();
+    snap.restRemaining = Math.max(snap.restRemaining || 0, 10);
+    pushHistory(snap);
+  }
+  captureLog();
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  // The rest ending IS the return-to-live moment: browsing snaps back to working.
+  viewingExercise = currentExercise;
+  viewingSet = currentSet;
+  if (settings.autoStart) {
+    state = 'ready';
+    lastSetStartAt = Date.now();
+  } else {
+    state = 'alert';
+  }
+  flipStampExName = null;
+  recomputeEst();
+  triggerWash();
+  render();
+  // Voice: "Rest complete" + (set-N + position cues | "tap to start") + daily clip /
+  // trigger-set wiring. Reached from visibilitychange with a still-suspended context
+  // (no user gesture since tab return) the chain would silent-fail — queue it; the
+  // global gesture-recovery net drains it on the next real touch.
+  {
+    const seq = ['rest-complete'];
+    if (settings.autoStart) {
+      const setStart = setStartClipFor(currentExercise, currentSet);
+      if (setStart) seq.push(setStart);
+      const ex = workout[currentExercise];
+      if (ex) seq.push(...setPositionCuesFor(currentExercise, currentSet, ex.sets));
+    } else {
+      seq.push('tap-to-start');
+    }
+    const _dc = dailyClipFor(currentExercise, currentSet);
+    if (_dc) seq.push(_dc);
+    else maybeAppendTriggerSetCue(seq, currentExercise, currentSet);
+    if (audioCtx && audioCtx.state === 'running') {
+      VoiceCue.playSequence(seq);
+    } else {
+      pendingPostGestureCues.push(seq);
+    }
+  }
+  requestAnimationFrame(() => {
+    triggerAlertFeedback();
+    saveState();
+  });
+}
+function acknowledgeAlert() {
+  pushHistory();
+  captureLog();
+  state = 'ready';
+  lastSetStartAt = Date.now();
+  render();
+  saveState();
+}
+function pauseRest() {
+  if (state !== 'resting') return;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  // Capture EXACT remaining (float seconds) so resume doesn't round-up jump.
+  restRemaining = Math.max(0, (restEndTime - Date.now()) / 1000);
+  state = 'paused';
+  render();
+  saveState();
+  VoiceCue.cancel();
+  VoiceCue.play('paused');
+}
+function resumeRest() {
+  if (state !== 'paused') return;
+  state = 'resting';
+  // Re-anchor SYNCHRONOUSLY. The old code re-anchored inside the cue's .then(), which
+  // left a ~1s window where state was 'resting' but restEndTime still held the stale
+  // pre-pause anchor: a second PAUSE tap in that window recomputed restRemaining from
+  // it (verified 60s → 0s wipe), adjustRest mutations were discarded by the late
+  // overwrite, and a background return could see an "expired" rest and fire restDone
+  // with a minute left. Anchoring here makes every reader of restEndTime correct.
+  restEndTime = Date.now() + restRemaining * 1000;
+  render(); // display stays frozen at the captured remaining until the cue resolves
+  saveState();
+  VoiceCue.cancel();
+  // Only the countdown START still waits for the 'resumed' cue (voice-off resolves
+  // immediately). The state-guard bails cleanly if the user pauses/skips mid-cue.
+  VoiceCue.playSequence(['resumed']).then(() => {
+    if (state !== 'resting') return;
+    startCountdown();
+  });
+}
+function skipRest() {
+  if (state !== 'resting' && state !== 'paused') return;
+  pushHistory();
+  VoiceCue.cancel();
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  captureLog();
+  skippedRests++;
+  flipStampExName = null;
+  viewingExercise = currentExercise;
+  viewingSet = currentSet;
+  state = 'ready';
+  lastSetStartAt = Date.now();
+  recomputeEst();
+  render();
+  saveState();
+  // Same chain shape as restDone's autoStart path. Skipping an inter-exercise rest
+  // re-announces up-next/final-exercise + name + weight/reps — the original transition
+  // chain was cancelled mid-flight by the skip. Daily-clip double-announce guarded.
+  {
+    const seq = ['rest-complete'];
+    const setStart = setStartClipFor(currentExercise, currentSet);
+    if (setStart) {
+      seq.push(setStart);
+    } else if (currentSet === 0) {
+      const isFinalExercise = (currentExercise === workout.length - 1);
+      const exClip = exerciseClipName(workout[currentExercise] && workout[currentExercise].name);
+      seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
+      if (exClip) seq.push(exClip);
+    }
+    const ex = workout[currentExercise];
+    if (ex) {
+      if (currentSet === 0) {
+        if (!dailyClipFor(currentExercise, 0)) {
+          seq.push(...weightClipsFor(ex));
+          const repClip = repRangeClipFor(ex.reps);
+          if (repClip) seq.push(repClip);
+        }
+      } else {
+        seq.push(...setPositionCuesFor(currentExercise, currentSet, ex.sets));
+      }
+    }
+    const _dc = dailyClipFor(currentExercise, currentSet);
+    if (_dc) seq.push(_dc);
+    else maybeAppendTriggerSetCue(seq, currentExercise, currentSet);
+    VoiceCue.playSequence(seq);
+  }
+}
+// +30 / −15: mutate restEndTime, clamp ≥ now (expiry handled by the tick), persist
+// instantly, renormalize the countdown thresholds (the ONLY non-background mutation
+// path that does — pause/resume deliberately do not).
+function adjustRest(deltaSec) {
+  if (state === 'resting') {
+    if (!restEndTime) return;
+    restEndTime = Math.max(Date.now(), restEndTime + deltaSec * 1000);
+    renormalizeCountdownThresholds();
+    if (deltaSec > 0 && !restAdjustedThisRest) { extendedRests++; restAdjustedThisRest = true; }
+    paintRestVisuals(Math.max(0, (restEndTime - Date.now()) / 1000));
+    saveState();
+  } else if (state === 'paused') {
+    restRemaining = Math.max(0, restRemaining + deltaSec);
+    countdownFiredThresholds = new Set(COUNTDOWN_THRESHOLDS.filter(t => t > Math.ceil(restRemaining)));
+    if (deltaSec > 0 && !restAdjustedThisRest) { extendedRests++; restAdjustedThisRest = true; }
+    paintRestVisuals(restRemaining);
+    saveState();
+  }
+}
+function finishWorkout() {
+  pushHistory();
+  releaseWakeLock();
+  captureLog();
+  state = 'finished';
+  viewingExercise = currentExercise;
+  viewingSet = currentSet;
+  estMinutes = null;
+  render();
+  try { localStorage.removeItem('gtpad-state'); } catch (e) {}
+  VoiceCue.cancel();
+  VoiceCue.play('workout-complete');
+  stopAudioKeepalive();
+}
+function resetWorkout() {
+  // Deliberately single-tap, no confirm — it already sits two taps deep behind the gear.
+  VoiceCue.cancel();
+  VoiceCue.play('workout-reset');
+  setTimeout(() => {
+    try { localStorage.removeItem('gtpad-state'); } catch (e) {}
+    location.reload();
+  }, settings.voice ? 1500 : 200);
+}
+
+// ============ BROWSING (two-cursor model) ============
+function cycleView(exIdx, setIdx) {
+  const oldKey = viewingExercise * 100 + viewingSet;
+  viewingExercise = exIdx;
+  viewingSet = setIdx;
+  const newKey = viewingExercise * 100 + viewingSet;
+  render(newKey > oldKey ? 1 : (newKey < oldKey ? -1 : 0));
+  saveState();
+}
+function handleRailTap(target) {
+  if (!target) return false;
+  if (sheetKind) return false;
+  if (state === 'finished') return false;
+  const tile = target.closest ? target.closest('.tile') : null;
+  if (!tile || tile.dataset.ex == null) return false;
+  const exIdx = Number(tile.dataset.ex);
+  if (!Number.isFinite(exIdx) || !workout[exIdx]) return false;
+  if (exIdx === viewingExercise) {
+    cycleView(exIdx, (viewingSet + 1) % workout[exIdx].sets);
+  } else {
+    cycleView(exIdx, 0);
+  }
+  return true;
+}
+function returnToWorking() {
+  viewingExercise = currentExercise;
+  viewingSet = currentSet;
+  render();
+  saveState();
+}
+// ↓SET: repoint the WORKING cursor to the viewed set (pushHistory first) — combined
+// with setDone's dedup this is the supported redo-a-set flow.
+function setCurrentFromView() {
+  if (!isBrowsing()) return;
+  pushHistory();
+  currentExercise = viewingExercise;
+  currentSet = viewingSet;
+  // From 'finishing' (all sets logged) the repoint must reopen the set — otherwise the
+  // commit bar still says FINISH and the redo-a-set flow dead-ends in the one state
+  // where viewing is pinned for editing. Mirrors the ready-state repoint semantics.
+  if (state === 'finishing') {
+    state = 'ready';
+    lastSetStartAt = Date.now();
+  }
+  recomputeEst();
+  render();
+  saveState();
+}
+
+// ============ SUMMARY ============
+function buildSummary() {
+  const total = getTotalDuration();
+  const durTxt = total ? formatDurCompact(total) : '—';
+  let head = '## Workout — ' + dayType + ', ' + summaryDateStr() + ' ✓ DONE (' + durTxt;
+  if (softDay) head += ' · ' + SOFT_NOTE;
+  head += ')';
+  const maxSets = Math.max(...workout.map(e => e.sets));
+  let text = head + '\n';
+  let hdr = '| Exercise | Weight |';
+  let sep = '|---|---|';
+  for (let j = 1; j <= maxSets; j++) { hdr += ' S' + j + ' |'; sep += '---|'; }
+  hdr += ' Time |'; sep += '---|';
+  text += hdr + '\n' + sep + '\n';
+  const firstExIdx = firstPerformedExercise();
+  workout.forEach((ex, i) => {
+    let row = '| ' + ex.name + ' | ' + ex.weight + ' |';
+    const drop = structuralDrop(ex);
+    for (let j = 0; j < maxSets; j++) {
+      if (j >= ex.sets) { row += ' — |'; continue; }       // set doesn't exist
+      const log = findLog(i, j);
+      if (!log) { row += ' ? |'; continue; }               // exists but unlogged
+      let c = String(log.reps);                            // 0 stays plain on stops
+      if (log.difficulty) c += ' [' + DIFFICULTY_LABELS[log.difficulty] + ']';
+      if (drop && drop.setIdx === j) c += ' @' + drop.w;   // structural-drop set
+      row += ' ' + c + ' |';
+    }
+    const dur = exerciseDurationForSummary(i, firstExIdx);
+    row += ' ' + (dur && dur > 0 ? formatDurCompact(dur) : '—') + ' |';
+    text += row + '\n';
+  });
+  const trigBits = [];
+  let anySoftStar = false;
+  workout.forEach((ex, i) => {
+    const oc = triggerOutcome(i);
+    if (!oc) return;
+    const ab = abbrevFor(ex.name);
+    if (oc.st === 'flipped') {
+      trigBits.push(ab + ' CLEARED → ' + (ex.triggerWeight || '') + (softDay ? '*' : ''));
+      if (softDay) anySoftStar = true;
+    } else if (oc.st === 'out') {
+      trigBits.push(ab + ' OUT S' + (oc.setIdx + 1) + ' (' + oc.reps + '<' + oc.req + ')');
+    } else {
+      trigBits.push(ab + ' —');
+    }
+  });
+  if (trigBits.length) text += 'Triggers: ' + trigBits.join(' · ') + '\n';
+  if (anySoftStar) text += '*' + SOFT_NOTE + '\n';
+  const noteLines = [];
+  workout.forEach((ex, i) => {
+    for (let j = 0; j < ex.sets; j++) {
+      const log = findLog(i, j);
+      if (log && log.note) noteLines.push(ex.name + ' S' + (j + 1) + ': ' + log.reps + ' — ' + log.note);
+    }
+  });
+  if (noteLines.length === 1) text += 'Notes: ' + noteLines[0] + '\n';
+  else if (noteLines.length > 1) text += 'Notes:\n' + noteLines.join('\n') + '\n';
+  if (skippedRests || extendedRests) {
+    const bits = [];
+    if (skippedRests) bits.push(skippedRests + ' skipped');
+    if (extendedRests) bits.push(extendedRests + ' extended');
+    text += 'Rests: ' + bits.join(' · ') + '\n';
+  }
+  // Clipboard payload is ASCII-only (Windows-paste safe — the summary lands in
+  // tracker.md / daily logs). On-screen DONE typography keeps its glyphs; only the
+  // copied text is sanitized: — → --, → → ->, · → |, ✓ dropped, – → -.
+  return text
+    .replace(/✓\s*/g, '')
+    .replace(/—/g, '--')
+    .replace(/–/g, '-')
+    .replace(/→/g, '->')
+    .replace(/·/g, '|');
+}
+function legacyCopy(t) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = t;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    // body is user-select:none globally; the copy shim needs selection back.
+    ta.style.webkitUserSelect = 'text';
+    ta.style.userSelect = 'text';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (e) { return false; }
+}
+function copySummary() {
+  const text = buildSummary();
+  const after = () => {
+    elCommit.classList.remove('flash');
+    void elCommit.offsetWidth;
+    elCommit.classList.add('flash');
+    elCommit.textContent = 'COPIED';
+    setTimeout(() => { if (state === 'finished') elCommit.textContent = 'COPY SUMMARY'; }, 2000);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(after, () => { legacyCopy(text); after(); });
+  } else {
+    legacyCopy(text);
+    after();
+  }
+}
+
+// ============ INPUT HANDLERS ============
+elCommit.addEventListener('click', () => {
+  recoverAudioCtx();
+  VoiceCue.unlock();
+  // 'finished' guard: COPY SUMMARY lands here — must not resurrect the keepalive
+  // that finishWorkout just stopped (battery burn on the done screen).
+  if (state !== 'finished') startAudioKeepalive();
+  if (state !== 'finished' && isBrowsing()) return;
+  if (state === 'pre-start') startSession();
+  else if (state === 'ready') setDone();
+  else if (state === 'alert') acknowledgeAlert();
+  else if (state === 'finishing') finishWorkout();
+  else if (state === 'finished') copySummary();
+});
+document.addEventListener('click', (e) => {
+  const el = e.target.closest ? e.target.closest('[data-action]') : null;
+  if (!el || el.disabled) return;
+  const action = el.dataset.action;
+  if (!action) return;
+  switch (action) {
+    case 'undo': undoStep(); break;
+    case 'redo': closeSheet(); redoStep(); break;
+    case 'gear': openGearSheet(); break;
+    case 'sheet-close': closeSheet(); break;
+    case 'order-open': openOrderSheet(); break;
+    case 'order-up': {
+      const i = Number(el.dataset.idx);
+      reorderExercise(i, i - 1);
+      if (sheetKind === 'order') elSheetBody.innerHTML = orderSheetBodyHTML();
+      break;
+    }
+    case 'order-down': {
+      const i = Number(el.dataset.idx);
+      reorderExercise(i, i + 1);
+      if (sheetKind === 'order') elSheetBody.innerHTML = orderSheetBodyHTML();
+      break;
+    }
+    case 'toggle-autostart':
+      settings.autoStart = !settings.autoStart;
+      saveSettings();
+      if (sheetKind === 'gear') elSheetBody.innerHTML = gearSheetBodyHTML();
+      break;
+    case 'toggle-voice':
+      settings.voice = !settings.voice;
+      if (!settings.voice) VoiceCue.cancel();
+      saveSettings();
+      if (sheetKind === 'gear') elSheetBody.innerHTML = gearSheetBodyHTML();
+      break;
+    case 'reset': resetWorkout(); break;
+    case 'brief-expand': {
+      const bt = byId('brief-text');
+      const bm = byId('brief-more');
+      if (bt) {
+        bt.classList.toggle('clamped');
+        if (bm) bm.textContent = bt.classList.contains('clamped') ? 'EXPAND' : 'COLLAPSE';
+      }
+      break;
+    }
+    case 'more-advice': openAdviceSheet(); break;
+    case 'note-open': openNoteSheet(); break;
+    // 0-STOP injury abort: reps=0, difficulty stays null (mirrors donor rep-zero).
+    case 'rep-zero': {
+      const log = getActiveLogForEdit();
+      if (!log) return;
+      log.reps = 0; // difficulty deliberately stays null — injury abort
+      log.difficulty = null;
+      evaluateTriggerFlip(log.exercise);
+      // STOP is a committed grade-less log; collapse semantics don't apply (stays open
+      // so it can be re-logged via the pad). Re-render the dock to show the STOP state.
+      const dz = byId('dock-zone');
+      if (dz) { dz.innerHTML = dockZoneHTML(); bindPadAfterSwap(); }
+      refreshSetNote();
+      saveState();
+      break;
+    }
+    case 'receipt-expand': {
+      dockCollapsed = false;
+      const dz = byId('dock-zone');
+      if (dz) { dz.innerHTML = dockZoneHTML(); bindPadAfterSwap(); }
+      saveState(); // dockCollapsed is persisted state — a reload must not re-collapse
+      break;
+    }
+    case 'set-current': setCurrentFromView(); break;
+    case 'return-live': returnToWorking(); break;
+    case 'adj-minus': adjustRest(-15); break;
+    case 'adj-plus': adjustRest(30); break;
+    case 'adj-skip': skipRest(); break;
+    case 'adj-pause':
+      if (state === 'resting') pauseRest();
+      else if (state === 'paused') resumeRest();
+      break;
+  }
+});
+// The ONLY text input lives in the note sheet; every keystroke writes the active log.
+elSheetBody.addEventListener('input', (e) => {
+  if (e.target && e.target.id === 'note-input') {
+    const log = getActiveLogForEdit();
+    if (log) {
+      log.note = e.target.value;
+      saveState();
+    }
+  }
+});
+elSheetBackdrop.addEventListener('click', closeSheet);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && sheetKind) closeSheet();
+});
+
+// Rail tap shim: RAW touch events (≤15px slop, ≤700ms tap, 500ms long-press → ORDER
+// sheet, 500ms synthetic-click swallow, contextmenu prevented). Click fallback for
+// desktop mouse.
+let railTapInfo = null;
+let railLongPressTimer = null;
+let lastRailTouchTap = 0;
+elRail.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) { railTapInfo = null; return; }
+  const t = e.touches[0];
+  railTapInfo = { x: t.clientX, y: t.clientY, time: Date.now(), target: e.target };
+  if (railLongPressTimer) clearTimeout(railLongPressTimer);
+  railLongPressTimer = setTimeout(() => {
+    railLongPressTimer = null;
+    if (railTapInfo) {
+      railTapInfo = null;
+      lastRailTouchTap = Date.now(); // swallow the synthetic click after the long-press
+      if (state !== 'finished') openOrderSheet();
+    }
+  }, 500);
+}, { passive: true });
+elRail.addEventListener('touchmove', (e) => {
+  if (!railTapInfo) return;
+  const t = e.touches[0];
+  if (!t) return;
+  if (Math.abs(t.clientX - railTapInfo.x) > 15 || Math.abs(t.clientY - railTapInfo.y) > 15) {
+    railTapInfo = null;
+    if (railLongPressTimer) { clearTimeout(railLongPressTimer); railLongPressTimer = null; }
+  }
+}, { passive: true });
+elRail.addEventListener('touchend', (e) => {
+  if (railLongPressTimer) { clearTimeout(railLongPressTimer); railLongPressTimer = null; }
+  if (!railTapInfo) return;
+  const info = railTapInfo;
+  railTapInfo = null;
+  if (Date.now() - info.time > 700) return;
+  if (e.changedTouches && e.changedTouches[0]) {
+    const t = e.changedTouches[0];
+    if (Math.abs(t.clientX - info.x) > 15 || Math.abs(t.clientY - info.y) > 15) return;
+  }
+  if (handleRailTap(info.target)) {
+    lastRailTouchTap = Date.now();
+    try { e.preventDefault(); } catch (err) {}
+  }
+}, { passive: false });
+elRail.addEventListener('touchcancel', () => {
+  railTapInfo = null;
+  if (railLongPressTimer) { clearTimeout(railLongPressTimer); railLongPressTimer = null; }
+}, { passive: true });
+elRail.addEventListener('click', (e) => {
+  if (Date.now() - lastRailTouchTap < 500) return;
+  handleRailTap(e.target);
+});
+elRail.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ============ BACKGROUND RETURN ============
+// Shared handler for tab-return + BFCache restore (iOS back/forward swipe closes
+// AudioContexts). Audio recovery runs FIRST — before any path that fires audio.
+function handleResumeFromBackground() {
+  recoverAudioCtx();
+  if (state === 'resting' && restEndTime) {
+    const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
+    if (remaining <= 0) {
+      // Clear the interval BEFORE restDone — the visibility handler and the 100ms
+      // tick used to double-fire it (restDone's state guard is the second net).
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      restDone();
+    } else {
+      restRemaining = remaining;
+      // Threshold catch-up: every threshold already passed while backgrounded is
+      // pre-marked so nothing announces late and stale.
+      renormalizeCountdownThresholds();
+      paintRestVisuals(Math.max(0, (restEndTime - Date.now()) / 1000));
+      startAudioKeepalive();
+    }
+  }
+  // Wake lock re-acquire for ALL active states INCLUDING 'ready'.
+  if (isActiveState() && !wakeLock) requestWakeLock();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  handleResumeFromBackground();
+});
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) handleResumeFromBackground();
+});
+
+// ============ INIT ============
+// URL reset (?reset=1) wipes saved workout state, then strips itself. The undo stack
+// is deliberately NOT named `history` — window.history must stay reachable here.
+if (new URLSearchParams(location.search).has('reset')) {
+  try { localStorage.removeItem('gtpad-state'); } catch (e) {}
+  try { window.history.replaceState(null, '', location.pathname); } catch (e) {}
+}
+VoiceCue.init();
+attachGlobalAudioRecovery();
+if (!restoreState()) {
+  // Fresh load (no saved state, or TTL expired): IDLE. The START tap unlocks audio,
+  // requests the wake lock, records workoutStartTime, and plays the opening chain.
+  state = 'pre-start';
+  render();
+}
+// 1Hz header elapsed register (textContent only).
+setInterval(() => {
+  if (workoutStartTime && state !== 'finished' && state !== 'pre-start') renderHeader();
+}, 1000);
+</script>
+
+</body>
+</html>
