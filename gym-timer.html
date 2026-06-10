@@ -49,21 +49,28 @@
     text-align: center;
   }
   #exercise-note {
-    font-size: 22px;
-    color: #bbb;
-    font-style: italic;
-    margin-bottom: 8px;
+    font-size: 13px;
+    color: #cfcfcf;
+    margin-bottom: 10px;
     text-align: center;
-    max-width: 360px;
-    line-height: 1.4;
-    /* Fixed height so 1/2/3-line notes don't shift the layout underneath.
-       Flex-centered so 1-line notes don't leave dead space below. */
-    height: 70px;
+    max-width: 340px;
+    line-height: 1.32;
+    /* Contained note panel — smaller text in a bordered card so the coach note
+       reads as a tidy box, not big italics floating over the timer. Fixed height
+       keeps the layout under it from shifting between 1/2/3-line notes. */
+    height: 66px;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 8px 14px;
+    background: #151515;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    box-sizing: border-box;
   }
+  #set-info .wt-now { color: #e0584a; font-weight: 700; }
+  #set-info .wt-was { color: #777; font-size: 0.85em; margin-left: 4px; }
   #timer-display {
     font-size: 76px;
     font-weight: 200;
@@ -406,8 +413,10 @@
     text-align: center;
     outline: none;
     transition: border-color 0.2s;
-    -webkit-user-select: auto;
-    user-select: auto;
+    cursor: pointer;                 /* read-only field; tap opens the note textbox */
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
   }
   #notes-input:focus { border-color: #c0392b; }
   #notes-input::placeholder { color: #555; font-size: 11px; }
@@ -592,7 +601,7 @@
   }
 
   /* Settings modal */
-  #settings-modal, #edit-modal {
+  #settings-modal, #edit-modal, #note-modal {
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.85);
@@ -602,7 +611,7 @@
     z-index: 200;
     padding: 20px;
   }
-  #settings-modal.show, #edit-modal.show { display: flex; }
+  #settings-modal.show, #edit-modal.show, #note-modal.show { display: flex; }
   .modal-card {
     background: #1a1a1a;
     border: 1px solid #2a2a2a;
@@ -735,6 +744,26 @@
     user-select: auto;
   }
   #edit-notes:focus { border-color: #c0392b; }
+  #note-modal-text {
+    width: 100%;
+    min-height: 108px;
+    padding: 12px 14px;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background: #111;
+    color: #eee;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;            /* >=16px so iOS Safari doesn't zoom on focus */
+    line-height: 1.4;
+    resize: vertical;
+    outline: none;
+    margin-bottom: 14px;
+    box-sizing: border-box;
+    -webkit-user-select: auto;
+    user-select: auto;
+  }
+  #note-modal-text:focus { border-color: #c0392b; }
+  #note-modal-text::placeholder { color: #555; }
   .edit-actions {
     display: flex;
     gap: 10px;
@@ -916,7 +945,7 @@
           <div class="rep-picker__strip" id="rep-picker-strip" role="listbox"></div>
           <div class="rep-picker__indicator"></div>
         </div>
-        <input type="text" id="notes-input" placeholder="notes..." inputmode="text" aria-label="Set notes">
+        <input type="text" id="notes-input" placeholder="+ note" readonly inputmode="none" aria-label="Set note (tap to open)">
       </div>
     </div>
   </div>
@@ -969,6 +998,17 @@
     <div class="edit-actions">
       <button class="edit-btn" id="edit-cancel">Cancel</button>
       <button class="edit-btn primary" id="edit-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="note-modal" role="dialog" aria-modal="true" aria-label="Set note">
+  <div class="modal-card">
+    <div class="modal-title">Set Note</div>
+    <textarea id="note-modal-text" rows="4" placeholder="how it felt, form cues, pain, etc." aria-label="Set note"></textarea>
+    <div class="edit-actions">
+      <button class="edit-btn" id="note-cancel">Cancel</button>
+      <button class="edit-btn primary" id="note-save">Save</button>
     </div>
   </div>
 </div>
@@ -1241,6 +1281,10 @@ const elSummary = document.getElementById("summary");
 const elCopy = document.getElementById("copy-btn");
 const elLogArea = document.getElementById("log-area");
 const elNotesInput = document.getElementById("notes-input");
+const elNoteModal = document.getElementById("note-modal");
+const elNoteModalText = document.getElementById("note-modal-text");
+const elNoteCancel = document.getElementById("note-cancel");
+const elNoteSave = document.getElementById("note-save");
 const elSettingsBtn = document.getElementById("settings-btn");
 const elSettingsModal = document.getElementById("settings-modal");
 const elSettingsClose = document.getElementById("settings-close");
@@ -2089,6 +2133,52 @@ function computeSetNote(exIdx, setIdx) {
   return ex.note || "";
 }
 
+// The weight to actually load THIS set. Reflects (a) a structural drop set
+// (dropLastSet, e.g. "110 lbs (S4 -> 90)") and (b) a reactive drop the advisor
+// calls after a sub-range max-effort set (ex.backoff). So the number on screen
+// is what to put on the machine, not the stale top-of-session prescription.
+function effectiveWeight(exIdx, setIdx) {
+  const ex = workout[exIdx];
+  const baseStr = String(ex.weight || "");
+  const baseNum = (baseStr.match(/(\d+(?:\.\d+)?)/) || [])[1] || null;
+  const clean = baseStr.replace(/\s*\([^)]*\)\s*/g, "").trim() || baseStr;
+  let dropNum = null;
+  // (a) structural drop set: the last set of a dropLastSet exercise.
+  if (ex.dropLastSet && setIdx === ex.sets - 1) {
+    const m = baseStr.match(/(?:→|->|drop to)\s*(\d+(?:\.\d+)?)/i);
+    if (m) dropNum = m[1];
+  }
+  // (b) reactive drop: prior set landed under range at max effort + a backoff exists.
+  if (dropNum == null && setIdx >= 1 && ex.backoff) {
+    const prevLogs = [];
+    let allLogged = true;
+    for (let i = 0; i < setIdx; i++) {
+      const lg = setLogs.find(l => l.exercise === exIdx && l.set === i);
+      if (lg && lg.difficulty != null) prevLogs.push({ reps: lg.reps, difficulty: lg.difficulty });
+      else { allLogged = false; break; }
+    }
+    if (allLogged && prevLogs.length === setIdx) {
+      const rng = String(ex.reps || "").match(/(\d+)\D+(\d+)/);
+      const last = prevLogs[prevLogs.length - 1];
+      if (rng && last && typeof last.reps === "number" && !isNaN(last.reps)) {
+        const lo = +rng[1];
+        const maxed = (+last.difficulty || 0) >= 5;
+        if (last.reps < lo && maxed) {
+          dropNum = (String(ex.backoff).match(/(\d+(?:\.\d+)?)/) || [])[1] || null;
+        }
+      }
+    }
+  }
+  if (dropNum != null && dropNum !== baseNum) {
+    return { dropped: true, html: '<span class="wt-now">▼ ' + dropNum + ' lbs</span><span class="wt-was">from ' + baseNum + '</span>' };
+  }
+  return { dropped: false, html: clean };
+}
+function setInfoHTML(exIdx, setIdx) {
+  const ex = workout[exIdx];
+  return effectiveWeight(exIdx, setIdx).html + "  ·  Set " + (setIdx + 1) + "/" + ex.sets + "  ·  " + ex.reps + " reps";
+}
+
 // Re-render JUST the exercise note. Cheaper than renderExercise() and
 // non-disruptive to layout (no centerMainButton churn). Called from rep
 // picker onChange + difficulty handler so set N's advice updates live as
@@ -2096,6 +2186,9 @@ function computeSetNote(exIdx, setIdx) {
 function refreshSetNote() {
   const exIdx = isBrowsing() ? viewingExercise : currentExercise;
   const setIdx = isBrowsing() ? viewingSet : currentSet;
+  // Refresh the weight too: grading the prior set can flip the upcoming set to
+  // a reactive drop, and the loaded weight must track that live.
+  elSet.innerHTML = setInfoHTML(exIdx, setIdx);
   elNote.textContent = computeSetNote(exIdx, setIdx);
   fitNoteToBox();
 }
@@ -2106,8 +2199,9 @@ function renderExercise() {
   const setIdx = isBrowsing() ? viewingSet : currentSet;
   const ex = workout[exIdx];
   elName.textContent = ex.name;
-  // Order: Weight \u00b7 Set X/Y \u00b7 reps
-  elSet.textContent = ex.weight + "  \u00b7  Set " + (setIdx + 1) + "/" + ex.sets + "  \u00b7  " + ex.reps + " reps";
+  // Weight is adaptive: reflects drop sets + reactive drops so it shows the
+  // load to actually put on (not the stale prescription). Then Set X/Y, reps.
+  elSet.innerHTML = setInfoHTML(exIdx, setIdx);
   // Compute set-specific note (dynamic advice when prev sets are graded,
   // static setNotes[] otherwise).
   let noteText = computeSetNote(exIdx, setIdx);
@@ -2976,7 +3070,8 @@ elEditModal.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (elEditModal.classList.contains("show")) closeEditModal();
+  if (elNoteModal.classList.contains("show")) closeNoteModal();
+  else if (elEditModal.classList.contains("show")) closeEditModal();
   else if (elSettingsModal.classList.contains("show")) closeSettings();
 });
 
@@ -3053,6 +3148,28 @@ elNotesInput.addEventListener("input", () => {
   if (log) log.note = elNotesInput.value;
   saveState();
 });
+// Note textbox modal — the inline field is read-only; tapping it opens a real
+// textarea so the note is actually visible while typing. Save funnels back
+// through the inline field's input handler above (keeps log.note + saveState).
+function openNoteModal() {
+  if (elLogArea.style.display === "none") return;
+  elNoteModalText.value = elNotesInput.value || "";
+  elNoteModal.classList.add("show");
+  // Focus synchronously inside the tap gesture (iOS only pops the keyboard for
+  // gesture-stack focus), with a rAF backup once layout has flushed.
+  try { elNoteModalText.focus(); } catch (e) {}
+  requestAnimationFrame(() => { try { elNoteModalText.focus(); } catch (e) {} });
+}
+function closeNoteModal() { elNoteModal.classList.remove("show"); }
+elNotesInput.addEventListener("click", openNoteModal);
+elNotesInput.addEventListener("focus", openNoteModal);
+elNoteCancel.addEventListener("click", closeNoteModal);
+elNoteSave.addEventListener("click", () => {
+  elNotesInput.value = elNoteModalText.value;
+  elNotesInput.dispatchEvent(new Event("input"));
+  closeNoteModal();
+});
+elNoteModal.addEventListener("click", (e) => { if (e.target === elNoteModal) closeNoteModal(); });
 elDifficultyRow.addEventListener("click", (e) => {
   const btn = e.target.closest('.diff-btn');
   if (!btn) return;
