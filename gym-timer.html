@@ -1022,103 +1022,99 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Upper";
+const dayType = "Lower";
 
-// UPPER session (Fri Jun 12) — PHASE 2. Order: Chest Press → Cable Rope Row → Cable Tricep Pushdown → DB Lateral Raise → DB Curls. ⚙️ PROGRAM CHANGE (6/10): DB French Press is OUT (overhead → R rotator-cuff pain, S2 cratered 12→6) → replaced by a NON-OVERHEAD cable tricep pushdown, moved right after the row (contiguous cable use), last set 35 lbs. Compounds (Chest Press, Cable Row) = 4 sets; Chest Press S4 is a standing drop to 90 (dropLastSet); isolations 3 sets, DB LR + DB Curls drop the last set (dropLastSet). Backoffs wired: Chest Press 95 / Cable Row 100 (reactive drop-calls if reps crater). The pushdown is INAUGURAL — no trigger/backoff yet, calibrate off today's reps. ⚠️ DB LR: keep every rep AT/BELOW parallel (painless L-shoulder click above parallel). DB Curls SUPINATED ONLY (hammer twangs the R musculocutaneous nerve). setNotes carry 6/10 actuals (~5-hr semi-soft); today is ~4-hr sleep — treat the marks as soft floors, no advances on low sleep, the dynamic advisor recomputes each set's target from your ACTUAL prior-set reps. Voice = ElevenLabs static bank, workout-agnostic — no regen, build id unchanged.
+// LOWER session (next, per U/L rotation — last was Fri/Sat 6/12-13 Upper, done ~2 AM 6/13) — PHASE 2. Order: Leg Press → Calf Raises → Leg Extension → Leg Curl → Face Pulls. Leg Press (compound) = 4 sets; Calf Raises + Leg Curl = 3; ⚙️ Leg Extension NOW 3 SETS (was 2 — Soren's 6/11 call: bank the earned 80 until 3×70 grooves, 3rd set 1-2 RIR); ⚙️ Face Pulls dropped to ~35 lbs @ 8-12 reps (was 15-20 @ 45, got bored — rear-delt/shoulder-health GROOVER, NOT to failure). Last set 0-1 RIR on Leg Press/Calf; LE + Face Pulls groove at 1-3 RIR. ⚠️ MEDIAL-THIGH/HAMSTRING is a TISSUE/NERVE thing to TRACK across movements — 6/11 was the FIRST fully clean Lower since the flag (no twang anywhere), keep watching; STOP INSTANTLY on any sharp medial sensation on ANY movement; recurs/worsens/lingers → sports med or PT. ⚠️ Leg Extension: towel over the shin bar (pads dug in 6/11) + report how it builds. setNotes carry 6/11 actuals (rested, post-4.5hr-nap) as soft floors — no advances on low sleep, the dynamic advisor recomputes each set's target from your ACTUAL prior-set reps. Backoffs wired: Leg Press 220 / Calf 115 / Leg Curl 40 (reactive drop-calls if reps crater). LE + Face Pulls = no backoff (groovers). Voice = ElevenLabs static bank, workout-agnostic — no regen, build id unchanged.
 const workout = [
   {
-    name: "Chest Press Machine",
+    name: "Leg Press",
     sets: 4,
     reps: "8-12",
-    weight: "110 lbs (S4 → 90)",
+    weight: "250 lbs",
     rest: 150,
-    note: "Last (6/10, ~5-hr sleep = semi-soft): 11/9/7 + S4 8@90 [MAX] — S3=7 nudged the chronic wall +1 (stuck at 6 for ~a month) = a small win. S1=11. The S4 drop to 90 → 8 reps held range, standing plan. Rested ref (6/4): 12/10/5. Read depends on today's sleep — chase the S3 wall (8+) if rested. Trigger 12/12/10/10 → 120. Hold 110.",
+    note: "Last (6/11, rested post-4.5hr-nap): 9/8/8/7 [all MAX] — NO medial-hamstring pain ✓, the FIRST fully clean Lower since the flag. Reps modest but all max effort + pain-free. Rested ref (6/6): 12/9/7. 4 sets (Phase 2 quad volume). Normal controlled tempo. ⚠️ Still watch the R medial hamstring on S1 — stop on sharp pain, don't grind through it. Trigger 12/12/10/10 → 265. Hold 250.",
     setNotes: [
-      "S1: full ROM, controlled, MOD pace — bank it without burning the back sets. Was 11. ~2 RIR.",
-      "S2: full 2.5-min rest. Was 9 — push 10+.",
-      "S3: the chronic wall — 7 last time (+1 off the ~month-long 6). Push 8+, this is the gate on the 120 trigger.",
-      "S4: DROP to 90 (standing plan — 8 clean reps 6/10). 0-1 RIR, no junk grinding."
+      "S1: full depth, controlled, no bounce. Was 9 [MAX]. If the R medial hamstring twangs, STOP, don't push it. ~2 RIR.",
+      "S2: full rest. Was 8 — match or beat with clean depth.",
+      "S3: was 8 — hold 8+, leave 1 in the tank.",
+      "S4: last set, 0-1 RIR. Was 7. If reps crater, drop to 220 and finish clean — no junk grinding."
     ],
     trigger: [12, 12, 10, 10],
-    triggerWeight: "120 lbs",
-    backoff: "95",
-    dropLastSet: true,
+    triggerWeight: "265 lbs",
+    backoff: "220",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Cable Rope Row",
-    sets: 4,
-    reps: "8-12",
-    weight: "120 lbs",
-    rest: 150,
-    note: "Last (6/10, semi-soft): 11/9/6/9 — S1=11 (+2 vs 6/8); S3 dipped to 6 then S4 rebounded to 9. Rope attachment (no V-bar at this gym). Rested ref (6/4): 12 on S1. Hold 120. Trigger 12/12/10/10 → 130.",
-    setNotes: [
-      "S1: drive elbows back, squeeze the scapula, slow eccentric. Was 11 — chase 12 (top).",
-      "S2: full rest. Strict, no body english. Was 9 — chase 10-12.",
-      "S3: was 6 (the dip) — hold 8+, 1-2 RIR. Drop call goes to 100 if reps crater.",
-      "S4: last set — 0-1 RIR, clean. Was 9."
-    ],
-    trigger: [12, 12, 10, 10],
-    triggerWeight: "130 lbs",
-    backoff: "100",
-    adviceFor: function(setIdx, prev) {
-      return null;
-    }
-  },
-  {
-    name: "Cable Tricep Pushdown",
+    name: "Calf Raises",
     sets: 3,
     reps: "12-15",
-    weight: "~30-35 lbs (last set 35)",
+    weight: "130 lbs",
     rest: 90,
-    note: "NEW — replaces DB French Press (overhead → R rotator-cuff pain; S2 cratered 12→6 on 6/10 with cuff pain). Rope or straight-bar pushdown at the cable station, RIGHT AFTER the row (contiguous cable use). Non-overhead = cuff-safe. ⚙️ INAUGURAL / CALIBRATION: find a weight that gives clean 12-15 reps and land the LAST set at 35 lbs to 0-1 RIR — we set the real baseline off today's reps. Elbows pinned to your ribs, full lockout, hard squeeze, 2-3s eccentric. (A pushdown de-emphasizes the long head vs an overhead extension — cuff health wins; a slight-incline cable ext is the middle option later if you want long-head work.)",
+    note: "Last (6/11): 15/11/12 — S1=15 (top), S3 +2 (10→12). Trigger 15/15/12 → S2 (was 11) is the gate for 135. Right after Leg Press (same machine, contiguous). Hold 130.",
     setNotes: [
-      "S1: elbows pinned to your sides (don't let them flare), full lockout at the bottom, slow return. Pick a weight you can clean-rep ~12-15 times. ~2-3 RIR — this is the feel-it-out set.",
-      "S2: same or a touch heavier if S1 felt easy. Controlled, no leaning into it. Chase clean 12-15.",
-      "S3: last set — land it at 35 lbs, push to 0-1 RIR. This anchors the baseline going forward."
-    ],
-    trigger: null,
-    triggerWeight: "set baseline off today",
-    adviceFor: function(setIdx, prev) {
-      return null;
-    }
-  },
-  {
-    name: "DB Lateral Raise",
-    sets: 3,
-    reps: "12-15",
-    weight: "15 lbs (drop to 10 for S3)",
-    rest: 90,
-    note: "Last (6/10, semi-soft): 13/10/11@10 — S1=13; S2 back to 10 (THE bottleneck). S2 ≥12 = the 17.5/20 jump, one good set away. ⚠️ L-shoulder painless CLICK above parallel — keep every rep AT/BELOW parallel (above shifts load to traps + risks impingement). Sits after the heavy row (delt pre-fatigued). Stay 15.",
-    setNotes: [
-      "S1: strict, controlled, slight forward lean. Stop AT parallel — no higher (L-shoulder click). Was 13 — chase 15.",
-      "S2: THE bottleneck — chase 12 for the jump. Expect row pre-fatigue. Cap at parallel.",
-      "S3: drop to 10 lb — clean burnout reps to parallel after 15 fails."
+      "S1: full stretch at the bottom, pause + squeeze the top. Was 15 (top) — pace it MOD so S2 holds.",
+      "S2: was 11 — THE gate for 135 (need 15). Push hard, controlled.",
+      "S3: was 12 (+2 win) — hold 12+. If reps tank, drop to 115 and burn clean."
     ],
     trigger: [15, 15, 12],
-    triggerWeight: "17.5 or 20 lbs",
-    dropLastSet: true,
+    triggerWeight: "135 lbs",
+    backoff: "115",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "DB Curls (supinated)",
+    name: "Leg Extension",
+    sets: 3,
+    reps: "8-12",
+    weight: "70 lbs",
+    rest: 90,
+    note: "Last (6/11, 2 sets): 12/12 🎯 hit the 2-set trigger → 80 EARNED, but BANKING it (Soren's call). NOW 3 SETS @ 70 — groove the volume; bank the 80 until 3×70 grooves clean, then advance. 3rd set 1-2 RIR, not to failure. ⚠️ Towel over the shin bar (pads dug in 6/11) + report how it builds. Controlled quad pull-in.",
+    setNotes: [
+      "S1: squeeze hard at the top, 2s hold, slow lower. 2-3 RIR. Was 12 — clean reps, towel over the bar.",
+      "S2: match clean, still 2-3 RIR. Was 12.",
+      "S3: NEW 3rd set — 1-2 RIR (groover, not to failure). Banking 3×70 before the jump to 80."
+    ],
+    trigger: [12, 12, 12],
+    triggerWeight: "80 lbs (once 3×70 grooves clean)",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "Leg Curl",
     sets: 3,
     reps: "10-12",
-    weight: "20 lbs (drop to 15 for S3)",
-    rest: 150,
-    note: "Last (6/10, semi-soft): 10/8/11@15 — S1=10, S2 dipped to 8; S3=11 at the dropped 15. NO twang 6/10 ✓. SUPINATED/REGULAR ONLY — hammer twangs the R musculocutaneous nerve, stays OUT. Next jump 20 → 25 (no 22.5 at this gym). Trigger 12/12/10 → 25. Stay 20.",
+    weight: "50 lbs",
+    rest: 90,
+    note: "Last (6/11): 10/8/7 — S1=10 the best-at-50, CLEAN (no twang). The medial-thigh issue is a tissue/nerve thing to TRACK across movements, not curl mechanics — STOP instantly on any medial lower-thigh sensation here. Hold 50, no climb yet.",
     setNotes: [
-      "S1: supinated grip ONLY (nerve protocol). Slow eccentric, no swing. Was 10 — chase 12.",
-      "S2: 2.5-min rest. Was 8 — chase 12 to clear the trigger. STOP instantly on any R-bicep twang.",
-      "S3: drop to 15 lb. Squeeze every rep — bonus volume. Was 11."
+      "S1: slow, controlled, NO jerk off the start. Was 10 (best at 50) — match clean, stop on any medial pull.",
+      "S2: controlled. Was 8. The instant you feel a medial lower-thigh twang, STOP — that's the right call, not a failure.",
+      "S3: was 7. Approach controlled; twang → STOP. Drop to 40 only if reps (not tissue) fall short."
     ],
     trigger: [12, 12, 10],
-    triggerWeight: "25 lbs",
-    dropLastSet: true,
+    triggerWeight: "60 lbs (only once the medial thing clears)",
+    backoff: "40",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "Face Pulls",
+    sets: 2,
+    reps: "8-12",
+    weight: "~35 lbs",
+    rest: 90,
+    note: "⚙️ CHANGED (Soren's 6/11 call): dropped to ~35 lbs at 8-12 reps (was 15-20 @ 45, got bored). Rear-delt / shoulder-health GROOVER — NOT to failure, don't chase the weight. High elbows, pull to the forehead, squeeze the rear delts. (Reverse-pec-deck swap optional if you want a change.)",
+    setNotes: [
+      "S1: high elbows, pull to the forehead, squeeze the rear delts. 8-12 clean reps at ~35, no swing.",
+      "S2: last set, leave 1-2 in the tank. Groover — shoulder-health work, not a PR chase."
+    ],
+    trigger: null,
+    triggerWeight: "groover — no weight chase",
     adviceFor: function(setIdx, prev) {
       return null;
     }
