@@ -1915,15 +1915,13 @@ function repRangeClipFor(repsStr) {
   return map[key] || null;
 }
 
-// v2 expansion: set-position coaching cues (returns array, may be empty).
-// Chains effort + RIR for richer dialogue per Soren's request.
-//   Set 2 (idx=1) of 3+ set exercise: "Go hard" + "One to two reps in reserve" (S2 = trigger, 1-2 RIR).
-//   Last set of any exercise:        "Max effort" + "Zero to one in the tank" (push to 0-1 RIR).
+// Set-position effort/RIR cues — DISABLED per Soren (2026-06-13: "get rid of the audio
+// cues of 'go hard, 1-2 reps in reserve' — that type of shit is useless to me").
+// Kept as a no-op so the 3 call sites (rest-start announcements) stay wired; always
+// returns [] so no effort/RIR line is ever spoken. The countdown, rest-duration,
+// exercise-name, and rep-range cues are untouched.
+// (Old behavior: S2 → "Go hard" + "1-2 in reserve"; last set → "Max effort" + "0-1 in the tank".)
 function setPositionCuesFor(setIdx, totalSets) {
-  // Daily hype line carries its own effort/RIR coaching -- skip the generic cues.
-  if (dailyClipFor(currentExercise, setIdx)) return [];
-  if (totalSets >= 3 && setIdx === 1) return ['cue-go-hard', 'cue-rir-one-two'];
-  if (setIdx === totalSets - 1)        return ['cue-max-effort', 'cue-rir-zero-one'];
   return [];
 }
 
