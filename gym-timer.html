@@ -2075,8 +2075,8 @@ function dynamicRepAdvice(setIdx, prev, ex) {
   }
   if (r <= 0) return L + " stopped early. Reset, go by feel this set.";
   if (r < lo && maxed) {
-    return bo ? L + " was " + r + ", under " + lo + "-" + hi + ". Drop to " + bo + ", aim " + lo + "-" + aimHi + "."
-              : L + " was " + r + ", under " + lo + ". Grind " + lo + "+ or drop a notch.";
+    return bo ? L + " was " + r + ", a hair under " + lo + "-" + hi + " at max. Hold " + w + " and grind " + Math.max(r, 1) + "+ -- drop to " + bo + " ONLY if it stalls out next set."
+              : L + " was " + r + ", under " + lo + ". Hold " + w + ", grind " + Math.max(r, 1) + "+ or drop a notch.";
   }
   if (r <= lo && maxed) {
     return bo ? L + " hit the floor (" + r + " at max). Hold " + w + " for ~" + pLo + "-" + pHi + ", or drop to " + bo + " for " + lo + "-" + aimHi + "."
@@ -2157,8 +2157,12 @@ function effectiveWeight(exIdx, setIdx) {
     const m = baseStr.match(/(?:→|->|drop to)\s*(\d+(?:\.\d+)?)/i);
     if (m) dropNum = m[1];
   }
-  // (b) reactive drop: prior set landed under range at max effort + a backoff exists.
-  if (dropNum == null && setIdx >= 1 && ex.backoff) {
+  // (b) reactive drop: ONLY on a genuine multi-set downtrend at max effort
+  // (reps fading >=1/set AND the next set projecting under the floor). A single
+  // set that merely lands a hair under range must NOT auto-drop the loaded
+  // weight -- that over-triggered on 6/17 (a 9-rep S1 leg curl flipped 50->40
+  // when 50 should have held). The advisor note still suggests an optional drop.
+  if (dropNum == null && setIdx >= 2 && ex.backoff) {
     const prevLogs = [];
     let allLogged = true;
     for (let i = 0; i < setIdx; i++) {
@@ -2169,10 +2173,12 @@ function effectiveWeight(exIdx, setIdx) {
     if (allLogged && prevLogs.length === setIdx) {
       const rng = String(ex.reps || "").match(/(\d+)\D+(\d+)/);
       const last = prevLogs[prevLogs.length - 1];
-      if (rng && last && typeof last.reps === "number" && !isNaN(last.reps)) {
+      const first = prevLogs[0];
+      if (rng && last && first && typeof last.reps === "number" && !isNaN(last.reps) && typeof first.reps === "number" && !isNaN(first.reps)) {
         const lo = +rng[1];
         const maxed = (+last.difficulty || 0) >= 5;
-        if (last.reps < lo && maxed) {
+        const lostPerSet = (first.reps - last.reps) / (prevLogs.length - 1);
+        if (maxed && lostPerSet >= 1 && (last.reps - Math.round(lostPerSet)) < lo) {
           dropNum = (String(ex.backoff).match(/(\d+(?:\.\d+)?)/) || [])[1] || null;
         }
       }
