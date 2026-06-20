@@ -3042,6 +3042,16 @@ function finishWorkout() {
   elDone.style.display = "block";
   document.body.classList.add('finished');
   elSummary.innerHTML = buildSummaryHTML();
+  // Auto-copy the summary to clipboard on finish (no button tap needed).
+  // finishWorkout() runs inside the Set-Done tap gesture, so writeText() has
+  // transient activation and is permitted. Manual #copy-btn stays as a fallback.
+  try {
+    navigator.clipboard.writeText(buildSummary()).then(() => {
+      elCopy.textContent = "Copied ✓ (auto)";
+      elCopy.className = "copied";
+      setTimeout(() => { elCopy.textContent = "Copy Summary"; elCopy.className = ""; }, 2500);
+    }).catch(() => {});
+  } catch(e) {}
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
   VoiceCue.cancel();
   VoiceCue.play('workout-complete');
