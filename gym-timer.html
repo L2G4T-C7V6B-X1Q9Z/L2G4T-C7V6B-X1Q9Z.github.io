@@ -1022,103 +1022,99 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Upper";
+const dayType = "Lower";
 
-// UPPER session (next, per U/L rotation — last Upper was Tue 6/16 DONE 44m35s; Wed 6/17 Lower is DONE 33m07s, timer flipping Lower->Upper). PHASE 2. Order: Chest Press -> Cable Rope Row -> Cable Tricep Pushdown -> DB Lateral Raise -> DB Curls. 🎯 DB CURLS ADVANCED 20->25 this build — the 20 trigger was earned 6/16 (S1+S2 12/12; the S2 bottleneck broke 9->12). Compounds (Chest Press, Cable Row) = 4 sets; Chest Press S4 is a standing drop to 90 (dropLastSet); isolations 3 sets, DB LR + DB Curls drop the last set (dropLastSet). ⚠️ S2-DIP PATTERN (6/16): Chest Press + Cable Row both had S1=12 at HARD pace -> S2 crashed to 8. Pace S1 at MOD on BOTH compounds this session to protect S2 — S2 holding 10+ is what gates the triggers. ⚙️ DROP-SET CLARITY (Soren 6/16): for DB LR + DB Curls, S1-S2 are at the working weight chasing the trigger and S3 is ALWAYS a separate drop-set burnout — the S2-trigger and the S3-drop are NOT mutually exclusive. Backoffs wired: Chest Press 90 / Cable Row 100 (reactive drop-calls if reps crater). ⚠️ DB LR: keep every rep AT/BELOW parallel (painless L-shoulder click above parallel). DB Curls SUPINATED ONLY (hammer twangs the R musculocutaneous nerve). setNotes carry 6/16 actuals as soft floors — the dynamic advisor recomputes each set's target from your ACTUAL prior-set reps. Voice = ElevenLabs static bank, workout-agnostic — no regen, build id unchanged.
+// LOWER session (next, per U/L rotation — Fri 6/19 Upper DONE 43m32s; flipping Upper->Lower). PHASE 2. Order: Leg Press -> Calf Raises -> Leg Extension -> Leg Curl -> Face Pulls. Baselines from Wed 6/17 Lower (33m07s): LP 250 (12/12/8/7), Calf 130 (15/12/11), LE 70 (12/12/8), LC 50 (S1 9@50; that session's 40 sets were void from an advisor bug, since fixed), Face Pulls 40 (12/12). ⚠️ NO RIR IN SET NOTES per Soren 6/19 ("stop telling me the RIR — I always go max") — notes are FORM + LOAD cues only, never reserve-rep targets. LP normal controlled tempo + full depth. LC: STOP on any medial lower-thigh pull/spasm (tissue-nerve watch). LE: groove staged at 70, banking 80 until 3x70 cleans up; towel over the bar. Face Pulls = light rear-delt / shoulder-health groover, not to failure. No drop sets this session. Backoffs wired: LP 220 / Calf 115 / LC 40 (reactive drop only on a genuine multi-set fade — 6/17 advisor fix). Voice = ElevenLabs static bank, workout-agnostic — no regen, build id unchanged.
 const workout = [
   {
-    name: "Chest Press Machine",
+    name: "Leg Press",
     sets: 4,
     reps: "8-12",
-    weight: "110 lbs (S4 -> 90)",
+    weight: "250 lbs",
     rest: 150,
-    note: "Last (6/16): 12/8/10/9@90 — 🎯 S3=10 [HARD] pushed the chronic wall further (6-7 -> 9 -> 10, room above). S1=12 (top). ⚠️ S2 DIPPED to 8 because S1=12 was at HARD pace — pace S1 at MOD this time so S2 holds. S4 drop to 90 -> 9. Trigger 12/12/10/10 -> 120. Hold 110.",
+    note: "Last (6/17): 12/12/8/7 — S2 10->12 (best S2 at 250), S1=12 top. Trigger 12/12/10/10 NOT cleared (S3=8/S4=7) — HOLD 250, chase S3+S4 up. Normal controlled tempo, full depth, no bouncing.",
     setNotes: [
-      "S1: full ROM, controlled, MOD pace (~2-3 RIR) — do NOT redline. S1=12 HARD last time crashed S2 to 8. Banking S1 easy is what protects the back sets.",
-      "S2: full 2.5-min rest. This is the set that dipped (8 last time). Hold 10+ — that's the real target, not S1.",
-      "S3: the wall you cracked (10 on 6/16, up from the ~month-long 6-7). Hold 10+, push 11 toward the 120 trigger.",
-      "S4: DROP to 90 (standing plan — 9 clean reps 6/16). 0-1 RIR, no junk grinding."
+      "S1: full depth, even tempo, no bounce out of the bottom. Was 12 (top of range).",
+      "S2: full rest. Best set last time (12). Match or beat it — that's what gates the 265 jump.",
+      "S3: where it faded (8). Grind full-depth reps, chase 10+.",
+      "S4: empty the tank, full depth, no half reps. Was 7 — beat it."
     ],
     trigger: [12, 12, 10, 10],
-    triggerWeight: "120 lbs",
-    backoff: "90",
-    dropLastSet: true,
+    triggerWeight: "265 lbs",
+    backoff: "220",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Cable Rope Row",
-    sets: 4,
-    reps: "8-12",
-    weight: "120 lbs",
-    rest: 150,
-    note: "Last (6/16): 12/8/9/9 — S1=12 (top), S3=9 recovered the 6/13 dip (was 6), S4=9. ⚠️ S2 DIPPED to 8 — same S1-HARD -> S2-crash pattern as Chest Press. Pace S1 MOD. (You held 120 but skipped the planned S3 drop — fine, just keep the reps clean.) Trigger 12/12/10/10 -> 130. Hold 120.",
-    setNotes: [
-      "S1: drive elbows back, squeeze the scapula, slow eccentric — MOD pace (~2-3 RIR). S1=12 HARD crashed S2 to 8 last time. Don't redline S1.",
-      "S2: full rest. The dip set (8 last time) — hold 10+, strict, no body english.",
-      "S3: was 9 (recovered from the 6/13 six). Hold 9+, 1-2 RIR. Drop call -> 100 only if reps crater.",
-      "S4: last set — 0-1 RIR, clean. Was 9."
-    ],
-    trigger: [12, 12, 10, 10],
-    triggerWeight: "130 lbs",
-    backoff: "100",
-    adviceFor: function(setIdx, prev) {
-      return null;
-    }
-  },
-  {
-    name: "Cable Tricep Pushdown",
+    name: "Calf Raises (Leg Press)",
     sets: 3,
     reps: "12-15",
-    weight: "35 lbs (working; burnout drop to 30)",
+    weight: "130 lbs",
     rest: 90,
-    note: "Last (6/16): 15/11 @35 working + burnout drop to 30. Working sets LOCKED at 35 (non-overhead = cuff-safe, replaced French Press). Elbows pinned to your ribs, full lockout, hard squeeze, 2-3s eccentric. Last set is a burnout drop to 30.",
+    note: "Last (6/17): 15/12/11 — S1=15 ties top. S2 is the 135 gate (need 15). Deep stretch at the bottom, full squeeze at the top, pause both ends, no bouncing. Hold 130.",
     setNotes: [
-      "S1: elbows pinned to your sides (no flare), full lockout at the bottom, slow return. 35 lbs, ~2 RIR. Was 15.",
-      "S2: same 35, controlled, no leaning into it. Chase clean 12-15. Was 11.",
-      "S3: burnout — drop to 30 and push to 0-1 RIR."
+      "S1: deep stretch at the bottom, full contraction at the top, pause both ends. Was 15 (top).",
+      "S2: same controlled tempo — this is the 135 gate, need 15 here. Was 12.",
+      "S3: full range every rep, no cutting it short. Was 11."
     ],
-    trigger: [15, 12, 12],
-    triggerWeight: "next increment up",
+    trigger: [15, 15, 15],
+    triggerWeight: "135 lbs",
+    backoff: "115",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "DB Lateral Raise",
-    sets: 3,
-    reps: "12-15",
-    weight: "15 lbs (drop to 10 for S3)",
-    rest: 90,
-    note: "Last (6/16): 15/12/15@10 — S1=15 (top), ⚠️ S2 REGRESSED to 12 (was 14 on 6/13); the 17.5/20 jump still needs S2>=15. S3=15@10 drop. Keep every rep AT/BELOW parallel (painless L-shoulder click above parallel). Sits after the heavy row (delt pre-fatigued). Hold 15.",
-    setNotes: [
-      "S1: strict, controlled, slight forward lean. Stop AT parallel — no higher (L-shoulder click). Was 15 (top).",
-      "S2: still at 15, chasing the trigger — regressed to 12 last time (was 14). Need S2>=15 to earn the 17.5/20 jump. Cap at parallel.",
-      "S3: ALWAYS a separate drop set — drop to 10 and burn out clean reps to parallel, no matter how S1/S2 went. Was 15@10."
-    ],
-    trigger: [15, 15, 12],
-    triggerWeight: "17.5 or 20 lbs",
-    dropLastSet: true,
-    adviceFor: function(setIdx, prev) {
-      return null;
-    }
-  },
-  {
-    name: "DB Curls (supinated)",
+    name: "Leg Extension",
     sets: 3,
     reps: "8-12",
-    weight: "25 lbs (drop to 20 for S3)",
-    rest: 150,
-    note: "🎯 ADVANCED to 25 — the 20 trigger was earned 6/16 (S1+S2 12/12; bottleneck broke 9->12). FIRST session at 25, so expect reps to drop into the low range — that's normal on a jump, just bank clean reps. SUPINATED/REGULAR GRIP ONLY (hammer twangs the R musculocutaneous nerve, stays OUT). S3 drops to 20. Trigger 12/12/10 -> 30.",
+    weight: "70 lbs",
+    rest: 90,
+    note: "Last (6/17): 12/12/8 — S2 9->12 (+3) big jump. Banking 80 until 3x70 grooves clean. Towel over the bar (shin comfort). Hard squeeze at full extension, slow on the way down.",
     setNotes: [
-      "S1: supinated grip ONLY (nerve protocol). Slow eccentric, no swing. First reps at 25 — chase 8-10, expect fewer than at 20.",
-      "S2: 2.5-min rest. Still at 25, chasing the trigger. STOP instantly on any R-bicep twang.",
-      "S3: ALWAYS a separate drop set — drop to 20 and squeeze every rep, no matter how S1/S2 went. Bonus volume."
+      "S1: full lockout extension, hard squeeze at the top, slow eccentric. Was 12.",
+      "S2: matched S1 last time (12) — hold that, it's how 70 locks in.",
+      "S3: the fade set (8). Clean full-range reps to bank 70 so 80 opens up."
+    ],
+    trigger: [12, 12, 12],
+    triggerWeight: "80 lbs",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "Leg Curl",
+    sets: 3,
+    reps: "8-12",
+    weight: "50 lbs",
+    rest: 90,
+    note: "Last (6/17): S1 9@50 was the valid datum (the 40 sets were void from an advisor bug, since fixed). STOP instantly on any medial lower-thigh pull or spasm (tissue-nerve watch). Slow eccentric, no jerk off the bottom. Hold 50.",
+    setNotes: [
+      "S1: smooth, slow on the way down, no jerk off the bottom. STOP on any medial-thigh twang. Was 9.",
+      "S2: same — strict and controlled. Keep watching the medial thigh.",
+      "S3: full-range clean reps, stop instantly on any sharp pull."
     ],
     trigger: [12, 12, 10],
-    triggerWeight: "30 lbs",
-    dropLastSet: true,
+    triggerWeight: "60 lbs",
+    backoff: "40",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "Face Pulls",
+    sets: 2,
+    reps: "8-12",
+    weight: "40 lbs",
+    rest: 90,
+    note: "Last (6/17): 12/12 — locked groover. Rear-delt / shoulder health, NOT to failure. High elbows, pull to the forehead, external rotation at the end. Hold 40.",
+    setNotes: [
+      "S1: high elbows, pull the rope to your forehead, rotate your knuckles back at the end. Smooth and controlled. Was 12.",
+      "S2: same — squeeze the rear delts, keep it clean. This is a health groover, not a grinder. Was 12."
+    ],
+    trigger: [12, 12],
+    triggerWeight: "45 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
