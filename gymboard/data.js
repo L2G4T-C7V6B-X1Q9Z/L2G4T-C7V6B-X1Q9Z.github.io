@@ -737,6 +737,8 @@ function rollupUpdateFields(businessDate, done, streakCache) {
     'rollup.today': { businessDate, workout: done },
     // rollup.week[businessDate] is the per-day cache for the cheap Today paint.
     [`rollup.week.${businessDate}`]: { workout: done },
+    // v2: a workout IS a log action, so it bumps last-active like nutrition/weight.
+    lastActiveAt: serverTimestamp(),
   };
   if (Number.isFinite(streakCache)) {
     fields['rollup.streak'] = streakCache;

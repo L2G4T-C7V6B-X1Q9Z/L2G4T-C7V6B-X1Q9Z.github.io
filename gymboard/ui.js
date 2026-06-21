@@ -1251,21 +1251,87 @@ async function refetchMyDays() {
   }
 }
 
-// onSnapshot callback: members changed (someone joined/archived, or a rollup/days write
-// landed). Re-fetch the day + weight windows for the current member set, then repaint.
-// Weights are re-fetched on EVERY snapshot so a hideWeight toggle reflects for viewers.
+// Selective refetch: only the named members' day / weight windows (used by the diffed
+// snapshot path so one person's tap doesn't fan out into a read for everyone).
+async function refetchDaysFor(uids, now) {
+  const cur = viewerBusinessDate(now);
+  const from = fromKeyFor(cur, 120);
+  await Promise.all(uids.map(async (uid) => {
+    try { daysByUser.set(uid, (await data.fetchDays(uid, from, cur)) || {}); }
+    catch (e) { if (!daysByUser.has(uid)) daysByUser.set(uid, {}); }
+  }));
+}
+async function refetchWeightsFor(uids, now) {
+  const cur = viewerBusinessDate(now);
+  const from = fromKeyFor(cur, WEIGHT_WINDOW_DAYS);
+  await Promise.all(uids.map(async (uid) => {
+    try { weightsByUser.set(uid, (await data.fetchWeights(uid, from, cur)) || {}); }
+    catch (e) { if (!weightsByUser.has(uid)) weightsByUser.set(uid, {}); }
+  }));
+}
+
+// A signature of the fields that, when they move, mean a member's day/weight window
+// may have changed (so we should refetch THAT member — and only that member).
+function memberSig(m) {
+  const la = (m && m.lastActiveAt && typeof m.lastActiveAt.toMillis === 'function') ? m.lastActiveAt.toMillis() : 0;
+  return {
+    la,
+    hw: !!(m && m.hideWeight === true),
+    rollup: JSON.stringify((m && m.rollup) || {}),
+    rp: JSON.stringify((m && m.restPattern) || []),
+    joinDate: (m && m.profile && m.profile.joinDate) || '',
+  };
+}
+
+// Drop an optimistic workout overlay once the authoritative snapshot agrees AND the
+// write is no longer in flight — restoring snapshot authority + the missed->red path
+// (without this the overlay pins a stale DONE on this device forever).
+function reconcileOptimistic() {
+  for (const [uid, ov] of optimistic) {
+    for (const dk of Object.keys(ov)) {
+      if (unsynced.has(uid + '|' + dk)) continue; // still pending
+      const srv = (daysByUser.get(uid) || {})[dk];
+      if (!!(srv && srv.workout === true) === !!ov[dk].workout) clearOptimistic(uid, dk);
+    }
+  }
+}
+
+// onSnapshot callback: a /users doc changed (someone joined/archived, or a log bumped
+// rollup/lastActiveAt). We DIFF against the previous snapshot and refetch ONLY the
+// members who materially changed: a moved lastActiveAt/rollup => that member logged
+// (refetch their /days); a hideWeight flip or a weigh-in (la moves) => refetch their
+// /weights. A user's OWN tap bumps only their own doc, so this collapses the old
+// per-tap 2N-read fan-out (the renderer stall) down to ~2 reads for the one changed
+// member, while still propagating everyone else's logs.
 let snapshotSeq = 0;
+let _prevSig = new Map();
 function onMembers(usersArray) {
   members = Array.isArray(usersArray) ? usersArray.slice() : [];
   const mySeq = ++snapshotSeq;
   const now = anchoredNow();
-  Promise.all([refetchAllDays(now), refetchAllWeights(now)]).then(() => {
-    if (mySeq !== snapshotSeq) return; // a newer snapshot superseded this fetch
-    repaint();
-    scheduleNextRollover(); // member set can change my clock anchor; re-arm
-  });
-  // paint immediately from the rollup-bearing /users docs so the board isn't blank while
-  // the windows load. effectiveDays falls back to {} -> cells render as pending.
+
+  const curSig = new Map(members.map((m) => [idOf(m), memberSig(m)]));
+  const daysUids = [];
+  const weightUids = [];
+  for (const [uid, s] of curSig) {
+    const p = _prevSig.get(uid);
+    if (!p) { daysUids.push(uid); weightUids.push(uid); continue; } // new member
+    if (p.la !== s.la || p.rollup !== s.rollup || p.rp !== s.rp || p.joinDate !== s.joinDate) daysUids.push(uid);
+    if (p.hw !== s.hw || p.la !== s.la) weightUids.push(uid);
+  }
+  _prevSig = curSig;
+
+  if (daysUids.length || weightUids.length) {
+    Promise.all([refetchDaysFor(daysUids, now), refetchWeightsFor(weightUids, now)]).then(() => {
+      if (mySeq !== snapshotSeq) return; // a newer snapshot superseded this fetch
+      reconcileOptimistic();
+      repaint();
+      scheduleNextRollover(); // member set can change my clock anchor; re-arm
+    });
+  } else {
+    scheduleNextRollover();
+  }
+  // paint immediately from the rollup-bearing /users docs so the board isn't blank.
   repaint();
 }
 
