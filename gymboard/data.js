@@ -925,3 +925,460 @@ export function teardown() {
   }
   _unsubs.clear();
 }
+
+
+// =============================================================================
+// gymboard v2 Ã¢â‚¬â€ data.js ADDITIONS
+// -----------------------------------------------------------------------------
+// Paste these into app/data.js. They follow the existing module's conventions
+// exactly: assertInit() first, _userId is the bound capability user id (the
+// /users/{userId} doc id, NOT the anon auth uid), all writes are owner-only and
+// merge-safe (setDoc({...},{merge:true}) Ã¢â‚¬â€ never clobbers sibling fields, and
+// deep-merges nested maps so profile.joinDate survives a profile.displayName
+// write), every owner write routes a binding-mismatch permission-denied through
+// maybeFireReclaim() and re-throws a tagged 'gymboard/reclaim-needed' the same
+// way markWorkout() does, and every offset refinement is best-effort.
+//
+// LOG actions (workout/nutrition/weight) bump /users/{uid}.lastActiveAt in the
+// SAME WriteBatch as the data write (atomic, one round-trip, can't half-apply).
+// SETTINGS actions (goal / hideWeight / displayName / rollover / restPattern) do
+// NOT bump lastActiveAt Ã¢â‚¬â€ per SPEC, lastActiveAt tracks LOGS only.
+//
+// REQUIRES one import addition (see integration_notes): `updateDoc` is NOT used;
+// everything here uses setDoc(merge) + writeBatch, both already imported. No
+// arrayUnion needed. Add `businessWeekKey` to the logic.js import IF you want the
+// optional rollup.week cache mirror in setNutritionHit (left OUT below to keep
+// the writes minimal and rule-safe; see the note in setNutritionHit).
+// =============================================================================
+
+
+// =============================================================================
+// validation helpers (clamp / reject typos Ã¢â‚¬â€ SPEC Ã‚Â§Validation)
+// =============================================================================
+
+/**
+ * Validate a finite number in [lo, hi]. Rejects NaN / non-finite / out-of-range
+ * with a tagged 'gymboard/bad-value' so ui.js can show a clean inline error
+ * (the rules ALSO enforce the bounds server-side; this is the friendly front
+ * line, not the security boundary). `round` is the number of decimal places to
+ * snap to (0 => integer kcal/protein, 1 => one-decimal weight).
+ */
+function validateNumber(val, lo, hi, name, round = 0) {
+  const n = typeof val === 'number' ? val : Number(val);
+  if (!Number.isFinite(n)) {
+    throw taggedError('gymboard/bad-value', `${name}: not a number (${val}).`);
+  }
+  if (n < lo || n > hi) {
+    throw taggedError('gymboard/bad-value', `${name}: ${n} out of range ${lo}..${hi}.`);
+  }
+  const f = Math.pow(10, round);
+  return Math.round(n * f) / f;
+}
+
+
+// =============================================================================
+// lastActiveAt Ã¢â‚¬â€ single internal bumper, batched with the log write
+// =============================================================================
+
+/**
+ * Add the lastActiveAt bump to an existing WriteBatch as a merge-set on the
+ * owner's /users/{userId} doc. We merge ONLY { lastActiveAt } so no sibling
+ * field (userId / archived / profile / rollup / sharing Ã¢â‚¬Â¦) is touched, and the
+ * rule re-validates everything else unchanged. Used by every LOG action
+ * (workout/nutrition/weight) so "last active" reflects real activity, never a
+ * settings tweak. Centralized here so the field name + stamp live in one place.
+ *
+ * NOTE: lastActiveAt must be added to the userShapeOk() whitelist in the v2
+ * rules (see integration_notes) or these batched sets will be denied.
+ */
+function bumpLastActiveInBatch(batch, userId) {
+  const userRef = doc(_db, 'users', userId);
+  batch.set(userRef, { lastActiveAt: serverTimestamp() }, { merge: true });
+}
+
+
+// =============================================================================
+// setNutritionHit Ã¢â‚¬â€ set the nutrition triangle (ate) on own day cell + bump
+// =============================================================================
+
+/**
+ * setNutritionHit(businessDate, ate) -> Promise<void>
+ *
+ * Set the SHARED nutrition flag `ate` on the bound owner's own day cell, plus a
+ * lastActiveAt bump, in one atomic 2-write batch:
+ *   write 1: set /users/{me}/days/{bizDate} { ate, updatedAt } (merge)
+ *   write 2: set /users/{me}            { lastActiveAt }        (merge)
+ * Merge-safe: never clobbers workout/off/kcal/protein already on the cell.
+ * `ate` is coerced to bool. A binding-mismatch denial routes to reclaim and
+ * re-throws 'gymboard/reclaim-needed'; any other error propagates (no outbox Ã¢â‚¬â€
+ * the offline outbox is workout-only by design; Firestore's own offline cache
+ * still queues the set, but we surface the error so ui.js can decide).
+ */
+export async function setNutritionHit(businessDate, ate) {
+  assertInit();
+  const id = _userId;
+  if (!id) throw taggedError('gymboard/not-bound', 'setNutritionHit: no bound userId.');
+  if (!isDayKey(businessDate)) {
+    throw taggedError('gymboard/bad-date', `setNutritionHit: businessDate not a day-key: ${businessDate}`);
+  }
+  const value = ate !== false; // coerce to bool; default true
+
+  const batch = writeBatch(_db);
+  const dayRef = doc(_db, 'users', id, 'days', businessDate);
+  // merge so workout / off / kcal / protein on this cell are preserved.
+  batch.set(dayRef, { ate: value, updatedAt: serverTimestamp() }, { merge: true });
+  bumpLastActiveInBatch(batch, id);
+
+  const sentAt = Date.now();
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected Ã¢â‚¬â€ this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+  // best-effort offset refinement from the cell's resolved updatedAt.
+  try {
+    const after = await getDoc(dayRef);
+    const ts = after.exists() ? after.data().updatedAt : null;
+    if (ts instanceof Timestamp) refineOffsetFromServerTimestamp(ts, sentAt);
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+
+// =============================================================================
+// setMacros Ã¢â‚¬â€ set kcal/protein numbers on own day cell (validated) + bump
+// =============================================================================
+
+/**
+ * setMacros(businessDate, { kcal?, protein? }) -> Promise<void>
+ *
+ * Write optional macro NUMBERS onto the bound owner's own day cell (v2 lifts the
+ * v1 number-ban on the day cell), plus a lastActiveAt bump, atomically:
+ *   write 1: set /users/{me}/days/{bizDate} { kcal?, protein?, updatedAt } (merge)
+ *   write 2: set /users/{me}            { lastActiveAt }                   (merge)
+ * Validation: kcal 0..10000 (integer), protein 0..1000 (integer). At least one
+ * of kcal/protein must be present (an empty object is a no-op error). Only the
+ * provided keys are written, so setting just protein leaves an existing kcal
+ * intact (merge). Does NOT set `ate` Ã¢â‚¬â€ call setNutritionHit for the triangle
+ * (the bottom-bar MACROS button calls setNutritionHit; the editor calls this for
+ * the numbers).
+ */
+export async function setMacros(businessDate, macros = {}) {
+  assertInit();
+  const id = _userId;
+  if (!id) throw taggedError('gymboard/not-bound', 'setMacros: no bound userId.');
+  if (!isDayKey(businessDate)) {
+    throw taggedError('gymboard/bad-date', `setMacros: businessDate not a day-key: ${businessDate}`);
+  }
+  if (!macros || typeof macros !== 'object') {
+    throw taggedError('gymboard/bad-value', 'setMacros: opts must be { kcal?, protein? }.');
+  }
+
+  const payload = { updatedAt: serverTimestamp() };
+  if (macros.kcal !== undefined && macros.kcal !== null) {
+    payload.kcal = validateNumber(macros.kcal, 0, 10000, 'kcal', 0);
+  }
+  if (macros.protein !== undefined && macros.protein !== null) {
+    payload.protein = validateNumber(macros.protein, 0, 1000, 'protein', 0);
+  }
+  // require at least one real macro field (besides updatedAt).
+  if (Object.keys(payload).length < 2) {
+    throw taggedError('gymboard/bad-value', 'setMacros: provide kcal and/or protein.');
+  }
+
+  const batch = writeBatch(_db);
+  const dayRef = doc(_db, 'users', id, 'days', businessDate);
+  batch.set(dayRef, payload, { merge: true });
+  bumpLastActiveInBatch(batch, id);
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected Ã¢â‚¬â€ this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+}
+
+
+// =============================================================================
+// setDayOff Ã¢â‚¬â€ toggle the one-off day-off flag on own day cell
+// =============================================================================
+
+/**
+ * setDayOff(businessDate, off) -> Promise<void>
+ *
+ * Toggle the one-off `off` flag on the bound owner's own day cell (a day off is
+ * NOT a miss; logic.missed() honors it). This is a LOG action, so it bumps
+ * lastActiveAt in the same batch:
+ *   write 1: set /users/{me}/days/{bizDate} { off, updatedAt } (merge)
+ *   write 2: set /users/{me}            { lastActiveAt }        (merge)
+ * Merge-safe: leaves workout/ate/kcal/protein untouched. `off` is coerced bool.
+ */
+export async function setDayOff(businessDate, off) {
+  assertInit();
+  const id = _userId;
+  if (!id) throw taggedError('gymboard/not-bound', 'setDayOff: no bound userId.');
+  if (!isDayKey(businessDate)) {
+    throw taggedError('gymboard/bad-date', `setDayOff: businessDate not a day-key: ${businessDate}`);
+  }
+  const value = off !== false; // coerce to bool; default true
+
+  const batch = writeBatch(_db);
+  const dayRef = doc(_db, 'users', id, 'days', businessDate);
+  batch.set(dayRef, { off: value, updatedAt: serverTimestamp() }, { merge: true });
+  bumpLastActiveInBatch(batch, id);
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected Ã¢â‚¬â€ this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+}
+
+
+// =============================================================================
+// setWeight Ã¢â‚¬â€ write a weigh-in to the read-gated /weights subcollection + bump
+// =============================================================================
+
+/**
+ * setWeight(businessDate, lb) -> Promise<void>
+ *
+ * Write a weigh-in to /users/{me}/weights/{bizDate} = { lb, at:serverTimestamp }
+ * (one decimal, 50..600), plus a lastActiveAt bump, atomically:
+ *   write 1: set /users/{me}/weights/{bizDate} { lb, at } (merge)
+ *   write 2: set /users/{me}               { lastActiveAt } (merge)
+ * One weigh-in per business date (the date IS the doc id); a re-weigh same day
+ * overwrites that date's number (latest shown). The whole subcollection is
+ * READ-gated on hideWeight in the v2 rules Ã¢â‚¬â€ hiding instantly revokes group read
+ * of the entire weight history. Owner-only write. A binding-mismatch denial
+ * routes to reclaim; any other error propagates.
+ */
+export async function setWeight(businessDate, lb) {
+  assertInit();
+  const id = _userId;
+  if (!id) throw taggedError('gymboard/not-bound', 'setWeight: no bound userId.');
+  if (!isDayKey(businessDate)) {
+    throw taggedError('gymboard/bad-date', `setWeight: businessDate not a day-key: ${businessDate}`);
+  }
+  const value = validateNumber(lb, 50, 600, 'weight', 1); // one decimal, sane bounds
+
+  const batch = writeBatch(_db);
+  const weightRef = doc(_db, 'users', id, 'weights', businessDate);
+  batch.set(weightRef, { lb: value, at: serverTimestamp() }, { merge: true });
+  bumpLastActiveInBatch(batch, id);
+
+  const sentAt = Date.now();
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected Ã¢â‚¬â€ this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+  // best-effort offset refinement from the resolved `at`.
+  try {
+    const after = await getDoc(weightRef);
+    const ts = after.exists() ? after.data().at : null;
+    if (ts instanceof Timestamp) refineOffsetFromServerTimestamp(ts, sentAt);
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+
+// =============================================================================
+// SETTINGS writes (own /users doc) Ã¢â‚¬â€ merge-safe, NO lastActiveAt bump
+// =============================================================================
+
+/**
+ * Shared owner-doc settings writer: merge-set `patch` onto /users/{me} so only
+ * the named fields change and every sibling is preserved + re-validated
+ * unchanged by the rule. Settings actions do NOT bump lastActiveAt (that field
+ * tracks LOGS, not config). Binding-mismatch -> reclaim; other errors propagate.
+ */
+async function updateOwnUser(patch, callerName) {
+  assertInit();
+  const id = _userId;
+  if (!id) throw taggedError('gymboard/not-bound', `${callerName}: no bound userId.`);
+  const ref = doc(_db, 'users', id);
+  try {
+    await setDoc(ref, patch, { merge: true });
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected Ã¢â‚¬â€ this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+}
+
+const VALID_GOALS = ['gain', 'lose', 'maintain'];
+
+/**
+ * setGoal(goal) -> Promise<void>
+ * Set the weight goal ('gain' | 'lose' | 'maintain') on own user doc. Drives the
+ * weight-arrow color (logic.weightTrend). Rejects anything outside the enum.
+ */
+export async function setGoal(goal) {
+  if (!VALID_GOALS.includes(goal)) {
+    throw taggedError('gymboard/bad-value', `setGoal: goal must be one of ${VALID_GOALS.join('/')}.`);
+  }
+  await updateOwnUser({ goal }, 'setGoal');
+}
+
+/**
+ * setHideWeight(hide) -> Promise<void>
+ * Flip the hideWeight flag on own user doc. true instantly revokes the group's
+ * read of the ENTIRE /weights history (the v2 rule gates weights read on this
+ * flag) and blanks the under-name weight+arrow for everyone else. Coerced bool.
+ */
+export async function setHideWeight(hide) {
+  await updateOwnUser({ hideWeight: hide !== false }, 'setHideWeight');
+}
+
+/**
+ * setDisplayName(name) -> Promise<void>
+ * Self-rename: write profile.displayName on own user doc (<= 24 chars after
+ * trim, non-empty). Deep-merges into `profile`, so profile.joinDate (the
+ * immutable missed()/streak anchor) is preserved. The v2 rule must whitelist
+ * profile.displayName as owner-editable while keeping joinDate locked.
+ */
+export async function setDisplayName(name) {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  if (!trimmed) {
+    throw taggedError('gymboard/bad-value', 'setDisplayName: name is empty.');
+  }
+  if (trimmed.length > 24) {
+    throw taggedError('gymboard/bad-value', 'setDisplayName: name exceeds 24 characters.');
+  }
+  // merge:true on a nested map is a DEEP merge Ã¢â‚¬â€ profile.joinDate survives.
+  await updateOwnUser({ profile: { displayName: trimmed } }, 'setDisplayName');
+}
+
+/**
+ * setRollover(hour, min) -> Promise<void>
+ * Set the owner's day-rollover wall-clock time (default 4:00). hour 0..23,
+ * min 0..59, both integers. This is what flips "today-not-yet" to red in the
+ * owner's own zone; viewers read it off the user doc.
+ */
+export async function setRollover(hour, min) {
+  const h = validateNumber(hour, 0, 23, 'rolloverHour', 0);
+  const m = validateNumber(min, 0, 59, 'rolloverMinute', 0);
+  await updateOwnUser({ rolloverHour: h, rolloverMinute: m }, 'setRollover');
+}
+
+/**
+ * setRestPattern(pattern) -> Promise<void>
+ * Replace the owner's weekly rest pattern. `pattern` is the restPattern LIST the
+ * rules/logic expect: an array of { effectiveFrom:'YYYY-MM-DD', weekdays:[0..6] }
+ * version objects (0=Sun..6=Sat). We validate the SHAPE (array of versions with a
+ * valid effectiveFrom day-key and a weekdays array of unique ints 0..6) but do
+ * not reorder or inject versions Ã¢â‚¬â€ the ME page composes the new version list
+ * (append-a-version, forward-only) and hands it in whole. logic.isRestDay()
+ * resolves the effective version per date, so a bad list would silently mis-paint
+ * rest days; hence the strict client check here.
+ */
+export async function setRestPattern(pattern) {
+  if (!Array.isArray(pattern) || pattern.length === 0) {
+    throw taggedError('gymboard/bad-value', 'setRestPattern: expected a non-empty version array.');
+  }
+  for (const v of pattern) {
+    if (!v || typeof v !== 'object') {
+      throw taggedError('gymboard/bad-value', 'setRestPattern: each version must be an object.');
+    }
+    if (!isDayKey(v.effectiveFrom)) {
+      throw taggedError('gymboard/bad-value', `setRestPattern: bad effectiveFrom ${v.effectiveFrom}.`);
+    }
+    if (!Array.isArray(v.weekdays)) {
+      throw taggedError('gymboard/bad-value', 'setRestPattern: weekdays must be an array.');
+    }
+    const seen = new Set();
+    for (const d of v.weekdays) {
+      if (!Number.isInteger(d) || d < 0 || d > 6) {
+        throw taggedError('gymboard/bad-value', `setRestPattern: weekday ${d} not in 0..6.`);
+      }
+      if (seen.has(d)) {
+        throw taggedError('gymboard/bad-value', `setRestPattern: duplicate weekday ${d}.`);
+      }
+      seen.add(d);
+    }
+  }
+  await updateOwnUser({ restPattern: pattern }, 'setRestPattern');
+}
+
+
+// =============================================================================
+// fetchWeights Ã¢â‚¬â€ read a member's weights window (permission-denied => hidden)
+// =============================================================================
+
+/**
+ * fetchWeights(userId, fromKey, toKey) -> Promise<{[dateKey]: number}>
+ *
+ * getDocs of /users/{userId}/weights bounded fromKey..toKey (inclusive),
+ * returned as a flat map dateKey -> lb (pounds, one decimal) for direct hand-off
+ * to logic.weightTrend(). Bounds by documentId() (the date key) so it needs no
+ * extra index. Both bounds must be valid 'YYYY-MM-DD'.
+ *
+ * The whole subcollection is READ-gated on the subject's hideWeight flag in the
+ * v2 rules. Per SPEC, a permission-denied here MEANS "this member's weight is
+ * hidden" -> we resolve {} (caller renders a blank weight + no arrow), we do NOT
+ * route it to the reclaim prompt: a weight read is gated by privacy, and even on
+ * the caller's OWN id a denial is the hide-gate, not a binding mismatch (real
+ * binding mismatches still surface on the owner WRITES, which do route to
+ * reclaim). Any non-permission error (offline/transient) propagates so ui.js can
+ * distinguish "hidden" (={}) from "couldn't load".
+ */
+export async function fetchWeights(userId, fromKey, toKey) {
+  assertInit();
+  const id = userId || _userId;
+  if (!id) throw taggedError('gymboard/not-bound', 'fetchWeights: no userId.');
+  if (!isDayKey(fromKey) || !isDayKey(toKey)) {
+    throw taggedError('gymboard/bad-range', `fetchWeights: bad range ${fromKey}..${toKey}`);
+  }
+
+  const weightsCol = collection(_db, 'users', id, 'weights');
+  const q = query(weightsCol, orderBy(documentId()), startAt(fromKey), endAt(toKey));
+  let qs;
+  try {
+    qs = await getDocs(q);
+  } catch (err) {
+    if (isPermissionDenied(err)) return {}; // gated => hidden (SPEC); not a reclaim.
+    throw err;
+  }
+  const map = {};
+  qs.forEach((d) => {
+    const data = d.data();
+    if (data && typeof data.lb === 'number') map[d.id] = data.lb;
+  });
+  return map;
+}
+
+
+// =============================================================================
+// fetchOlderDays Ã¢â‚¬â€ scroll-back alias over the bounded fetchDays
+// =============================================================================
+
+/**
+ * fetchOlderDays(userId, fromKey, toKey) -> Promise<{[dateKey]: DayEntry}>
+ * Thin alias for the scroll-up "load past weeks" path. fetchDays() is already a
+ * bounded documentId() range read, so older weeks are just an earlier window;
+ * kept as a named export so ui.js reads intent at the call site (and so a future
+ * older-only optimization has a seam). Same reclaim/return semantics as fetchDays.
+ */
+export async function fetchOlderDays(userId, fromKey, toKey) {
+  return fetchDays(userId, fromKey, toKey);
+}

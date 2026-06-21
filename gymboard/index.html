@@ -42,24 +42,51 @@
   <!-- ===== TAB STRIP: Today | Grid (Phase 1 only — Weigh-in/Profile deferred) ===== -->
   <nav id="tabs" aria-label="Sections">
     <button class="tab is-active" data-tab="grid" aria-pressed="true">GRID</button>
+    <button class="tab" data-tab="me" aria-pressed="false">ME</button>
   </nav>
 
   <!-- ===== STAGE: the two screens. Only the inner list inside #screen-today scrolls. ===== -->
   <main id="stage">
 
-    <!-- ---- TODAY ---- -->
-    <section id="screen-today" class="screen" aria-label="Today" hidden>
-      <!-- Hero: group weekly consistency %. Recomputed on read from /days via
-           logic.groupConsistency. Fraction clamped; "+N bonus" surfaced separately. -->
-      <div id="hero">
-        <div id="hero-pct" class="num">--<span class="hero-sign">%</span></div>
-        <div id="hero-sub" class="hero-sub">loading the week…</div>
-        <div id="hero-bonus" class="hero-bonus hidden"></div>
-        <div class="hero-arc" aria-hidden="true"></div>
-      </div>
+    <!-- ---- ME (your inputs: logging on top, settings below) ---- -->
+    <section id="screen-me" class="screen" aria-label="Me" hidden>
+      <div id="me-scroll" class="scrolly">
 
-      <!-- The ONLY scrolling region. One row per active (archived==false) member. -->
-      <div id="today-list" class="scrolly" aria-live="polite"></div>
+        <!-- TODAY logging -->
+        <div class="me-card">
+          <div class="me-card-title">TODAY</div>
+          <div class="me-row"><span class="me-label">Workout</span><button id="me-workout" class="me-toggle" type="button">mark done</button></div>
+          <div class="me-row"><span class="me-label">Nutrition</span><button id="me-ate" class="me-toggle" type="button">hit it</button></div>
+          <div class="me-row"><span class="me-label">Calories</span><input id="me-kcal" class="me-input" type="number" inputmode="numeric" placeholder="kcal"></div>
+          <div class="me-row"><span class="me-label">Protein</span><input id="me-protein" class="me-input" type="number" inputmode="numeric" placeholder="g"></div>
+          <div class="me-row"><span class="me-label">Weight</span><input id="me-weight" class="me-input" type="number" inputmode="decimal" placeholder="lb"></div>
+          <button id="me-save-log" class="me-save" type="button">save today</button>
+        </div>
+
+        <!-- REST DAYS -->
+        <div class="me-card">
+          <div class="me-card-title">REST DAYS</div>
+          <div class="me-hint">Days you rest. Those never go red.</div>
+          <div id="me-restdays" class="me-weekdays"></div>
+        </div>
+
+        <!-- GOAL -->
+        <div class="me-card">
+          <div class="me-card-title">GOAL</div>
+          <div class="me-hint">Colors your weight trend arrow.</div>
+          <div id="me-goal" class="me-seg"></div>
+        </div>
+
+        <!-- PROFILE -->
+        <div class="me-card">
+          <div class="me-card-title">PROFILE</div>
+          <div class="me-row"><span class="me-label">Name</span><input id="me-name" class="me-input" type="text" maxlength="24" placeholder="your name"></div>
+          <div class="me-row"><span class="me-label">Day starts</span><input id="me-rollover" class="me-input me-input-sm" type="number" inputmode="numeric" min="0" max="23" placeholder="4"><span class="me-suffix">:00</span></div>
+          <div class="me-row"><span class="me-label">Hide my weight</span><button id="me-hideweight" class="me-toggle" type="button">shared</button></div>
+          <button id="me-save-settings" class="me-save" type="button">save settings</button>
+        </div>
+
+      </div>
     </section>
 
     <!-- ---- GRID (one tap off Today) ---- -->
@@ -80,10 +107,14 @@
   <!-- ===== ACTION BAR: ONE full-width WORKOUT tile (MACROS omitted this phase) ===== -->
   <!-- NEUTRAL (--g3 -> --g4), NOT red. Turns status-green only AFTER the tap. Optimistic
        with an "unsynced" dot; long-press = undo (gated by the client edit window). -->
-  <div id="action">
+  <div id="action" class="action-2">
     <button id="workout-tile" class="workout-tile" aria-label="Mark today's workout done">
-      <span class="wt-glyph" aria-hidden="true"></span>
       <span class="wt-label">WORKOUT</span>
+      <span class="wt-sub"></span>
+      <span class="wt-unsynced" aria-hidden="true" title="not yet synced"></span>
+    </button>
+    <button id="macros-tile" class="workout-tile macros-tile" aria-label="Mark today's nutrition hit">
+      <span class="wt-label">MACROS</span>
       <span class="wt-sub"></span>
       <span class="wt-unsynced" aria-hidden="true" title="not yet synced"></span>
     </button>
@@ -100,6 +131,36 @@
     </div>
     <button id="reclaim-btn" class="reclaim-btn">TAP TO RECLAIM THIS DEVICE</button>
     <div id="reclaim-status" class="reclaim-status" aria-live="assertive"></div>
+  </section>
+
+  <!-- ===== DAY EDITOR (tap your OWN cell; backfill any recent day) ===== -->
+  <div id="dayedit-backdrop" class="hidden" aria-hidden="true"></div>
+  <section id="dayedit" class="hidden sheet" role="dialog" aria-modal="true" aria-labelledby="dayedit-title">
+    <div id="dayedit-title" class="sheet-title">EDIT DAY</div>
+    <div id="dayedit-date" class="sheet-sub"></div>
+    <div class="sheet-body">
+      <div class="me-row"><span class="me-label">Workout</span><button id="de-workout" class="me-toggle" type="button">done</button></div>
+      <div class="me-row"><span class="me-label">Day off</span><button id="de-off" class="me-toggle" type="button">off</button></div>
+      <div class="me-row"><span class="me-label">Nutrition</span><button id="de-ate" class="me-toggle" type="button">hit it</button></div>
+      <div class="me-row"><span class="me-label">Calories</span><input id="de-kcal" class="me-input" type="number" inputmode="numeric" placeholder="kcal"></div>
+      <div class="me-row"><span class="me-label">Protein</span><input id="de-protein" class="me-input" type="number" inputmode="numeric" placeholder="g"></div>
+      <div class="me-row"><span class="me-label">Weight</span><input id="de-weight" class="me-input" type="number" inputmode="decimal" placeholder="lb"></div>
+    </div>
+    <div class="sheet-actions">
+      <button id="de-cancel" class="sheet-btn" type="button">cancel</button>
+      <button id="de-save" class="sheet-btn sheet-btn-go" type="button">save</button>
+    </div>
+  </section>
+
+  <!-- ===== DAY DETAIL (tap someone ELSE's cell; read-only) ===== -->
+  <div id="daydetail-backdrop" class="hidden" aria-hidden="true"></div>
+  <section id="daydetail" class="hidden sheet" role="dialog" aria-modal="true" aria-labelledby="daydetail-title">
+    <div id="daydetail-title" class="sheet-title"></div>
+    <div id="daydetail-sub" class="sheet-sub"></div>
+    <div id="daydetail-body" class="sheet-body"></div>
+    <div class="sheet-actions">
+      <button id="daydetail-close" class="sheet-btn" type="button">close</button>
+    </div>
   </section>
 
   <!-- ===== FATAL / BOOT BANNER (bad link, App Check fail, etc.) ===== -->
