@@ -337,7 +337,7 @@ button:disabled { cursor:default; }
 /* CSS Grid (display:grid), NOT a <table>. Columns set inline by ui.js; date gutter + 1 col
    per member. Newest date at top (ui.js orders rows). */
 #grid { display:grid; gap:6px; align-content:start; }
-.gcell-corner, .ghead, .gdate, .gcell {
+.gcell-corner, .ghead, .ghead-day, .gdate, .gcell {
   display:flex; align-items:center; justify-content:center;
   min-height:40px; border-radius:var(--r-sm);
   -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;
@@ -350,6 +350,28 @@ button:disabled { cursor:default; }
   background:var(--g1); border:1px solid var(--hairline);
 }
 .ghead.me { color:var(--red); border-color:var(--red-wash-bd); background:var(--red-wash); }
+
+/* ---- transposed grid: day-of-week column headers ---- */
+.ghead-day {
+  font-size:9px; font-weight:700; letter-spacing:.04em; color:var(--txt3);
+  text-transform:uppercase; flex-direction:column; gap:1px; white-space:nowrap;
+  background:transparent; border:none;
+}
+.ghead-day .ghd-dow { font-size:8.5px; letter-spacing:.08em; color:var(--txt3); }
+.ghead-day .ghd-md { font-size:9.5px; color:var(--txt2); font-variant-numeric:tabular-nums lining-nums; }
+.ghead-day.today .ghd-dow { color:var(--red); }
+.ghead-day.today .ghd-md { color:var(--txt); }
+
+/* ---- transposed grid: per-member row name label (full width, ellipsis fallback) ---- */
+.grow-name {
+  min-height:40px; line-height:40px; padding:0 8px 0 4px;
+  font-size:11px; font-weight:700; letter-spacing:.01em; color:var(--txt2);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  border-radius:var(--r-sm);
+}
+.grow-name.me { color:var(--red); }
+/* faint highlight on today's column cells so the current day stands out */
+.gcell.col-today { outline:1px solid var(--red-wash-bd); outline-offset:-1px; }
 .gdate {
   font-size:10px; color:var(--txt2); letter-spacing:.02em;
   font-variant-numeric:tabular-nums lining-nums;

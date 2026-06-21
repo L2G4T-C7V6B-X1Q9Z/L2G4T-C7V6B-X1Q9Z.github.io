@@ -81,7 +81,7 @@ const elToast = $('toast');
 let myUserId = null;
 let members = []; // latest /users snapshot (archived==false), as data.js hands it over
 let daysByUser = new Map(); // userId -> { [dateKey]: DayEntry }  (fetched window)
-let activeTab = 'today';
+let activeTab = 'grid';
 
 // Optimistic overlay: while a WORKOUT write for (userId+businessDate) is in flight (or
 // failed pre-rollback), we paint from THIS map, not the snapshot, and we never repaint
@@ -373,51 +373,56 @@ function renderGrid(now) {
   }
   const { keys, cur } = gridDateKeys(now);
 
-  // column order: date gutter, then the current user FIRST (frozen first data column),
-  // then the rest alphabetically.
-  const cols = members.slice().sort((a, b) => {
+  // Day columns run left->right oldest->newest (the week reads naturally, today on the
+  // right). People are ROWS (scales down the list instead of off-screen sideways, and
+  // each name gets a full-width gutter so it never truncates to "MARCU"/"OLIVI").
+  const dayCols = keys.slice().reverse();
+
+  // row order: the current user FIRST, then the rest alphabetically.
+  const rows = members.slice().sort((a, b) => {
     const am = idOf(a) === myUserId ? 0 : 1;
     const bm = idOf(b) === myUserId ? 0 : 1;
     if (am !== bm) return am - bm;
     return displayNameOf(a).localeCompare(displayNameOf(b));
   });
 
-  // CSS grid template: a fixed date gutter + one fixed-width column per member.
-  elGrid.style.gridTemplateColumns = `52px repeat(${cols.length}, minmax(44px, 1fr))`;
+  // CSS grid template: a name gutter + one column per day of the week.
+  elGrid.style.gridTemplateColumns = `68px repeat(${dayCols.length}, minmax(0, 1fr))`;
 
   const cells = [];
-  // header row: corner + member name tokens
+  // header row: corner + day-of-week headers
   cells.push('<div class="gcell-corner"></div>');
-  for (const m of cols) {
-    const isMe = idOf(m) === myUserId;
-    cells.push(`<div class="ghead${isMe ? ' me' : ''}" title="${escapeHtml(displayNameOf(m))}">${escapeHtml(shortName(m))}</div>`);
-  }
-
-  // body: newest date at top
-  for (const dk of keys) {
+  for (const dk of dayCols) {
     const g = fmtDateGutter(dk);
     const isToday = dk === cur;
     cells.push(
-      `<div class="gdate${isToday ? ' today' : ''}"><span class="gdate-dow">${g.dow}</span><span>${g.md}</span></div>`
+      `<div class="ghead-day${isToday ? ' today' : ''}"><span class="ghd-dow">${g.dow}</span><span class="ghd-md">${g.md}</span></div>`
     );
-    for (const m of cols) {
-      const uid = idOf(m);
-      const subject = subjectOf(m);
-      const isMe = uid === myUserId;
+  }
+
+  // body: one row per member (name label + that member's 7 day cells)
+  for (const m of rows) {
+    const uid = idOf(m);
+    const subject = subjectOf(m);
+    const isMe = uid === myUserId;
+    cells.push(
+      `<div class="grow-name${isMe ? ' me' : ''}" title="${escapeHtml(displayNameOf(m))}">${escapeHtml(displayNameOf(m))}</div>`
+    );
+    for (const dk of dayCols) {
       const day = effectiveDays(uid)[dk];
       const cls = classifyDay(subject, dk, now, day);
       const macro = cls.macros ? '<span class="gmacro" aria-hidden="true"></span>' : '';
+      const isToday = dk === cur;
       cells.push(
-        `<div class="gcell ${cls.status}${isMe ? ' me' : ''}" aria-label="${escapeHtml(displayNameOf(m))} ${dk} ${cls.status}">${macro}</div>`
+        `<div class="gcell ${cls.status}${isToday ? ' col-today' : ''}${isMe ? ' me' : ''}" aria-label="${escapeHtml(displayNameOf(m))} ${dk} ${cls.status}">${macro}</div>`
       );
     }
   }
   elGrid.innerHTML = cells.join('');
 
-  const first = keys[keys.length - 1];
-  const lastG = fmtDateGutter(first);
-  const firstG = fmtDateGutter(cur);
-  elGridRange.textContent = `${lastG.md} – ${firstG.md}`;
+  const firstDk = dayCols[0];
+  const lastDk = dayCols[dayCols.length - 1];
+  elGridRange.textContent = `${fmtDateGutter(firstDk).md} – ${fmtDateGutter(lastDk).md}`;
 
   if (!elGridLegend.dataset.built) {
     elGridLegend.innerHTML =

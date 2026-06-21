@@ -41,15 +41,15 @@
 
   <!-- ===== TAB STRIP: Today | Grid (Phase 1 only — Weigh-in/Profile deferred) ===== -->
   <nav id="tabs" aria-label="Sections">
-    <button class="tab is-active" data-tab="today" aria-pressed="true">TODAY</button>
-    <button class="tab" data-tab="grid" aria-pressed="false">GRID</button>
+    <button class="tab is-active" data-tab="grid" aria-pressed="true">GRID</button>
+    <button class="tab" data-tab="today" aria-pressed="false">TODAY</button>
   </nav>
 
   <!-- ===== STAGE: the two screens. Only the inner list inside #screen-today scrolls. ===== -->
   <main id="stage">
 
     <!-- ---- TODAY ---- -->
-    <section id="screen-today" class="screen is-active" aria-label="Today">
+    <section id="screen-today" class="screen" aria-label="Today" hidden>
       <!-- Hero: group weekly consistency %. Recomputed on read from /days via
            logic.groupConsistency. Fraction clamped; "+N bonus" surfaced separately. -->
       <div id="hero">
@@ -64,7 +64,7 @@
     </section>
 
     <!-- ---- GRID (one tap off Today) ---- -->
-    <section id="screen-grid" class="screen" aria-label="Week grid" hidden>
+    <section id="screen-grid" class="screen is-active" aria-label="Week grid">
       <div id="grid-head">
         <div class="grid-title">THIS WEEK</div>
         <div id="grid-range" class="grid-range mono"></div>
