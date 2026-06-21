@@ -345,11 +345,15 @@ button:disabled { cursor:default; }
 }
 .gcell-corner { background:transparent; }
 .ghead {
-  font-size:9.5px; font-weight:700; letter-spacing:.08em; color:var(--txt3);
-  text-transform:uppercase; overflow:hidden; white-space:nowrap;
-  background:var(--g1); border:1px solid var(--hairline);
+  min-height:74px; align-items:flex-end; padding-bottom:5px;
+  background:transparent; border:none; overflow:hidden;
 }
-.ghead.me { color:var(--red); border-color:var(--red-wash-bd); background:var(--red-wash); }
+.ghead-v {
+  writing-mode:vertical-rl; text-orientation:mixed;
+  font-size:10px; font-weight:700; letter-spacing:.04em; color:var(--txt3);
+  text-transform:uppercase; max-height:66px; overflow:hidden; white-space:nowrap;
+}
+.ghead.me .ghead-v { color:var(--red); }
 
 /* ---- transposed grid: day-of-week column headers ---- */
 .ghead-day {
@@ -385,36 +389,23 @@ button:disabled { cursor:default; }
 /* ---- grid status CELLS: status palette + SHAPE (11px-safe, grayscale-safe) ---- */
 .gcell { position:relative; background:var(--g2); border:1px solid var(--hairline); color:transparent; font-size:13px; }
 .gcell.me { box-shadow:inset 2px 0 0 var(--red); }
-/* done: solid + check */
-.gcell.done { background:var(--st-done-bg); border-color:#225338; color:var(--st-done); }
-.gcell.done::after { content:'\2713'; font-size:14px; color:var(--st-done); }
-/* bonus: solid + check + plus */
-.gcell.bonus { background:#10231a; border-color:#2c6043; }
-.gcell.bonus::after { content:'\2713'; font-size:13px; color:var(--st-bonus); }
-.gcell.bonus::before { content:'+'; position:absolute; top:1px; right:4px; font-size:10px; color:var(--st-bonus); }
-/* rest: hollow ring (no fill) */
-.gcell.rest { background:transparent; border:1px solid var(--st-rest-bd); }
-/* missed: red wash + 45deg hatch + strike */
-.gcell.missed {
-  border-color:var(--st-missed-line);
-  background:
-    repeating-linear-gradient(45deg, transparent 0 5px, rgba(92,23,20,.6) 5px 6px),
-    var(--st-missed-bg);
-}
-.gcell.missed::after {
-  content:''; position:absolute; left:18%; right:18%; top:50%; height:1.5px;
-  background:rgba(231,169,162,.8); transform:rotate(-12deg);
-}
-/* off: dashed border */
-.gcell.off { background:var(--st-off); border:1px dashed var(--etch); }
-.gcell.off::after { content:'\2013'; color:var(--txt3); font-size:13px; }
-/* pending: faint centered dots, no border */
-.gcell.pending { background:transparent; border:none; }
-.gcell.pending::after { content:'\00B7'; color:var(--st-pending); font-size:22px; line-height:0; }
-/* pre-join: diagonal corner clip */
+/* done: solid green + check */
+.gcell.done { background:#1f7a4d; border-color:#1f7a4d; }
+.gcell.done::after { content:'\2713'; font-size:13px; color:#eafaf1; }
+/* bonus (worked out on a rest day): brighter green + check */
+.gcell.bonus { background:#2a9c63; border-color:#2a9c63; }
+.gcell.bonus::after { content:'\2713'; font-size:13px; color:#eafaf1; }
+/* missed: solid red, no marks */
+.gcell.missed { background:#9e342c; border-color:#9e342c; }
+/* rest: muted neutral fill (nothing expected) */
+.gcell.rest { background:var(--g2); border:1px solid var(--hairline); }
+/* off: muted with a dash (manual day off) */
+.gcell.off { background:var(--g3); border:1px solid var(--etch); }
+.gcell.off::after { content:'\2013'; color:var(--txt3); font-size:12px; }
+/* pending: empty, dashed (today, not logged yet) */
+.gcell.pending { background:transparent; border:1px dashed var(--hairline); }
+/* pre-join: faint, clipped corner */
 .gcell.prejoin { background:var(--g1); border:1px solid var(--hairline); clip-path:polygon(9px 0, 100% 0, 100% 100%, 0 100%, 0 9px); }
-/* macros corner dot (secondary, never red) */
-.gcell .gmacro { position:absolute; top:3px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--st-macrodot); }
 
 /* grid legend strip */
 .grid-legend {
@@ -425,13 +416,12 @@ button:disabled { cursor:default; }
 }
 .leg { display:inline-flex; align-items:center; gap:6px; font-size:9px; letter-spacing:.06em; color:var(--txt3); text-transform:uppercase; }
 .leg .swatch { width:14px; height:14px; border-radius:4px; flex:0 0 auto; position:relative; }
-.leg .swatch.done { background:var(--st-done-bg); border:1px solid #225338; }
-.leg .swatch.done::after { content:'\2713'; font-size:9px; color:var(--st-done); display:flex; align-items:center; justify-content:center; height:100%; }
-.leg .swatch.rest { border:1px solid var(--st-rest-bd); }
-.leg .swatch.missed { border:1px solid var(--st-missed-line); background:repeating-linear-gradient(45deg, transparent 0 3px, rgba(92,23,20,.6) 3px 4px), var(--st-missed-bg); }
-.leg .swatch.off { background:var(--st-off); border:1px dashed var(--etch); }
-.leg .swatch.pending { border:none; }
-.leg .swatch.pending::after { content:'\00B7'; color:var(--st-pending); font-size:16px; display:flex; align-items:center; justify-content:center; height:100%; }
+.leg .swatch.done { background:#1f7a4d; border:1px solid #1f7a4d; }
+.leg .swatch.done::after { content:'\2713'; font-size:9px; color:#eafaf1; display:flex; align-items:center; justify-content:center; height:100%; }
+.leg .swatch.rest { background:var(--g2); border:1px solid var(--hairline); }
+.leg .swatch.missed { background:#9e342c; border:1px solid #9e342c; }
+.leg .swatch.off { background:var(--g3); border:1px dashed var(--etch); }
+.leg .swatch.pending { background:transparent; border:1px dashed var(--hairline); }
 
 /* ============ LOUD RECLAIM MODAL ============ */
 #reclaim-backdrop {
