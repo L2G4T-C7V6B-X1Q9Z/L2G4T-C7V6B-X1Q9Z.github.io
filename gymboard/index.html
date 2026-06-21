@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#060606">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>gymboard</title>
+
+<!-- JetBrains Mono — loaded NON-BLOCKING (media=print, flipped to all onload) so a
+     stalled / captive gym connection can never hang first paint. display=optional means
+     the font applies only when it's ready immediately (HTTP cache after the first visit)
+     and never swaps in mid-session. The tuned monospace fallback stack in styles.css keeps
+     the app fully usable and deliberately styled if this never loads. Mirrors the
+     gym-timer-v4.html approach verbatim. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=optional" rel="stylesheet" media="print" onload="this.media='all'">
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!--
+  APP SHELL — the gym-timer-v4 fixed-flex pattern (NO page scroll, NO sticky bars).
+  #app is position:fixed/inset:0/100dvh/flex-column/overflow:hidden. The ONLY scroller is
+  the per-person list (#today-list). The tab strip and the bottom action bar are fixed-
+  height flex children that never scroll. See DESIGN.md "App shell" + styles.css.
+-->
+<div id="app">
+
+  <!-- ===== HEADER: brand + tiny session register (wake/save-style status pips) ===== -->
+  <header id="hdr">
+    <div id="hdr-left">GYM<span class="accent">BOARD</span></div>
+    <div id="hdr-right">
+      <span id="hdr-reg" aria-label="Session register"></span>
+      <span id="pip-sync" class="pip-status" aria-hidden="true" title="sync"></span>
+    </div>
+  </header>
+
+  <!-- ===== TAB STRIP: Today | Grid (Phase 1 only — Weigh-in/Profile deferred) ===== -->
+  <nav id="tabs" aria-label="Sections">
+    <button class="tab is-active" data-tab="today" aria-pressed="true">TODAY</button>
+    <button class="tab" data-tab="grid" aria-pressed="false">GRID</button>
+  </nav>
+
+  <!-- ===== STAGE: the two screens. Only the inner list inside #screen-today scrolls. ===== -->
+  <main id="stage">
+
+    <!-- ---- TODAY ---- -->
+    <section id="screen-today" class="screen is-active" aria-label="Today">
+      <!-- Hero: group weekly consistency %. Recomputed on read from /days via
+           logic.groupConsistency. Fraction clamped; "+N bonus" surfaced separately. -->
+      <div id="hero">
+        <div id="hero-pct" class="num">--<span class="hero-sign">%</span></div>
+        <div id="hero-sub" class="hero-sub">loading the week…</div>
+        <div id="hero-bonus" class="hero-bonus hidden"></div>
+        <div class="hero-arc" aria-hidden="true"></div>
+      </div>
+
+      <!-- The ONLY scrolling region. One row per active (archived==false) member. -->
+      <div id="today-list" class="scrolly" aria-live="polite"></div>
+    </section>
+
+    <!-- ---- GRID (one tap off Today) ---- -->
+    <section id="screen-grid" class="screen" aria-label="Week grid" hidden>
+      <div id="grid-head">
+        <div class="grid-title">THIS WEEK</div>
+        <div id="grid-range" class="grid-range mono"></div>
+      </div>
+      <!-- CSS Grid (display:grid), NOT a <table>. Newest date at top. Built by ui.js. -->
+      <div id="grid-scroll" class="scrolly">
+        <div id="grid" role="table" aria-label="Week consistency grid"></div>
+      </div>
+      <div class="grid-legend" id="grid-legend" aria-hidden="true"></div>
+    </section>
+
+  </main>
+
+  <!-- ===== ACTION BAR: ONE full-width WORKOUT tile (MACROS omitted this phase) ===== -->
+  <!-- NEUTRAL (--g3 -> --g4), NOT red. Turns status-green only AFTER the tap. Optimistic
+       with an "unsynced" dot; long-press = undo (gated by the client edit window). -->
+  <div id="action">
+    <button id="workout-tile" class="workout-tile" aria-label="Mark today's workout done">
+      <span class="wt-glyph" aria-hidden="true"></span>
+      <span class="wt-label">WORKOUT</span>
+      <span class="wt-sub"></span>
+      <span class="wt-unsynced" aria-hidden="true" title="not yet synced"></span>
+    </button>
+  </div>
+
+  <!-- ===== LOUD RECLAIM MODAL (signed out elsewhere). Wired to data.onReclaimNeeded. ===== -->
+  <div id="reclaim-backdrop" class="hidden" aria-hidden="true"></div>
+  <section id="reclaim" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="reclaim-title" aria-describedby="reclaim-body">
+    <div class="reclaim-icon" aria-hidden="true">!</div>
+    <div id="reclaim-title" class="reclaim-title">SIGNED OUT ELSEWHERE</div>
+    <div id="reclaim-body" class="reclaim-body">
+      This device was signed out because your link was opened on another phone.
+      Your taps are not being saved right now.
+    </div>
+    <button id="reclaim-btn" class="reclaim-btn">TAP TO RECLAIM THIS DEVICE</button>
+    <div id="reclaim-status" class="reclaim-status" aria-live="assertive"></div>
+  </section>
+
+  <!-- ===== FATAL / BOOT BANNER (bad link, App Check fail, etc.) ===== -->
+  <div id="boot" class="hidden" role="alert"></div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" aria-live="polite"></div>
+
+</div>
+
+<!--
+  ui.js is the ES-module entry point. It DYNAMICALLY imports ./firebase-config.js (the
+  gitignored copy of firebase-config.example.js, which exports `firebaseConfig`,
+  `recaptchaSiteKey`, and optional `appCheckDebugToken`) and passes those into
+  data.initApp(). A dynamic import (not a classic <script> or a static import) is used so
+  that if firebase-config.js hasn't been created yet, ui.js can catch the failure and show
+  a friendly CONFIG-MISSING banner instead of a blank screen + opaque module error. ui.js
+  also imports data.js (the Firebase layer) and logic.js (pure date/missed/streak math).
+-->
+<script type="module" src="ui.js"></script>
+
+</body>
+</html>

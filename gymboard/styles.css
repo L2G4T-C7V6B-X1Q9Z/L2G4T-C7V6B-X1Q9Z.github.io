@@ -1,0 +1,500 @@
+/* =============================================================================
+   gymboard — styles.css   (Phase 1)
+   -----------------------------------------------------------------------------
+   Two palettes that NEVER mix (DESIGN.md "Chrome vs. status palette"):
+     - CHROME  = the gym-timer-v4 system. Red (#ff3b30) means live / accent / brand,
+                 NEVER "you failed." All app chrome is red-on-black/gray.
+     - STATUS  = desaturated, dark-tuned. Allowed ONLY inside a day cell, a grid square,
+                 or a Today status pill. Each status carries COLOR **plus** SHAPE so it
+                 survives red-green colorblindness, gym glare, and 11px squares.
+   The WORKOUT tile is deliberately NEUTRAL (--g3 -> --g4), not red; status-green appears
+   only AFTER the tap. Shell = the gym-timer-v4 fixed-flex pattern (no page scroll, no
+   sticky bars). Chrome tokens are copied verbatim from gym-timer-v4.html lines 19-47.
+   ============================================================================= */
+
+/* ============ CHROME TOKENS (verbatim from gym-timer-v4) ============ */
+:root {
+  --g0:#060606;            /* canvas (OLED black) */
+  --g1:#0e0e0e;            /* panel */
+  --g2:#181818;            /* module */
+  --g3:#232323;            /* control face */
+  --g4:#2f2f2f;            /* pressed / filled */
+  --hairline:#272727;
+  --edge:rgba(255,255,255,.045);
+  --txt:#e8e8e8;
+  --txt2:#9c9c9c;
+  --txt3:#6e6e6e;
+  --etch:#585858;
+  --red:#ff3b30;
+  --red-dim:rgba(255,59,48,.32);
+  --red-wash:#2a0f0d;
+  --red-wash-bd:#5c1714;
+  --font-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+  --spring:cubic-bezier(.34,1.45,.4,1);
+  --r-lg:18px;
+  --r-md:12px;
+  --r-sm:8px;
+  --bd:rgba(255,255,255,.07);
+  --panel-grad:linear-gradient(180deg,#191919,#111111);
+  --ctl-grad:linear-gradient(180deg,#242424,#1a1a1a);
+  --elev:0 12px 32px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05);
+
+  /* ============ STATUS TOKENS (new; cells / stripes / pills ONLY) ============ */
+  --st-done:#2f7d4f;        /* desaturated green (workout=true) */
+  --st-done-bg:#13251b;     /* fill behind a done cell */
+  --st-bonus:#4a9e6a;       /* brighter green (workout on a rest day) */
+  --st-rest-bd:var(--etch); /* rest = hollow with a visible BORDER RING */
+  --st-off:#242424;         /* OFF = gray, DASHED border */
+  --st-missed-bg:#2a0f0d;   /* missed red wash (reuses --red-wash) */
+  --st-missed-line:#5c1714; /* missed hatch / strike stroke */
+  --st-pending:#6e6e6e;     /* faint centered dots, NO border */
+  --st-macrodot:#2f7d4f;    /* small corner dot when macros=true */
+}
+
+/* ============ BASE ============ */
+* { margin:0; padding:0; box-sizing:border-box; }
+html { -webkit-text-size-adjust:100%; }
+html, body { height:100%; background:var(--g0); overscroll-behavior:none; }
+body {
+  font-family:var(--font-mono);
+  font-size:13.5px; line-height:1.5;
+  color:var(--txt);
+  -webkit-tap-highlight-color:transparent;
+  overflow:hidden;
+  /* Global selection/zoom block (gym-timer parity): no long-press callout/magnifier, no
+     double-tap smart-zoom, so our WORKOUT long-press-to-undo fires instead of iOS UI. */
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  touch-action:manipulation;
+}
+::selection { background:var(--g4); color:var(--txt); }
+button {
+  font:inherit; color:inherit; background:none; border:none; cursor:pointer;
+  touch-action:manipulation;
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent;
+}
+button:disabled { cursor:default; }
+:focus { outline:none; }
+:focus-visible { outline:1px solid var(--txt2); outline-offset:2px; }
+.num, .mono { font-variant-numeric:tabular-nums lining-nums; }
+.hidden { display:none !important; }
+.accent { color:var(--red); }
+
+/* ============ APP FRAME (gym-timer-v4 lines 88-103) ============ */
+#app {
+  position:fixed; inset:0;
+  height:100vh; height:100dvh;
+  background:var(--g0);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+  padding-top:env(safe-area-inset-top,0px);
+}
+@media (min-width:500px) {
+  #app {
+    left:50%; right:auto; transform:translateX(-50%);
+    width:430px;
+    border-left:1px solid var(--hairline);
+    border-right:1px solid var(--hairline);
+  }
+}
+
+/* ============ HEADER (52px) ============ */
+#hdr {
+  height:52px; flex:0 0 52px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 14px;
+  border-bottom:1px solid var(--hairline);
+  background:var(--g1);
+  box-shadow:inset 0 1px 0 var(--edge);
+  position:relative; z-index:20;
+}
+#hdr-left {
+  font-weight:700; font-size:14px; letter-spacing:.18em;
+  color:var(--txt2); white-space:nowrap;
+}
+#hdr-right { display:flex; align-items:center; gap:8px; }
+#hdr-reg {
+  font-size:10px; color:var(--txt3); letter-spacing:.04em; white-space:nowrap;
+  font-variant-numeric:tabular-nums lining-nums;
+}
+.pip-status { width:6px; height:6px; border-radius:50%; flex:0 0 auto; background:var(--g4); transition:background 140ms ease, box-shadow 140ms ease; }
+#pip-sync.ok { background:var(--st-done); }
+#pip-sync.pending { background:var(--red); box-shadow:0 0 0 0 rgba(255,59,48,.5); animation:syncpulse 1.4s ease-in-out infinite; }
+#pip-sync.fail { background:transparent; border:1px solid var(--red); }
+@keyframes syncpulse { 0%,100%{ box-shadow:0 0 0 0 rgba(255,59,48,0);} 50%{ box-shadow:0 0 0 3.5px rgba(255,59,48,.22);} }
+
+/* ============ TAB STRIP (44px, fixed, never scrolls) ============ */
+#tabs {
+  height:44px; flex:0 0 44px;
+  display:flex; align-items:stretch;
+  border-bottom:1px solid var(--hairline);
+  background:var(--g1);
+  position:relative; z-index:15;
+}
+.tab {
+  flex:1 1 0; min-width:0;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:700; font-size:11px; letter-spacing:.16em;
+  color:var(--txt3);
+  position:relative;
+  transition:color 140ms ease;
+}
+.tab.is-active { color:var(--txt); }
+/* the active-tab marker is a 2px RED underline (chrome accent) */
+.tab.is-active::after {
+  content:''; position:absolute; left:18%; right:18%; bottom:0; height:2px;
+  background:var(--red); border-radius:2px 2px 0 0;
+}
+.tab:active { color:var(--txt2); }
+
+/* ============ STAGE + SCREENS ============ */
+#stage { flex:1 1 auto; position:relative; overflow:hidden; min-height:0; }
+.screen { position:absolute; inset:0; display:none; flex-direction:column; overflow:hidden; min-height:0; }
+.screen.is-active { display:flex; }
+
+/* the ONLY scrollers in the whole app */
+.scrolly { overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+
+/* ============ HERO (group weekly consistency %) ============ */
+#hero {
+  flex:0 0 auto; position:relative;
+  padding:26px 16px 20px;
+  display:flex; flex-direction:column; align-items:center;
+  border-bottom:1px solid var(--hairline);
+  background:var(--g0);
+}
+#hero-pct {
+  font-weight:700; font-size:76px; line-height:.92;
+  letter-spacing:-.04em; color:var(--txt);
+}
+#hero-pct .hero-sign { font-size:30px; color:var(--txt3); margin-left:4px; letter-spacing:0; }
+.hero-sub { margin-top:8px; font-size:11.5px; color:var(--txt2); letter-spacing:.06em; text-align:center; }
+.hero-bonus {
+  margin-top:8px;
+  font-size:10px; font-weight:700; letter-spacing:.14em;
+  color:var(--st-bonus);
+  border:1px solid #235034; background:#10231a; border-radius:999px;
+  padding:3px 10px;
+}
+/* decorative chrome-red accent arc under the hero (NOT a status color) */
+.hero-arc {
+  position:absolute; left:50%; bottom:-1px; transform:translateX(-50%);
+  width:160px; height:3px; border-radius:3px 3px 0 0;
+  background:linear-gradient(90deg,transparent,var(--red),transparent);
+  opacity:.7;
+}
+
+/* ============ TODAY: per-person status list (the scroller) ============ */
+#today-list { flex:1 1 auto; min-height:0; padding:4px 0 8px; }
+.prow {
+  display:flex; align-items:center; gap:12px;
+  padding:13px 16px; border-bottom:1px solid var(--hairline);
+  -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;
+  touch-action:manipulation;
+  animation:rowin 240ms var(--ease-out) backwards;
+}
+@keyframes rowin { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none;} }
+.prow:last-child { border-bottom:none; }
+.prow.me {
+  background:linear-gradient(90deg,rgba(255,59,48,.05),transparent 60%);
+  border-left:2px solid var(--red);
+}
+.prow .pname {
+  flex:1 1 auto; min-width:0;
+  font-weight:600; font-size:15.5px; letter-spacing:.01em; color:var(--txt);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.prow.me .pname::after {
+  content:'YOU'; margin-left:8px;
+  font-size:8.5px; font-weight:700; letter-spacing:.14em; color:var(--red);
+  border:1px solid var(--red-wash-bd); background:var(--red-wash);
+  border-radius:999px; padding:1px 6px; vertical-align:middle;
+}
+.prow .pstreak {
+  flex:0 0 auto;
+  font-size:11px; color:var(--txt2); letter-spacing:.02em;
+  font-variant-numeric:tabular-nums lining-nums;
+  display:inline-flex; align-items:center; gap:3px;
+}
+.prow .pstreak .flame { color:var(--txt3); font-size:11px; }
+.prow .pstreak.zero { opacity:.45; }
+
+/* ---- the today status PILL (status palette + shape; lives only here) ---- */
+.pill {
+  flex:0 0 auto; min-width:78px; height:30px; padding:0 12px;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  border-radius:999px;
+  font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  position:relative;
+}
+.pill .pdot { width:7px; height:7px; flex:0 0 auto; }
+/* DONE: solid green + check */
+.pill.done { color:#bfe6cf; background:var(--st-done-bg); border:1px solid #225338; }
+.pill.done .pdot { display:none; }
+.pill.done::before { content:'\2713'; font-size:12px; color:var(--st-done); }
+/* BONUS: brighter green + check + plus */
+.pill.bonus { color:#cdeedb; background:#10231a; border:1px solid #2c6043; }
+.pill.bonus::before { content:'\2713+'; font-size:11px; color:var(--st-bonus); letter-spacing:-.04em; }
+.pill.bonus .pdot { display:none; }
+/* REST: hollow ring */
+.pill.rest { color:var(--txt2); background:transparent; border:1px solid var(--st-rest-bd); }
+.pill.rest .pdot { display:none; }
+/* MISSED: red wash + hatch + strike (status red — the ONE place red means "missed") */
+.pill.missed {
+  color:#e7a9a2; border:1px solid var(--st-missed-line);
+  background:
+    repeating-linear-gradient(45deg, transparent 0 4px, rgba(92,23,20,.55) 4px 5px),
+    var(--st-missed-bg);
+  text-decoration:line-through; text-decoration-color:rgba(231,169,162,.7);
+}
+.pill.missed .pdot { display:none; }
+/* OFF: dashed border */
+.pill.off { color:var(--txt2); background:var(--st-off); border:1px dashed var(--etch); }
+.pill.off .pdot { display:none; }
+/* PENDING: faint centered dots, NO border */
+.pill.pending { color:var(--st-pending); background:transparent; border:none; letter-spacing:.3em; }
+.pill.pending::before { content:'\00B7\00B7\00B7'; font-size:16px; line-height:0; color:var(--st-pending); }
+.pill.pending .ptext { display:none; }
+.pill.pending .pdot { display:none; }
+/* PRE-JOIN: corner clip (never red, distinct from rest) */
+.pill.prejoin {
+  color:var(--txt3); background:var(--g2); border:1px solid var(--hairline);
+  clip-path:polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px);
+}
+.pill.prejoin .pdot { display:none; }
+/* macros corner dot — secondary, never red, independent of workout color */
+.pill .macrodot {
+  position:absolute; top:-3px; right:-3px;
+  width:8px; height:8px; border-radius:50%;
+  background:var(--st-macrodot); border:1.5px solid var(--g0);
+}
+
+/* ============ ACTION BAR — single full-width WORKOUT tile (NOT red) ============ */
+#action {
+  flex:0 0 auto;
+  padding:8px 12px max(16px,env(safe-area-inset-bottom)) 12px;
+  background:var(--g1);
+  border-top:1px solid var(--hairline);
+  box-shadow:inset 0 1px 0 var(--edge);
+  position:relative; z-index:20;
+}
+.workout-tile {
+  width:100%; height:76px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  background:var(--ctl-grad);              /* NEUTRAL --g3 -> --g4 face, never red */
+  border:1px solid var(--bd);
+  border-radius:var(--r-lg);
+  box-shadow:var(--elev);
+  position:relative;
+  transition:transform 160ms var(--spring), background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+.workout-tile:active:not(:disabled) { transform:scale(.985); background:var(--g4); }
+.workout-tile .wt-label {
+  font-weight:700; font-size:20px; letter-spacing:.2em; color:var(--txt);
+}
+.workout-tile .wt-sub {
+  font-size:10px; letter-spacing:.1em; color:var(--txt3); min-height:12px;
+}
+.workout-tile .wt-glyph { display:none; }
+/* DONE state: the tile flips to STATUS green (the only post-tap color) + check glyph */
+.workout-tile.done {
+  background:linear-gradient(180deg,#19342440,#10231a);
+  border-color:#2c6043;
+}
+.workout-tile.done .wt-label { color:#cdeedb; }
+.workout-tile.done .wt-label::before { content:'\2713 '; color:var(--st-done); }
+.workout-tile.done .wt-sub { color:var(--st-done); }
+/* the tiny "unsynced" dot — an optimistic write is queued but not yet server-acked */
+.workout-tile .wt-unsynced {
+  position:absolute; top:10px; right:12px;
+  width:9px; height:9px; border-radius:50%;
+  background:var(--red); opacity:0;
+  transition:opacity 160ms ease;
+  animation:syncpulse 1.4s ease-in-out infinite;
+}
+.workout-tile.unsynced .wt-unsynced { opacity:1; }
+/* disabled (out-of-window / not yet bound / browsing-only states) */
+.workout-tile:disabled { opacity:.4; box-shadow:none; }
+/* long-press-to-undo affordance: a thin red fill that grows while held */
+.workout-tile .wt-hold {
+  position:absolute; left:0; bottom:0; height:100%; width:0;
+  background:rgba(255,59,48,.12); border-radius:var(--r-lg);
+  pointer-events:none;
+}
+.workout-tile.holding .wt-hold { width:100%; transition:width 520ms linear; }
+
+/* ============ GRID (one tap off Today) ============ */
+#grid-head {
+  flex:0 0 auto;
+  display:flex; align-items:baseline; justify-content:space-between;
+  padding:14px 16px 10px;
+  border-bottom:1px solid var(--hairline); background:var(--g0);
+}
+.grid-title { font-weight:700; font-size:12px; letter-spacing:.18em; color:var(--txt2); }
+.grid-range { font-size:10.5px; color:var(--txt3); letter-spacing:.04em; }
+#grid-scroll { flex:1 1 auto; min-height:0; padding:6px 12px 10px; transform:translateZ(0); will-change:transform; }
+/* CSS Grid (display:grid), NOT a <table>. Columns set inline by ui.js; date gutter + 1 col
+   per member. Newest date at top (ui.js orders rows). */
+#grid { display:grid; gap:6px; align-content:start; }
+.gcell-corner, .ghead, .gdate, .gcell {
+  display:flex; align-items:center; justify-content:center;
+  min-height:40px; border-radius:var(--r-sm);
+  -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;
+  touch-action:manipulation;
+}
+.gcell-corner { background:transparent; }
+.ghead {
+  font-size:9.5px; font-weight:700; letter-spacing:.08em; color:var(--txt3);
+  text-transform:uppercase; overflow:hidden; white-space:nowrap;
+  background:var(--g1); border:1px solid var(--hairline);
+}
+.ghead.me { color:var(--red); border-color:var(--red-wash-bd); background:var(--red-wash); }
+.gdate {
+  font-size:10px; color:var(--txt2); letter-spacing:.02em;
+  font-variant-numeric:tabular-nums lining-nums;
+  justify-content:flex-end; padding-right:8px; white-space:nowrap;
+  flex-direction:column; gap:1px; align-items:flex-end;
+}
+.gdate .gdate-dow { color:var(--txt3); font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; }
+.gdate.today { color:var(--txt); }
+.gdate.today .gdate-dow { color:var(--red); }
+
+/* ---- grid status CELLS: status palette + SHAPE (11px-safe, grayscale-safe) ---- */
+.gcell { position:relative; background:var(--g2); border:1px solid var(--hairline); color:transparent; font-size:13px; }
+.gcell.me { box-shadow:inset 2px 0 0 var(--red); }
+/* done: solid + check */
+.gcell.done { background:var(--st-done-bg); border-color:#225338; color:var(--st-done); }
+.gcell.done::after { content:'\2713'; font-size:14px; color:var(--st-done); }
+/* bonus: solid + check + plus */
+.gcell.bonus { background:#10231a; border-color:#2c6043; }
+.gcell.bonus::after { content:'\2713'; font-size:13px; color:var(--st-bonus); }
+.gcell.bonus::before { content:'+'; position:absolute; top:1px; right:4px; font-size:10px; color:var(--st-bonus); }
+/* rest: hollow ring (no fill) */
+.gcell.rest { background:transparent; border:1px solid var(--st-rest-bd); }
+/* missed: red wash + 45deg hatch + strike */
+.gcell.missed {
+  border-color:var(--st-missed-line);
+  background:
+    repeating-linear-gradient(45deg, transparent 0 5px, rgba(92,23,20,.6) 5px 6px),
+    var(--st-missed-bg);
+}
+.gcell.missed::after {
+  content:''; position:absolute; left:18%; right:18%; top:50%; height:1.5px;
+  background:rgba(231,169,162,.8); transform:rotate(-12deg);
+}
+/* off: dashed border */
+.gcell.off { background:var(--st-off); border:1px dashed var(--etch); }
+.gcell.off::after { content:'\2013'; color:var(--txt3); font-size:13px; }
+/* pending: faint centered dots, no border */
+.gcell.pending { background:transparent; border:none; }
+.gcell.pending::after { content:'\00B7'; color:var(--st-pending); font-size:22px; line-height:0; }
+/* pre-join: diagonal corner clip */
+.gcell.prejoin { background:var(--g1); border:1px solid var(--hairline); clip-path:polygon(9px 0, 100% 0, 100% 100%, 0 100%, 0 9px); }
+/* macros corner dot (secondary, never red) */
+.gcell .gmacro { position:absolute; top:3px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--st-macrodot); }
+
+/* grid legend strip */
+.grid-legend {
+  flex:0 0 auto;
+  display:flex; flex-wrap:wrap; gap:10px 14px; justify-content:center;
+  padding:9px 14px max(10px,env(safe-area-inset-bottom));
+  border-top:1px solid var(--hairline); background:var(--g1);
+}
+.leg { display:inline-flex; align-items:center; gap:6px; font-size:9px; letter-spacing:.06em; color:var(--txt3); text-transform:uppercase; }
+.leg .swatch { width:14px; height:14px; border-radius:4px; flex:0 0 auto; position:relative; }
+.leg .swatch.done { background:var(--st-done-bg); border:1px solid #225338; }
+.leg .swatch.done::after { content:'\2713'; font-size:9px; color:var(--st-done); display:flex; align-items:center; justify-content:center; height:100%; }
+.leg .swatch.rest { border:1px solid var(--st-rest-bd); }
+.leg .swatch.missed { border:1px solid var(--st-missed-line); background:repeating-linear-gradient(45deg, transparent 0 3px, rgba(92,23,20,.6) 3px 4px), var(--st-missed-bg); }
+.leg .swatch.off { background:var(--st-off); border:1px dashed var(--etch); }
+.leg .swatch.pending { border:none; }
+.leg .swatch.pending::after { content:'\00B7'; color:var(--st-pending); font-size:16px; display:flex; align-items:center; justify-content:center; height:100%; }
+
+/* ============ LOUD RECLAIM MODAL ============ */
+#reclaim-backdrop {
+  position:absolute; inset:0; z-index:100;
+  background:rgba(0,0,0,.82);
+  animation:fadein 160ms ease;
+}
+@keyframes fadein { from { opacity:0;} to { opacity:1;} }
+#reclaim {
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  z-index:110; width:min(360px,calc(100% - 36px));
+  background:linear-gradient(180deg,#1a0f0e,#120b0a);
+  border:1px solid var(--red-wash-bd); border-radius:20px;
+  box-shadow:0 18px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(255,59,48,.18), inset 0 1px 0 rgba(255,255,255,.05);
+  padding:26px 22px 22px;
+  display:flex; flex-direction:column; align-items:center; text-align:center;
+  animation:reclaimpop 320ms var(--spring);
+}
+@keyframes reclaimpop { from { opacity:0; transform:translate(-50%,-46%) scale(.96);} to { opacity:1; transform:translate(-50%,-50%) scale(1);} }
+.reclaim-icon {
+  width:46px; height:46px; border-radius:50%;
+  background:var(--red-wash); border:1px solid var(--red-wash-bd);
+  display:flex; align-items:center; justify-content:center;
+  font-size:26px; font-weight:700; color:var(--red);
+  margin-bottom:14px;
+  animation:reclaimthrob 1.3s ease-in-out infinite;
+}
+@keyframes reclaimthrob { 0%,100%{ box-shadow:0 0 0 0 rgba(255,59,48,0);} 50%{ box-shadow:0 0 0 8px rgba(255,59,48,.16);} }
+.reclaim-title { font-weight:700; font-size:15px; letter-spacing:.12em; color:var(--red); margin-bottom:10px; }
+.reclaim-body { font-size:12.5px; line-height:1.55; color:var(--txt2); margin-bottom:20px; }
+.reclaim-btn {
+  width:100%; min-height:54px;
+  background:linear-gradient(180deg,#ff4b40,#e02e24); color:#fff;
+  border:none; border-radius:var(--r-md);
+  font-weight:700; font-size:13px; letter-spacing:.12em;
+  box-shadow:0 10px 30px rgba(255,59,48,.28), inset 0 1px 0 rgba(255,255,255,.25);
+  transition:transform 160ms var(--spring), filter 120ms ease;
+}
+.reclaim-btn:active:not(:disabled) { transform:scale(.97); filter:brightness(.9); }
+.reclaim-btn:disabled { opacity:.6; }
+.reclaim-status { margin-top:12px; min-height:14px; font-size:11px; letter-spacing:.04em; color:var(--txt3); }
+.reclaim-status.err { color:var(--red); }
+
+/* ============ BOOT / FATAL BANNER ============ */
+#boot {
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  z-index:120; width:min(360px,calc(100% - 36px));
+  background:var(--g1); border:1px solid var(--red-wash-bd); border-radius:16px;
+  box-shadow:var(--elev);
+  padding:22px 20px; text-align:center;
+}
+#boot .boot-title { font-weight:700; font-size:13px; letter-spacing:.12em; color:var(--red); margin-bottom:10px; }
+#boot .boot-body { font-size:12.5px; line-height:1.55; color:var(--txt2); }
+#boot .boot-body code { color:var(--txt); background:var(--g2); border:1px solid var(--hairline); border-radius:6px; padding:1px 5px; font-size:11.5px; }
+
+/* ============ TOAST (gym-timer parity) ============ */
+#toast {
+  position:absolute; left:50%; bottom:110px; transform:translateX(-50%);
+  background:var(--ctl-grad); border:1px solid var(--bd); border-radius:999px;
+  box-shadow:0 10px 30px rgba(0,0,0,.55);
+  font-size:11.5px; color:var(--txt2);
+  padding:9px 14px; white-space:nowrap;
+  opacity:0; pointer-events:none; z-index:130;
+  transition:opacity 300ms ease;
+}
+#toast.show { opacity:1; }
+
+/* ============ EMPTY / LOADING STATES ============ */
+.empty-note {
+  padding:34px 22px; text-align:center;
+  font-size:12px; line-height:1.6; color:var(--txt3); letter-spacing:.02em;
+}
+
+/* ============ REDUCED MOTION ============ */
+@media (prefers-reduced-motion:reduce) {
+  *, *::before, *::after { animation-duration:120ms !important; transition-duration:120ms !important; }
+  #pip-sync.pending, .workout-tile .wt-unsynced, .reclaim-icon { animation:none; }
+  .workout-tile.holding .wt-hold { transition:width 520ms linear; } /* keep the hold meter */
+}
+
+/* ============ COMPACT VIEWPORTS (SE / Safari-with-toolbars) ============ */
+@media (max-height:760px) {
+  #hero { padding:18px 16px 14px; }
+  #hero-pct { font-size:60px; }
+  #hero-pct .hero-sign { font-size:24px; }
+  .workout-tile { height:66px; }
+  .prow { padding:11px 16px; }
+}
