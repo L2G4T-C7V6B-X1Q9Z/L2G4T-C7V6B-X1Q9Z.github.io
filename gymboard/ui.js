@@ -393,12 +393,14 @@ function renderGrid(now) {
     cells.push(`<div class="ghead${isMe ? ' me' : ''}" title="${escapeHtml(displayNameOf(m))}"><span class="ghead-v">${escapeHtml(displayNameOf(m))}</span></div>`);
   }
 
-  // body: newest date at top
-  for (const dk of keys) {
+  // body: newest date at top; older rows fade out so the most recent reads clearest.
+  for (let i = 0; i < keys.length; i++) {
+    const dk = keys[i];
     const g = fmtDateGutter(dk);
     const isToday = dk === cur;
+    const op = keys.length > 1 ? (1 - (i / (keys.length - 1)) * 0.55).toFixed(2) : '1';
     cells.push(
-      `<div class="gdate${isToday ? ' today' : ''}"><span class="gdate-dow">${g.dow}</span><span>${g.md}</span></div>`
+      `<div class="gdate${isToday ? ' today' : ''}" style="opacity:${op}"><span class="gdate-dow">${g.dow}</span><span>${g.md}</span></div>`
     );
     for (const m of cols) {
       const uid = idOf(m);
@@ -407,7 +409,7 @@ function renderGrid(now) {
       const day = effectiveDays(uid)[dk];
       const cls = classifyDay(subject, dk, now, day);
       cells.push(
-        `<div class="gcell ${cls.status}${isMe ? ' me' : ''}" aria-label="${escapeHtml(displayNameOf(m))} ${dk} ${cls.status}"></div>`
+        `<div class="gcell ${cls.status}${isMe ? ' me' : ''}" style="opacity:${op}" aria-label="${escapeHtml(displayNameOf(m))} ${dk} ${cls.status}"></div>`
       );
     }
   }

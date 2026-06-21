@@ -349,7 +349,7 @@ button:disabled { cursor:default; }
   background:transparent; border:none; overflow:hidden;
 }
 .ghead-v {
-  writing-mode:vertical-rl; text-orientation:mixed;
+  writing-mode:vertical-rl; text-orientation:mixed; transform:rotate(180deg);
   font-size:10px; font-weight:700; letter-spacing:.04em; color:var(--txt3);
   text-transform:uppercase; max-height:66px; overflow:hidden; white-space:nowrap;
 }
