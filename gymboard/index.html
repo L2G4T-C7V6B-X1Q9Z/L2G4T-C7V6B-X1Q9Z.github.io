@@ -18,6 +18,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=optional" rel="stylesheet" media="print" onload="this.media='all'">
 
+<!-- apply saved theme before first paint so light mode never flashes dark -->
+<script>try{if(localStorage.getItem('gymboard.theme')==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
+
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -35,8 +38,7 @@
   <header id="hdr">
     <div id="hdr-left">GYM<span class="accent">BOARD</span></div>
     <div id="hdr-right">
-      <span id="hdr-reg" aria-label="Session register"></span>
-      <span id="pip-sync" class="pip-status" aria-hidden="true" title="sync"></span>
+      <button id="hdr-theme" class="hdr-theme" type="button" aria-label="Toggle light or dark mode" title="Light / dark mode"></button>
     </div>
   </header>
 
@@ -64,7 +66,7 @@
 
         <!-- NUTRITION: done toggle (the simple path) + meal log + quick meals -->
         <div class="me-card">
-          <div class="me-card-title">NUTRITION</div>
+          <div class="me-card-title">🍎 NUTRITION</div>
           <div id="me-nut-hint" class="me-hint">Log meals to auto-check, or just mark it done.</div>
 
           <!-- the simple path: a "mark nutrition done" toggle (sets the manual `ate` override) -->
@@ -104,7 +106,7 @@
 
         <!-- WORKOUT: mark-done + enabled-type picker -->
         <div class="me-card">
-          <div class="me-card-title">WORKOUT</div>
+          <div class="me-card-title">🏋️ WORKOUT</div>
           <div class="me-row"><span class="me-label">Workout</span><button id="me-workout" class="me-toggle" type="button">mark done</button></div>
           <div class="me-row me-row-stack">
             <span class="me-label me-label-sub">Type <span class="me-opt">(optional)</span></span>
@@ -119,14 +121,14 @@
 
         <!-- WEIGHT quick-log -->
         <div class="me-card">
-          <div class="me-card-title">WEIGHT</div>
+          <div class="me-card-title">⚖️ WEIGHT</div>
           <div class="me-row"><span class="me-label">Today's weight</span><input id="me-weight" class="me-input" type="number" inputmode="decimal" placeholder="lb"><button id="me-log-weight" class="me-meal-btn" type="button">LOG</button></div>
         </div>
 
         <!-- ============ ZONE 2: SETTINGS (collapsible, collapsed by default) ============ -->
         <div id="me-settings" class="me-settings collapsed">
           <button id="me-settings-toggle" class="me-settings-header" type="button" aria-expanded="false" aria-controls="me-settings-body">
-            <span class="me-settings-label">SETTINGS</span>
+            <span class="me-settings-label">⚙️ SETTINGS</span>
             <span class="me-settings-sub">goal · rest days · quick meals · workout types · profile</span>
             <span class="me-settings-caret" aria-hidden="true">▸</span>
           </button>

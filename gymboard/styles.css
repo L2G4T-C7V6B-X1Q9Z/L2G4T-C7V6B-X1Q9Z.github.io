@@ -61,6 +61,26 @@
   /* v3: the diagonal-divider + pending-hatch tokens are gone — cells are flat now. */
 }
 
+/* chart "other member" line colors — tokenized so the light theme can darken them. */
+:root { --wc-o1:#cfcfcf; --wc-o2:#9c9c9c; --wc-o3:#6e6e6e; --wc-o4:#bdbdbd; --wc-o5:#808080; }
+
+/* ============ LIGHT THEME (opt-in via the header toggle; dark stays the default).
+   Red (--red) is the single accent in BOTH palettes; text is soft near-black, never
+   pure #000. Quiet status fills become light grays so cells read on white. ============ */
+:root[data-theme="light"] {
+  --g0:#f4f4f5; --g1:#ffffff; --g2:#ececed; --g3:#e2e2e4; --g4:#d4d4d7;
+  --hairline:#dcdcdf; --edge:rgba(0,0,0,.05); --bd:rgba(0,0,0,.10);
+  --txt:#2b2b2d; --txt2:#5c5c60; --txt3:#8c8c92; --etch:#b6b6ba;
+  --panel-grad:linear-gradient(180deg,#ffffff,#f3f3f4);
+  --ctl-grad:linear-gradient(180deg,#fbfbfc,#ededee);
+  --elev:0 8px 24px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.6);
+  --red-wash:#ffe9e7; --red-wash-bd:#f0aaa3;
+  --st-done:#2f9e63; --st-done-bg:#dcf2e6; --st-bonus:#37b377;
+  --st-missed:#d8443a; --st-rest:var(--g2); --st-off:var(--g3);
+  --st-none:#e4e4e6; --st-pending:#ededef; --st-macrodot:#2f9e63;
+  --wc-o1:#9a9a9e; --wc-o2:#76767a; --wc-o3:#54545a; --wc-o4:#88888c; --wc-o5:#646468;
+}
+
 /* ============ BASE ============ */
 * { margin:0; padding:0; box-sizing:border-box; }
 html { -webkit-text-size-adjust:100%; }
@@ -132,6 +152,16 @@ button:disabled { cursor:default; }
 #pip-sync.pending { background:var(--red); box-shadow:0 0 0 0 rgba(255,59,48,.5); animation:syncpulse 1.4s ease-in-out infinite; }
 #pip-sync.fail { background:transparent; border:1px solid var(--red); }
 @keyframes syncpulse { 0%,100%{ box-shadow:0 0 0 0 rgba(255,59,48,0);} 50%{ box-shadow:0 0 0 3.5px rgba(255,59,48,.22);} }
+/* v4.5: light/dark toggle button (top-right; replaces the "live" pip). */
+.hdr-theme {
+  width:30px; height:30px; border-radius:8px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--g2); border:1px solid var(--hairline); color:var(--txt2);
+  font-size:14px; line-height:1; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  transition:background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.hdr-theme:hover { color:var(--txt); }
+.hdr-theme:active { background:var(--g3); }
 
 /* ============ TAB STRIP (44px, fixed, never scrolls) ============ */
 #tabs {
@@ -427,25 +457,25 @@ button:disabled { cursor:default; }
 /* grid legend strip — v4 (#11): now at the TOP of the SOCIAL board (border-BOTTOM). */
 .grid-legend {
   flex:0 0 auto;
-  display:flex; flex-wrap:wrap; gap:8px 12px; justify-content:center; align-items:center;
-  padding:8px 12px;
+  display:flex; flex-wrap:wrap; gap:3px 8px; justify-content:center; align-items:center;
+  padding:4px 8px;
   border-bottom:1px solid var(--hairline); background:var(--g1);
 }
-.leg { display:inline-flex; align-items:center; gap:6px; font-size:9px; letter-spacing:.06em; color:var(--txt3); text-transform:uppercase; }
+.leg { display:inline-flex; align-items:center; gap:3px; font-size:7.5px; letter-spacing:.03em; color:var(--txt3); text-transform:uppercase; }
 .leg-missed-note { font-size:8px; color:var(--txt3); opacity:.8; }
 
 /* v4 (#11): the labeled mini-cell DIAGRAM — a larger 50/50 split cell flanked by
    "top = workout" / "bottom = nutrition" side labels, so the encoding is unmistakable. */
-.leg-diagram { display:inline-flex; align-items:center; gap:6px; margin-right:2px; }
-.leg-diagram .leg-cell.leg-cell-big { width:22px; height:22px; border-radius:5px; }
-.leg-diagram .leg-diag-labels { display:flex; flex-direction:column; gap:3px; line-height:1; }
+.leg-diagram { display:inline-flex; align-items:center; gap:4px; margin-right:0; }
+.leg-diagram .leg-cell.leg-cell-big { width:14px; height:14px; border-radius:4px; }
+.leg-diagram .leg-diag-labels { display:flex; flex-direction:column; gap:1px; line-height:1; }
 .leg-diagram .leg-diag-top, .leg-diagram .leg-diag-bot {
   font-size:8px; font-weight:700; letter-spacing:.04em; color:var(--txt3); text-transform:uppercase; white-space:nowrap;
 }
 
 /* legend uses .leg-cell — the SAME horizontal split as the real grid cell. */
 .leg-cell {
-  width:16px; height:16px; border-radius:4px; flex:0 0 auto; position:relative; overflow:hidden;
+  width:11px; height:11px; border-radius:3px; flex:0 0 auto; position:relative; overflow:hidden;
   border:1px solid var(--hairline); --w:var(--g2); --n:var(--g2);
   background:var(--st-pending);
 }
@@ -611,9 +641,9 @@ button:disabled { cursor:default; }
 .me-track-lbl { font-size:10px; font-weight:700; letter-spacing:.12em; color:var(--txt3); }
 .me-track-fig { font-size:12px; font-weight:700; color:var(--txt); font-variant-numeric:tabular-nums lining-nums; }
 /* the thin progress track + fill — fill is green/neutral, NEVER red (even over goal). */
-.me-progress { height:3px; border-radius:2px; background:var(--g3); overflow:hidden; }
-.me-progress-fill { display:block; height:100%; width:0%; background:var(--st-done); opacity:.7; transition:width 220ms var(--ease-out); }
-.me-progress-fill.full { opacity:.9; }
+.me-progress { height:9px; border-radius:5px; background:var(--g3); overflow:hidden; box-shadow:inset 0 1px 1px rgba(0,0,0,.18); }
+.me-progress-fill { display:block; height:100%; width:0%; background:var(--st-done); opacity:.92; transition:width 220ms var(--ease-out); border-radius:5px; }
+.me-progress-fill.full { opacity:1; }
 /* nutrition indicator (HIT / on track / pending) — green for hit, muted otherwise. */
 .me-nut-indicator { font-size:10.5px; font-weight:700; letter-spacing:.08em; color:var(--txt3); }
 .me-nut-indicator.hit { color:var(--st-done); }
@@ -794,10 +824,10 @@ button:disabled { cursor:default; }
    SVG, no libraries. "me" line is red; others are muted gray/white tints. Dark palette;
    these are NOT status colors (no green/red status semantics here). ---- */
 .social-chart {
-  flex:0 0 32%; min-height:0;
+  flex:0 0 18%; min-height:84px; max-height:150px;
   display:flex; flex-direction:column;
   border-top:1px solid var(--hairline); background:var(--g0);
-  padding:6px 12px max(6px,env(safe-area-inset-bottom));
+  padding:5px 12px max(5px,env(safe-area-inset-bottom));
   overflow:hidden;
 }
 .social-chart.hidden { display:none; }

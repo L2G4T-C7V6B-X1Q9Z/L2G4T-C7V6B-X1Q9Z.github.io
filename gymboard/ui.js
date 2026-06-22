@@ -75,7 +75,8 @@ const WCHART_PAD_L = 6;
 const WCHART_PAD_R = 22; // extra right room for the end-labels
 const WCHART_PAD_T = 8;
 const WCHART_PAD_B = 8;
-const WCHART_OTHER_COLORS = ['#cfcfcf', '#9c9c9c', '#6e6e6e', '#bdbdbd', '#808080'];
+// v4.5: tokenized so the light theme can darken them (light grays vanish on white).
+const WCHART_OTHER_COLORS = ['var(--wc-o1)', 'var(--wc-o2)', 'var(--wc-o3)', 'var(--wc-o4)', 'var(--wc-o5)'];
 let wchartRange = 30; // selected window in days (30d default; 90d via the toggle)
 // v4 (#1): weight-chart perf. _wchartSig is the signature of the LAST real rebuild; a
 // repaint whose signature matches it skips the (expensive) SVG rebuild + innerHTML parse.
@@ -1031,6 +1032,58 @@ function wireTabs() {
     const btn = e.target.closest('.tab');
     if (btn) setTab(btn.dataset.tab);
   });
+}
+
+// =============================================================================
+// THEME  (light / dark toggle in the header; dark is the default, persisted)
+// =============================================================================
+const elHdrTheme = $('hdr-theme');
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+}
+function applyThemeIcon() {
+  // show the icon of the mode you'll switch TO (sun => go light, moon => go dark).
+  if (elHdrTheme) elHdrTheme.textContent = currentTheme() === 'light' ? '☾' : '☀';
+}
+function setTheme(theme) {
+  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  try { localStorage.setItem('gymboard.theme', theme); } catch (_) { /* private mode */ }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'light' ? '#f4f4f5' : '#060606');
+  applyThemeIcon();
+}
+function wireTheme() {
+  applyThemeIcon();
+  if (elHdrTheme) {
+    elHdrTheme.addEventListener('click', () =>
+      setTheme(currentTheme() === 'light' ? 'dark' : 'light')
+    );
+  }
+}
+
+// =============================================================================
+// SWIPE  (left/right between ME and SOCIAL on touch screens)
+// =============================================================================
+function wireSwipe() {
+  const stage = $('stage');
+  if (!stage) return;
+  let x0 = null, y0 = null, t0 = 0;
+  stage.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { x0 = null; return; }
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now();
+  }, { passive: true });
+  stage.addEventListener('touchend', (e) => {
+    if (x0 == null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0, dt = Date.now() - t0;
+    x0 = null;
+    if (dt > 600) return;                          // too slow to read as a flick
+    if (Math.abs(dx) < 55) return;                 // not a decisive horizontal move
+    if (Math.abs(dx) < Math.abs(dy) * 1.6) return; // mostly-vertical => a scroll, ignore
+    if (dx < 0 && activeTab === 'me') setTab('grid');      // swipe LEFT: ME -> SOCIAL
+    else if (dx > 0 && activeTab === 'grid') setTab('me'); // swipe RIGHT: SOCIAL -> ME
+  }, { passive: true });
 }
 
 // =============================================================================
@@ -2485,8 +2538,8 @@ async function boot() {
     // non-fatal: the doc may already exist (seeded by admin). Proceed to subscribe.
   }
 
-  // refresh the header register with a short, non-identifying session tag.
-  if (elHdrReg) elHdrReg.textContent = '● live';
+  // v4.5: the header "live" text + sync pip were removed (replaced by the theme
+  // toggle). booted still gates the sync-pip class updates (harmless no-ops now).
   booted = true;
 
   // 4. live board: onSnapshot on /users where archived==false.
@@ -2499,6 +2552,8 @@ async function boot() {
 
   // wire interactions + timers
   wireTabs();
+  wireTheme();
+  wireSwipe();
   wireMe();
   wireGridTaps();
   wireWeightChart();
