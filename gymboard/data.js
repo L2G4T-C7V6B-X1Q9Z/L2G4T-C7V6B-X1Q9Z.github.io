@@ -457,10 +457,14 @@ export async function authAndBind() {
   // Self-enroll for reads (non-fatal).
   await appendSelfToActive();
 
-  // Strip the fragment so the token isn't left in location.hash for later
-  // scripts / screenshots / the BF cache. The persisted localStorage copy (same
-  // exposure as the bookmark) remains for rebind.
-  stripFragment();
+  // v4.4: do NOT strip the fragment. iOS "Add to Home Screen" captures the CURRENT
+  // URL, and a standalone home-screen PWA gets ISOLATED storage — the localStorage
+  // rebind copy Safari saved is invisible to it. Stripping the hash left the saved
+  // icon loading bare (no #u=&t=) with no way to recover identity, dead-ending every
+  // iPhone user on the "NO ACCESS LINK" doormat. The token is the bearer secret
+  // already carried in the link, so keeping it in the URL is the same exposure as the
+  // saved bookmark. stripFragment() stays defined above for a possible future opt-in
+  // but is intentionally NOT called here.
 
   return { userId: _userId, uid: _uid };
 }

@@ -312,10 +312,16 @@ button:disabled { cursor:default; }
    LAST, so justify-content:flex-end pins every column's NAME to a common bottom baseline
    (just above the first cell row) while the optional stats float above it. Height is
    fixed (not min-height) so a column with fewer stats still aligns its name with a
-   column that has all three. */
+   column that has all three.
+   v4.4: the name + emoji are flex-shrink:0 (below) so the "me" column's taller 3-line
+   stat stack (%, weight, last-active) can't shrink/compress them. Without that guard,
+   flex-shrink squished the name's line box (10px vs 15px) and knocked it off the
+   shared baseline of the single-stat columns. Height bumped to 72px so the full
+   3-line stack fits un-clipped; if a stack ever overgrows, it clips at the top
+   (overflow:hidden) and the name stays pinned. */
 .ghead {
   flex-direction:column; align-items:center; justify-content:flex-end; gap:2px;
-  height:66px; flex:0 0 66px; padding-bottom:4px;
+  height:72px; flex:0 0 72px; padding-bottom:4px;
   background:transparent; border:none; overflow:hidden;
 }
 /* v3: inline HORIZONTAL name (no vertical rotation), ellipsis-truncated in the
@@ -323,12 +329,12 @@ button:disabled { cursor:default; }
 .ghead-v {
   font-size:10px; font-weight:700; letter-spacing:.04em; color:var(--txt3);
   text-transform:uppercase; max-width:100%; overflow:hidden; text-overflow:ellipsis;
-  white-space:nowrap; writing-mode:horizontal-tb; transform:none;
+  white-space:nowrap; writing-mode:horizontal-tb; transform:none; flex-shrink:0;
 }
 .ghead.me .ghead-v { color:var(--red); }
 
 /* ---- under-name stat stack: compliance% (+streak) / weight+arrow / last-active ---- */
-.gh-stack { display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.2; max-width:100%; }
+.gh-stack { display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.2; max-width:100%; flex-shrink:0; min-height:0; overflow:hidden; }
 /* v4 (#5): WORKOUT compliance % is the headline accountability number (largest). */
 .gh-compliance { font-size:10px; font-weight:700; color:var(--txt); white-space:nowrap; font-variant-numeric:tabular-nums lining-nums; display:inline-flex; align-items:center; gap:3px; }
 .gh-compliance.none { color:var(--txt3); }
@@ -341,7 +347,7 @@ button:disabled { cursor:default; }
 .gh-active { font-size:8px; color:var(--txt3); white-space:nowrap; }
 .gh-active.stale { opacity:.4; }
 /* v4 (#14): the per-person emoji shown ABOVE the name in the SOCIAL column header. */
-.ghead-emoji { font-size:13px; line-height:1; margin-bottom:1px; }
+.ghead-emoji { font-size:13px; line-height:1; margin-bottom:1px; flex-shrink:0; }
 
 /* ---- transposed grid: day-of-week column headers ---- */
 .ghead-day {
