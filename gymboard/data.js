@@ -45,6 +45,8 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  updateDoc,
+  arrayUnion,
   writeBatch,
   serverTimestamp,
   Timestamp,
@@ -387,15 +389,30 @@ async function writeBinding(userId, token) {
  * itself does not fail. Skips the write if this uid is already present.
  */
 async function appendSelfToActive() {
+  if (!_uid) return false;
+  const ref = doc(_db, 'meta', 'active');
+  // Atomic enrollment. arrayUnion is race-free (no read-modify-write window), so two
+  // devices binding at the same moment can't clobber each other's uid. It also
+  // satisfies the /meta/active rule: the post-write array is old ∪ {me}, which is
+  // hasAll(old) AND hasOnly(old + me). The prior read-then-setDoc(full array) raced
+  // under concurrent binds — a stale `current` dropped someone else's uid, the rule's
+  // hasAll(old) then failed, the write was DENIED, and the silent catch left this
+  // fresh anon uid OFF the activeReader allowlist. Its very first /users list was then
+  // denied and the board rendered EMPTY (the iOS-PWA "everyone else is missing").
   try {
-    const ref = doc(_db, 'meta', 'active');
-    const snap = await getDoc(ref);
-    const current = snap.exists() && Array.isArray(snap.data().uids) ? snap.data().uids : [];
-    if (current.includes(_uid)) return; // already enrolled
-    // setDoc with the full array (the rule compares post-write to old.concat([me])).
-    await setDoc(ref, { uids: [...current, _uid] }, { merge: true });
-  } catch (_) {
-    // meta/active may be admin-seed-pending or contended; never block auth on it.
+    await updateDoc(ref, { uids: arrayUnion(_uid) });
+    return true;
+  } catch (_e) {
+    // Fallback if the allowlist doc somehow doesn't exist yet (pre-seed): create it.
+    try {
+      const snap = await getDoc(ref);
+      const current = snap.exists() && Array.isArray(snap.data().uids) ? snap.data().uids : [];
+      if (current.includes(_uid)) return true;
+      await setDoc(ref, { uids: [...current, _uid] }, { merge: true });
+      return true;
+    } catch (_e2) {
+      return false; // never block auth on enrollment; subscribeUsers self-heals.
+    }
   }
 }
 
@@ -662,34 +679,62 @@ export async function ensureUserDoc(userId) {
 export function subscribeUsers(cb) {
   assertInit();
   const q = query(collection(_db, 'users'), where('archived', '==', false));
-  const unsub = onSnapshot(
-    q,
-    (qs) => {
-      const users = [];
-      qs.forEach((d) => {
-        users.push({ id: d.id, ...d.data() });
-      });
-      // Opportunistically refine offset from OUR OWN doc's updatedAt-class field
-      // if present (createdAt is the stable owned server stamp here).
-      if (_userId) {
-        const mine = users.find((u) => u.id === _userId);
-        if (mine && mine.createdAt instanceof Timestamp && !_serverOffsetEstablished) {
-          refineOffsetFromServerTimestamp(mine.createdAt, mine.createdAt.toMillis());
+  let active = null; // the live onSnapshot unsub (reassigned if we self-heal)
+  let healed = false; // allow exactly one re-enroll + re-subscribe
+
+  const onNext = (qs) => {
+    const users = [];
+    qs.forEach((d) => {
+      users.push({ id: d.id, ...d.data() });
+    });
+    // Opportunistically refine offset from OUR OWN doc's updatedAt-class field
+    // if present (createdAt is the stable owned server stamp here).
+    if (_userId) {
+      const mine = users.find((u) => u.id === _userId);
+      if (mine && mine.createdAt instanceof Timestamp && !_serverOffsetEstablished) {
+        refineOffsetFromServerTimestamp(mine.createdAt, mine.createdAt.toMillis());
+      }
+    }
+    if (typeof cb === 'function') cb(users);
+  };
+
+  const onErr = async (err) => {
+    // SELF-HEAL: a brand-new context (e.g. a freshly installed iOS home-screen PWA,
+    // which gets ISOLATED storage and therefore a brand-new anon uid) can hit this
+    // first /users list before its uid is on the /meta/active allowlist (or after an
+    // enrollment hiccup), which is a permission-denied that KILLS the listener. Re-
+    // enroll ONCE and re-subscribe before falling back to the reclaim prompt, so the
+    // board fills in on its own instead of stranding the user on an empty grid.
+    if (!healed && isPermissionDenied(err)) {
+      healed = true;
+      if (active) {
+        _unsubs.delete(active);
+        try {
+          active();
+        } catch (_) {
+          /* already detached */
         }
       }
-      if (typeof cb === 'function') cb(users);
-    },
-    (err) => {
-      maybeFireReclaim(err);
+      const ok = await appendSelfToActive();
+      if (ok) {
+        active = onSnapshot(q, onNext, onErr);
+        _unsubs.add(active);
+        return;
+      }
     }
-  );
-  _unsubs.add(unsub);
+    maybeFireReclaim(err);
+  };
+
+  active = onSnapshot(q, onNext, onErr);
+  _unsubs.add(active);
   return () => {
-    _unsubs.delete(unsub);
-    try {
-      unsub();
-    } catch (_) {
-      /* already detached */
+    if (active) {
+      _unsubs.delete(active);
+      try {
+        active();
+      } catch (_) {
+        /* already detached */
+      }
     }
   };
 }
