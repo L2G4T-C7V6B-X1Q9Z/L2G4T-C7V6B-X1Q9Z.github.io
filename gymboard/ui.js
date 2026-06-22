@@ -77,6 +77,14 @@ const WCHART_PAD_T = 8;
 const WCHART_PAD_B = 8;
 const WCHART_OTHER_COLORS = ['#cfcfcf', '#9c9c9c', '#6e6e6e', '#bdbdbd', '#808080'];
 let wchartRange = 30; // selected window in days (30d default; 90d via the toggle)
+// v4 (#1): weight-chart perf. _wchartSig is the signature of the LAST real rebuild; a
+// repaint whose signature matches it skips the (expensive) SVG rebuild + innerHTML parse
+// entirely. The rebuild itself is coalesced into one requestAnimationFrame so the burst of
+// back-to-back repaints (heartbeat + the double onMembers paint + rollover) collapses to a
+// single parse. Set _wchartSig = null to FORCE the next rebuild (e.g. the 30d/90d toggle).
+let _wchartSig = null;
+let _wchartRafPending = false;
+let _wchartRafNow = 0; // the latest `now` to build with when the rAF fires
 
 // =============================================================================
 // DOM HANDLES
@@ -496,10 +504,9 @@ function headStackHtml(member, now, viewerBiz) {
 }
 
 function renderGrid(now) {
-  // v4 (#13): a repaint replaces the cells the popover was anchored to — close it so it
-  // never points at a stale position. (A fresh tap reopens it on the new cell.)
-  if (daypopOpen) closeDayPopover();
   if (!members.length) {
+    // no cells to anchor to anymore — close any open popover before blanking the grid.
+    if (daypopOpen) closeDayPopover();
     elGrid.innerHTML =
       '<div class="empty-note">No active members yet.<br>Soren seeds people with the admin script, then texts each person their link.</div>';
     elGridRange.textContent = '';
@@ -566,6 +573,12 @@ function renderGrid(now) {
     }
   }
   elGrid.innerHTML = cells.join('');
+
+  // v4 (#4): the rebuild above replaced the cell the popover was anchored to. Instead of
+  // force-closing it on every snapshot/heartbeat/rollover (which made reading a teammate's
+  // day flicker away the moment anyone logged), RE-ANCHOR it to the freshly-built cell if
+  // that uid+date is still on the grid; only close if the cell genuinely fell out of range.
+  reanchorDayPopover();
 
   const first = keys[keys.length - 1];
   elGridRange.textContent = `${fmtDateGutter(first).md} – ${fmtDateGutter(cur).md}`;
@@ -637,10 +650,48 @@ function smoothPath(points) {
   return d;
 }
 
+// v4 (#1): the cheap signature of everything the chart draws from — the range, the
+// container width, and per-VISIBLE-member (stable order) point summary. When this string
+// is unchanged, the SVG is byte-identical, so we skip the rebuild. Walks the window once
+// with plain map lookups (no string building), so it's cheap to run on every repaint.
+function weightChartSig(now) {
+  const cur = viewerBusinessDate(now);
+  const rangeDays = wchartRange;
+  // walk back the window once, collecting the in-range keys (oldest..newest order isn't
+  // needed for the sig — only counts + first/last + lastLb).
+  const keys = [cur];
+  for (let i = 1; i < rangeDays; i++) keys.push(prevBusinessDate(keys[i - 1]));
+  const width = (elWchartSvg && elWchartSvg.clientWidth) || (elSocialChart && elSocialChart.clientWidth) || 0;
+  const parts = [`r${rangeDays}`, `w${width}`];
+  for (const m of orderedMembers()) {
+    const uid = idOf(m);
+    if (uid !== myUserId && m.hideWeight === true) continue; // mirror the render's gate (#2)
+    const wmap = weightsByUser.get(uid) || {};
+    let count = 0;
+    let firstKey = '';
+    let lastKey = '';
+    let lastLb = '';
+    // keys is newest-first; iterate oldest-first so first/last read naturally.
+    for (let i = keys.length - 1; i >= 0; i--) {
+      const dk = keys[i];
+      const lb = wmap[dk];
+      if (Number.isFinite(lb)) {
+        if (!count) firstKey = dk;
+        lastKey = dk;
+        lastLb = String(lb);
+        count++;
+      }
+    }
+    parts.push(`${uid}:${count}:${firstKey}:${lastKey}:${lastLb}`);
+  }
+  return parts.join('|');
+}
+
 function renderWeightChart(now) {
   if (!elSocialChart || !elWchartSvg) return;
 
-  // sync the range label + toggle button states to the current selection.
+  // sync the range label + toggle button states to the current selection. Cheap + always
+  // safe to run (idempotent), so it stays OUTSIDE the dirty-check / rAF coalescing.
   if (elWchartRangeLabel) elWchartRangeLabel.textContent = String(wchartRange);
   if (elWchartToggle) {
     for (const btn of elWchartToggle.querySelectorAll('.wc-range')) {
@@ -649,6 +700,21 @@ function renderWeightChart(now) {
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
   }
+
+  // perf: skip the expensive innerHTML SVG rebuild when nothing the chart draws from has
+  // changed (heartbeat / no-op snapshots / lastActiveAt bumps). weightChartSig is a cheap
+  // map walk; buildWeightChart (the reparse) only runs on a real change — a logged weight,
+  // a member-set change, or the range. The 30d/90d toggle sets _wchartSig=null to force it.
+  const sig = weightChartSig(now);
+  if (sig === _wchartSig) return;
+  _wchartSig = sig;
+  buildWeightChart(now);
+}
+
+// The actual SVG build (expensive: string assembly + innerHTML parse). Only ever reached
+// from renderWeightChart after the dirty-check found a real change, coalesced via rAF.
+function buildWeightChart(now) {
+  if (!elSocialChart || !elWchartSvg) return;
 
   // ---- X: the ordered window of business-dates, oldest..newest, DST-safe. dateIndex maps
   // a dateKey -> its 0-based position from the OLDEST in-window day (for the x coordinate).
@@ -672,7 +738,10 @@ function renderWeightChart(now) {
   let yMax = -Infinity;
   for (const m of cols) {
     const uid = idOf(m);
-    if (m.hideWeight === true) continue; // belt-and-suspenders: the gate would blank it anyway
+    // v4 (#2): hiding weight hides it from the GROUP, not from yourself — so only skip
+    // OTHERS here. Genuinely-hidden others come back with an empty weight map (the gate)
+    // and fall out at the `!pts.length` check below anyway; this just keeps MY own line.
+    if (uid !== myUserId && m.hideWeight === true) continue;
     const wmap = weightsByUser.get(uid) || {};
     const pts = [];
     for (const dk of keysOldestFirst) {
@@ -1151,9 +1220,16 @@ function renderMealsList(day) {
     const p = Number.isFinite(m.protein) ? Math.round(m.protein) : 0;
     // prefer a preset label written onto the element (v4 addMeal carries it); else "Meal N".
     const name = (typeof m.label === 'string' && m.label.trim()) ? m.label.trim() : `Meal ${i + 1}`;
+    // v4 (#7): a meal logged from a quick-meal preset can carry a note — show it small
+    // under the name (nutrition is NEVER red, so this stays in the muted text tones).
+    const note = (typeof m.note === 'string' && m.note.trim()) ? m.note.trim() : '';
+    const nameCell = note
+      ? `<span class="me-meal-name has-note"><span class="me-meal-nametext">${escapeHtml(name)}</span>` +
+          `<span class="me-meal-rownote">${escapeHtml(note)}</span></span>`
+      : `<span class="me-meal-name">${escapeHtml(name)}</span>`;
     rows.push(
-      `<div class="me-meal-row">` +
-        `<span class="me-meal-name">${escapeHtml(name)}</span>` +
+      `<div class="me-meal-row${note ? ' has-note' : ''}">` +
+        nameCell +
         `<span class="me-meal-fig">${k} kcal / ${p}g</span>` +
         `<button class="me-meal-x" type="button" data-idx="${i}" aria-label="remove ${escapeHtml(name)}, ${k} kcal ${p} grams protein">⌫</button>` +
       `</div>`
@@ -1479,6 +1555,8 @@ async function meLogQuickMeal(presetIdx) {
     // v4 (#8): carry the preset's label onto the meal element so TODAY'S MEALS names it.
     const mealArg = { kcal: m.kcal, protein: Number.isFinite(m.protein) ? m.protein : 0 };
     if (typeof m.label === 'string' && m.label.trim()) mealArg.label = m.label.trim();
+    // v4 (#7): also forward the preset's note so it rides through to the logged meal.
+    if (m.note) mealArg.note = m.note;
     await data.addMeal(cur, mealArg);
     await refetchMyDays();
     toast('meal logged');
@@ -1924,6 +2002,8 @@ function toggleSettings() {
 let daypopTimer = null; // the ~5s auto-dismiss timer
 let daypopOutsideHandler = null; // the document outside-tap listener (removed on close)
 let daypopOpen = false;
+let daypopAnchor = null; // v4 (#4): {uid, date} the open popover is anchored to, so a
+                         // repaint can RE-ANCHOR it to the rebuilt cell instead of closing.
 
 function buildDayPopBody(member, dateKey) {
   const uid = idOf(member);
@@ -1970,6 +2050,30 @@ function buildDayPopBody(member, dateKey) {
   return lines.join('');
 }
 
+// v4 (#4): after a grid rebuild, keep an open popover pinned to its (uid+date) cell. If
+// that cell is still present, just RE-POSITION against the fresh node (the body content is
+// left as-is — read-only — and the original auto-dismiss timer + outside-tap listener keep
+// running, so nothing is duplicated or leaked). If the cell fell out of the window, close.
+function reanchorDayPopover() {
+  if (!daypopOpen || !daypopAnchor || !elDayPop || !elGrid) return;
+  const sel = `.gcell[data-uid="${cssAttrEscape(daypopAnchor.uid)}"][data-date="${cssAttrEscape(daypopAnchor.date)}"]`;
+  const cell = elGrid.querySelector(sel);
+  if (cell) {
+    positionDayPop(cell); // re-pin to the rebuilt node; don't touch the timer/listener
+  } else {
+    closeDayPopover(); // the anchored day is no longer on the grid
+  }
+}
+
+// Escape a string for safe use inside a CSS attribute-selector "...". Prefer the native
+// CSS.escape when available; the fallback backslash-escapes the quote + backslash, which
+// is all our uid/date keys can contain that would break the selector.
+function cssAttrEscape(s) {
+  const str = String(s == null ? '' : s);
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(str);
+  return str.replace(/["\\]/g, '\\$&');
+}
+
 function openDayPopover(member, dateKey, cellEl) {
   if (!elDayPop) return;
   const emoji = emojiOf({ emoji: member.emoji, id: idOf(member) });
@@ -1985,6 +2089,7 @@ function openDayPopover(member, dateKey, cellEl) {
   elDayPop.classList.remove('hidden');
   positionDayPop(cellEl);
   daypopOpen = true;
+  daypopAnchor = { uid: idOf(member), date: dateKey }; // v4 (#4): remember what it points at
 
   // auto-dismiss after ~5s.
   clearTimeout(daypopTimer);
@@ -2049,6 +2154,7 @@ function removeDayPopOutside() {
 function closeDayPopover() {
   if (elDayPop) elDayPop.classList.add('hidden');
   daypopOpen = false;
+  daypopAnchor = null; // v4 (#4)
   clearTimeout(daypopTimer);
   daypopTimer = null;
   removeDayPopOutside();
@@ -2086,6 +2192,7 @@ function wireWeightChart() {
     if (r !== 30 && r !== 90) return;
     if (r === wchartRange) return;
     wchartRange = r;
+    _wchartSig = null; // v4 (#1c): force a rebuild — the range changed, the dirty-check must not skip it
     renderWeightChart(anchoredNow());
   });
 }

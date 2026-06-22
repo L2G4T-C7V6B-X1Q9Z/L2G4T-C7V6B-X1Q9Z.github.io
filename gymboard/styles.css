@@ -632,6 +632,12 @@ button:disabled { cursor:default; }
 .me-meal-row .me-meal-x { flex:0 0 auto; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:var(--r-sm); background:transparent; border:none; color:var(--txt3); font-size:13px; }
 .me-meal-row .me-meal-x:active { background:var(--g3); color:var(--txt2); }
 .me-meal-note { font-size:10px; color:var(--txt3); letter-spacing:.02em; padding-left:2px; }
+/* v4 (#7): a meal row carrying a note grows past the fixed height and stacks name+note. */
+.me-meal-row.has-note { height:auto; min-height:34px; padding-top:5px; padding-bottom:5px; align-items:flex-start; }
+.me-meal-row.has-note .me-meal-fig, .me-meal-row.has-note .me-meal-x { align-self:center; }
+.me-meal-row .me-meal-name.has-note { display:flex; flex-direction:column; gap:2px; overflow:visible; white-space:normal; }
+.me-meal-name .me-meal-nametext { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.me-meal-name .me-meal-rownote { font-size:10px; color:var(--txt3); letter-spacing:.02em; line-height:1.3; white-space:normal; }
 
 /* v4 (#14): personal-emoji picker — a wrap of curated symbols to tap. Selected = filled. */
 .me-emoji-pick { display:flex; flex-wrap:wrap; gap:6px; }

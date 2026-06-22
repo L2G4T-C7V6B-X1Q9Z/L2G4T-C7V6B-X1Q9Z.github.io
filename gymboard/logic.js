@@ -589,7 +589,9 @@ export function nutritionStatus(day, opts = {}) {
   if (mode === 'protein') {
     if (!Number.isFinite(proteinGoal)) return notMet; // unset -> manual-only
     const P = day && Number.isFinite(day.protein) ? day.protein : 0;
-    if (!(P > 0)) return notMet; // 0 protein logged never auto-hits
+    // 0 intake never auto-hits, but ONLY when there's a positive goal to meet; a
+    // proteinGoal of 0 is satisfied by 0 (0>=0), matching 'both' mode's goal-0 floor.
+    if (proteinGoal > 0 && !(P > 0)) return notMet;
     return P >= proteinGoal ? 'hit' : notMet;
   }
 
@@ -689,24 +691,27 @@ export function computeCompliance(daysMap, subject, nowInstant, opts = {}) {
     if (cursor < joinDate) break; // pre-join: out of scope, and nothing older qualifies
     const day = days[cursor];
 
-    // ---- workout: only scheduled (non rest/off) past training days count ----
+    // ---- workout + nutrition: only scheduled (non rest/off) past days count ----
+    // Both numbers exclude rest, off, prejoin, and future days so the two %s mean the
+    // same thing ("of the days it counted, how often you hit") and are comparable. The
+    // prejoin/future exclusions come from the loop bounds (cursor<joinDate breaks; the
+    // walk starts at yesterday). rest/off are skipped here, mirroring the workout side.
     const rest = isRestDay(subject.restPattern, subject.perDateOverrides, cursor);
     const off = !!(day && day.off === true);
     if (!(rest || off)) {
       wExpected += 1;
       if (day && day.workout === true) wCompleted += 1;
-    }
 
-    // ---- nutrition: expected on EVERY past non-prejoin day (eat on rest days) ----
-    nExpected += 1;
-    const ns = nutritionStatus(day, {
-      nutritionMode: mode,
-      kcalGoal,
-      proteinGoal,
-      goal,
-      isPast: true,
-    });
-    if (ns === 'hit') nCompleted += 1;
+      nExpected += 1;
+      const ns = nutritionStatus(day, {
+        nutritionMode: mode,
+        kcalGoal,
+        proteinGoal,
+        goal,
+        isPast: true,
+      });
+      if (ns === 'hit') nCompleted += 1;
+    }
 
     cursor = prevBusinessDate(cursor);
   }

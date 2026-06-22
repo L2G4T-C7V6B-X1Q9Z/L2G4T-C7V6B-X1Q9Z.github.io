@@ -1219,6 +1219,11 @@ export async function addMeal(businessDate, meal = {}) {
       if (label) mealEl.label = label;
     }
   }
+  // v4 (#7): a quick-meal preset can carry a free-text note; copy a trimmed, capped
+  // copy onto the meal element the same way as the label (client-trusted, no rule change).
+  if (typeof meal.note === 'string' && meal.note.trim()) {
+    mealEl.note = meal.note.trim().slice(0, 80);
+  }
   const newMeals = prevMeals.concat([mealEl]);
 
   const batch = writeBatch(_db);
