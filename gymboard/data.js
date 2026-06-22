@@ -46,6 +46,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   arrayUnion,
   writeBatch,
   serverTimestamp,
@@ -113,6 +114,30 @@ const WORKOUT_TYPES = ['upper', 'lower', 'push', 'pull', 'legs', 'full', 'cardio
 // =============================================================================
 // small internal helpers
 // =============================================================================
+
+/**
+ * newSongId() -> a 16-hex-char (64-bit) random id for a /playlist song doc.
+ *
+ * Lives in data.js (NOT logic.js) on purpose: logic.js is the deterministic,
+ * no-random/no-clock core that logic.test.mjs proves under plain Node, so a
+ * randomness source can't live there without breaking that purity. The id only
+ * needs to be unique among a handful of concurrently-added songs, so 64 bits is
+ * ample. Uses the Web Crypto CSPRNG when present (browsers + Node 19+ globalThis),
+ * falling back to Math.random only if crypto is somehow unavailable. Shape matches
+ * the lowercase-hex convention TOKEN_RE uses elsewhere (here 16, not 32, chars).
+ */
+export function newSongId() {
+  const bytes = new Uint8Array(8); // 8 bytes -> 16 hex chars
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (g.crypto && typeof g.crypto.getRandomValues === 'function') {
+    g.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) out += bytes[i].toString(16).padStart(2, '0');
+  return out;
+}
 
 function assertInit() {
   if (!_initialized || !_db) {
@@ -1819,4 +1844,169 @@ export async function fetchWeights(userId, fromKey, toKey) {
  */
 export async function fetchOlderDays(userId, fromKey, toKey) {
   return fetchDays(userId, fromKey, toKey);
+}
+
+
+// =============================================================================
+// PLAYLIST (v5) - the shared in-app song wall + the optional collab-playlist link
+// -----------------------------------------------------------------------------
+// A new top-level /playlist collection, ONE doc per song (newSongId() id), is the
+// whole source of truth: a live onSnapshot wall the group builds together. It is
+// a deep-LINK wall - it stores exactly what's typed/pasted and ui.js opens
+// Spotify / YT-Music from the stored url (or a search URL built off the
+// title/artist). There is NO Spotify Web API / OAuth here (a public SPA can't do
+// it), so this carries no secret. The OPTIONAL human-managed Spotify
+// collaborative-playlist share link lives in the Admin-seeded read-only
+// /meta/playlist doc ({ collabUrl }), surfaced by a footer button.
+//
+// Identity, per the rules: addedByUserId = the bound capability USER id (display:
+// who added it, drives the emoji/name), addedByUid = the anon AUTH uid (== the
+// caller, the rule's attribution proof). createdAt is server-stamped. Like every
+// other writer here, a permission-denied that traces to a binding mismatch routes
+// through maybeFireReclaim() and re-throws a tagged 'gymboard/reclaim-needed'.
+// =============================================================================
+
+const VALID_SONG_SOURCES = ['spotify', 'ytmusic', 'url', 'text']; // matches the rule enum.
+
+/**
+ * subscribePlaylist(cb) -> unsubscribeFn (sync return)
+ *
+ * onSnapshot on /playlist ordered by createdAt DESC (newest song first); cb is
+ * called with the songs array on every change. Each element is { id, ...docData }
+ * (id == the song doc id). The single orderBy('createdAt','desc') needs the
+ * single-field index the console offers on first run - accept it. A server
+ * createdAt is null on the local echo of an optimistic add until the write acks;
+ * ui.js handles that (it renders its own optimistic row meanwhile). The unsub is
+ * tracked in _unsubs so data.teardown() detaches it. A permission-denied on the
+ * stream (our uid dropped from /meta/active, or a binding mismatch) routes to the
+ * reclaim prompt - same posture as subscribeUsers.
+ */
+export function subscribePlaylist(cb) {
+  assertInit();
+  const q = query(collection(_db, 'playlist'), orderBy('createdAt', 'desc'));
+  const onNext = (qs) => {
+    const songs = [];
+    qs.forEach((d) => {
+      songs.push({ id: d.id, ...d.data() });
+    });
+    if (typeof cb === 'function') cb(songs);
+  };
+  const onErr = (err) => {
+    maybeFireReclaim(err);
+  };
+  const active = onSnapshot(q, onNext, onErr);
+  _unsubs.add(active);
+  return () => {
+    _unsubs.delete(active);
+    try {
+      active();
+    } catch (_) {
+      /* already detached */
+    }
+  };
+}
+
+/**
+ * addSong({ title, artist, url, source }) -> Promise<string> (the new song id)
+ *
+ * Create one /playlist/{newSongId} doc. Stamps addedByUserId = the bound user id
+ * (display), addedByUid = this install's anon uid (the rule's attribution proof),
+ * and createdAt = serverTimestamp() (the rule requires == request.time). title is
+ * REQUIRED; artist/url default to '' / omitted; source is validated against the
+ * enum (defaults to 'text'). Returns the generated id so ui.js can key its
+ * optimistic row and reconcile it against the snapshot. A binding-mismatch denial
+ * routes to reclaim + re-throws 'gymboard/reclaim-needed' (the SAME path every
+ * other writer uses); any other error propagates so ui.js can roll the optimistic
+ * row back. No outbox (a song add is not the rollover-sensitive workout write).
+ */
+export async function addSong(song = {}) {
+  assertInit();
+  const id = _userId;
+  if (!id) throw taggedError('gymboard/not-bound', 'addSong: no bound userId.');
+  if (!_uid) throw taggedError('gymboard/not-bound', 'addSong: not signed in.');
+  if (!song || typeof song !== 'object') {
+    throw taggedError('gymboard/bad-value', 'addSong: expected { title, artist?, url?, source? }.');
+  }
+
+  const title = typeof song.title === 'string' ? song.title.trim().slice(0, 200) : '';
+  if (!title) {
+    throw taggedError('gymboard/bad-value', 'addSong: a song needs a title.');
+  }
+  const source = VALID_SONG_SOURCES.includes(song.source) ? song.source : 'text';
+
+  const payload = {
+    title,
+    source,
+    addedByUserId: id, // display: who added it (drives the emoji/name in the row)
+    addedByUid: _uid, // rule: == request.auth.uid (attribution proof)
+    createdAt: serverTimestamp(), // rule: == request.time
+  };
+  // artist + url are optional; only write them when non-empty (so a pasted-URL row
+  // omits artist and a "Song - Artist" text row omits url, matching the rule's
+  // "optional when present" checks).
+  if (typeof song.artist === 'string' && song.artist.trim()) {
+    payload.artist = song.artist.trim().slice(0, 200);
+  }
+  if (typeof song.url === 'string' && song.url.trim()) {
+    payload.url = song.url.trim().slice(0, 2000);
+  }
+
+  const songId = newSongId();
+  try {
+    await setDoc(doc(_db, 'playlist', songId), payload);
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected - this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+  return songId;
+}
+
+/**
+ * removeSong(songId) -> Promise<void>
+ *
+ * Delete /playlist/{songId}. ANYONE-can-remove (the rule's delete:activeReader()),
+ * per the approved shared-jukebox decision - so this works on any song, not just
+ * one you added. A binding-mismatch denial routes to reclaim + re-throws
+ * 'gymboard/reclaim-needed'; any other error propagates.
+ */
+export async function removeSong(songId) {
+  assertInit();
+  if (!_userId) throw taggedError('gymboard/not-bound', 'removeSong: no bound userId.');
+  if (typeof songId !== 'string' || !songId) {
+    throw taggedError('gymboard/bad-value', `removeSong: bad songId ${songId}.`);
+  }
+  try {
+    await deleteDoc(doc(_db, 'playlist', songId));
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected - this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+}
+
+/**
+ * fetchPlaylistMeta() -> Promise<{ collabUrl: string|null }>
+ *
+ * One-shot read of the Admin-seeded read-only /meta/playlist doc. Returns the
+ * optional collaborative-playlist share URL (or null if the doc / field is
+ * absent), used by the PLAYLIST footer's "OPEN SHARED PLAYLIST" button. Read-only
+ * (the /meta/{docId} rule is write:false to clients). Non-fatal: any error
+ * resolves { collabUrl: null } so a missing doc just hides the button.
+ */
+export async function fetchPlaylistMeta() {
+  assertInit();
+  try {
+    const snap = await getDoc(doc(_db, 'meta', 'playlist'));
+    if (!snap.exists()) return { collabUrl: null };
+    const data = snap.data() || {};
+    const collabUrl = typeof data.collabUrl === 'string' && data.collabUrl.trim() ? data.collabUrl.trim() : null;
+    return { collabUrl };
+  } catch (_) {
+    return { collabUrl: null }; // missing/denied => no shared-playlist button.
+  }
 }

@@ -42,11 +42,15 @@
     </div>
   </header>
 
-  <!-- ===== TAB STRIP: Me | Social. v4: ME is first + default-active, SOCIAL second.
-       The internal id/data-tab stays 'grid' to minimize churn (label-only rename). ===== -->
-  <nav id="tabs" aria-label="Sections">
+  <!-- ===== TAB STRIP: Me | Social | Month | Playlist. v4: ME is first + default-active.
+       SOCIAL's internal id/data-tab stays 'grid' to minimize churn (label-only rename).
+       v5 (#3): MONTH + PLAYLIST added — order matches SCREENS in ui.js (the slide order).
+       4 tabs use tighter type/spacing (.tabs-4 in styles.css) so PLAYLIST still fits. ===== -->
+  <nav id="tabs" class="tabs-4" aria-label="Sections">
     <button class="tab is-active" data-tab="me" aria-pressed="true">ME</button>
     <button class="tab" data-tab="grid" aria-pressed="false">SOCIAL</button>
+    <button class="tab" data-tab="month" aria-pressed="false">MONTH</button>
+    <button class="tab" data-tab="playlist" aria-pressed="false">PLAYLIST</button>
   </nav>
 
   <!-- ===== STAGE: the two screens. ME is default-active; only the inner scroll regions scroll. ===== -->
@@ -216,8 +220,17 @@
          (bottom third — placeholder for the chart phase). -->
     <section id="screen-grid" class="screen" aria-label="Social board" aria-hidden="true">
       <div id="grid-head">
-        <div class="grid-title">THIS WEEK</div>
-        <div id="grid-range" class="grid-range mono"></div>
+        <div class="grid-head-l">
+          <div id="grid-title" class="grid-title">THIS WEEK</div>
+          <div id="grid-range" class="grid-range mono"></div>
+        </div>
+        <!-- v5 (#2): week nav. ‹ = older week, › = newer (dead at the current week), and a
+             "today" pill (hidden on the current week) to jump straight back. -->
+        <div class="wk-nav" role="group" aria-label="Week navigation">
+          <button id="wk-older" class="wk-arrow" type="button" aria-label="Older week">‹</button>
+          <button id="wk-today" class="wk-today mono hidden" type="button" aria-label="Back to this week">today</button>
+          <button id="wk-newer" class="wk-arrow" type="button" aria-label="Newer week">›</button>
+        </div>
       </div>
       <!-- v4 (#11): legend at the TOP, with a labeled mini-cell diagram + color key. -->
       <div class="grid-legend" id="grid-legend" aria-hidden="true"></div>
@@ -243,6 +256,66 @@
           <div id="wchart-svg" class="wchart-svg"></div>
           <div id="wchart-empty" class="wchart-empty hidden">No shared weights yet.</div>
         </div>
+      </div>
+    </section>
+
+    <!-- ---- MONTH (v5 #4) — per-person calendar. A person-chip row picks WHOSE month shows
+         (defaults to me, reset to me on tab-leave); ‹ › step the visible month (› dead at the
+         current month). The grid REUSES the real .gcell so each day's diagonal workout/nutrition
+         split matches the SOCIAL board automatically. `hidden` keeps it display:none until the
+         tab system first runs (setTab clears it; off-screen panes are then clipped by #stage). -->
+    <section id="screen-month" class="screen" aria-label="Month" aria-hidden="true" hidden>
+      <div id="month-head" class="month-head">
+        <!-- ‹ › month nav + the visible month label (e.g. "June 2026"). › disables at the
+             current month (no future to browse). -->
+        <button id="month-prev" class="wk-arrow" type="button" aria-label="Previous month">‹</button>
+        <div id="month-label" class="month-label mono" aria-live="polite"></div>
+        <button id="month-next" class="wk-arrow" type="button" aria-label="Next month">›</button>
+      </div>
+      <!-- person selector: one tappable emoji chip per member (me first), the selected one
+           ringed in --red. Built + kept in sync by ui.js renderMonthChips(). -->
+      <div id="month-chips" class="month-chips" role="group" aria-label="Whose month"></div>
+      <div id="month-scroll" class="scrolly">
+        <!-- 7-col calendar (Mon..Sun). Weekday header row + day cells, built by ui.js. -->
+        <div id="month-grid" class="month-grid" role="grid" aria-label="Month calendar"></div>
+      </div>
+    </section>
+
+    <!-- ---- PLAYLIST (v5 #5) — a shared in-app song WALL. One live onSnapshot list the
+         group builds together: paste a Spotify / YT-Music link OR type "Song - Artist", tap
+         ADD. Each row deep-links out to BOTH services (open the pasted link, or search the
+         title+artist) and ANYONE can ✕-remove it (shared-jukebox model). It is NOT a real
+         Spotify sync (a public SPA can't); the footer's OPEN buttons search the whole list
+         or open an Admin-stored collaborative-playlist link. Same `hidden`-until-first-setTab
+         handling as MONTH. ---- -->
+    <section id="screen-playlist" class="screen" aria-label="Playlist" aria-hidden="true" hidden>
+      <!-- header: title + a live "· N SONGS" count (not a date window — it's one evolving list). -->
+      <div id="pl-head" class="pl-head">
+        <div class="pl-title">PLAYLIST<span id="pl-count" class="pl-count mono" aria-live="polite"></span></div>
+        <div class="pl-sub">Shared song wall · tap a row to open it in Spotify or YT Music.</div>
+      </div>
+      <!-- fixed add-bar: paste a link OR type "Song - Artist". One input + ADD. The hint line
+           below it doubles as the "already added" pulse target. -->
+      <div id="pl-add" class="pl-add">
+        <div class="pl-add-row">
+          <input id="pl-input" class="me-input me-input-text pl-in" type="text" inputmode="text"
+                 autocapitalize="off" autocorrect="off" spellcheck="false"
+                 placeholder="Paste a link or type Song - Artist"
+                 aria-label="Paste a song link or type Song - Artist">
+          <button id="pl-add-btn" class="me-meal-btn pl-add-btn" type="button">ADD</button>
+        </div>
+        <div id="pl-add-hint" class="pl-add-hint" aria-live="polite"></div>
+      </div>
+      <!-- the live song list (newest first). Built + reconciled by ui.js renderPlaylist. -->
+      <div id="pl-scroll" class="scrolly">
+        <div id="pl-list" class="pl-list" role="list" aria-label="Shared playlist"></div>
+      </div>
+      <!-- footer: OPEN-the-whole-list-on-each-service + (when Admin-seeded) the shared
+           collaborative-playlist link. -->
+      <div id="pl-foot" class="pl-foot">
+        <button id="pl-open-spotify" class="pl-foot-btn" type="button" aria-label="Search the whole list on Spotify">OPEN ON SPOTIFY ↗</button>
+        <button id="pl-open-ytm" class="pl-foot-btn" type="button" aria-label="Search the whole list on YT Music">OPEN ON YT MUSIC ↗</button>
+        <a id="pl-collab" class="pl-foot-btn pl-collab hidden" target="_blank" rel="noopener" href="#" aria-label="Open the shared collaborative playlist">OPEN SHARED PLAYLIST ↗</a>
       </div>
     </section>
 

@@ -186,17 +186,25 @@ button:disabled { cursor:default; }
   background:var(--red); border-radius:2px 2px 0 0;
 }
 .tab:active { color:var(--txt2); }
+/* v5 (#3): with 4 tabs (ME · SOCIAL · MONTH · PLAYLIST) the strip is tighter — pull the
+   type + tracking in so PLAYLIST still fits on a narrow phone, and clip any overflow rather
+   than let a long label wrap. Still mono/uppercase/red-underline, no new colors. */
+.tabs-4 .tab { font-size:10px; letter-spacing:.08em; padding:0 2px;
+  white-space:nowrap; overflow:hidden; text-overflow:clip; }
+.tabs-4 .tab.is-active::after { left:10%; right:10%; }
 
 /* ============ STAGE + SCREENS ============ */
 #stage { flex:1 1 auto; position:relative; overflow:hidden; min-height:0; }
-/* v4.5: both screens stay mounted and SLIDE horizontally via transform (a real swipe
-   animation); #stage clips the off-screen one. ME is the left screen, SOCIAL the right. */
+/* v4.5: all screens stay mounted and SLIDE horizontally via transform (a real swipe
+   animation); #stage clips the off-screen ones. v5 (#1): there are now up to 4 panes
+   (ME · SOCIAL · MONTH · PLAYLIST). The exact translateX of each pane is computed in JS
+   (applyScreenTransforms in ui.js: (idx-activeIdx)*100%) and set as an inline style, which
+   is more robust for 3+ panes than declarative ±100% rules. The CSS below only provides the
+   PRE-JS resting state (before the first setTab): ME visible at 0, every other pane parked
+   off-screen RIGHT so nothing flashes. The first tab/swipe hands all positioning to JS. */
 .screen { position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden; min-height:0;
-  transition:transform 300ms var(--ease-out); will-change:transform; }
-#screen-me { transform:translateX(-100%); }
-#screen-me.is-active { transform:translateX(0); }
-#screen-grid { transform:translateX(100%); }
-#screen-grid.is-active { transform:translateX(0); }
+  transform:translateX(100%); transition:transform 300ms var(--ease-out); will-change:transform; }
+.screen.is-active { transform:translateX(0); }
 @media (prefers-reduced-motion: reduce) { .screen { transition:none; } }
 
 /* the ONLY scrollers in the whole app */
@@ -324,12 +332,37 @@ button:disabled { cursor:default; }
 /* ============ GRID (read-only board; tap any cell -> read-only detail) ============ */
 #grid-head {
   flex:0 0 auto;
-  display:flex; align-items:baseline; justify-content:space-between;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
   padding:14px 16px 10px;
   border-bottom:1px solid var(--hairline); background:var(--g0);
 }
-.grid-title { font-weight:700; font-size:12px; letter-spacing:.18em; color:var(--txt2); }
-.grid-range { font-size:10.5px; color:var(--txt3); letter-spacing:.04em; }
+/* v5 (#2): title + range stack on the left; the week-nav cluster sits on the right. */
+.grid-head-l { display:flex; align-items:baseline; gap:10px; min-width:0; }
+.grid-title { font-weight:700; font-size:12px; letter-spacing:.18em; color:var(--txt2); white-space:nowrap; }
+.grid-range { font-size:10.5px; color:var(--txt3); letter-spacing:.04em; white-space:nowrap; }
+/* v5 (#2): WEEK NAV — arrows styled like .hdr-theme, the "today" pill like .wc-range.
+   Monochrome; red only as the pill's text accent. No new colors. */
+.wk-nav { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+.wk-arrow {
+  width:28px; height:28px; border-radius:8px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--g2); border:1px solid var(--hairline); color:var(--txt2);
+  font-size:16px; line-height:1; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  transition:background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.wk-arrow:hover { color:var(--txt); }
+.wk-arrow:active { background:var(--g3); }
+.wk-arrow:disabled { opacity:.32; cursor:default; color:var(--txt3); }
+.wk-today {
+  font:inherit; font-size:9px; letter-spacing:.08em; line-height:1;
+  padding:5px 9px; border-radius:var(--r-sm);
+  background:var(--g2); border:1px solid var(--hairline); color:var(--red);
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+  transition:background 140ms ease, border-color 140ms ease;
+}
+.wk-today:hover { border-color:var(--edge); }
+.wk-today:active { background:var(--g3); }
+.wk-today.hidden { display:none; }
 #grid-scroll { flex:1 1 auto; min-height:0; padding:6px 12px 10px; overflow-x:auto; transform:translateZ(0); will-change:transform; }
 /* CSS Grid (display:grid), NOT a <table>. Columns set inline by ui.js; date gutter + 1 col
    per member. Newest date at top (ui.js orders rows).
@@ -460,6 +493,149 @@ button:disabled { cursor:default; }
 .gcell.prejoin { --w:var(--g1); --n:var(--g1); border-color:var(--hairline); clip-path:polygon(9px 0, 100% 0, 100% 100%, 0 100%, 0 9px); }
 .gcell.prejoin .seg-w::before, .gcell.prejoin .gcell-wtag { display:none; }
 .gcell.me { box-shadow:inset 2px 0 0 var(--red); }
+
+/* =================================================================================
+   MONTH TAB (v5 #4) — a per-person calendar. The day cells REUSE .gcell (above) so the
+   diagonal workout/nutrition split + every w-/n- color match the SOCIAL board for free;
+   only the calendar chrome (header, chip row, 7-col layout, the overlaid day number, and
+   the inert adjacent-month pad cells) is new here. Monochrome + --red accent only.
+   ================================================================================= */
+/* header: ‹ month-label › (the arrows reuse .wk-arrow from the SOCIAL week-nav). */
+.month-head {
+  flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:12px;
+  padding:11px 14px; border-bottom:1px solid var(--hairline); background:var(--g0);
+}
+.month-label {
+  font-size:12.5px; font-weight:700; letter-spacing:.08em; color:var(--txt2);
+  text-transform:uppercase; min-width:118px; text-align:center; white-space:nowrap;
+}
+/* person selector: emoji chips, the selected subject ringed in --red (the --red-wash idiom
+   used by the ME segmented buttons). Horizontally scrollable if a big group overflows. */
+.month-chips {
+  flex:0 0 auto; display:flex; align-items:center; justify-content:center; flex-wrap:wrap;
+  gap:8px; padding:9px 12px; border-bottom:1px solid var(--hairline); background:var(--g1);
+  overflow-x:auto; -webkit-overflow-scrolling:touch;
+}
+.month-chip {
+  flex:0 0 auto; width:38px; height:38px; display:flex; align-items:center; justify-content:center;
+  border-radius:50%; background:var(--g2); border:1px solid var(--hairline);
+  transition:background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; touch-action:manipulation;
+}
+.month-chip:active { background:var(--g3); }
+.month-chip-emoji { font-size:18px; line-height:1; }
+.month-chip.on { background:var(--red-wash); border-color:var(--red-wash-bd); box-shadow:0 0 0 1px var(--red-wash-bd); }
+
+/* the 7-col grid. The weekday header row + the day cells share the same template so columns
+   line up. align-content:start so a 5-row month doesn't stretch its cells vertically. */
+.month-grid {
+  display:grid; grid-template-columns:repeat(7, 1fr); gap:5px; align-content:start;
+  padding:12px; max-width:520px; margin-inline:auto; width:100%;
+}
+.month-dow {
+  display:flex; align-items:center; justify-content:center; padding:2px 0 4px;
+  font-size:8.5px; font-weight:700; letter-spacing:.06em; color:var(--txt3); text-transform:uppercase;
+}
+/* a month day cell IS a .gcell (inherits the diagonal split + colors); these rules only add
+   the calendar specifics: a slightly shorter min-height for density + the day-number overlay
+   sitting above the two triangles. */
+.gcell.month-cell { min-height:0; aspect-ratio:1 / 1; }
+.month-num {
+  position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-mono); font-size:11px; font-weight:700; line-height:1;
+  color:var(--txt); opacity:.92; pointer-events:none;
+  /* legible over any triangle color (done-green / missed-red / pending-gray) without picking
+     a new color: a soft same-as-canvas halo behind the glyph. */
+  text-shadow:0 0 3px var(--g0), 0 0 3px var(--g0), 0 1px 1px var(--g0);
+}
+/* inert adjacent-month pad cells: no .gcell (no status fill/diagonal), just a dim number and
+   no interactivity — they don't imply data. */
+.month-cell.pad {
+  position:relative; aspect-ratio:1 / 1; min-height:0; border-radius:var(--r-sm);
+  border:1px solid transparent; background:transparent; pointer-events:none;
+}
+.month-cell.pad .month-num { color:var(--txt3); opacity:.32; text-shadow:none; font-weight:400; }
+
+/* =================================================================================
+   PLAYLIST TAB (v5 #5) — a shared song WALL. Header + count, a fixed add-bar, a scrolling
+   list of song rows (reuses the .me-meal-row idiom: emoji/title/meta left, service buttons +
+   ✕ right), and a footer of OPEN-on-each-service buttons. Monochrome + --red accent only; the
+   service + footer buttons are neutral chrome (the --red-wash ring is reserved for selection).
+   ================================================================================= */
+/* header: title + a live "· N SONGS" count, plus a one-line subtitle. */
+.pl-head {
+  flex:0 0 auto; padding:13px 16px 11px; border-bottom:1px solid var(--hairline); background:var(--g0);
+}
+.pl-title { font-size:13px; font-weight:700; letter-spacing:.1em; color:var(--txt2); text-transform:uppercase; }
+.pl-count { color:var(--red); font-weight:700; letter-spacing:.04em; }
+.pl-sub { margin-top:3px; font-size:10.5px; color:var(--txt3); letter-spacing:.01em; }
+
+/* fixed add-bar: one wide input + ADD (reuses .me-input + .me-meal-btn), then a hint line that
+   doubles as the "already added" pulse target. */
+.pl-add {
+  flex:0 0 auto; padding:10px 14px; border-bottom:1px solid var(--hairline); background:var(--g1);
+}
+.pl-add-row { display:flex; gap:6px; align-items:center; }
+.pl-in { flex:1 1 auto; width:auto; min-width:0; height:36px; }
+.pl-add-btn { flex:0 0 auto; height:36px; }
+.pl-add-hint { min-height:13px; margin-top:6px; font-size:10.5px; letter-spacing:.02em; color:var(--txt3); }
+.pl-add-hint.dupe { color:var(--red); animation:plpulse 360ms var(--ease-out); }
+.pl-add-hint.err { color:var(--red); }
+@keyframes plpulse { 0%{ opacity:.25; } 100%{ opacity:1; } }
+
+/* the live song list — a vertical stack of rows (newest first). */
+.pl-list { display:flex; flex-direction:column; gap:6px; padding:12px 14px; max-width:560px; margin-inline:auto; width:100%; }
+.pl-row {
+  display:flex; align-items:center; gap:10px; min-height:42px; padding:6px 6px 6px 10px;
+  border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline);
+}
+.pl-row.pending { opacity:.62; } /* optimistic, not-yet-acked add */
+.pl-row-emoji { flex:0 0 auto; width:22px; text-align:center; font-size:16px; line-height:1; }
+.pl-row-main { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.pl-row-title { font-size:12px; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pl-row-meta { display:flex; align-items:center; gap:7px; min-width:0; }
+.pl-row-artist { font-size:10.5px; color:var(--txt3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pl-row-src {
+  flex:0 0 auto; font-size:8px; font-weight:700; letter-spacing:.1em; color:var(--txt3);
+  border:1px solid var(--hairline); border-radius:4px; padding:1px 4px; text-transform:uppercase;
+}
+/* the two per-row service buttons (SP / YT). Neutral chrome; a disabled (no-target) one is dim
+   and inert. They're <a> when live, <span> when off — same box either way. */
+.pl-row-svcs { flex:0 0 auto; display:flex; gap:5px; }
+.pl-svc {
+  display:inline-flex; align-items:center; justify-content:center; min-width:30px; height:28px; padding:0 7px;
+  border-radius:var(--r-sm); background:var(--g3); border:1px solid var(--hairline);
+  color:var(--txt2); font-family:var(--font-mono); font-size:9.5px; font-weight:700; letter-spacing:.06em;
+  text-decoration:none; -webkit-touch-callout:none; user-select:none; touch-action:manipulation;
+}
+.pl-svc:hover { color:var(--txt); }
+.pl-svc:active { background:var(--g4); }
+.pl-svc.off { opacity:.32; pointer-events:none; }
+/* the remove ✕ (anyone can remove) — borderless, quiet until pressed (matches .me-meal-x). */
+.pl-row-x {
+  flex:0 0 auto; width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center;
+  border-radius:var(--r-sm); background:transparent; border:none; color:var(--txt3); font-size:13px;
+}
+.pl-row-x:active:not(:disabled) { background:var(--g3); color:var(--txt2); }
+.pl-row-x:disabled { opacity:.3; }
+
+/* footer: whole-list OPEN buttons + the optional shared-playlist link. */
+.pl-foot {
+  flex:0 0 auto; display:flex; flex-wrap:wrap; align-items:center; gap:8px; justify-content:center;
+  padding:11px 14px; border-top:1px solid var(--hairline); background:var(--g0);
+}
+.pl-foot-btn {
+  height:34px; padding:0 14px; display:inline-flex; align-items:center; justify-content:center;
+  border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline);
+  color:var(--txt2); font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; text-decoration:none; touch-action:manipulation;
+}
+.pl-foot-btn:hover { color:var(--txt); }
+.pl-foot-btn:active { background:var(--g3); }
+/* the shared-playlist link gets the --red-wash treatment so it reads as the "real" playlist. */
+.pl-collab { color:var(--red); border-color:var(--red-wash-bd); background:var(--red-wash); }
+.pl-collab:hover { color:var(--red); border-color:var(--red); }
+.pl-collab.hidden { display:none; }
 
 /* grid legend strip — v4 (#11): now at the TOP of the SOCIAL board (border-BOTTOM). */
 .grid-legend {

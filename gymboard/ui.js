@@ -32,6 +32,7 @@
 import {
   currentBusinessDate,
   prevBusinessDate,
+  nextDayKey,
   businessDate,
   missed,
   isRestDay,
@@ -43,6 +44,11 @@ import {
   emojiOf,
   EMOJI_SET,
   isDayKey,
+  // v5 (#5): PLAYLIST — the pure song-input parser + cross-service deep-link builders.
+  parseSongInput,
+  playlistDedupeKey,
+  spotifySearchUrl,
+  ytMusicSearchUrl,
 } from './logic.js';
 
 import * as data from './data.js';
@@ -91,9 +97,40 @@ const $ = (id) => document.getElementById(id);
 const elHdrReg = $('hdr-reg');
 const elPipSync = $('pip-sync');
 const elTabs = $('tabs');
-const elScreens = { grid: $('screen-grid'), me: $('screen-me') };
+// v5 (#1): the tab/pane order is the LEFT-to-RIGHT slide order. setTab + wireSwipe both
+// do index math over this one list, and each .screen's resting transform is computed off
+// its index vs the active index (idx-activeIdx)*100% — robust for 3+ panes where the old
+// declarative ±100% rules break (non-adjacent panes would slide from the wrong side).
+const SCREENS = ['me', 'grid', 'month', 'playlist'];
+const elScreens = {
+  me: $('screen-me'),
+  grid: $('screen-grid'),
+  month: $('screen-month'), // v5 (#3): MONTH calendar tab (rendered in step 4)
+  playlist: $('screen-playlist'), // v5 (#5): shared PLAYLIST tab (rendered in step 5)
+};
 const elGrid = $('grid');
+const elGridTitle = $('grid-title'); // v5 (#2): THIS WEEK / LAST WEEK / N WEEKS AGO
 const elGridRange = $('grid-range');
+// v5 (#2): SOCIAL week-nav controls (older/newer arrows + a "today" reset pill).
+const elWkOlder = $('wk-older');
+const elWkNewer = $('wk-newer');
+const elWkToday = $('wk-today');
+// v5 (#4): MONTH tab — per-person calendar. The chip row picks the subject; ‹ › step months.
+const elMonthHead = $('month-head');
+const elMonthPrev = $('month-prev');
+const elMonthNext = $('month-next');
+const elMonthLabel = $('month-label');
+const elMonthChips = $('month-chips');
+const elMonthGrid = $('month-grid');
+// v5 (#5): PLAYLIST tab — the shared song wall (add-bar, live list, footer open-buttons).
+const elPlCount = $('pl-count');
+const elPlInput = $('pl-input');
+const elPlAddBtn = $('pl-add-btn');
+const elPlAddHint = $('pl-add-hint');
+const elPlList = $('pl-list');
+const elPlOpenSpotify = $('pl-open-spotify');
+const elPlOpenYtm = $('pl-open-ytm');
+const elPlCollab = $('pl-collab');
 const elGridLegend = $('grid-legend');
 // v4 (#3): weight-over-time chart handles (the inline-SVG line chart on the SOCIAL board).
 const elSocialChart = $('social-chart');
@@ -179,6 +216,32 @@ let members = []; // latest /users snapshot (archived==false), as data.js hands 
 let daysByUser = new Map(); // userId -> { [dateKey]: DayEntry }  (fetched window)
 let weightsByUser = new Map(); // userId -> { [dateKey]: lb }  ({} == hidden)
 let activeTab = 'me'; // v3.1: ME is the default-active tab
+// v5 (#2): how many WEEKS back the SOCIAL grid is scrolled (0 = current week, newest at
+// top). Negative only — there's no future to browse. Shifts the grid's date anchor by
+// weekOffset*GRID_DAYS days; the "today" highlight + weight chart stay pinned to the REAL
+// current business-date so a past week shows no red today-row. Reset to 0 on tab switch.
+let weekOffset = 0;
+
+// v5 (#4): MONTH tab state. monthSubjectUid = whose calendar shows (the chip selection),
+// reset to myUserId whenever we LEAVE the tab (see setTab). monthOffset = how many calendar
+// months back from the viewer's current month (0 = this month; negative only — no future).
+// _monthFetchSig is a `uid|monthAnchorKey` dirty-check: the on-demand fetch of an OTHER
+// member's older month runs at most once per (subject, month) so re-renders don't refetch.
+let monthSubjectUid = null; // set to myUserId on boot (myUserId isn't known at module load)
+let monthOffset = 0;
+let _monthFetchSig = null;
+
+// v5 (#5): PLAYLIST tab state. `songs` is the latest /playlist snapshot (newest first), as
+// data.subscribePlaylist hands it over. `plCollabUrl` is the Admin-seeded optional shared-
+// playlist link (null = hide that footer button), fetched once on boot. The optimistic
+// overlays make add/remove feel instant before the snapshot lands: `plOptimisticAdds` is a
+// list of locally-added rows (keyed by the id addSong() returned) we render UNTIL the same id
+// shows up in the snapshot, and `plOptimisticRemoves` is a set of ids we hide UNTIL the
+// snapshot drops them. Reconciled in onSongs.
+let songs = [];
+let plCollabUrl = null;
+let plOptimisticAdds = []; // [{ id, title, artist, url, source, addedByUserId }]
+const plOptimisticRemoves = new Set(); // song ids hidden pending the snapshot
 
 // Optimistic overlay: while a WORKOUT write for (userId+businessDate) is in flight (or
 // failed pre-rollback), we paint from THIS map, not the snapshot, and we never repaint
@@ -401,12 +464,18 @@ const CELL_LABEL = {
 // top, older rows fade. Diagonal cells: upper-left WORKOUT, lower-right NUTRITION.)
 // =============================================================================
 function gridDateKeys(now) {
-  // Anchor on the viewer's current business-date, walk back GRID_DAYS-1 by
-  // CALENDAR-DAY decrement (logic.prevBusinessDate — DST-safe), newest first.
-  const cur = viewerBusinessDate(now);
-  const keys = [cur];
+  // v5 (#2): the body anchor is the viewer's current business-date shifted back
+  // |weekOffset| WEEKS (weekOffset is <=0). Step prevBusinessDate weekOffset*GRID_DAYS
+  // times so the trailing-7 body slides intact (fades/gutter/classifyDay follow). The
+  // REAL today (unshifted) is returned separately so the today-highlight + range title
+  // can be computed against it — a past week must paint NO red today-row.
+  const today = viewerBusinessDate(now);
+  let anchor = today;
+  const back = -weekOffset * GRID_DAYS; // weekOffset<=0 => non-negative step count
+  for (let i = 0; i < back; i++) anchor = prevBusinessDate(anchor);
+  const keys = [anchor];
   for (let i = 1; i < GRID_DAYS; i++) keys.push(prevBusinessDate(keys[i - 1]));
-  return { keys, cur }; // newest (cur) first
+  return { keys, anchor, today }; // newest (anchor) first; today = real current biz-date
 }
 
 function fmtDateGutter(dateKey) {
@@ -416,6 +485,23 @@ function fmtDateGutter(dateKey) {
   const dt = new Date(Date.UTC(y, mo - 1, d, 12, 0, 0));
   const dow = dt.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
   return { dow: dow.toUpperCase(), md: `${mo}/${d}` };
+}
+
+// v5 (#2): a readable "Mon D" label for a dateKey (no zoned instant — UTC noon avoids a
+// local-offset day shift, same trick as fmtDateGutter). Used for the SOCIAL range label.
+function fmtDateShort(dateKey) {
+  const [y, mo, d] = dateKey.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d, 12, 0, 0));
+  const mon = dt.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+  return `${mon} ${d}`;
+}
+
+// v5 (#2): the SOCIAL header title for the current weekOffset (0 = THIS WEEK, -1 = LAST
+// WEEK, -N = N WEEKS AGO). weekOffset is never positive (no future to browse).
+function weekTitleFor(offset) {
+  if (offset >= 0) return 'THIS WEEK';
+  if (offset === -1) return 'LAST WEEK';
+  return `${-offset} WEEKS AGO`;
 }
 
 // Ordered columns: the current user first, then everyone else A-Z.
@@ -511,7 +597,7 @@ function renderGrid(now) {
     elGridRange.textContent = '';
     return;
   }
-  const { keys, cur } = gridDateKeys(now);
+  const { keys, anchor, today } = gridDateKeys(now);
   const cols = orderedMembers();
 
   // CSS grid template: a fixed date gutter + one CAPPED column per member. v4 (#15): the
@@ -532,7 +618,7 @@ function renderGrid(now) {
     const emoji = emojiOf({ emoji: m.emoji, id: idOf(m) });
     cells.push(
       `<div class="ghead${isMe ? ' me' : ''}" title="${escapeHtml(displayNameOf(m))}">` +
-        headStackHtml(m, now, cur) +
+        headStackHtml(m, now, today) +
         `<span class="ghead-emoji" aria-hidden="true">${escapeHtml(emoji)}</span>` +
         `<span class="ghead-v">${escapeHtml(displayNameOf(m))}</span>` +
         `</div>`
@@ -543,7 +629,7 @@ function renderGrid(now) {
   for (let i = 0; i < keys.length; i++) {
     const dk = keys[i];
     const g = fmtDateGutter(dk);
-    const isToday = dk === cur;
+    const isToday = dk === today; // real current biz-date, NOT the shifted anchor
     const op = keys.length > 1 ? (1 - (i / (keys.length - 1)) * 0.55).toFixed(2) : '1';
     cells.push(
       `<div class="gdate${isToday ? ' today' : ''}" style="opacity:${op}"><span class="gdate-dow">${g.dow}</span><span>${g.md}</span></div>`
@@ -579,8 +665,13 @@ function renderGrid(now) {
   // that uid+date is still on the grid; only close if the cell genuinely fell out of range.
   reanchorDayPopover();
 
+  // v5 (#2): readable date range (oldest → newest of the shown week) + a dynamic title
+  // that names how far back we're browsing. Title/range follow the shifted anchor; the
+  // today-highlight + weight chart stay pinned to the real current business-date.
   const first = keys[keys.length - 1];
-  elGridRange.textContent = `${fmtDateGutter(first).md} – ${fmtDateGutter(cur).md}`;
+  elGridRange.textContent = `${fmtDateShort(first)} – ${fmtDateShort(anchor)}`;
+  if (elGridTitle) elGridTitle.textContent = weekTitleFor(weekOffset);
+  syncWeekNav();
 
   // Legend (v4 #11): at the TOP now, with a labeled mini-cell DIAGRAM (top=workout /
   // bottom=nutrition) plus the color key. Off is merged into rest (#1); nutrition is
@@ -865,8 +956,12 @@ function repaint() {
   const now = anchoredNow();
   if (activeTab === 'me') {
     renderMe(now);
-  } else {
+  } else if (activeTab === 'grid') {
     renderGrid(now);
+  } else if (activeTab === 'month') {
+    renderMonth(now); // v5 (#4): per-person calendar
+  } else if (activeTab === 'playlist') {
+    renderPlaylist(); // v5 (#5): shared song wall (live; not time-anchored, so no `now`)
   }
   updateSyncPip();
 }
@@ -1005,28 +1100,55 @@ function wireError() {
 }
 
 // =============================================================================
-// TABS  (ME | GRID)
+// TABS  (ME | SOCIAL | MONTH | PLAYLIST — order = SCREENS = left-to-right slide order)
 // =============================================================================
+// v5 (#1): position every mounted screen off the active index. Each pane's resting
+// transform is translateX((idx - activeIdx) * 100%): the active pane sits at 0, panes to
+// its right slide off to the right (+100%, +200%, …), panes to its left off to the left.
+// JS-computed per-index inline transforms beat the old declarative ±100% rules because a
+// 4-pane strip also needs ±200%/±300%, and a jump from pane 0 to pane 2 must enter from the
+// correct side. #stage (overflow:hidden) clips everything that isn't sitting at 0.
+function applyScreenTransforms(activeIdx) {
+  for (let i = 0; i < SCREENS.length; i++) {
+    const el = elScreens[SCREENS[i]];
+    if (el) el.style.transform = `translateX(${(i - activeIdx) * 100}%)`;
+  }
+}
+
 function setTab(tab) {
-  if (tab !== 'grid' && tab !== 'me') return;
+  const idx = SCREENS.indexOf(tab);
+  if (idx < 0) return; // not a known pane
   closeDayPopover(); // v4 (#13): don't leave a popover floating across a tab switch
+  weekOffset = 0; // v5 (#2): never resume on a stale N-weeks-ago view after a tab switch
+  // v5 (#4): reset the MONTH view to the viewer's own current month on every tab switch, so
+  // we never resume on someone else's calendar or a stale month back. (Runs on leaving AND
+  // re-entering — either way the tab opens fresh as "my current month".)
+  monthSubjectUid = myUserId;
+  monthOffset = 0;
   activeTab = tab;
   for (const btn of elTabs.querySelectorAll('.tab')) {
     const on = btn.dataset.tab === tab;
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
-  // v4.5: screens stay in the DOM and SLIDE via CSS transform (see .screen in styles.css),
-  // so we toggle is-active + aria-hidden instead of `hidden` (display:none would kill the
-  // transition). #stage clips the off-screen one.
-  if (elScreens.grid) {
-    elScreens.grid.classList.toggle('is-active', tab === 'grid');
-    elScreens.grid.setAttribute('aria-hidden', tab === 'grid' ? 'false' : 'true');
+  // v4.5: screens stay in the DOM and SLIDE via transform (see .screen in styles.css), so
+  // we toggle is-active + aria-hidden instead of `hidden` (display:none would kill the
+  // transition). v5 (#1): the actual translateX is set per-index in applyScreenTransforms
+  // (the .is-active class is kept only as a styling hook + the pre-JS CSS resting state).
+  // Loop over SCREENS so any number of panes stay in sync.
+  for (let i = 0; i < SCREENS.length; i++) {
+    const el = elScreens[SCREENS[i]];
+    if (!el) continue;
+    const on = SCREENS[i] === tab;
+    // v5 (#3): the month/playlist sections ship with the boolean `hidden` attr (display:none)
+    // so they never flash empty before first interaction. The moment the tab system runs we
+    // clear it on EVERY pane — from here on, hiding is the transform slide + #stage clip, and
+    // an off-screen pane must stay rendered (not display:none) so it can slide back in.
+    el.hidden = false;
+    el.classList.toggle('is-active', on);
+    el.setAttribute('aria-hidden', on ? 'false' : 'true');
   }
-  if (elScreens.me) {
-    elScreens.me.classList.toggle('is-active', tab === 'me');
-    elScreens.me.setAttribute('aria-hidden', tab === 'me' ? 'false' : 'true');
-  }
+  applyScreenTransforms(idx);
   repaint();
 }
 function wireTabs() {
@@ -1065,7 +1187,10 @@ function wireTheme() {
 }
 
 // =============================================================================
-// SWIPE  (left/right between ME and SOCIAL on touch screens)
+// SWIPE  (left/right between adjacent panes on touch screens)
+// v5 (#1): index math over SCREENS — a swipe moves ONE pane left or right, clamped to the
+// ends (no wrap). Swipe LEFT advances to the next pane (idx+1), swipe RIGHT to the previous
+// (idx-1). The same flick thresholds as before keep it from firing on scrolls/taps.
 // =============================================================================
 function wireSwipe() {
   const stage = $('stage');
@@ -1083,9 +1208,609 @@ function wireSwipe() {
     if (dt > 600) return;                          // too slow to read as a flick
     if (Math.abs(dx) < 55) return;                 // not a decisive horizontal move
     if (Math.abs(dx) < Math.abs(dy) * 1.6) return; // mostly-vertical => a scroll, ignore
-    if (dx < 0 && activeTab === 'me') setTab('grid');      // swipe LEFT: ME -> SOCIAL
-    else if (dx > 0 && activeTab === 'grid') setTab('me'); // swipe RIGHT: SOCIAL -> ME
+    const cur = SCREENS.indexOf(activeTab);
+    if (cur < 0) return;
+    const next = cur + (dx < 0 ? 1 : -1);          // LEFT => next pane, RIGHT => previous
+    if (next < 0 || next >= SCREENS.length) return; // clamp at the ends (no wrap)
+    setTab(SCREENS[next]);
   }, { passive: true });
+}
+
+// =============================================================================
+// WEEK NAVIGATION (v5 #2) — browse PAST weeks on SOCIAL via header arrows.
+//   ‹ (older) decrements weekOffset (further back), › (newer) increments it toward 0,
+//   and a "today" pill (shown only off-current-week) jumps straight back to 0. Browsing
+//   within the already-cached ~120-day day-window is a PURE re-render; paging older than
+//   the window lazy-fetches and MERGES the older days in (never replaces). The weight
+//   chart + today-highlight stay pinned to the real current business-date (they do NOT
+//   follow weekOffset — see gridDateKeys/renderWeightChart).
+// =============================================================================
+// The day-window the snapshot path already holds (matches the 120 in refetchAllDays /
+// refetchDaysFor). _fetchedDaysBack tracks how deep we've ACTUALLY fetched, so paging
+// further back only ever fetches the new slice once and grows the cache monotonically.
+const DAY_WINDOW_DAYS = 120;
+let _fetchedDaysBack = DAY_WINDOW_DAYS;
+
+// How many days back the OLDEST cell of a given weekOffset reaches (weekOffset <= 0).
+function oldestDaysBackFor(offset) {
+  return -offset * GRID_DAYS + (GRID_DAYS - 1);
+}
+
+// Reflect weekOffset in the arrow/pill enabled+visible state. Idempotent + cheap, so it's
+// safe to call on every grid paint. › is dead at offset>=0 (no future); the pill only
+// shows once we've left the current week.
+function syncWeekNav() {
+  if (elWkNewer) {
+    const atNow = weekOffset >= 0;
+    elWkNewer.disabled = atNow;
+    elWkNewer.setAttribute('aria-disabled', atNow ? 'true' : 'false');
+  }
+  if (elWkOlder) {
+    elWkOlder.disabled = false; // no hard floor — we lazy-fetch older on demand
+    elWkOlder.setAttribute('aria-disabled', 'false');
+  }
+  if (elWkToday) elWkToday.classList.toggle('hidden', weekOffset === 0);
+}
+
+// Lazy-fetch + MERGE older days for every member when the target week reaches past the
+// cached window. Merges {...existing, ...older} (older-only slice) so nothing already
+// loaded is dropped, then repaints. Within the window this is a no-op (pure re-render).
+async function ensureDaysForOffset(offset, now) {
+  const needBack = oldestDaysBackFor(offset);
+  if (needBack < _fetchedDaysBack) return; // already cached this far — nothing to fetch
+  const cur = viewerBusinessDate(now);
+  // grow the window in week-sized headroom so we don't refetch on every single step.
+  const targetBack = needBack + GRID_DAYS * 4;
+  const newFrom = fromKeyFor(cur, targetBack);          // oldest key of the grown window
+  const oldFrom = fromKeyFor(cur, _fetchedDaysBack);     // oldest key we already hold
+  // fetch only the NEW older slice [newFrom .. dayBefore(oldFrom)] and merge it in.
+  const sliceTo = prevBusinessDate(oldFrom);
+  _fetchedDaysBack = targetBack;
+  await Promise.all(members.map(async (m) => {
+    const uid = idOf(m);
+    try {
+      const older = await data.fetchOlderDays(uid, newFrom, sliceTo);
+      const existing = daysByUser.get(uid) || {};
+      daysByUser.set(uid, { ...existing, ...(older || {}) }); // merge, never replace
+    } catch (e) {
+      /* keep prior; a per-member miss just leaves those older cells as pending blanks */
+    }
+  }));
+}
+
+// Step the grid by `delta` weeks (negative = older). Clamps the upper bound at 0 (no
+// future), re-renders immediately for snappy feedback, then lazy-fetches older days if we
+// paged past the window (a second repaint lands the merged data when it arrives).
+function stepWeek(delta) {
+  const next = Math.min(0, weekOffset + delta);
+  if (next === weekOffset) return;
+  weekOffset = next;
+  const now = anchoredNow();
+  renderGrid(now);
+  if (oldestDaysBackFor(weekOffset) >= _fetchedDaysBack) {
+    ensureDaysForOffset(weekOffset, now).then(() => {
+      if (activeTab === 'grid') renderGrid(anchoredNow());
+    });
+  }
+}
+
+function wireWeekNav() {
+  if (elWkOlder) elWkOlder.addEventListener('click', () => stepWeek(-1)); // ‹ older
+  if (elWkNewer) elWkNewer.addEventListener('click', () => stepWeek(1));  // › newer
+  if (elWkToday) elWkToday.addEventListener('click', () => {              // pill -> now
+    if (weekOffset === 0) return;
+    weekOffset = 0;
+    renderGrid(anchoredNow());
+  });
+  syncWeekNav();
+}
+
+// =============================================================================
+// RENDER: MONTH (v5 #4) — a per-person calendar. A chip row picks WHOSE month shows; ‹ ›
+//   step the visible month. Each day cell REUSES the real .gcell + classifyDay so it shows
+//   the exact same diagonal workout/nutrition split as the SOCIAL board (no new status
+//   logic). The visible month is anchored on the VIEWER's current business-date (so nav is
+//   stable regardless of subject), but every cell is classified against the SUBJECT's own
+//   tz/rollover via subjectOf(member) — never the viewer's. Leading/trailing adjacent-month
+//   pad cells are inert (dim number, no status, no tap). Tapping a real day reuses the day
+//   popover. The viewer's recent months are already cached in daysByUser; an OTHER member's
+//   (or an older) month outside the cached window is fetched on demand, guarded by a
+//   uid|monthAnchor dirty-check so a re-render never refetches.
+// =============================================================================
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+// Monday-start weekday header (matches GRID_DAYS' Mon..Sun framing + businessWeekKey math).
+const MONTH_DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// The visible month's {y, m} (m is 1-based): the viewer's current-business-date month walked
+// back `monthOffset` calendar months (monthOffset <= 0). Pure y/m arithmetic, no instant.
+function monthAnchorParts(now) {
+  const cur = viewerBusinessDate(now); // 'YYYY-MM-DD' in the viewer's own clock
+  let y = +cur.slice(0, 4);
+  let m = +cur.slice(5, 7) + monthOffset; // monthOffset is <= 0
+  while (m < 1) { m += 12; y -= 1; }
+  while (m > 12) { m -= 12; y += 1; }
+  return { y, m };
+}
+
+// The whole-month days-back of the 1st of {y,m} from the viewer's today — how deep we'd have
+// to have fetched for this month's earliest day to be inside the cached window.
+function monthFirstDaysBack(now, y, m) {
+  const first = `${pad4(y)}-${pad2u(m)}-01`;
+  let k = viewerBusinessDate(now);
+  let back = 0;
+  // walk back until we pass the 1st (cap the loop at a sane ceiling so a bad anchor can't spin).
+  while (k > first && back < 4000) { k = prevBusinessDate(k); back++; }
+  return back;
+}
+
+// tiny zero-pads (logic.js keeps its pad2 private; we need our own for key assembly here).
+function pad2u(n) { return n < 10 ? '0' + n : '' + n; }
+function pad4(n) { return ('000' + n).slice(-4); }
+
+// Reset monthOffset toward 0 (never positive) + reflect the › disabled state. Cheap + safe
+// to call on every month paint.
+function syncMonthNav() {
+  if (monthOffset > 0) monthOffset = 0;
+  if (elMonthNext) {
+    const atNow = monthOffset >= 0;
+    elMonthNext.disabled = atNow;
+    elMonthNext.setAttribute('aria-disabled', atNow ? 'true' : 'false');
+  }
+  if (elMonthPrev) {
+    elMonthPrev.disabled = false; // no hard floor — older months fetch on demand
+    elMonthPrev.setAttribute('aria-disabled', 'false');
+  }
+}
+
+// Fetch + MERGE an out-of-window month's /days for `uid` (skip weights — day cells only need
+// workout + nutrition). Guarded by a uid|monthAnchor dirty-check so a re-render never refetches
+// the same (subject, month). Returns true if a fetch actually fired (so the caller repaints).
+async function ensureMonthDays(uid, y, m, now) {
+  const back = monthFirstDaysBack(now, y, m);
+  // inside the already-cached day-window (the 120d board window / week-nav's grown depth) =>
+  // nothing to do; the viewer's recent months + everyone's ~4-month board window land here.
+  if (back < _fetchedDaysBack) return false;
+  const sig = `${uid}|${pad4(y)}-${pad2u(m)}`;
+  if (sig === _monthFetchSig) return false; // already fetched (or fetching) this exact month
+  _monthFetchSig = sig;
+  const fromKey = `${pad4(y)}-${pad2u(m)}-01`;
+  // last day of the month: step to the 1st of next month, then back one day.
+  let nm = m + 1, ny = y;
+  if (nm > 12) { nm = 1; ny += 1; }
+  const toKey = prevBusinessDate(`${pad4(ny)}-${pad2u(nm)}-01`);
+  try {
+    const older = await data.fetchDays(uid, fromKey, toKey);
+    const existing = daysByUser.get(uid) || {};
+    daysByUser.set(uid, { ...existing, ...(older || {}) }); // merge, never replace
+  } catch (e) {
+    /* a miss just leaves those days as pending blanks; don't blank the rest of the cache */
+  }
+  return true;
+}
+
+// The chip row: one tappable emoji chip per member (me first), the selected subject ringed
+// in --red. Rebuilt only when the member set or selection changes (a cheap signature), so
+// repaints don't thrash the DOM.
+function renderMonthChips() {
+  if (!elMonthChips) return;
+  const cols = orderedMembers();
+  const sig = cols.map((m) => idOf(m) + ':' + emojiOf({ emoji: m.emoji, id: idOf(m) })).join('|') + '#' + (monthSubjectUid || '');
+  if (elMonthChips.dataset.sig !== sig) {
+    elMonthChips.innerHTML = cols.map((m) => {
+      const uid = idOf(m);
+      const emoji = emojiOf({ emoji: m.emoji, id: uid });
+      const on = uid === monthSubjectUid;
+      return (
+        `<button class="month-chip${on ? ' on' : ''}" type="button" data-uid="${escapeHtml(uid)}" ` +
+        `aria-pressed="${on ? 'true' : 'false'}" title="${escapeHtml(displayNameOf(m))}" ` +
+        `aria-label="show ${escapeHtml(displayNameOf(m))}'s month">` +
+        `<span class="month-chip-emoji" aria-hidden="true">${escapeHtml(emoji)}</span></button>`
+      );
+    }).join('');
+    elMonthChips.dataset.sig = sig;
+  }
+}
+
+function renderMonth(now) {
+  if (!elMonthGrid) return;
+  // default / guard the subject (myUserId isn't known at module load; a removed member falls
+  // back to me) and keep nav state legal.
+  if (!monthSubjectUid || !memberById(monthSubjectUid)) monthSubjectUid = myUserId;
+  syncMonthNav();
+
+  if (!members.length) {
+    elMonthChips.innerHTML = '';
+    elMonthChips.dataset.sig = '';
+    elMonthGrid.innerHTML = '<div class="empty-note">No active members yet.</div>';
+    if (elMonthLabel) elMonthLabel.textContent = '';
+    return;
+  }
+
+  renderMonthChips();
+
+  const member = memberById(monthSubjectUid) || memberById(myUserId);
+  if (!member) return;
+  const uid = idOf(member);
+  const subject = subjectOf(member);
+  const { y, m } = monthAnchorParts(now);
+  if (elMonthLabel) elMonthLabel.textContent = `${MONTH_NAMES[m - 1]} ${y}`;
+
+  // classify every cell against the SUBJECT's OWN current business-date (their calendar's
+  // "today"), not the viewer's — the highlighted/relative-day logic is the subject's.
+  const subjCur = currentBusinessDate(now, subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
+
+  const firstKey = `${pad4(y)}-${pad2u(m)}-01`;
+  const monthPrefix = `${pad4(y)}-${pad2u(m)}`;
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate(); // day 0 of next month = last day
+  // leading Monday-start offset for the 1st (Mon->0 .. Sun->6), same math as businessWeekKey.
+  const firstDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); // 0=Sun..6=Sat
+  const lead = (firstDow + 6) % 7;
+  // total visible cells = leading pad + the month, rounded UP to whole Mon..Sun weeks so the
+  // grid is a clean 7-col rectangle (5 or 6 rows). Walk back `lead` days to the first cell,
+  // then step forward one civil day per cell (nextDayKey) — pad cells fall outside monthPrefix.
+  const total = Math.ceil((lead + daysInMonth) / 7) * 7;
+  let k = firstKey;
+  for (let i = 0; i < lead; i++) k = prevBusinessDate(k);
+
+  const cells = [];
+  // weekday header row (Mon..Sun).
+  for (const d of MONTH_DOW) cells.push(`<div class="month-dow" aria-hidden="true">${d}</div>`);
+
+  for (let i = 0; i < total; i++) {
+    const inMonth = k.slice(0, 7) === monthPrefix;
+    const dayNum = +k.slice(8, 10);
+    if (!inMonth) {
+      // adjacent-month pad cell: inert — dim number, no status, no tap.
+      cells.push(`<div class="month-cell pad" aria-hidden="true"><span class="month-num">${dayNum}</span></div>`);
+    } else {
+      const day = effectiveDays(uid)[k];
+      const { wStatus, nStatus } = classifyDay(subject, k, now, day);
+      const prejoin = wStatus === 'prejoin';
+      const isToday = k === subjCur;
+      const aria = `${displayNameOf(member)} ${k} — workout ${CELL_LABEL[wStatus] || wStatus}, nutrition ${nStatus}`;
+      // reuse the exact .gcell + w-/n- classes so the diagonal split + colors match the board.
+      // No workout corner-tag in this density (too small to read; color carries the signal).
+      cells.push(
+        `<div class="gcell month-cell w-${wStatus} n-${nStatus}${prejoin ? ' prejoin' : ''}${isToday ? ' col-today' : ''}" ` +
+          `data-uid="${escapeHtml(uid)}" data-date="${escapeHtml(k)}" ` +
+          `role="button" tabindex="0" aria-label="${escapeHtml(aria)}">` +
+          `<div class="seg-w"></div><div class="seg-n"></div>` +
+          `<span class="month-num">${dayNum}</span></div>`
+      );
+    }
+    k = nextDayKey(k);
+  }
+  elMonthGrid.innerHTML = cells.join('');
+
+  // on-demand fetch (skip weights): if this subject's month is outside the cached window,
+  // ensureMonthDays merges it in and resolves true; we then repaint once (still on this tab +
+  // subject). The dirty-check inside makes it fire at most once per subject+month, so this
+  // never loops. Within the window it resolves false (a pure no-op).
+  ensureMonthDays(uid, y, m, now).then((fetched) => {
+    if (fetched && activeTab === 'month' && monthSubjectUid === uid) renderMonth(anchoredNow());
+  });
+}
+
+// Tap/keyboard-activate a real month day cell -> the shared read-only day popover (pad cells
+// have no data-date and are skipped). Reuses openDayPopover verbatim.
+function onMonthCellActivate(target) {
+  const cell = target.closest && target.closest('.month-cell');
+  if (!cell || cell.classList.contains('pad')) return;
+  const uid = cell.dataset.uid;
+  const dateKey = cell.dataset.date;
+  if (!uid || !isDayKey(dateKey)) return;
+  const member = memberById(uid);
+  if (member) openDayPopover(member, dateKey, cell);
+}
+
+// Step the visible month by `delta` (negative = older). Clamps the upper bound at 0 (no
+// future) and repaints; renderMonth's own on-demand fetch lands older data when needed.
+function stepMonth(delta) {
+  const next = Math.min(0, monthOffset + delta);
+  if (next === monthOffset) return;
+  monthOffset = next;
+  renderMonth(anchoredNow());
+}
+
+function wireMonth() {
+  if (elMonthPrev) elMonthPrev.addEventListener('click', () => stepMonth(-1)); // ‹ older
+  if (elMonthNext) elMonthNext.addEventListener('click', () => stepMonth(1));  // › newer
+  if (elMonthChips)
+    elMonthChips.addEventListener('click', (e) => {
+      const chip = e.target.closest('.month-chip');
+      if (!chip) return;
+      const uid = chip.dataset.uid;
+      if (!uid || uid === monthSubjectUid) return;
+      monthSubjectUid = uid; // switch whose month shows (keep the current monthOffset)
+      _monthFetchSig = null;  // a new subject may need its own out-of-window fetch
+      renderMonth(anchoredNow());
+    });
+  if (elMonthGrid) {
+    elMonthGrid.addEventListener('click', (e) => onMonthCellActivate(e.target));
+    elMonthGrid.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onMonthCellActivate(e.target);
+      }
+    });
+  }
+}
+
+// =============================================================================
+// RENDER: PLAYLIST (v5 #5) — the shared in-app song WALL. One live onSnapshot list (newest
+//   first) the group builds together: paste a Spotify / YT-Music link OR type "Song - Artist"
+//   and tap ADD. Each row deep-LINKS out — it never fetches metadata — with a small Spotify +
+//   YT-Music button apiece (OPEN the pasted link if it's that service, else SEARCH the
+//   title+artist) and a ✕ on EVERY row since anyone can remove (shared-jukebox). Add/remove are
+//   optimistic (plOptimisticAdds / plOptimisticRemoves) and reconciled against the snapshot.
+//   The footer searches the whole list on each service + opens the optional Admin-stored
+//   collaborative-playlist link; a live "· N SONGS" count sits in the header. All user text is
+//   escaped; every outbound link is rel="noopener".
+// =============================================================================
+
+// the per-source row tag + a11y word. 'text' = a typed "Song - Artist" (no link); 'url' = a
+// pasted link we don't recognize as Spotify/YT (still openable verbatim).
+const SONG_SOURCE_TAG = { spotify: 'SPOTIFY', ytmusic: 'YT MUSIC', url: 'LINK', text: 'TYPED' };
+
+// A text search query for a song: only meaningful for a TYPED row (title is a real song name);
+// a pasted-link row's title IS the raw URL, so it has no good text query (returns '').
+function songSearchText(song) {
+  if (!song || song.source !== 'text') return '';
+  const t = typeof song.title === 'string' ? song.title.trim() : '';
+  const a = typeof song.artist === 'string' ? song.artist.trim() : '';
+  return [t, a].filter(Boolean).join(' ');
+}
+
+// Per-row deep-link plan for the two service buttons. For each service: OPEN the song's own url
+// when it's that service; else SEARCH the title+artist when we have a text query; else null
+// (no usable target — e.g. the cross-service button on a pasted link with no text). Returns
+// { sp:{href,mode}, yt:{href,mode} } with mode in 'open'|'search'|null.
+function songLinks(song) {
+  const url = typeof song.url === 'string' && song.url.trim() ? song.url.trim() : '';
+  const q = songSearchText(song);
+  const sp = { href: '', mode: null };
+  const yt = { href: '', mode: null };
+  if (song.source === 'spotify' && url) { sp.href = url; sp.mode = 'open'; }
+  else if (q) { sp.href = spotifySearchUrl(q); sp.mode = 'search'; }
+  if (song.source === 'ytmusic' && url) { yt.href = url; yt.mode = 'open'; }
+  else if (q) { yt.href = ytMusicSearchUrl(q); yt.mode = 'search'; }
+  // a generic ('url') pasted link with no text query: let BOTH service buttons just open the
+  // verbatim link (better than a dead button — the link still plays SOMEwhere).
+  if (song.source === 'url' && url) {
+    if (!sp.mode) { sp.href = url; sp.mode = 'open'; }
+    if (!yt.mode) { yt.href = url; yt.mode = 'open'; }
+  }
+  return { sp, yt };
+}
+
+// One escaped row. `pending` (an optimistic, not-yet-acked add) dims it slightly + disables ✕
+// until the snapshot confirms it (the id then matches a real doc and pending clears).
+function songRowHtml(song, pending) {
+  const uid = song.addedByUserId || '';
+  const member = memberById(uid);
+  const emoji = emojiOf({ emoji: member && member.emoji, id: uid });
+  const who = member ? displayNameOf(member) : 'Someone';
+  const title = escapeHtml(song.title || '');
+  const artist = song.artist ? escapeHtml(song.artist) : '';
+  const tag = SONG_SOURCE_TAG[song.source] || 'TYPED';
+  const { sp, yt } = songLinks(song);
+
+  const svcBtn = (svc, plan, label) => {
+    if (!plan.mode) {
+      return `<span class="pl-svc pl-svc-${svc} off" aria-hidden="true">${label}</span>`;
+    }
+    const verb = plan.mode === 'open' ? 'open' : 'search';
+    return (
+      `<a class="pl-svc pl-svc-${svc}" href="${escapeHtml(plan.href)}" target="_blank" rel="noopener" ` +
+      `aria-label="${verb} ${escapeHtml(song.title || 'this song')} on ${svc === 'sp' ? 'Spotify' : 'YT Music'}">${label}</a>`
+    );
+  };
+
+  return (
+    `<div class="pl-row${pending ? ' pending' : ''}" role="listitem" data-id="${escapeHtml(song.id || '')}">` +
+      `<span class="pl-row-emoji" title="${escapeHtml(who)}" aria-label="added by ${escapeHtml(who)}">${escapeHtml(emoji)}</span>` +
+      `<div class="pl-row-main">` +
+        `<div class="pl-row-title">${title}</div>` +
+        `<div class="pl-row-meta">` +
+          (artist ? `<span class="pl-row-artist">${artist}</span>` : '') +
+          `<span class="pl-row-src mono">${tag}</span>` +
+        `</div>` +
+      `</div>` +
+      `<div class="pl-row-svcs">${svcBtn('sp', sp, 'SP')}${svcBtn('yt', yt, 'YT')}</div>` +
+      `<button class="pl-row-x" type="button" ${pending ? 'disabled' : ''} ` +
+        `data-id="${escapeHtml(song.id || '')}" aria-label="remove ${escapeHtml(song.title || 'song')}">✕</button>` +
+    `</div>`
+  );
+}
+
+// The render list = the snapshot MINUS optimistically-removed ids, PLUS any optimistic adds
+// whose id hasn't appeared in the snapshot yet (so a just-added song shows instantly without a
+// duplicate once the server row lands). Optimistic adds render at the TOP (newest).
+function playlistRenderList() {
+  const snapIds = new Set(songs.map((s) => s.id));
+  const visibleSnap = songs.filter((s) => !plOptimisticRemoves.has(s.id));
+  const pendingAdds = plOptimisticAdds.filter((s) => !snapIds.has(s.id));
+  return { pendingAdds, visibleSnap };
+}
+
+function renderPlaylist() {
+  if (!elPlList) return;
+  const { pendingAdds, visibleSnap } = playlistRenderList();
+  const total = pendingAdds.length + visibleSnap.length;
+
+  // live "· N SONGS" count in the header (no date window — one evolving list).
+  if (elPlCount) elPlCount.textContent = total ? ` · ${total} SONG${total === 1 ? '' : 'S'}` : '';
+
+  if (!total) {
+    elPlList.innerHTML = '<div class="empty-note">No songs yet. Paste a link or type a song above to start the wall.</div>';
+  } else {
+    const rows = [];
+    for (const s of pendingAdds) rows.push(songRowHtml(s, true));
+    for (const s of visibleSnap) rows.push(songRowHtml(s, false));
+    elPlList.innerHTML = rows.join('');
+  }
+
+  // footer: whole-list search on each service is built from up to ~12 titles (a long query
+  // helps neither engine); the shared-playlist link shows only when Admin-seeded.
+  const wholeListQuery = visibleSnap
+    .concat(pendingAdds)
+    .map((s) => (s.source === 'text' ? [s.title, s.artist].filter(Boolean).join(' ') : ''))
+    .filter(Boolean)
+    .slice(0, 12)
+    .join(' ');
+  const spHref = wholeListQuery ? spotifySearchUrl(wholeListQuery) : 'https://open.spotify.com/search';
+  const ytHref = wholeListQuery ? ytMusicSearchUrl(wholeListQuery) : 'https://music.youtube.com/search';
+  if (elPlOpenSpotify) elPlOpenSpotify.dataset.href = spHref;
+  if (elPlOpenYtm) elPlOpenYtm.dataset.href = ytHref;
+  if (elPlCollab) {
+    if (plCollabUrl) {
+      elPlCollab.href = plCollabUrl;
+      elPlCollab.classList.remove('hidden');
+    } else {
+      elPlCollab.classList.add('hidden');
+      elPlCollab.removeAttribute('href');
+    }
+  }
+}
+
+// snapshot handler: store + reconcile the optimistic overlays, then repaint if the tab is live.
+function onSongs(songsArray) {
+  songs = Array.isArray(songsArray) ? songsArray.slice() : [];
+  const snapIds = new Set(songs.map((s) => s.id));
+  // an optimistic ADD that now exists in the snapshot is no longer pending — drop it.
+  plOptimisticAdds = plOptimisticAdds.filter((s) => !snapIds.has(s.id));
+  // an optimistic REMOVE the server has honored (id gone from the snapshot) can be forgotten.
+  for (const id of [...plOptimisticRemoves]) {
+    if (!snapIds.has(id)) plOptimisticRemoves.delete(id);
+  }
+  if (activeTab === 'playlist') renderPlaylist();
+}
+
+// A short red "already added" pulse on the add-bar hint (client-side dedupe feedback). Cleared
+// on the next keystroke / successful add.
+let _plPulseTimer = null;
+function plHint(msg, kind) {
+  if (!elPlAddHint) return;
+  elPlAddHint.textContent = msg || '';
+  elPlAddHint.classList.remove('dupe', 'err');
+  if (kind) elPlAddHint.classList.add(kind);
+  clearTimeout(_plPulseTimer);
+  if (msg) {
+    _plPulseTimer = setTimeout(() => {
+      if (elPlAddHint) { elPlAddHint.textContent = ''; elPlAddHint.classList.remove('dupe', 'err'); }
+    }, 2600);
+  }
+}
+
+// Add the current input. parseSongInput → a {title,artist,url,source} payload; client-side
+// dedupe via playlistDedupeKey against the CURRENT render list; optimistic insert + a real
+// addSong() write reconciled by onSongs.
+async function submitSong() {
+  if (!elPlInput) return;
+  const raw = elPlInput.value || '';
+  const parsed = parseSongInput(raw);
+  if (parsed.kind === 'empty') { plHint('Type a song or paste a link first.', 'err'); return; }
+
+  // map parser kind -> stored source enum (the parser uses 'spotify'|'ytmusic'|'url'|'text').
+  const source = ['spotify', 'ytmusic', 'url', 'text'].includes(parsed.kind) ? parsed.kind : 'text';
+  const payload = {
+    title: (parsed.title || '').trim(),
+    artist: (parsed.artist || '').trim(),
+    url: parsed.url || '',
+    source,
+  };
+  if (!payload.title) { plHint('Type a song or paste a link first.', 'err'); return; }
+
+  // client-side dedupe (best-effort): same canonical key as an existing/visible row => pulse,
+  // don't add. A same-second race can still slip a dup past this; harmless, anyone ✕'s one.
+  const key = playlistDedupeKey(payload);
+  if (key) {
+    const { pendingAdds, visibleSnap } = playlistRenderList();
+    const dup = pendingAdds.concat(visibleSnap).some((s) => playlistDedupeKey(s) === key);
+    if (dup) {
+      plHint('Already added.', 'dupe');
+      elPlInput.select();
+      return;
+    }
+  }
+
+  // addSong generates the doc id and returns it, so the optimistic row and the server row share
+  // ONE id — onSongs reconciles by id (no temp-id swap, no flash, no duplicate) the moment the
+  // server row lands in the snapshot. We write FIRST (Firestore's offline cache acks the local
+  // write fast, even offline) so a hard reject surfaces before we paint a row that can't exist.
+  let songId;
+  try {
+    songId = await data.addSong(payload); // addSong stamps addedBy* + createdAt; returns the id
+  } catch (err) {
+    const code = String((err && (err.code || err.message)) || err);
+    if (/reclaim/i.test(code)) { plHint('Signed out elsewhere — tap to reclaim.', 'err'); return; }
+    plHint('Could not add that song.', 'err');
+    return;
+  }
+  // success: clear the box + show the row optimistically until the snapshot confirms it. Guard
+  // the unshift on the id NOT already being in the snapshot — with offline persistence the
+  // onSnapshot echo can beat this await, in which case the row is already live and a stale
+  // pendingAdd would just leak (it's filtered out of rendering, but never garbage-collected
+  // since its own onSongs already passed). The guard keeps plOptimisticAdds tidy.
+  elPlInput.value = '';
+  plHint('');
+  if (!songs.some((s) => s.id === songId)) {
+    plOptimisticAdds.unshift({
+      id: songId,
+      title: payload.title,
+      artist: payload.artist,
+      url: payload.url,
+      source: payload.source,
+      addedByUserId: myUserId,
+    });
+  }
+  renderPlaylist();
+}
+
+// Remove a song (anyone can). Optimistic hide, then the real delete; on failure, un-hide.
+async function removeSongRow(songId) {
+  if (!songId) return;
+  plOptimisticRemoves.add(songId);
+  renderPlaylist();
+  try {
+    await data.removeSong(songId);
+  } catch (err) {
+    plOptimisticRemoves.delete(songId); // un-hide on failure
+    renderPlaylist();
+    const code = String((err && (err.code || err.message)) || err);
+    if (/reclaim/i.test(code)) plHint('Signed out elsewhere — tap to reclaim.', 'err');
+    else plHint('Could not remove that song.', 'err');
+  }
+}
+
+function wirePlaylist() {
+  if (elPlAddBtn) elPlAddBtn.addEventListener('click', () => { submitSong(); });
+  if (elPlInput) {
+    elPlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submitSong(); }
+    });
+    // clear a stale "already added" pulse as soon as they edit the box.
+    elPlInput.addEventListener('input', () => {
+      if (elPlAddHint && elPlAddHint.textContent) plHint('');
+    });
+  }
+  // delegated remove (anyone-can-remove ✕ on every row).
+  if (elPlList) {
+    elPlList.addEventListener('click', (e) => {
+      const x = e.target.closest('.pl-row-x');
+      if (!x || x.disabled) return;
+      removeSongRow(x.dataset.id);
+    });
+  }
+  // footer open-buttons: open the whole-list search (href stashed on the dataset by render).
+  const openStashed = (el) => {
+    const href = el && el.dataset && el.dataset.href;
+    if (href) window.open(href, '_blank', 'noopener');
+  };
+  if (elPlOpenSpotify) elPlOpenSpotify.addEventListener('click', () => openStashed(elPlOpenSpotify));
+  if (elPlOpenYtm) elPlOpenYtm.addEventListener('click', () => openStashed(elPlOpenYtm));
+  // elPlCollab is a real <a href> (set in render) — no JS click needed.
 }
 
 // =============================================================================
@@ -2585,12 +3310,29 @@ async function boot() {
     return;
   }
 
+  // 4b. v5 (#5): live PLAYLIST wall (onSnapshot on /playlist, newest first). Non-fatal — a
+  // playlist subscribe hiccup must not blank the board; the tab just stays empty. The unsub is
+  // tracked inside data.subscribePlaylist (detached by data.teardown).
+  try {
+    data.subscribePlaylist(onSongs);
+  } catch (e) {
+    /* non-fatal: the playlist tab degrades to empty */
+  }
+  // one-shot read of the optional Admin-seeded collaborative-playlist link (footer button).
+  data.fetchPlaylistMeta().then((meta) => {
+    plCollabUrl = (meta && meta.collabUrl) || null;
+    if (activeTab === 'playlist') renderPlaylist();
+  });
+
   // wire interactions + timers
   wireTabs();
   wireTheme();
   wireSwipe();
   wireMe();
   wireGridTaps();
+  wireWeekNav();
+  wireMonth(); // v5 (#4): MONTH tab — chip selector + month nav + day taps
+  wirePlaylist(); // v5 (#5): PLAYLIST tab — add-bar, delegated remove, footer open-buttons
   wireWeightChart();
   wireChartCollapse();
   wireReclaim();

@@ -410,9 +410,20 @@ export function groupConsistency(allMembersDays, weekKey, nowInstant) {
   return { expected, completed, percent, bonus };
 }
 
-// next-day calendar increment, mirror of prevBusinessDate (kept private; the
-// week builder needs to step forward from the Monday).
-function nextDayKey(dateKey) {
+/**
+ * nextDayKey(dateKey) -> the 'YYYY-MM-DD' one calendar day AFTER dateKey, rolling
+ * month/year. The forward mirror of prevBusinessDate: pure string/number math on
+ * the calendar fields, so DST cannot affect it (no instant/offset involved). Used
+ * by groupConsistency's week builder AND by the v5 month-grid / week-nav forward
+ * iteration, so it is exported alongside prevBusinessDate.
+ *
+ * Uses Date.UTC purely as a civil-calendar lookup (days-in-month, leap years); UTC
+ * carries no timezone/DST behaviour of its own here.
+ */
+export function nextDayKey(dateKey) {
+  if (!isDayKey(dateKey)) {
+    throw new TypeError(`nextDayKey: not a YYYY-MM-DD key: ${dateKey}`);
+  }
   const y = +dateKey.slice(0, 4);
   const m = +dateKey.slice(5, 7);
   const d = +dateKey.slice(8, 10);
@@ -812,4 +823,143 @@ export function relativeTime(fromMs, nowMs) {
   if (gap < DAY_MS) return { text: `${Math.floor(gap / HOUR_MS)}h`, stale };
   if (gap < WEEK_MS) return { text: `${Math.floor(gap / DAY_MS)}d`, stale };
   return { text: `${Math.floor(gap / WEEK_MS)}w`, stale };
+}
+
+// ---- playlist: song-input parsing + cross-service deep-link builders ----------
+// The shared song wall (v5) stores exactly what's typed/pasted and deep-links out
+// to Spotify + YT Music — it NEVER fetches metadata (no Cloud Function, the SPA
+// can't call the Spotify Web API). These helpers are the pure half: parse one
+// input line into {kind,url,title,artist}, build a stable dedupe key, and build
+// the two search URLs. The random song-id generator lives in data.js instead, so
+// this module stays deterministic (no crypto/random) and fully unit-testable.
+
+// Hosts we recognize as a direct track/playlist link (vs a "Song - Artist" line).
+// Matched case-insensitively against the URL's hostname, with an optional leading
+// "www." / "music." / "open." subdomain. Anything else that parses as a URL is
+// kept as kind:'url' with title=the raw URL (still deep-linkable verbatim).
+const SPOTIFY_HOST_RE = /(^|\.)spotify\.com$/i;
+const YT_HOST_RE = /(^|\.)(music\.youtube\.com|youtube\.com|youtu\.be)$/i;
+
+/**
+ * parseSongInput(raw) -> { kind, url, title, artist }
+ *
+ * Classify one line of song input. Three shapes:
+ *   1. A Spotify URL        -> { kind:'spotify', url, title:<raw url>, artist:'' }
+ *   2. A YouTube/YT-Music URL -> { kind:'ytmusic', url, title:<raw url>, artist:'' }
+ *   3. Any other http(s) URL  -> { kind:'url',     url, title:<raw url>, artist:'' }
+ *   4. A plain "Song - Artist" string -> { kind:'text', url:null, title, artist }
+ *      (splits on the FIRST ' - ' / ' — ' / ' – ' separator; no separator => the
+ *       whole string is the title and artist is '').
+ *
+ * URL detection is host-based (not substring), so "Song - spotify.com cover" is
+ * correctly treated as text, not a link. A bare "open.spotify.com/track/.." with
+ * no scheme is still recognized (we retry with an https:// prefix). Returns
+ * { kind:'empty', url:null, title:'', artist:'' } for blank/non-string input.
+ */
+export function parseSongInput(raw) {
+  const EMPTY = { kind: 'empty', url: null, title: '', artist: '' };
+  if (typeof raw !== 'string') return EMPTY;
+  const s = raw.trim();
+  if (!s) return EMPTY;
+
+  // Try to read it as a URL. Accept a scheme-less host (open.spotify.com/..) by
+  // retrying with an https:// prefix, but ONLY when the first token looks like a
+  // host (has a dot, no spaces) — so "Song - Artist" never parses as a URL.
+  const url = tryParseUrl(s);
+  if (url) {
+    const host = url.hostname || '';
+    if (SPOTIFY_HOST_RE.test(host)) return { kind: 'spotify', url: url.href, title: s, artist: '' };
+    if (YT_HOST_RE.test(host)) return { kind: 'ytmusic', url: url.href, title: s, artist: '' };
+    return { kind: 'url', url: url.href, title: s, artist: '' };
+  }
+
+  // Plain text: split on the first dash-style separator into title - artist.
+  // Spaced separators only (' - ' / ' — ' / ' – ') so a hyphenated title like
+  // "Spider-Man Theme" isn't split mid-word.
+  const m = s.match(/^(.*?)\s+[-—–]\s+(.*)$/);
+  if (m) {
+    return { kind: 'text', url: null, title: m[1].trim(), artist: m[2].trim() };
+  }
+  return { kind: 'text', url: null, title: s, artist: '' };
+}
+
+/**
+ * tryParseUrl(s) -> URL | null. Parse with the WHATWG URL constructor; if `s`
+ * has no scheme but its first whitespace-free token contains a dot (a hostname),
+ * retry as https://. Returns null on anything that isn't a valid http(s) URL.
+ * Kept module-private (not exported) — parseSongInput is the public surface.
+ */
+function tryParseUrl(s) {
+  const attempt = (str) => {
+    try {
+      const u = new URL(str);
+      return u.protocol === 'http:' || u.protocol === 'https:' ? u : null;
+    } catch {
+      return null;
+    }
+  };
+  if (/^https?:\/\//i.test(s)) return attempt(s);
+  // scheme-less: only treat as a URL if it's a single token that looks like a host.
+  if (!/\s/.test(s) && /^[^/]+\.[^/]+/.test(s)) return attempt('https://' + s);
+  return null;
+}
+
+/**
+ * playlistDedupeKey({title, artist, url}) -> a lowercased canonical string used
+ * for best-effort client-side de-duplication of the song wall (a same-second add
+ * race can still slip two rows past it; harmless, anyone removes one).
+ *
+ * Rules:
+ *   - If a `url` is present, key off the URL with its QUERY STRING and HASH
+ *     stripped and a trailing slash removed (so ...?si=abc tracking params and a
+ *     trailing / don't make "the same link" look distinct), lowercased.
+ *   - Otherwise key off `title` + `artist`: lowercased, "feat." / "ft." segments
+ *     removed, all punctuation stripped, and whitespace collapsed.
+ *
+ * Pure and deterministic. Returns '' for input with no usable url/title/artist.
+ */
+export function playlistDedupeKey(song) {
+  const url = song && typeof song.url === 'string' ? song.url.trim() : '';
+  if (url) {
+    // Strip ?query and #hash, drop a single trailing slash, lowercase.
+    let u = url.replace(/[?#].*$/, '').replace(/\/+$/, '');
+    return u.toLowerCase();
+  }
+  const title = song && typeof song.title === 'string' ? song.title : '';
+  const artist = song && typeof song.artist === 'string' ? song.artist : '';
+  const norm = (s) =>
+    s
+      .toLowerCase()
+      // drop "feat. xyz" / "ft xyz" / "featuring xyz" to end-of-string or before a bracket.
+      .replace(/\b(feat\.?|ft\.?|featuring)\b.*$/g, ' ')
+      // strip anything that isn't a letter/number/space (punctuation, brackets, &).
+      .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const t = norm(title);
+  const a = norm(artist);
+  if (!t && !a) return '';
+  // pipe-joined; norm() strips '|' from both sides so this separator can't collide
+  // (e.g. {title:'ab',artist:'c'} -> "ab | c" stays distinct from {title:'a',artist:'bc'}).
+  return a ? `${t} | ${a}` : t;
+}
+
+/**
+ * spotifySearchUrl(q) -> an open.spotify.com search URL for the query string `q`,
+ * with `q` percent-encoded into the PATH (Spotify's search route is
+ * open.spotify.com/search/<encoded query>). Returns '' for a blank/non-string q.
+ */
+export function spotifySearchUrl(q) {
+  if (typeof q !== 'string' || !q.trim()) return '';
+  return `https://open.spotify.com/search/${encodeURIComponent(q.trim())}`;
+}
+
+/**
+ * ytMusicSearchUrl(q) -> a music.youtube.com search URL for `q`, with `q`
+ * percent-encoded into the ?q= QUERY param (YT Music's search route is
+ * music.youtube.com/search?q=<encoded query>). Returns '' for a blank/non-string q.
+ */
+export function ytMusicSearchUrl(q) {
+  if (typeof q !== 'string' || !q.trim()) return '';
+  return `https://music.youtube.com/search?q=${encodeURIComponent(q.trim())}`;
 }
