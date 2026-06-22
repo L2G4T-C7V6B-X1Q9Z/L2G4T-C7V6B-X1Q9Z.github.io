@@ -57,6 +57,7 @@ import {
 import {
   currentBusinessDate,
   isDayKey,
+  randomEmoji,
 } from './logic.js';
 
 // =============================================================================
@@ -582,6 +583,9 @@ function buildFirstRunUserDoc(userId, joinDate) {
     restPattern: [{ effectiveFrom: joinDate, weekdays: [] }],
     perDateOverrides: {},
     sharing: { shareMacros: false, shareWeight: false }, // rule: both must be false
+    // v4: a random curated personal symbol on first create (rule whitelists 'emoji').
+    // Existing/seeded docs without it fall back to logic.emojiOf's deterministic id hash.
+    emoji: randomEmoji(),
   };
 }
 
@@ -1204,7 +1208,18 @@ export async function addMeal(businessDate, meal = {}) {
   }
 
   const at = Timestamp.fromMillis(anchoredNow()); // the one client-clocked field.
-  const newMeals = prevMeals.concat([{ kcal: mealKcal, protein: mealProtein, at }]);
+  // v4 (#8): when a meal is logged from a quick-meal preset WITH a name, carry that
+  // label onto the meal element so TODAY'S MEALS can show "Lunch — 600 kcal / 45g".
+  // Meal elements are client-trusted by the rules (is-list + size cap), so no rule
+  // change is needed. Trim + cap at 24 chars; omit if empty/non-string.
+  const mealEl = { kcal: mealKcal, protein: mealProtein, at };
+  if (meal.label !== undefined && meal.label !== null && meal.label !== '') {
+    if (typeof meal.label === 'string') {
+      const label = meal.label.trim().slice(0, 24);
+      if (label) mealEl.label = label;
+    }
+  }
+  const newMeals = prevMeals.concat([mealEl]);
 
   const batch = writeBatch(_db);
   batch.set(
@@ -1574,6 +1589,18 @@ export async function setSavedMeals(arr) {
       }
       if (label) out.label = label;
     }
+    // v4 (#7): optional free-text note (<=80 chars). Per-element shape is client-trusted
+    // by the rules (savedMeals is is-list + size<=20), so 'note' needs no rule change.
+    if (m.note !== undefined && m.note !== null && m.note !== '') {
+      if (typeof m.note !== 'string') {
+        throw taggedError('gymboard/bad-value', `setSavedMeals: entry ${i} note must be a string.`);
+      }
+      const note = m.note.trim();
+      if (note.length > 80) {
+        throw taggedError('gymboard/bad-value', `setSavedMeals: entry ${i} note exceeds 80 characters.`);
+      }
+      if (note) out.note = note;
+    }
     return out;
   });
   await updateOwnUser({ savedMeals: clean }, 'setSavedMeals');
@@ -1635,6 +1662,46 @@ export async function setEnabledWorkoutTypes(arr) {
     throw taggedError('gymboard/bad-value', 'setEnabledWorkoutTypes: too many types (max 7).');
   }
   await updateOwnUser({ enabledWorkoutTypes: clean }, 'setEnabledWorkoutTypes');
+}
+
+const VALID_NUTRITION_MODES = ['manual', 'protein', 'both'];
+
+/**
+ * setNutritionMode(mode) -> Promise<void>
+ *
+ * v4 (#6): set the per-person nutrition auto-check mode on own user doc:
+ *   'manual'  = nutrition hits ONLY when manually marked done (ate===true).
+ *   'protein' = auto-hit when protein >= proteinGoal (calories ignored).
+ *   'both'    = auto-hit when calories in-range (by goal direction) AND protein floor.
+ * Drives logic.nutritionStatus. Rejects anything outside the enum (the rule ALSO
+ * enforces `nutritionMode in ['manual','protein','both']`). This is a SETTING, so it
+ * does NOT bump lastActiveAt (consistent with setGoal/setRollover).
+ */
+export async function setNutritionMode(mode) {
+  if (!VALID_NUTRITION_MODES.includes(mode)) {
+    throw taggedError('gymboard/bad-value', `setNutritionMode: mode must be one of ${VALID_NUTRITION_MODES.join('/')}.`);
+  }
+  await updateOwnUser({ nutritionMode: mode }, 'setNutritionMode');
+}
+
+/**
+ * setEmoji(emoji) -> Promise<void>
+ *
+ * v4 (#14): set the personal symbol shown by the name on the SOCIAL board. The rule
+ * caps `emoji.size() <= 8` (UTF-16 code units) so a multi-codepoint ZWJ/flag emoji is
+ * permitted; the picker only offers single curated graphemes in practice. We restrict
+ * to one grapheme (<=2 code points) here as the friendly front line, while still
+ * allowing up to 8 UTF-16 units (the rule's cap) for ZWJ sequences. SETTING, no bump.
+ */
+export async function setEmoji(emoji) {
+  if (typeof emoji !== 'string' || !emoji.trim()) {
+    throw taggedError('gymboard/bad-value', 'setEmoji: emoji must be a non-empty string.');
+  }
+  // one grapheme (allow a ZWJ sequence up to 8 UTF-16 code units, mirroring the rule).
+  if ([...emoji].length > 2 || emoji.length > 8) {
+    throw taggedError('gymboard/bad-value', 'setEmoji: expected a single emoji.');
+  }
+  await updateOwnUser({ emoji }, 'setEmoji');
 }
 
 

@@ -528,55 +528,76 @@ const MAINTAIN_PCT = 0.1; // +/-10%
 /**
  * nutritionStatus(day, opts) -> 'hit' | 'pending' | 'none'
  *
- * SPEC-v3 §2. Direction-aware nutrition auto-check derived from the day's running
- * totals vs the member's goals. Nutrition NEVER uses red — these three values map
- * to green (hit) / quiet fill (pending) / quiet gray (none), none of them red.
+ * SPEC-v4 §4+§6. MODE-AWARE nutrition auto-check. Each person has a
+ * `nutritionMode` ('manual' | 'protein' | 'both') that decides which goals (if
+ * any) auto-check the day. Nutrition NEVER uses red — these three values map to
+ * green (hit) / quiet fill (pending) / quiet gray (none), none of them red.
  *
  *   day  : the DayEntry { kcal?, protein?, ate?, macros?, ... } or undefined/null.
- *   opts : { kcalGoal, proteinGoal, goal, isPast }
+ *   opts : { nutritionMode, kcalGoal, proteinGoal, goal, isPast }
+ *          nutritionMode : 'manual' | 'protein' | 'both'. Anything else
+ *                          (incl. undefined) => 'both' (back-compat default).
  *          goal    : 'gain' | 'lose' | 'maintain' (anything else => 'maintain').
+ *                    Only consulted in 'both' mode.
  *          isPast  : true if dateKey < the subject's current business-date.
  *                    The caller computes this via currentBusinessDate; this fn
  *                    stays pure and only branches on the boolean.
  *
  * Returns:
- *   'hit'     -> goals met (or manual override) — green.
+ *   'hit'     -> mode satisfied (or manual override) — green.
  *   'pending' -> today/future, not yet met — quiet fill (NEVER red).
- *   'none'    -> a past day that never met goals — quiet gray (NEVER red).
+ *   'none'    -> a past day that never met — quiet gray (NEVER red).
  *
- * Order of resolution (see the §2 table + edge cases A-H):
- *   1. Manual override: day.ate === true (or legacy day.macros === true) => 'hit'.
- *      (Lets someone force a green when they ate well but didn't log numbers.)
- *   2. Goals unset (kcalGoal/proteinGoal not BOTH finite): fall back to the manual
- *      flag only — which already returned 'hit' at step 1 if set. So with no goals
- *      and no manual flag => 'pending' (today/future) or 'none' (past). Never
- *      auto-greens without goals. A half-configured user (only one goal set) is
- *      treated as "goals not set" (edge E) to avoid an accidental silent pass.
- *   3. Some intake required: kcal must be a finite number > 0. 0 kcal logged (or no
- *      kcal at all) NEVER auto-checks — an empty day is not a "hit" (edge A).
- *   4. Direction rule (K=kcal, P=protein||0, KG=kcalGoal, PG=proteinGoal):
- *        lose     : K <= KG          AND P >= PG
- *        gain     : K >= KG          AND P >= PG
- *        maintain : |K - KG| <= band AND P >= PG     (band = MAINTAIN_PCT*KG)
- *      The protein floor uses proteinGoal directly (both goals are finite here by
- *      rule 2). Bounds are inclusive (<=/>=), so an exact-edge maintain day hits.
- *   5. Direction rule met => 'hit'. Otherwise: isPast => 'none', else 'pending'.
+ * Resolution order (SPEC-v4 §4, NO logic gaps):
+ *   notMet = isPast ? 'none' : 'pending'
+ *   1. MANUAL OVERRIDE (all modes): day.ate === true || day.macros === true
+ *      => 'hit'. Manual always wins, in every mode including 'manual'.
+ *   2. MODE 'manual': no auto-check ever -> notMet (step 1 was the only hit path).
+ *   3. MODE 'protein':
+ *        a. proteinGoal not finite (unset) -> manual-only -> notMet.
+ *        b. P = finite day.protein else 0; if !(P > 0) -> notMet (0 never hits).
+ *        c. P >= proteinGoal -> 'hit', else notMet. (Calories IGNORED.)
+ *   4. MODE 'both' (and default):
+ *        a. NOT (kcalGoal finite AND proteinGoal finite) -> manual-only -> notMet
+ *           (half-configured treated as unset, no accidental silent pass).
+ *        b. K = finite day.kcal; if !(K > 0) -> notMet (0-kcal never auto-greens).
+ *        c. P = finite day.protein else 0.
+ *        d. band = MAINTAIN_PCT*kcalGoal; direction rule (inclusive bounds):
+ *             lose     : K <= KG          AND P >= PG
+ *             gain     : K >= KG          AND P >= PG
+ *             maintain : |K - KG| <= band AND P >= PG   (unknown goal => maintain)
+ *        e. rule met -> 'hit', else notMet.
  *
- * protein is treated as 0 when absent (so a kcal-only day can't pass the floor
- * unless proteinGoal is 0). kcal absent/0 short-circuits at rule 3.
+ * protein is treated as 0 when absent (so a kcal-only 'both' day can't pass the
+ * floor unless proteinGoal is 0).
  */
 export function nutritionStatus(day, opts = {}) {
-  const { kcalGoal, proteinGoal, goal, isPast } = opts;
+  const { nutritionMode, kcalGoal, proteinGoal, goal, isPast } = opts;
   const notMet = isPast ? 'none' : 'pending';
 
-  // 1. Manual override always wins (edges C, D). Legacy `macros` bool too.
+  // 1. Manual override always wins, in EVERY mode. Legacy `macros` bool too.
   if (day && (day.ate === true || day.macros === true)) return 'hit';
 
-  // 2. Both goals must be finite numbers to auto-check; else manual-only (edges
-  //    B, E). The manual flag already short-circuited above, so no goals => notMet.
+  // Normalize the mode; anything unrecognized => 'both' (back-compat default).
+  const mode =
+    nutritionMode === 'manual' || nutritionMode === 'protein' ? nutritionMode : 'both';
+
+  // 2. MANUAL: no auto-check ever — step 1 was the only way it could hit.
+  if (mode === 'manual') return notMet;
+
+  // 3. PROTEIN: auto-hit when protein >= proteinGoal; calories ignored entirely.
+  if (mode === 'protein') {
+    if (!Number.isFinite(proteinGoal)) return notMet; // unset -> manual-only
+    const P = day && Number.isFinite(day.protein) ? day.protein : 0;
+    if (!(P > 0)) return notMet; // 0 protein logged never auto-hits
+    return P >= proteinGoal ? 'hit' : notMet;
+  }
+
+  // 4. BOTH (default): calories-in-range (by goal direction) AND protein floor.
+  // 4a. Both goals must be finite; half-configured treated as unset (manual-only).
   if (!Number.isFinite(kcalGoal) || !Number.isFinite(proteinGoal)) return notMet;
 
-  // 3. Some real intake is required — an empty/0-kcal day never auto-greens (edge A).
+  // 4b. Some real intake required — an empty/0-kcal day never auto-greens.
   const K = day && day.kcal;
   if (!Number.isFinite(K) || K <= 0) return notMet;
 
@@ -584,7 +605,7 @@ export function nutritionStatus(day, opts = {}) {
   const KG = kcalGoal;
   const PG = proteinGoal;
 
-  // 4. Direction rule. Unknown goal falls back to maintain (matches weightTrend).
+  // 4d. Direction rule. Unknown goal falls back to maintain (matches weightTrend).
   const proteinOk = P >= PG;
   let calorieOk;
   if (goal === 'lose') {
@@ -596,8 +617,154 @@ export function nutritionStatus(day, opts = {}) {
     calorieOk = Math.abs(K - KG) <= band;
   }
 
-  // 5. Both conditions => hit; otherwise past=>none, today/future=>pending (edge H).
+  // 4e. Both conditions => hit; otherwise past=>none, today/future=>pending.
   return calorieOk && proteinOk ? 'hit' : notMet;
+}
+
+// ---- compliance % over a trailing window (SPEC-v4 §5) ------------------------
+
+/**
+ * computeCompliance(daysMap, subject, nowInstant, { windowDays = 30 })
+ *   -> { workout:   { expected, completed, percent|null },
+ *        nutrition: { expected, completed, percent|null } }
+ *
+ * Two trailing-window accountability numbers for one subject (SPEC-v4 §5).
+ *
+ *   daysMap   : { [dateKey]: DayEntry } — the subject's /days (with the viewer's
+ *               optimistic overlay; the caller passes effectiveDays(uid)).
+ *   subject   : the logic subject shape (ianaTz, rollover, restPattern,
+ *               perDateOverrides, profile.joinDate) PLUS nutritionMode, kcalGoal,
+ *               proteinGoal, goal for the nutrition %.
+ *   nowInstant: server-anchored now.
+ *   windowDays: trailing window length (default 30).
+ *
+ * `percent` is an integer 0..100, or NULL when expected === 0 (caller renders
+ * "—", never NaN/0).
+ *
+ * Window (DST-safe): cur = currentBusinessDate(now). Walk back from
+ * prevBusinessDate(cur) — today is still pending and excluded — collecting up to
+ * windowDays PAST decided business-dates via prevBusinessDate (never raw ms).
+ * Stop early once a date is before joinDate (pre-join is out of scope).
+ *
+ * WORKOUT %: rest/off days are NOT scheduled training days -> excluded from BOTH
+ *   numerator and denominator (a workout on one is a bonus, ignored — mirrors
+ *   groupConsistency). Every other in-window past non-prejoin day is expected;
+ *   completed when day.workout === true. completed <= expected by construction.
+ *
+ * NUTRITION %: nutrition is expected on EVERY in-window past non-prejoin day
+ *   (you eat on rest days too). completed when nutritionStatus(...isPast:true)
+ *   === 'hit' for the subject's mode/goals. Unset goals honestly yield low % —
+ *   intentional, not special-cased.
+ *
+ * Pure: no Firebase/DOM. Fail-safe: a subject with no ianaTz or no joinDate
+ * yields all-zero expected => percent null on both.
+ */
+export function computeCompliance(daysMap, subject, nowInstant, opts = {}) {
+  const windowDays =
+    Number.isFinite(opts.windowDays) && opts.windowDays > 0 ? opts.windowDays : 30;
+  const empty = {
+    workout: { expected: 0, completed: 0, percent: null },
+    nutrition: { expected: 0, completed: 0, percent: null },
+  };
+  if (!subject || !subject.ianaTz) return empty;
+
+  const joinDate = subject.profile && subject.profile.joinDate;
+  if (!isDayKey(joinDate)) return empty;
+
+  const { h, m } = rollover(subject);
+  const cur = currentBusinessDate(nowInstant, subject.ianaTz, h, m);
+  const days = daysMap || {};
+  const mode = subject.nutritionMode;
+  const kcalGoal = subject.kcalGoal;
+  const proteinGoal = subject.proteinGoal;
+  const goal = subject.goal;
+
+  let wExpected = 0;
+  let wCompleted = 0;
+  let nExpected = 0;
+  let nCompleted = 0;
+
+  let cursor = prevBusinessDate(cur); // most recent DECIDED day (today excluded)
+  for (let i = 0; i < windowDays; i++) {
+    if (cursor < joinDate) break; // pre-join: out of scope, and nothing older qualifies
+    const day = days[cursor];
+
+    // ---- workout: only scheduled (non rest/off) past training days count ----
+    const rest = isRestDay(subject.restPattern, subject.perDateOverrides, cursor);
+    const off = !!(day && day.off === true);
+    if (!(rest || off)) {
+      wExpected += 1;
+      if (day && day.workout === true) wCompleted += 1;
+    }
+
+    // ---- nutrition: expected on EVERY past non-prejoin day (eat on rest days) ----
+    nExpected += 1;
+    const ns = nutritionStatus(day, {
+      nutritionMode: mode,
+      kcalGoal,
+      proteinGoal,
+      goal,
+      isPast: true,
+    });
+    if (ns === 'hit') nCompleted += 1;
+
+    cursor = prevBusinessDate(cursor);
+  }
+
+  const pct = (c, e) => (e === 0 ? null : Math.round((c / e) * 100));
+  return {
+    workout: { expected: wExpected, completed: wCompleted, percent: pct(wCompleted, wExpected) },
+    nutrition: { expected: nExpected, completed: nCompleted, percent: pct(nCompleted, nExpected) },
+  };
+}
+
+// ---- per-person emoji (curated set + deterministic fallback) — SPEC-v4 §14 ---
+
+/**
+ * The curated emoji set (single source of truth, importable by data.js for the
+ * random default and by ui.js for the picker + fallback). 24 entries.
+ */
+export const EMOJI_SET = [
+  '💪', '🔥', '🏋️', '🥇', '⚡', '🚀', '🦍', '🐺', '🦅', '🐉', '🦁', '🐻',
+  '🦏', '🦈', '🐅', '🦌', '🍀', '⭐', '🎯', '💎', '🧨', '🥊', '🏆', '🧗',
+];
+
+/**
+ * hashId(id) -> a small stable non-negative integer hash of a string (FNV-1a,
+ * 32-bit). Deterministic, so the same userId always maps to the same emoji.
+ * Returns 0 for a non-string / empty input.
+ */
+export function hashId(id) {
+  if (typeof id !== 'string' || id.length === 0) return 0;
+  let h = 0x811c9dc5; // FNV offset basis
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    // 32-bit FNV prime multiply via shifts (stay in 32-bit unsigned space).
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/**
+ * emojiOf(member) -> the member's chosen emoji if a non-empty string, else a
+ * DETERMINISTIC fallback derived from the userId (so demo users with no emoji
+ * field still show a stable symbol). Accepts the member id under `id`, `userId`,
+ * or `uid` (whichever the caller's shape uses).
+ */
+export function emojiOf(member) {
+  if (member && typeof member.emoji === 'string' && member.emoji.trim()) {
+    return member.emoji;
+  }
+  const id = (member && (member.id || member.userId || member.uid)) || '';
+  return EMOJI_SET[hashId(id) % EMOJI_SET.length];
+}
+
+/**
+ * randomEmoji() -> a random pick from EMOJI_SET. Client Math.random is fine;
+ * used only by ensureUserDoc's first-run default.
+ */
+export function randomEmoji() {
+  return EMOJI_SET[Math.floor(Math.random() * EMOJI_SET.length)];
 }
 
 // ---- relative "last active" label --------------------------------------------

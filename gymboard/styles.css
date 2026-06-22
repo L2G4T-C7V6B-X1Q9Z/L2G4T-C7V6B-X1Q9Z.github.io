@@ -293,10 +293,14 @@ button:disabled { cursor:default; }
 }
 .grid-title { font-weight:700; font-size:12px; letter-spacing:.18em; color:var(--txt2); }
 .grid-range { font-size:10.5px; color:var(--txt3); letter-spacing:.04em; }
-#grid-scroll { flex:1 1 auto; min-height:0; padding:6px 12px 10px; transform:translateZ(0); will-change:transform; }
+#grid-scroll { flex:1 1 auto; min-height:0; padding:6px 12px 10px; overflow-x:auto; transform:translateZ(0); will-change:transform; }
 /* CSS Grid (display:grid), NOT a <table>. Columns set inline by ui.js; date gutter + 1 col
-   per member. Newest date at top (ui.js orders rows). */
-#grid { display:grid; gap:6px; align-content:start; }
+   per member. Newest date at top (ui.js orders rows).
+   v4 (#15): width:max-content + margin-inline:auto CENTERS the whole grid block (gutter +
+   header + rows shift uniformly) when few columns don't fill the width; when many columns
+   overflow, #grid-scroll's overflow-x lets it scroll horizontally. Per-column width is
+   CAPPED (minmax(40px,~56px) set inline by ui.js) so 3 people don't stretch full-width. */
+#grid { display:grid; gap:6px; align-content:start; width:max-content; max-width:100%; margin-inline:auto; justify-content:center; }
 .gcell-corner, .ghead, .ghead-day, .gdate, .gcell {
   display:flex; align-items:center; justify-content:center;
   min-height:40px; border-radius:var(--r-sm);
@@ -323,15 +327,21 @@ button:disabled { cursor:default; }
 }
 .ghead.me .ghead-v { color:var(--red); }
 
-/* ---- under-name stat stack: flame+streak / weight+arrow / last-active ---- */
+/* ---- under-name stat stack: compliance% (+streak) / weight+arrow / last-active ---- */
 .gh-stack { display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.2; max-width:100%; }
-.gh-streak { font-size:8.5px; font-weight:700; color:var(--txt2); white-space:nowrap; }
+/* v4 (#5): WORKOUT compliance % is the headline accountability number (largest). */
+.gh-compliance { font-size:10px; font-weight:700; color:var(--txt); white-space:nowrap; font-variant-numeric:tabular-nums lining-nums; display:inline-flex; align-items:center; gap:3px; }
+.gh-compliance.none { color:var(--txt3); }
+/* v4 (#5): streak folded in small, secondary glyph after the % (a tiny pip + number). */
+.gh-streak { font-size:8px; font-weight:700; color:var(--txt3); white-space:nowrap; display:inline-flex; align-items:center; }
 /* v3: a tiny monochrome pip before the streak number (NO fire emoji). */
-.gh-streak-pip { display:inline-block; width:3px; height:3px; border-radius:50%; background:var(--txt3); margin-right:3px; vertical-align:middle; }
+.gh-streak-pip { display:inline-block; width:3px; height:3px; border-radius:50%; background:var(--txt3); margin-right:2px; vertical-align:middle; }
 .gh-wt { font-size:8.5px; color:var(--txt2); font-variant-numeric:tabular-nums lining-nums; white-space:nowrap; }
 .gh-arrow { margin-left:1px; font-size:8px; font-weight:700; }
 .gh-active { font-size:8px; color:var(--txt3); white-space:nowrap; }
 .gh-active.stale { opacity:.4; }
+/* v4 (#14): the per-person emoji shown ABOVE the name in the SOCIAL column header. */
+.ghead-emoji { font-size:13px; line-height:1; margin-bottom:1px; }
 
 /* ---- transposed grid: day-of-week column headers ---- */
 .ghead-day {
@@ -374,32 +384,29 @@ button:disabled { cursor:default; }
   --w:var(--g2); --n:var(--g2);
   background:var(--st-pending); /* flat fill behind the two bands */
 }
+/* v4 (#2): EXACT 50/50 split — top band = workout, bottom band = nutrition. The 1px
+   var(--g0) divider sits on the bottom band's top edge, visually at the 50% line. */
 .gcell .seg-w {
-  position:absolute; left:0; right:0; top:0; height:56%;
+  position:absolute; left:0; right:0; top:0; height:50%;
   background:var(--w);
 }
 .gcell .seg-n {
-  position:absolute; left:0; right:0; bottom:0; height:44%;
+  position:absolute; left:0; right:0; bottom:0; height:50%;
   background:var(--n); border-top:1px solid var(--g0);
 }
 .gcell.w-done    { --w:var(--st-done); }
 .gcell.w-missed  { --w:var(--st-missed); }
 .gcell.w-rest    { --w:var(--st-rest); }
-.gcell.w-off     { --w:var(--st-off); }
+/* v4 (#1): OFF renders IDENTICALLY to REST — neutral fill + the small "rest" label.
+   (Data stays distinct: 'off' is ad-hoc, 'rest' is scheduled; only the paint converges.) */
+.gcell.w-off     { --w:var(--st-rest); }
 .gcell.w-pending { --w:var(--st-pending); }
 .gcell.n-hit     { --n:var(--st-done); }
 .gcell.n-none    { --n:var(--st-none); }
 .gcell.n-pending { --n:var(--st-pending); }
-/* REST (scheduled rest day) — say "rest" in small letters, no diagonal/mark. */
-.gcell.w-rest .seg-w { display:flex; align-items:center; justify-content:center; }
-.gcell.w-rest .seg-w::after { content:'rest'; font-size:7px; font-weight:700; letter-spacing:.02em; color:var(--txt3); text-transform:lowercase; line-height:1; }
-/* DAY OFF (ad-hoc holiday/sick day) — diagonal GREEN lines, so it clearly reads as
-   intentional time off, NOT a missed workout (which is red). */
-.gcell.w-off .seg-w {
-  background:
-    repeating-linear-gradient(45deg, var(--st-done) 0 1.5px, transparent 1.5px 5px),
-    var(--st-off);
-}
+/* REST + OFF (v4 #1): both say "rest" in small letters, no diagonal/mark. */
+.gcell.w-rest .seg-w, .gcell.w-off .seg-w { display:flex; align-items:center; justify-content:center; }
+.gcell.w-rest .seg-w::after, .gcell.w-off .seg-w::after { content:'rest'; font-size:7px; font-weight:700; letter-spacing:.02em; color:var(--txt3); text-transform:lowercase; line-height:1; }
 /* tiny dim corner tag for a typed workout — decoration only, never colored red. */
 .gcell-wtag {
   position:absolute; top:1px; right:2px; z-index:3;
@@ -411,14 +418,24 @@ button:disabled { cursor:default; }
 .gcell.prejoin .seg-w::before, .gcell.prejoin .gcell-wtag { display:none; }
 .gcell.me { box-shadow:inset 2px 0 0 var(--red); }
 
-/* grid legend strip */
+/* grid legend strip — v4 (#11): now at the TOP of the SOCIAL board (border-BOTTOM). */
 .grid-legend {
   flex:0 0 auto;
-  display:flex; flex-wrap:wrap; gap:10px 14px; justify-content:center;
-  padding:9px 14px max(10px,env(safe-area-inset-bottom));
-  border-top:1px solid var(--hairline); background:var(--g1);
+  display:flex; flex-wrap:wrap; gap:8px 12px; justify-content:center; align-items:center;
+  padding:8px 12px;
+  border-bottom:1px solid var(--hairline); background:var(--g1);
 }
 .leg { display:inline-flex; align-items:center; gap:6px; font-size:9px; letter-spacing:.06em; color:var(--txt3); text-transform:uppercase; }
+.leg-missed-note { font-size:8px; color:var(--txt3); opacity:.8; }
+
+/* v4 (#11): the labeled mini-cell DIAGRAM — a larger 50/50 split cell flanked by
+   "top = workout" / "bottom = nutrition" side labels, so the encoding is unmistakable. */
+.leg-diagram { display:inline-flex; align-items:center; gap:6px; margin-right:2px; }
+.leg-diagram .leg-cell.leg-cell-big { width:22px; height:22px; border-radius:5px; }
+.leg-diagram .leg-diag-labels { display:flex; flex-direction:column; gap:3px; line-height:1; }
+.leg-diagram .leg-diag-top, .leg-diagram .leg-diag-bot {
+  font-size:8px; font-weight:700; letter-spacing:.04em; color:var(--txt3); text-transform:uppercase; white-space:nowrap;
+}
 
 /* legend uses .leg-cell — the SAME horizontal split as the real grid cell. */
 .leg-cell {
@@ -426,18 +443,15 @@ button:disabled { cursor:default; }
   border:1px solid var(--hairline); --w:var(--g2); --n:var(--g2);
   background:var(--st-pending);
 }
-.leg-cell .seg-w { position:absolute; left:0; right:0; top:0; height:56%; background:var(--w); }
-.leg-cell .seg-n { position:absolute; left:0; right:0; bottom:0; height:44%; background:var(--n); border-top:1px solid var(--g0); }
+.leg-cell .seg-w { position:absolute; left:0; right:0; top:0; height:50%; background:var(--w); }
+.leg-cell .seg-n { position:absolute; left:0; right:0; bottom:0; height:50%; background:var(--n); border-top:1px solid var(--g0); }
 .leg-cell.w-done { --w:var(--st-done); }
 .leg-cell.w-missed { --w:var(--st-missed); }
 .leg-cell.w-rest { --w:var(--st-rest); }
-.leg-cell.w-off { --w:var(--st-off); }
 .leg-cell.w-pending { --w:var(--st-pending); }
 .leg-cell.n-hit { --n:var(--st-done); }
 .leg-cell.n-none { --n:var(--st-none); }
 .leg-cell.n-pending { --n:var(--st-pending); }
-/* legend: DAY OFF swatch mirrors the grid's green diagonal lines */
-.leg-cell.w-off .seg-w { background: repeating-linear-gradient(45deg, var(--st-done) 0 1px, transparent 1px 3.5px), var(--st-off); }
 
 /* ============ LOUD RECLAIM MODAL ============ */
 #reclaim-backdrop {
@@ -540,10 +554,17 @@ button:disabled { cursor:default; }
 .me-label { flex:1; font-size:12.5px; color:var(--txt); letter-spacing:.02em; }
 .me-input { width:104px; height:34px; text-align:right; background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm); color:var(--txt); font-family:var(--font-mono); font-size:13px; padding:0 10px; }
 .me-input:focus { outline:none; border-color:var(--red-wash-bd); }
-/* v3.1 fix (#9): text fields (name) read LEFT-aligned + flex to fill — right-aligning a
-   short text value looked broken. Numeric fields keep right-align (they read as figures). */
+/* v3.1 fix (#9): text fields (name) read LEFT-aligned. Numeric fields keep right-align. */
 .me-row-input { align-items:center; }
-.me-input-text { flex:1 1 auto; width:auto; min-width:0; text-align:left; }
+.me-input-text { text-align:left; }
+
+/* v4 (#10): PROFILE inputs UNIFORM width, right-edge aligned. Scoped to .me-profile so
+   other toggles/inputs elsewhere are unaffected. Name box, day-starts hourbox, and the
+   hide-weight toggle all become one fixed 104px width so their right edges line up. */
+.me-profile .me-input,
+.me-profile .me-input-text { width:104px; flex:0 0 auto; min-width:0; }
+.me-profile .me-hourbox { width:104px; flex:0 0 auto; justify-content:flex-end; }
+.me-profile .me-toggle { width:104px; min-width:0; flex:0 0 auto; }
 
 /* v3.1 fix (#9): "day starts" is ONE cohesive bordered box containing the hour + ":00",
    so ":00" reads as part of the field instead of floating outside a tiny box. */
@@ -600,13 +621,27 @@ button:disabled { cursor:default; }
 .me-meal-btn:active:not(:disabled) { filter:brightness(.9); }
 .me-meal-btn:disabled { opacity:.5; }
 
-/* meals-today list: compact chips (newest first), tap-to-remove */
-.me-meals { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:0; }
-.me-meal-chip { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 8px 0 10px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:10.5px; font-weight:700; font-variant-numeric:tabular-nums lining-nums; }
-.me-meal-chip:active { background:var(--g3); }
-.me-chip-fig { letter-spacing:.02em; }
-.me-chip-x { color:var(--txt3); font-size:11px; }
-.me-meal-note { font-size:10px; color:var(--txt3); letter-spacing:.02em; }
+/* v4 (#8): TODAY'S MEALS — a clear header + a readable VERTICAL list of rows (label/figure
+   on the left, remove on the right) so it's unmistakable these are today's logged meals. */
+.me-meals { display:flex; flex-direction:column; gap:6px; align-items:stretch; min-height:0; }
+.me-meals:empty { display:none; }
+.me-meals-head { font-size:10px; font-weight:700; letter-spacing:.14em; color:var(--txt3); text-transform:uppercase; margin:4px 0 2px; }
+.me-meal-row { display:flex; align-items:center; gap:10px; height:34px; padding:0 4px 0 10px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); }
+.me-meal-row .me-meal-name { flex:1 1 auto; min-width:0; font-size:11.5px; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.me-meal-row .me-meal-fig { flex:0 0 auto; font-size:10.5px; color:var(--txt3); font-variant-numeric:tabular-nums lining-nums; }
+.me-meal-row .me-meal-x { flex:0 0 auto; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:var(--r-sm); background:transparent; border:none; color:var(--txt3); font-size:13px; }
+.me-meal-row .me-meal-x:active { background:var(--g3); color:var(--txt2); }
+.me-meal-note { font-size:10px; color:var(--txt3); letter-spacing:.02em; padding-left:2px; }
+
+/* v4 (#14): personal-emoji picker — a wrap of curated symbols to tap. Selected = filled. */
+.me-emoji-pick { display:flex; flex-wrap:wrap; gap:6px; }
+.me-emoji-btn {
+  width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center;
+  border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline);
+  font-size:17px; line-height:1;
+}
+.me-emoji-btn:active { background:var(--g3); }
+.me-emoji-btn.on { background:var(--g4); border-color:var(--etch); }
 
 /* workout-type picker (ME today + day editor): 7 small segmented buttons that wrap */
 .me-row-stack { flex-direction:column; align-items:stretch; gap:6px; }
@@ -667,6 +702,10 @@ button:disabled { cursor:default; }
 .me-qm-row .qm-row-edit { flex:0 0 auto; height:28px; padding:0 9px; display:inline-flex; align-items:center; border-radius:var(--r-sm); background:transparent; border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.04em; }
 .me-qm-row .qm-row-edit:active { background:var(--g3); color:var(--txt); }
 .me-qm-row.editing { border-color:var(--red-wash-bd); background:var(--red-wash); }
+/* v4 (#7): a quick-meal registry row with a NOTE wraps to two lines (label+fig / note). */
+.me-qm-row.has-note { height:auto; min-height:38px; flex-wrap:wrap; padding-top:6px; padding-bottom:6px; align-items:flex-start; }
+.me-qm-row.has-note .qm-row-label { align-self:center; }
+.me-qm-row .qm-row-note { flex-basis:100%; order:5; font-size:10px; color:var(--txt3); letter-spacing:.02em; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* TODAY "save as quick meal" row: optional name + the save button */
 .me-qm-save { display:flex; gap:8px; align-items:center; margin:2px 0 6px; }
 .me-qm-save .me-textbtn { flex:0 0 auto; margin-bottom:0; padding:6px 0; white-space:nowrap; }
@@ -718,17 +757,59 @@ button:disabled { cursor:default; }
 }
 .errpop-btn:active { transform:scale(.98); background:var(--g4); }
 
-/* ---- bottom-sheet modal (read-only detail) ---- */
-#daydetail-backdrop { position:absolute; inset:0; z-index:100; background:rgba(0,0,0,.78); animation:fadein 160ms ease; }
-.sheet { position:absolute; left:50%; bottom:0; transform:translateX(-50%); z-index:110; width:min(440px,100%); background:linear-gradient(180deg,#161616,#0e0e0e); border:1px solid var(--hairline); border-bottom:none; border-radius:18px 18px 0 0; box-shadow:0 -18px 50px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04); padding:18px 18px max(18px,env(safe-area-inset-bottom)); animation:sheetup 280ms var(--spring); }
-@keyframes sheetup { from { transform:translate(-50%,100%);} to { transform:translate(-50%,0);} }
-.sheet-title { font-weight:700; font-size:13px; letter-spacing:.14em; color:var(--txt); text-transform:uppercase; }
-.sheet-sub { font-size:11px; color:var(--txt3); margin-top:3px; margin-bottom:12px; letter-spacing:.04em; }
-.sheet-body { display:flex; flex-direction:column; }
-.sheet-actions { display:flex; gap:10px; margin-top:16px; }
-.sheet-btn { flex:1; height:44px; border-radius:var(--r-md); background:var(--g3); border:1px solid var(--bd); color:var(--txt2); font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:.1em; }
-.sheet-btn-go { background:linear-gradient(180deg,#ff4b40,#e02e24); color:#fff; border:none; }
-.sheet-btn:active { transform:scale(.98); }
-.daydetail-body { font-size:13px; line-height:1.6; color:var(--txt); }
-.daydetail-body .dd-line { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--hairline); }
-.daydetail-body .dd-k { color:var(--txt3); }
+/* ---- v4 (#13): MINI POPOVER (read-only day detail anchored beside the tapped cell) ----
+   Replaces the old bottom-sheet. position:fixed, placed left/right of the cell by ui.js
+   via getBoundingClientRect (clamped inside the app column). No backdrop; dismiss on
+   outside tap + a ~5s auto-timeout. Read-only (no buttons). */
+.daypop {
+  position:fixed; z-index:115; width:150px; max-width:calc(100vw - 16px);
+  background:var(--g1); border:1px solid var(--hairline); border-radius:var(--r-md);
+  box-shadow:0 12px 32px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
+  padding:10px 12px; animation:fadein 120ms ease;
+  pointer-events:auto;
+}
+.daypop-title { font-weight:700; font-size:12px; letter-spacing:.06em; color:var(--txt); display:flex; align-items:center; gap:5px; }
+.daypop-sub { font-size:10px; color:var(--txt3); margin-top:2px; margin-bottom:8px; letter-spacing:.04em; }
+.daypop-body { font-size:11.5px; line-height:1.5; color:var(--txt); }
+.daypop-body .dd-line { display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px solid var(--hairline); }
+.daypop-body .dd-line:last-child { border-bottom:none; }
+.daypop-body .dd-k { color:var(--txt3); }
+.daypop-body .dd-v { color:var(--txt); text-align:right; }
+/* the nutrition-compliance footer line — quiet, never red. */
+.daypop-body .dd-foot { margin-top:6px; padding-top:6px; border-top:1px solid var(--hairline); border-bottom:none; color:var(--txt3); font-size:10.5px; }
+
+/* ---- v4 (#3): weight-over-time chart (bottom third of the SOCIAL board). Pure inline
+   SVG, no libraries. "me" line is red; others are muted gray/white tints. Dark palette;
+   these are NOT status colors (no green/red status semantics here). ---- */
+.social-chart {
+  flex:0 0 32%; min-height:0;
+  display:flex; flex-direction:column;
+  border-top:1px solid var(--hairline); background:var(--g0);
+  padding:6px 12px max(6px,env(safe-area-inset-bottom));
+  overflow:hidden;
+}
+.social-chart.hidden { display:none; }
+.wchart-head {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:4px; flex:0 0 auto;
+}
+.wchart-title {
+  font-size:9px; letter-spacing:.12em; color:var(--txt3); font-weight:700;
+  text-transform:uppercase; white-space:nowrap;
+}
+.wchart-toggle { display:flex; gap:2px; }
+.wchart-toggle .wc-range {
+  font:inherit; font-size:9px; letter-spacing:.04em; line-height:1;
+  padding:3px 7px; border-radius:var(--r-sm);
+  background:var(--g2); border:1px solid var(--hairline); color:var(--txt3);
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.wchart-toggle .wc-range.on { background:var(--g4); color:var(--txt); border-color:var(--edge); }
+/* the SVG host fills the remaining height; the <svg> stretches to it. */
+.wchart-svg { flex:1 1 auto; min-height:0; width:100%; }
+.wchart-svg svg { display:block; width:100%; height:100%; }
+.wchart-empty {
+  flex:1 1 auto; display:flex; align-items:center; justify-content:center;
+  font-size:11px; color:var(--txt3); letter-spacing:.03em;
+}
+.wchart-empty.hidden { display:none; }

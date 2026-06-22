@@ -36,9 +36,12 @@ import {
   missed,
   isRestDay,
   computeStreak,
+  computeCompliance,
   weightTrend,
   relativeTime,
   nutritionStatus,
+  emojiOf,
+  EMOJI_SET,
   isDayKey,
 } from './logic.js';
 
@@ -55,8 +58,25 @@ const DEFAULT_TZ =
   'America/New_York';
 
 const GRID_DAYS = 7; // one week (the current Mon..Sun-ish window, newest at top)
-const WEIGHT_WINDOW_DAYS = 14; // weights window fetched per member for the trend
+// v4 (#3): widened to 90d so the weight-over-time chart (chart phase) shares this one
+// fetch; weightTrend only looks ~7d back, so the wider window is harmless to the arrow.
+const WEIGHT_WINDOW_DAYS = 90; // weights window fetched per member (trend + chart)
 const HEARTBEAT_MS = 60 * 1000; // coarse belt-and-suspenders missed() re-eval
+const COMPLIANCE_WINDOW_DAYS = 30; // v4 (#5): trailing window for the per-person % stat
+const DAYPOP_AUTO_MS = 5000; // v4 (#13): the read-only popover self-dismisses after ~5s
+
+// v4 (#3): weight-chart logical canvas (coords are computed against this fixed box; the
+// <svg> stretches to the container via width/height:100%). Pad keeps lines + labels off
+// the edges. The muted (non-me) line palette is gray/white tints ONLY — red is reserved
+// for "me", and these are NOT status colors (no green/red status semantics in the chart).
+const WCHART_VB_W = 300;
+const WCHART_VB_H = 90;
+const WCHART_PAD_L = 6;
+const WCHART_PAD_R = 22; // extra right room for the end-labels
+const WCHART_PAD_T = 8;
+const WCHART_PAD_B = 8;
+const WCHART_OTHER_COLORS = ['#cfcfcf', '#9c9c9c', '#6e6e6e', '#bdbdbd', '#808080'];
+let wchartRange = 30; // selected window in days (30d default; 90d via the toggle)
 
 // =============================================================================
 // DOM HANDLES
@@ -69,6 +89,12 @@ const elScreens = { grid: $('screen-grid'), me: $('screen-me') };
 const elGrid = $('grid');
 const elGridRange = $('grid-range');
 const elGridLegend = $('grid-legend');
+// v4 (#3): weight-over-time chart handles (the inline-SVG line chart on the SOCIAL board).
+const elSocialChart = $('social-chart');
+const elWchartSvg = $('wchart-svg');
+const elWchartEmpty = $('wchart-empty');
+const elWchartToggle = $('wchart-toggle');
+const elWchartRangeLabel = $('wchart-range-label');
 const elReclaim = $('reclaim');
 const elReclaimBackdrop = $('reclaim-backdrop');
 const elReclaimBtn = $('reclaim-btn');
@@ -83,6 +109,10 @@ const elMeCalBar = $('me-cal-bar');
 const elMeProFig = $('me-pro-fig');
 const elMeProBar = $('me-pro-bar');
 const elMeNutInd = $('me-nut-indicator');
+const elMeNutHint = $('me-nut-hint'); // v4 (#6): the NUTRITION card hint (adapts per mode)
+const elMeCalRow = $('me-cal-row'); // v4 (#6): wrapper around the CALORIES track row
+const elMeProRow = $('me-pro-row'); // v4 (#6): wrapper around the PROTEIN track row
+const elMeNutTracksSep = $('me-nut-tracks-sep'); // separator above the tracks (hidden in manual)
 const elMeNutDone = $('me-nutdone'); // v3.1 "mark nutrition done" toggle (sets `ate`)
 const elMeAddKcal = $('me-add-kcal');
 const elMeAddProtein = $('me-add-protein');
@@ -111,20 +141,22 @@ const elMeQmManage = $('me-qm-manage'); // quick-meal manager (add/remove preset
 const elMeQmKcal = $('me-qm-kcal');
 const elMeQmProtein = $('me-qm-protein');
 const elMeQmLabel = $('me-qm-label');
+const elMeQmNote = $('me-qm-note'); // v4 (#7): optional free-text note for a quick-meal preset
 const elMeQmAdd = $('me-qm-add');
 const elMeQmName = $('me-qm-name'); // optional name for the TODAY "+ save as quick meal"
 const elMeQmCancel = $('me-qm-cancel'); // cancel an in-progress SETTINGS quick-meal edit
 let qmEditIdx = null; // index of the SETTINGS quick-meal being edited, or null
 const elMeTypeChooser = $('me-typechooser'); // which workout types show in the picker
 const elMeSaveTypes = $('me-save-types');
+const elMeNutMode = $('me-nutmode'); // v4 (#6): nutrition-mode chooser (manual/protein/both)
+const elMeNutModeHint = $('me-nutmode-hint'); // one-line hint under the chooser
+const elMeEmoji = $('me-emoji'); // v4 (#14): personal-emoji picker
 
-// Read-only day-detail handles (the editor is gone in v3.1)
-const elDayDetail = $('daydetail');
-const elDayDetailBackdrop = $('daydetail-backdrop');
-const elDayDetailTitle = $('daydetail-title');
-const elDayDetailSub = $('daydetail-sub');
-const elDayDetailBody = $('daydetail-body');
-const elDayDetailClose = $('daydetail-close');
+// v4 (#13): read-only MINI POPOVER handles (replaces the old bottom-sheet day detail).
+const elDayPop = $('daypop');
+const elDayPopTitle = $('daypop-title');
+const elDayPopSub = $('daypop-sub');
+const elDayPopBody = $('daypop-body');
 
 // Error popup (app-chrome alert — used for the rest-day/workout mutual-exclusion block).
 const elErrPop = $('errpop');
@@ -159,6 +191,14 @@ const GOALS = [
   { key: 'lose', label: 'Lose' },
   { key: 'maintain', label: 'Maintain' },
 ];
+
+// v4 (#6): the three per-person nutrition modes (the ME SETTINGS chooser + the one-line hint).
+const NUTRITION_MODES = [
+  { key: 'manual', label: 'Manual', hint: 'Nutrition counts as done only when you mark it done.' },
+  { key: 'protein', label: 'Protein', hint: 'Auto-done when you hit your protein goal (calories ignored).' },
+  { key: 'both', label: 'Both', hint: 'Auto-done when both calories and protein are on target.' },
+];
+const NUTMODE_HINT = Object.fromEntries(NUTRITION_MODES.map((m) => [m.key, m.hint]));
 
 // v3 workout types (lowercase stored). `label` = the picker button text; `tag` = the
 // tiny 1-2 letter corner glyph painted on a done WORKOUT band in the grid.
@@ -225,7 +265,16 @@ function subjectOf(member) {
     goal: member.goal || 'maintain',
     kcalGoal: Number.isFinite(member.kcalGoal) ? member.kcalGoal : null,
     proteinGoal: Number.isFinite(member.proteinGoal) ? member.proteinGoal : null,
+    // v4 (#6): the per-person nutrition mode (default 'both' for back-compat / demo users).
+    nutritionMode: nutritionModeOf(member),
   };
+}
+
+// v4 (#6): a member's nutrition mode, defaulting to 'both' (today's behavior) when absent
+// or invalid — so seeded/demo docs with no nutritionMode keep working.
+function nutritionModeOf(member) {
+  const m = member && member.nutritionMode;
+  return m === 'manual' || m === 'protein' || m === 'both' ? m : 'both';
 }
 
 function displayNameOf(member) {
@@ -321,6 +370,7 @@ function classifyDay(subject, dateKey, now, day) {
   const { h, m } = { h: subject.rolloverHour, m: subject.rolloverMinute };
   const cur = currentBusinessDate(now, subject.ianaTz, h, m);
   const nStatus = nutritionStatus(day, {
+    nutritionMode: subject.nutritionMode, // v4 (#6): mode-aware auto-check
     kcalGoal: subject.kcalGoal,
     proteinGoal: subject.proteinGoal,
     goal: subject.goal || 'maintain',
@@ -334,7 +384,7 @@ const CELL_LABEL = {
   done: 'done',
   missed: 'missed',
   rest: 'rest',
-  off: 'day off',
+  off: 'rest', // v4 (#1): off renders + reads identically to rest
   pending: 'pending',
   prejoin: 'pre-join',
 };
@@ -371,24 +421,40 @@ function orderedMembers() {
   });
 }
 
-// Build the under-name header stack (flame+streak, weight+arrow, last-active).
+// Build the under-name header stack. v4 (#5): WORKOUT compliance % (30d) is the headline
+// accountability number, with the streak folded in small beside it; then weight+arrow;
+// then last-active. Nutrition % lives in the day popover (keeps the column uncluttered).
 function headStackHtml(member, now, viewerBiz) {
   const uid = idOf(member);
   const subject = subjectOf(member);
   const parts = [];
 
-  // (a) streak — a quiet monochrome pip + the number (NO fire emoji). Hidden at 0.
+  // (a) WORKOUT compliance % over a trailing 30d window (computeCompliance). null
+  // (zero scheduled training days in-window) renders "—", never NaN/0. The streak is
+  // folded in as a small secondary glyph on the same line.
+  let comp = null;
+  try {
+    comp = computeCompliance(effectiveDays(uid), subject, now, { windowDays: COMPLIANCE_WINDOW_DAYS });
+  } catch (e) {
+    comp = null;
+  }
   let streak = 0;
   try {
     streak = computeStreak(effectiveDays(uid), subject, now);
   } catch (e) {
     streak = 0;
   }
-  if (streak > 0) {
-    parts.push(
-      `<span class="gh-streak" aria-label="streak ${streak}"><span class="gh-streak-pip" aria-hidden="true"></span>${streak}</span>`
-    );
-  }
+  const wPct = comp && comp.workout ? comp.workout.percent : null;
+  const compNone = wPct == null;
+  const pctText = compNone ? '—' : `${wPct}%`;
+  const streakGlyph =
+    streak > 0
+      ? `<span class="gh-streak" aria-label="streak ${streak}"><span class="gh-streak-pip" aria-hidden="true"></span>${streak}</span>`
+      : '';
+  parts.push(
+    `<span class="gh-compliance${compNone ? ' none' : ''}" aria-label="workout compliance ${compNone ? 'not enough data' : wPct + ' percent'} over 30 days">` +
+      `${pctText}${streakGlyph}</span>`
+  );
 
   // (b) weight + trend arrow (number neutral, arrow colored by goal/toward).
   const goal = (member && member.goal) || 'maintain';
@@ -430,6 +496,9 @@ function headStackHtml(member, now, viewerBiz) {
 }
 
 function renderGrid(now) {
+  // v4 (#13): a repaint replaces the cells the popover was anchored to — close it so it
+  // never points at a stale position. (A fresh tap reopens it on the new cell.)
+  if (daypopOpen) closeDayPopover();
   if (!members.length) {
     elGrid.innerHTML =
       '<div class="empty-note">No active members yet.<br>Soren seeds people with the admin script, then texts each person their link.</div>';
@@ -439,8 +508,11 @@ function renderGrid(now) {
   const { keys, cur } = gridDateKeys(now);
   const cols = orderedMembers();
 
-  // CSS grid template: a fixed date gutter + one (slightly wider) column per member.
-  elGrid.style.gridTemplateColumns = `44px repeat(${cols.length}, minmax(40px, 1fr))`;
+  // CSS grid template: a fixed date gutter + one CAPPED column per member. v4 (#15): the
+  // cap (max 56px) stops 3 people from stretching full-width; #grid (width:max-content,
+  // margin-inline:auto, justify-content:center) centers the block when narrow and lets
+  // #grid-scroll scroll horizontally when many columns overflow.
+  elGrid.style.gridTemplateColumns = `44px repeat(${cols.length}, minmax(40px, 56px))`;
 
   const cells = [];
   // header row: corner + member-name headers. v3.1: emit the stat stack FIRST and the
@@ -449,9 +521,13 @@ function renderGrid(now) {
   cells.push('<div class="gcell-corner"></div>');
   for (const m of cols) {
     const isMe = idOf(m) === myUserId;
+    // v4 (#14): the per-person emoji sits ABOVE the name (between the stat stack and the
+    // name span). emojiOf falls back to a deterministic id-hash for demo users with none.
+    const emoji = emojiOf({ emoji: m.emoji, id: idOf(m) });
     cells.push(
       `<div class="ghead${isMe ? ' me' : ''}" title="${escapeHtml(displayNameOf(m))}">` +
         headStackHtml(m, now, cur) +
+        `<span class="ghead-emoji" aria-hidden="true">${escapeHtml(emoji)}</span>` +
         `<span class="ghead-v">${escapeHtml(displayNameOf(m))}</span>` +
         `</div>`
     );
@@ -494,19 +570,206 @@ function renderGrid(now) {
   const first = keys[keys.length - 1];
   elGridRange.textContent = `${fmtDateGutter(first).md} – ${fmtDateGutter(cur).md}`;
 
-  // Legend: horizontal-split swatches mirroring the new cell encoding (workout band
-  // on top, nutrition band on the bottom).
+  // Legend (v4 #11): at the TOP now, with a labeled mini-cell DIAGRAM (top=workout /
+  // bottom=nutrition) plus the color key. Off is merged into rest (#1); nutrition is
+  // NEVER red, and the "missed = workout only" note makes that explicit.
   if (!elGridLegend.dataset.built) {
     const legCell = (w, n, label) =>
       `<span class="leg"><span class="leg-cell w-${w} n-${n}"><span class="seg-w"></span><span class="seg-n"></span></span>${label}</span>`;
+    // the labeled mini-cell diagram (a bigger split cell + side labels).
+    const diagram =
+      `<span class="leg-diagram" aria-label="cell key: top is workout, bottom is nutrition">` +
+        `<span class="leg-cell leg-cell-big w-done n-hit"><span class="seg-w"></span><span class="seg-n"></span></span>` +
+        `<span class="leg-diag-labels">` +
+          `<span class="leg-diag-top">top = workout</span>` +
+          `<span class="leg-diag-bot">bottom = nutrition</span>` +
+        `</span>` +
+      `</span>`;
     elGridLegend.innerHTML =
+      diagram +
       legCell('done', 'hit', 'done / hit') +
       legCell('missed', 'none', 'missed') +
+      `<span class="leg-missed-note">(workout only)</span>` +
       legCell('rest', 'none', 'rest') +
-      legCell('off', 'none', 'day off') +
-      legCell('pending', 'pending', 'pending');
+      legCell('pending', 'pending', 'pending') +
+      legCell('pending', 'hit', 'nutrition hit') +
+      legCell('pending', 'none', 'nutrition none');
     elGridLegend.dataset.built = '1';
   }
+
+  // v4 (#3): the weight-over-time chart shares this repaint (it lives below the grid on
+  // the SOCIAL board). Re-rendered on every Social paint + on weights refetch + on toggle.
+  renderWeightChart(now);
+}
+
+// =============================================================================
+// RENDER: WEIGHT-OVER-TIME CHART (v4 #3) — pure inline SVG, no libraries.
+//   x = business-date over the selected window (30d/90d), walked back DST-safely via
+//   prevBusinessDate (never raw ms). y = weight, auto-fit with padding. One smoothed
+//   polyline per VISIBLE member ("me" = red, others = muted gray tints) with a small
+//   emoji/initial end-label. Faint hairline gridlines + a couple of y labels. Hidden
+//   members (fetchWeights returned {}) and members with no in-range points are omitted.
+// =============================================================================
+
+// Catmull-Rom -> cubic-bezier smoothing over ordered {x,y} points. Returns an SVG path
+// `d` string. 0 points => '', 1 point handled by the caller (a dot). The Catmull-Rom
+// tension is the standard 1/6 control-point spacing, clamped to the segment endpoints so
+// the curve never overshoots wildly on sparse, spiky weight data.
+function smoothPath(points) {
+  const n = points.length;
+  if (n === 0) return '';
+  if (n === 1) return ''; // caller draws a dot for a single point
+  if (n === 2) {
+    return `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)} L ${points[1].x.toFixed(2)} ${points[1].y.toFixed(2)}`;
+  }
+  let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
+function renderWeightChart(now) {
+  if (!elSocialChart || !elWchartSvg) return;
+
+  // sync the range label + toggle button states to the current selection.
+  if (elWchartRangeLabel) elWchartRangeLabel.textContent = String(wchartRange);
+  if (elWchartToggle) {
+    for (const btn of elWchartToggle.querySelectorAll('.wc-range')) {
+      const on = Number(btn.dataset.range) === wchartRange;
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+
+  // ---- X: the ordered window of business-dates, oldest..newest, DST-safe. dateIndex maps
+  // a dateKey -> its 0-based position from the OLDEST in-window day (for the x coordinate).
+  const cur = viewerBusinessDate(now);
+  const rangeDays = wchartRange;
+  const keysNewestFirst = [cur];
+  for (let i = 1; i < rangeDays; i++) keysNewestFirst.push(prevBusinessDate(keysNewestFirst[i - 1]));
+  const keysOldestFirst = keysNewestFirst.slice().reverse();
+  const dateIndex = new Map();
+  keysOldestFirst.forEach((k, i) => dateIndex.set(k, i));
+
+  const innerW = WCHART_VB_W - WCHART_PAD_L - WCHART_PAD_R;
+  const innerH = WCHART_VB_H - WCHART_PAD_T - WCHART_PAD_B;
+  const xOf = (idx) => WCHART_PAD_L + (rangeDays <= 1 ? innerW : (idx / (rangeDays - 1)) * innerW);
+
+  // ---- gather each visible member's in-range points. Hidden members (fetchWeights -> {})
+  // and members with zero in-range points are omitted. "me" first so its red draws on top.
+  const cols = orderedMembers();
+  const series = [];
+  let yMin = Infinity;
+  let yMax = -Infinity;
+  for (const m of cols) {
+    const uid = idOf(m);
+    if (m.hideWeight === true) continue; // belt-and-suspenders: the gate would blank it anyway
+    const wmap = weightsByUser.get(uid) || {};
+    const pts = [];
+    for (const dk of keysOldestFirst) {
+      const lb = wmap[dk];
+      if (Number.isFinite(lb)) {
+        pts.push({ dk, lb, idx: dateIndex.get(dk) });
+        if (lb < yMin) yMin = lb;
+        if (lb > yMax) yMax = lb;
+      }
+    }
+    if (!pts.length) continue; // no in-range data -> no line (no flat zero, no NaN)
+    series.push({ uid, member: m, isMe: uid === myUserId, pts });
+  }
+
+  // ---- empty: zero shared in-range points across everyone -> hide SVG, show the note.
+  if (!series.length) {
+    elWchartSvg.innerHTML = '';
+    if (elWchartEmpty) elWchartEmpty.classList.remove('hidden');
+    elSocialChart.classList.remove('hidden');
+    return;
+  }
+  if (elWchartEmpty) elWchartEmpty.classList.add('hidden');
+  elSocialChart.classList.remove('hidden');
+
+  // ---- Y: auto-fit with padding. Single distinct value -> pad to [v-2, v+2] so the line
+  // sits mid-canvas instead of dividing by zero.
+  let lo = Math.floor(yMin - 1);
+  let hi = Math.ceil(yMax + 1);
+  if (lo === hi) { lo = yMin - 2; hi = yMax + 2; }
+  const span = hi - lo || 1;
+  const yOf = (lb) => WCHART_PAD_T + (1 - (lb - lo) / span) * innerH;
+
+  // ---- assign colors: "me" is red; others cycle the muted gray palette deterministically
+  // by their order among the non-me series (red is never reused for an "other").
+  let otherI = 0;
+  for (const s of series) {
+    if (s.isMe) {
+      s.color = 'var(--red)';
+      s.width = 2;
+      s.opacity = 1;
+    } else {
+      s.color = WCHART_OTHER_COLORS[otherI % WCHART_OTHER_COLORS.length];
+      s.width = 1.5;
+      s.opacity = 0.85;
+      otherI++;
+    }
+  }
+
+  // ---- build the SVG.
+  const parts = [];
+  // gridlines: 3 faint hairlines (bottom / mid / top) with tiny right-edge lb labels.
+  const gridVals = [lo, Math.round((lo + hi) / 2), hi];
+  const seenG = new Set();
+  for (const gv of gridVals) {
+    if (seenG.has(gv)) continue;
+    seenG.add(gv);
+    const gy = yOf(gv).toFixed(2);
+    parts.push(
+      `<line x1="${WCHART_PAD_L}" y1="${gy}" x2="${(WCHART_VB_W - WCHART_PAD_R).toFixed(2)}" y2="${gy}" ` +
+        `stroke="var(--hairline)" stroke-width="0.5" />`
+    );
+    parts.push(
+      `<text x="${(WCHART_VB_W - WCHART_PAD_R + 2).toFixed(2)}" y="${(yOf(gv) + 2.4).toFixed(2)}" ` +
+        `font-size="7" fill="var(--txt3)" text-anchor="start">${Math.round(gv)}</text>`
+    );
+  }
+
+  // one line (or dot) + end-label per member.
+  for (const s of series) {
+    const coords = s.pts.map((p) => ({ x: xOf(p.idx), y: yOf(p.lb) }));
+    const last = coords[coords.length - 1];
+    if (coords.length === 1) {
+      // single point -> a 3px (radius 1.6) dot, no path.
+      parts.push(`<circle cx="${last.x.toFixed(2)}" cy="${last.y.toFixed(2)}" r="1.6" fill="${s.color}" opacity="${s.opacity}" />`);
+    } else {
+      const d = smoothPath(coords);
+      parts.push(
+        `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width}" ` +
+          `stroke-linecap="round" stroke-linejoin="round" opacity="${s.opacity}" />`
+      );
+    }
+    // end-label: the member's emoji (REQ 14) else first initial, just right of the last
+    // point, clamped inside the canvas (placed left if it would overflow).
+    const emoji = emojiOf({ emoji: s.member.emoji, id: s.uid });
+    const label = emoji || (displayNameOf(s.member).charAt(0) || '?');
+    const wouldOverflow = last.x + 8 > WCHART_VB_W;
+    const lx = wouldOverflow ? last.x - 3 : last.x + 3;
+    const anchor = wouldOverflow ? 'end' : 'start';
+    parts.push(
+      `<text x="${lx.toFixed(2)}" y="${(last.y + 2.4).toFixed(2)}" font-size="7" ` +
+        `fill="${s.isMe ? 'var(--red)' : s.color}" text-anchor="${anchor}">${escapeHtml(label)}</text>`
+    );
+  }
+
+  elWchartSvg.innerHTML =
+    `<svg viewBox="0 0 ${WCHART_VB_W} ${WCHART_VB_H}" preserveAspectRatio="xMidYMid meet" ` +
+    `role="img" aria-label="Weight over time, last ${rangeDays} days">${parts.join('')}</svg>`;
 }
 
 // =============================================================================
@@ -661,6 +924,7 @@ function wireError() {
 // =============================================================================
 function setTab(tab) {
   if (tab !== 'grid' && tab !== 'me') return;
+  closeDayPopover(); // v4 (#13): don't leave a popover floating across a tab switch
   activeTab = tab;
   for (const btn of elTabs.querySelectorAll('.tab')) {
     const on = btn.dataset.tab === tab;
@@ -705,13 +969,25 @@ function renderMe(now) {
   const protein = day && Number.isFinite(day.protein) ? day.protein : 0;
   const kcalGoal = Number.isFinite(me.kcalGoal) ? me.kcalGoal : null;
   const proteinGoal = Number.isFinite(me.proteinGoal) ? me.proteinGoal : null;
+  const nutMode = nutritionModeOf(me); // v4 (#6)
 
   // calorie + protein figures and progress bars (NEVER red, even when over).
   renderTrackRow(elMeCalFig, elMeCalBar, kcal, kcalGoal, ''); // kcal unit blank
   renderTrackRow(elMeProFig, elMeProBar, protein, proteinGoal, 'g');
 
+  // v4 (#6): the ME TODAY nutrition card ADAPTS to the person's mode so only what's
+  // relevant shows. manual = just the mark-done toggle + meals (hide both tracks + the
+  // indicator). protein = protein track only (hide calories). both = both tracks (v3.1).
+  const showCal = nutMode === 'both';
+  const showPro = nutMode === 'both' || nutMode === 'protein';
+  const showTracks = showCal || showPro;
+  if (elMeCalRow) elMeCalRow.style.display = showCal ? '' : 'none';
+  if (elMeProRow) elMeProRow.style.display = showPro ? '' : 'none';
+  if (elMeNutTracksSep) elMeNutTracksSep.style.display = showTracks ? '' : 'none';
+
   // nutrition status from nutritionStatus (today is never past => never 'none').
   const ns = nutritionStatus(day, {
+    nutritionMode: nutMode, // v4 (#6)
     kcalGoal,
     proteinGoal,
     goal: me.goal || 'maintain',
@@ -719,14 +995,28 @@ function renderMe(now) {
   });
   if (elMeNutInd) {
     elMeNutInd.classList.remove('hit', 'pending', 'none');
-    if (ns === 'hit') {
-      elMeNutInd.classList.add('hit');
-      elMeNutInd.textContent = 'HIT ✓';
+    // manual mode has no auto-progress to show — hide the indicator entirely.
+    if (nutMode === 'manual') {
+      elMeNutInd.style.display = 'none';
     } else {
-      elMeNutInd.classList.add('pending');
-      // a little nudge based on whether anything's logged yet.
-      elMeNutInd.textContent = kcal > 0 ? 'on track' : 'nothing logged yet';
+      elMeNutInd.style.display = '';
+      if (ns === 'hit') {
+        elMeNutInd.classList.add('hit');
+        elMeNutInd.textContent = 'HIT ✓';
+      } else {
+        elMeNutInd.classList.add('pending');
+        // a little nudge based on whether anything's logged yet (mode-relevant total).
+        const logged = nutMode === 'protein' ? protein > 0 : kcal > 0;
+        elMeNutInd.textContent = logged ? 'on track' : 'nothing logged yet';
+      }
     }
+  }
+  // mode-relevant hint line at the top of the card.
+  if (elMeNutHint) {
+    elMeNutHint.textContent =
+      nutMode === 'manual' ? 'Mark nutrition done when you\'ve eaten well.'
+      : nutMode === 'protein' ? 'Log meals to auto-check on protein, or just mark it done.'
+      : 'Log meals to auto-check, or just mark it done.';
   }
 
   // v3.1 "mark nutrition done" toggle — reflects the manual `ate` override OR an
@@ -781,6 +1071,9 @@ function renderMe(now) {
     elMeProteinGoal.value = Number.isFinite(me.proteinGoal) ? String(me.proteinGoal) : '';
   }
 
+  // ---- NUTRITION MODE chooser (v4 #6) ----
+  renderNutMode(me);
+
   // ---- QUICK MEALS manager ----
   renderQuickMealManager(me);
 
@@ -799,6 +1092,8 @@ function renderMe(now) {
     elMeHideWeight.classList.toggle('neutral-on', hidden);
     elMeHideWeight.textContent = hidden ? 'hidden' : 'shared';
   }
+  // ---- EMOJI picker (v4 #14) ----
+  renderEmojiPicker(me);
 }
 
 // Render one CALORIES/PROTEIN row: the "total / goal" figure + a progress-bar fill.
@@ -825,38 +1120,49 @@ function renderTrackRow(figEl, barEl, total, goal, unit) {
   }
 }
 
-// Render the meals-today list, newest-first, as chips with a tap-to-remove glyph.
-// When sum(meals) != day.kcal (a pre-array manual number), append the migration note.
+// v4 (#8): TODAY'S MEALS — an unambiguous, clearly-headed VERTICAL list. Each row reads
+// "Meal N — NNN kcal / NNg" (or the preset's label if the meal was logged from one), with
+// a remove control. A pre-array manual total still surfaces below as a migration note.
+// Rows are newest-first but keep the ORIGINAL array index for removal.
 function renderMealsList(day) {
   if (!elMeMeals) return;
   const meals = day && Array.isArray(day.meals) ? day.meals : [];
+  const totalKcal = day && Number.isFinite(day.kcal) ? day.kcal : 0;
+
   if (!meals.length) {
-    // still surface a pre-array manual total if one exists (e.g. a v2 day).
-    if (day && Number.isFinite(day.kcal) && day.kcal > 0) {
-      elMeMeals.innerHTML = `<span class="me-meal-note">${Math.round(day.kcal)} kcal logged earlier</span>`;
+    // no array yet: still surface a pre-array manual total if one exists (e.g. a v2 day).
+    if (totalKcal > 0) {
+      elMeMeals.innerHTML =
+        `<div class="me-meals-head">TODAY'S MEALS</div>` +
+        `<span class="me-meal-note">${Math.round(totalKcal)} kcal logged earlier</span>`;
     } else {
       elMeMeals.innerHTML = '';
     }
     return;
   }
+
   let mealsKcal = 0;
   for (const m of meals) if (m && Number.isFinite(m.kcal)) mealsKcal += m.kcal;
 
-  const chips = [];
-  // newest-first: iterate from the end, but keep the ORIGINAL array index for removal.
+  const rows = [];
   for (let i = meals.length - 1; i >= 0; i--) {
     const m = meals[i] || {};
     const k = Number.isFinite(m.kcal) ? Math.round(m.kcal) : 0;
     const p = Number.isFinite(m.protein) ? Math.round(m.protein) : 0;
-    chips.push(
-      `<button class="me-meal-chip" type="button" data-idx="${i}" aria-label="remove meal ${k} kcal ${p} grams protein">` +
-        `<span class="me-chip-fig">${k}/${p}g</span><span class="me-chip-x" aria-hidden="true">⌫</span></button>`
+    // prefer a preset label written onto the element (v4 addMeal carries it); else "Meal N".
+    const name = (typeof m.label === 'string' && m.label.trim()) ? m.label.trim() : `Meal ${i + 1}`;
+    rows.push(
+      `<div class="me-meal-row">` +
+        `<span class="me-meal-name">${escapeHtml(name)}</span>` +
+        `<span class="me-meal-fig">${k} kcal / ${p}g</span>` +
+        `<button class="me-meal-x" type="button" data-idx="${i}" aria-label="remove ${escapeHtml(name)}, ${k} kcal ${p} grams protein">⌫</button>` +
+      `</div>`
     );
   }
-  let html = chips.join('');
-  const total = day && Number.isFinite(day.kcal) ? day.kcal : 0;
-  if (Math.round(mealsKcal) !== Math.round(total)) {
-    const earlier = Math.round(total - mealsKcal);
+
+  let html = `<div class="me-meals-head">TODAY'S MEALS</div>` + rows.join('');
+  if (Math.round(mealsKcal) !== Math.round(totalKcal)) {
+    const earlier = Math.round(totalKcal - mealsKcal);
     if (earlier > 0) html += `<span class="me-meal-note">+${earlier} kcal logged earlier</span>`;
   }
   elMeMeals.innerHTML = html;
@@ -895,13 +1201,17 @@ function renderQuickMeals(member) {
     const k = Math.round(m.kcal);
     const p = Number.isFinite(m.protein) ? Math.round(m.protein) : 0;
     const custom = (typeof m.label === 'string' && m.label.trim()) ? m.label.trim() : '';
+    const note = (typeof m.note === 'string' && m.note.trim()) ? m.note.trim() : '';
     const fig = `${k} / ${p}g`;
     const inner = custom
       ? `<span class="qm-label">${escapeHtml(custom)}</span><span class="qm-fig">${fig}</span>`
       : `<span class="qm-fig solo">${escapeHtml(fig)}</span>`;
+    // v4 (#7): the note rides on the title + aria-label (chip face stays compact).
+    const titleAttr = note ? ` title="${escapeHtml(note)}"` : '';
+    const ariaNote = note ? ` ${escapeHtml(note)}` : '';
     return (
-      `<button class="me-qm-chip" type="button" data-qm="${i}" ` +
-      `aria-label="log ${escapeHtml(custom || (k + ' kcal'))} ${k} kcal ${p} grams protein">` +
+      `<button class="me-qm-chip" type="button" data-qm="${i}"${titleAttr} ` +
+      `aria-label="log ${escapeHtml(custom || (k + ' kcal'))} ${k} kcal ${p} grams protein${ariaNote}">` +
       `${inner}</button>`
     );
   });
@@ -921,12 +1231,16 @@ function renderQuickMealManager(member) {
     const k = Math.round(m.kcal);
     const p = Number.isFinite(m.protein) ? Math.round(m.protein) : 0;
     const label = (typeof m.label === 'string' && m.label.trim()) ? m.label.trim() : `${k} kcal`;
+    const note = (typeof m.note === 'string' && m.note.trim()) ? m.note.trim() : '';
+    // v4 (#7): a note shows as a dim second line (the row wraps via .has-note).
+    const noteHtml = note ? `<span class="qm-row-note">${escapeHtml(note)}</span>` : '';
     return (
-      `<div class="me-qm-row${qmEditIdx === i ? ' editing' : ''}">` +
+      `<div class="me-qm-row${qmEditIdx === i ? ' editing' : ''}${note ? ' has-note' : ''}">` +
       `<span class="qm-row-label">${escapeHtml(label)}</span>` +
       `<span class="qm-row-fig">${k} / ${p}g</span>` +
       `<button class="qm-row-edit" type="button" data-qm-edit="${i}" aria-label="edit ${escapeHtml(label)}">edit</button>` +
       `<button class="qm-row-x" type="button" data-qm-rm="${i}" aria-label="remove ${escapeHtml(label)}">✕</button>` +
+      noteHtml +
       `</div>`
     );
   });
@@ -1003,6 +1317,38 @@ function renderGoal(member) {
   }
   for (const btn of elMeGoal.querySelectorAll('.me-seg-btn')) {
     btn.classList.toggle('on', btn.dataset.goal === goal);
+  }
+}
+
+// v4 (#6): the NUTRITION MODE 3-segment chooser (manual / protein / both) + one-line hint.
+function renderNutMode(member) {
+  if (!elMeNutMode) return;
+  const mode = nutritionModeOf(member);
+  if (!elMeNutMode.dataset.built) {
+    elMeNutMode.innerHTML = NUTRITION_MODES.map(
+      (m) => `<button class="me-seg-btn" type="button" data-nutmode="${m.key}">${m.label}</button>`
+    ).join('');
+    elMeNutMode.dataset.built = '1';
+  }
+  for (const btn of elMeNutMode.querySelectorAll('.me-seg-btn')) {
+    btn.classList.toggle('on', btn.dataset.nutmode === mode);
+  }
+  if (elMeNutModeHint) elMeNutModeHint.textContent = NUTMODE_HINT[mode] || '';
+}
+
+// v4 (#14): the personal-emoji picker — the curated set as tap targets, current marked.
+function renderEmojiPicker(member) {
+  if (!elMeEmoji) return;
+  if (!elMeEmoji.dataset.built) {
+    elMeEmoji.innerHTML = EMOJI_SET.map(
+      (e) => `<button class="me-emoji-btn" type="button" data-emoji="${escapeHtml(e)}" aria-label="set symbol ${escapeHtml(e)}">${escapeHtml(e)}</button>`
+    ).join('');
+    elMeEmoji.dataset.built = '1';
+  }
+  // the member's CURRENT symbol (chosen, or the deterministic id fallback) is marked.
+  const current = emojiOf({ emoji: member.emoji, id: idOf(member) });
+  for (const btn of elMeEmoji.querySelectorAll('.me-emoji-btn')) {
+    btn.classList.toggle('on', btn.dataset.emoji === current);
   }
 }
 
@@ -1130,7 +1476,10 @@ async function meLogQuickMeal(presetIdx) {
   const m = presets[presetIdx];
   if (!m) return;
   try {
-    await data.addMeal(cur, { kcal: m.kcal, protein: Number.isFinite(m.protein) ? m.protein : 0 });
+    // v4 (#8): carry the preset's label onto the meal element so TODAY'S MEALS names it.
+    const mealArg = { kcal: m.kcal, protein: Number.isFinite(m.protein) ? m.protein : 0 };
+    if (typeof m.label === 'string' && m.label.trim()) mealArg.label = m.label.trim();
+    await data.addMeal(cur, mealArg);
     await refetchMyDays();
     toast('meal logged');
   } catch (err) {
@@ -1227,6 +1576,11 @@ async function meSaveQuickMeal(fromSettings) {
     const label = nameEl.value.trim();
     if (label) preset.label = label;
   }
+  // v4 (#7): the optional note only exists in the SETTINGS registry form.
+  if (fromSettings && elMeQmNote) {
+    const note = elMeQmNote.value.trim();
+    if (note) preset.note = note;
+  }
   const current = savedMealsOf(me);
   const editing = fromSettings && qmEditIdx != null && qmEditIdx >= 0 && qmEditIdx < current.length;
   if (!editing && current.length >= 20) {
@@ -1248,6 +1602,7 @@ async function meSaveQuickMeal(fromSettings) {
       if (elMeQmKcal) elMeQmKcal.value = '';
       if (elMeQmProtein) elMeQmProtein.value = '';
       if (elMeQmLabel) elMeQmLabel.value = '';
+      if (elMeQmNote) elMeQmNote.value = '';
       qmEditIdx = null;
     } else if (elMeQmName) {
       elMeQmName.value = '';
@@ -1292,6 +1647,7 @@ function meEditQuickMeal(idx) {
   if (elMeQmKcal) elMeQmKcal.value = Number.isFinite(m.kcal) ? String(Math.round(m.kcal)) : '';
   if (elMeQmProtein) elMeQmProtein.value = Number.isFinite(m.protein) ? String(Math.round(m.protein)) : '';
   if (elMeQmLabel) elMeQmLabel.value = (typeof m.label === 'string') ? m.label : '';
+  if (elMeQmNote) elMeQmNote.value = (typeof m.note === 'string') ? m.note : ''; // v4 (#7)
   renderQuickMealManager(me); // highlight the editing row + flip SAVE->UPDATE
   if (elMeQmKcal) elMeQmKcal.focus();
 }
@@ -1302,6 +1658,7 @@ function meCancelQmEdit() {
   if (elMeQmKcal) elMeQmKcal.value = '';
   if (elMeQmProtein) elMeQmProtein.value = '';
   if (elMeQmLabel) elMeQmLabel.value = '';
+  if (elMeQmNote) elMeQmNote.value = ''; // v4 (#7)
   const me = memberById(myUserId);
   if (me) renderQuickMealManager(me);
   else syncQmEditUI();
@@ -1387,6 +1744,39 @@ async function meSetGoal(goal) {
   }
 }
 
+// v4 (#6): set the nutrition mode (SETTING). Reflects locally + repaints the board (the
+// mode changes the nutrition auto-check everywhere) and the ME card (tracks show/hide).
+async function meSetNutMode(mode) {
+  const me = memberById(myUserId);
+  if (!me) return;
+  try {
+    await data.setNutritionMode(mode);
+    me.nutritionMode = mode;
+    renderMe(anchoredNow());
+    renderGrid(anchoredNow());
+    toast('nutrition mode saved');
+  } catch (err) {
+    handleWriteError(err);
+    renderNutMode(me); // revert visual to truth
+  }
+}
+
+// v4 (#14): set the personal emoji (SETTING). Reflects locally + repaints the board header.
+async function meSetEmoji(emoji) {
+  const me = memberById(myUserId);
+  if (!me) return;
+  try {
+    await data.setEmoji(emoji);
+    me.emoji = emoji;
+    renderEmojiPicker(me);
+    renderGrid(anchoredNow());
+    toast('symbol saved');
+  } catch (err) {
+    handleWriteError(err);
+    renderEmojiPicker(me);
+  }
+}
+
 async function meToggleHideWeight() {
   const me = memberById(myUserId);
   if (!me) return;
@@ -1456,8 +1846,8 @@ function wireMe() {
     });
   if (elMeMeals)
     elMeMeals.addEventListener('click', (e) => {
-      const chip = e.target.closest('.me-meal-chip');
-      if (chip) meRemoveMeal(Number(chip.dataset.idx));
+      const x = e.target.closest('.me-meal-x');
+      if (x) meRemoveMeal(Number(x.dataset.idx));
     });
   // ---- TODAY: WORKOUT ----
   if (elMeWorkout) elMeWorkout.addEventListener('click', meToggleWorkout);
@@ -1485,6 +1875,12 @@ function wireMe() {
       if (btn) meSetGoal(btn.dataset.goal);
     });
   if (elMeSaveGoals) elMeSaveGoals.addEventListener('click', meSaveGoals);
+  // ---- SETTINGS: NUTRITION MODE (v4 #6) ----
+  if (elMeNutMode)
+    elMeNutMode.addEventListener('click', (e) => {
+      const btn = e.target.closest('.me-seg-btn');
+      if (btn) meSetNutMode(btn.dataset.nutmode);
+    });
   // ---- SETTINGS: QUICK MEALS manager ----
   if (elMeQmAdd) elMeQmAdd.addEventListener('click', () => meSaveQuickMeal(true));
   if (elMeQmCancel) elMeQmCancel.addEventListener('click', meCancelQmEdit);
@@ -1504,6 +1900,11 @@ function wireMe() {
   if (elMeSaveTypes) elMeSaveTypes.addEventListener('click', meSaveTypes);
   // ---- SETTINGS: PROFILE ----
   if (elMeHideWeight) elMeHideWeight.addEventListener('click', meToggleHideWeight);
+  if (elMeEmoji)
+    elMeEmoji.addEventListener('click', (e) => {
+      const btn = e.target.closest('.me-emoji-btn');
+      if (btn) meSetEmoji(btn.dataset.emoji);
+    });
   if (elMeSaveSettings) elMeSaveSettings.addEventListener('click', meSaveSettings);
 }
 
@@ -1516,56 +1917,144 @@ function toggleSettings() {
 }
 
 // =============================================================================
-// DAY DETAIL (tap ANY cell — own or other — read-only). v3.1: the editor is gone;
-// the grid is read-only, and ME edits TODAY only.
+// DAY POPOVER (v4 #13) — tap ANY cell -> a small read-only popover anchored beside the
+// cell (left/right via getBoundingClientRect, clamped inside the app column). Read-only;
+// dismisses on outside tap AND a ~5s auto-timeout. Replaces the old bottom-sheet.
 // =============================================================================
-function openSheet(sheet, backdrop) {
-  if (backdrop) backdrop.classList.remove('hidden');
-  if (sheet) sheet.classList.remove('hidden');
-}
-function closeSheet(sheet, backdrop) {
-  if (backdrop) backdrop.classList.add('hidden');
-  if (sheet) sheet.classList.add('hidden');
-}
+let daypopTimer = null; // the ~5s auto-dismiss timer
+let daypopOutsideHandler = null; // the document outside-tap listener (removed on close)
+let daypopOpen = false;
 
-function openDayDetail(member, dateKey) {
+function buildDayPopBody(member, dateKey) {
   const uid = idOf(member);
+  const subject = subjectOf(member);
   const days = effectiveDays(uid);
   const day = days[dateKey] || {};
   const wt = (weightsByUser.get(uid) || {})[dateKey];
 
-  if (elDayDetailTitle) elDayDetailTitle.textContent = displayNameOf(member);
-  if (elDayDetailSub) {
+  const line = (k, v, cls) =>
+    `<div class="dd-line${cls ? ' ' + cls : ''}"><span class="dd-k">${escapeHtml(k)}</span><span class="dd-v">${escapeHtml(v)}</span></div>`;
+
+  const lines = [];
+  // v4 (#1): off reads as "rest" (off and rest converge).
+  const workoutVal = day.workout === true ? 'yes' : (day.off === true || isRestDay(subject.restPattern, subject.perDateOverrides, dateKey)) ? 'rest' : 'no';
+  lines.push(line('Workout', workoutVal));
+  if (day.workout === true && day.workoutType && WTYPE_LABEL[day.workoutType]) {
+    lines.push(line('Type', WTYPE_LABEL[day.workoutType]));
+  }
+  // nutrition status for THIS day, mode-aware (read-only; never red).
+  const now = anchoredNow();
+  const cur = currentBusinessDate(now, subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
+  const ns = nutritionStatus(day, {
+    nutritionMode: subject.nutritionMode,
+    kcalGoal: subject.kcalGoal,
+    proteinGoal: subject.proteinGoal,
+    goal: subject.goal || 'maintain',
+    isPast: dateKey < cur,
+  });
+  lines.push(line('Nutrition', ns === 'hit' ? 'hit' : '—'));
+  if (Number.isFinite(day.kcal)) lines.push(line('Calories', `${day.kcal}`));
+  if (Number.isFinite(day.protein)) lines.push(line('Protein', `${day.protein}g`));
+  if (Number.isFinite(wt)) lines.push(line('Weight', `${wt} lb`)); // omit if hidden/absent
+
+  // v4 (#5): nutrition compliance % footer (30d). null => "—".
+  let nPct = null;
+  try {
+    const comp = computeCompliance(days, subject, now, { windowDays: COMPLIANCE_WINDOW_DAYS });
+    nPct = comp && comp.nutrition ? comp.nutrition.percent : null;
+  } catch (e) {
+    nPct = null;
+  }
+  lines.push(line('Nutrition 30d', nPct == null ? '—' : `${nPct}%`, 'dd-foot'));
+
+  return lines.join('');
+}
+
+function openDayPopover(member, dateKey, cellEl) {
+  if (!elDayPop) return;
+  const emoji = emojiOf({ emoji: member.emoji, id: idOf(member) });
+  if (elDayPopTitle) elDayPopTitle.innerHTML =
+    `<span aria-hidden="true">${escapeHtml(emoji)}</span><span>${escapeHtml(displayNameOf(member))}</span>`;
+  if (elDayPopSub) {
     const g = fmtDateGutter(dateKey);
-    elDayDetailSub.textContent = `${g.dow} ${g.md}`;
+    elDayPopSub.textContent = `${g.dow} ${g.md}`;
   }
-  if (elDayDetailBody) {
-    elDayDetailBody.classList.add('daydetail-body'); // pull in the .dd-line styling
-    const lines = [];
-    const workoutVal = day.workout === true ? 'yes' : day.off === true ? 'off' : 'no';
-    lines.push(line('Workout', workoutVal));
-    if (day.workout === true && day.workoutType && WTYPE_LABEL[day.workoutType]) {
-      lines.push(line('Type', WTYPE_LABEL[day.workoutType]));
-    }
-    lines.push(line('Nutrition', day.ate === true || day.macros === true ? 'hit' : '—'));
-    if (Number.isFinite(day.kcal)) lines.push(line('Calories', `${day.kcal}`));
-    if (Number.isFinite(day.protein)) lines.push(line('Protein', `${day.protein}g`));
-    if (Number.isFinite(wt)) lines.push(line('Weight', `${wt} lb`)); // omit if hidden/absent
-    elDayDetailBody.innerHTML = lines.join('');
-  }
-  openSheet(elDayDetail, elDayDetailBackdrop);
+  if (elDayPopBody) elDayPopBody.innerHTML = buildDayPopBody(member, dateKey);
 
-  function line(k, v) {
-    return `<div class="dd-line"><span class="dd-k">${escapeHtml(k)}</span><span class="dd-v">${escapeHtml(v)}</span></div>`;
+  // show first (so we can measure), then position beside the cell, clamped to #app.
+  elDayPop.classList.remove('hidden');
+  positionDayPop(cellEl);
+  daypopOpen = true;
+
+  // auto-dismiss after ~5s.
+  clearTimeout(daypopTimer);
+  daypopTimer = setTimeout(closeDayPopover, DAYPOP_AUTO_MS);
+
+  // dismiss on the NEXT outside tap (defer attach so the opening click doesn't close it).
+  removeDayPopOutside();
+  daypopOutsideHandler = (e) => {
+    if (elDayPop.contains(e.target)) return; // taps inside stay open
+    closeDayPopover();
+  };
+  setTimeout(() => {
+    if (daypopOpen) document.addEventListener('click', daypopOutsideHandler, true);
+  }, 0);
+}
+
+// Place the popover to the RIGHT of the cell if it fits, else LEFT, else clamp; vertically
+// align to the cell top, clamped within the app column. position:fixed (viewport coords).
+function positionDayPop(cellEl) {
+  if (!elDayPop || !cellEl || typeof cellEl.getBoundingClientRect !== 'function') return;
+  const appEl = document.getElementById('app');
+  const r = cellEl.getBoundingClientRect();
+  const appR = appEl ? appEl.getBoundingClientRect() : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight };
+  const gap = 6;
+  const popW = elDayPop.offsetWidth || 150;
+  const popH = elDayPop.offsetHeight || 120;
+
+  // horizontal: prefer right, else left, else clamp inside the app column.
+  let left;
+  if (r.right + gap + popW <= appR.right) {
+    left = r.right + gap;
+  } else if (r.left - gap - popW >= appR.left) {
+    left = r.left - gap - popW;
+  } else {
+    left = Math.max(appR.left + 4, Math.min(r.left, appR.right - popW - 4));
+  }
+  // vertical: align to the cell top, clamp within the app column.
+  let top = r.top;
+  const maxTop = appR.bottom - popH - 4;
+  const minTop = appR.top + 4;
+  top = Math.max(minTop, Math.min(top, maxTop));
+
+  // #app has transform:translateX(-50%) on wide viewports (>=500px), which makes it the
+  // containing block for #daypop's position:fixed. getBoundingClientRect gives VIEWPORT
+  // coords, so subtract the containing block's viewport origin to get correct local coords.
+  // On phones #app has no transform, so this subtraction is a no-op (appR.left/top ~= 0).
+  const isContained = appEl && getComputedStyle(appEl).transform !== 'none';
+  const ox = isContained ? appR.left : 0;
+  const oy = isContained ? appR.top : 0;
+
+  elDayPop.style.left = `${Math.round(left - ox)}px`;
+  elDayPop.style.top = `${Math.round(top - oy)}px`;
+}
+
+function removeDayPopOutside() {
+  if (daypopOutsideHandler) {
+    document.removeEventListener('click', daypopOutsideHandler, true);
+    daypopOutsideHandler = null;
   }
 }
 
-function closeDayDetail() {
-  closeSheet(elDayDetail, elDayDetailBackdrop);
+function closeDayPopover() {
+  if (elDayPop) elDayPop.classList.add('hidden');
+  daypopOpen = false;
+  clearTimeout(daypopTimer);
+  daypopTimer = null;
+  removeDayPopOutside();
 }
 
-// v3.1: the grid is READ-ONLY. Tapping ANY cell (own or other) opens the read-only
-// day-detail popup. No editing from the grid.
+// v4: the grid is READ-ONLY. Tapping ANY cell opens the read-only mini popover beside it.
 function onGridCellActivate(target) {
   const cell = target.closest && target.closest('.gcell');
   if (!cell) return;
@@ -1573,7 +2062,7 @@ function onGridCellActivate(target) {
   const dateKey = cell.dataset.date;
   if (!uid || !isDayKey(dateKey)) return;
   const member = memberById(uid);
-  if (member) openDayDetail(member, dateKey);
+  if (member) openDayPopover(member, dateKey, cell);
 }
 
 function wireGridTaps() {
@@ -1584,9 +2073,21 @@ function wireGridTaps() {
       onGridCellActivate(e.target);
     }
   });
-  // read-only detail wiring (the only sheet left).
-  if (elDayDetailClose) elDayDetailClose.addEventListener('click', closeDayDetail);
-  if (elDayDetailBackdrop) elDayDetailBackdrop.addEventListener('click', closeDayDetail);
+}
+
+// v4 (#3): the 30d/90d range toggle is a PURE re-render — the 90-day weights window is
+// already fetched (WEIGHT_WINDOW_DAYS=90), so switching never refetches.
+function wireWeightChart() {
+  if (!elWchartToggle) return;
+  elWchartToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('.wc-range');
+    if (!btn) return;
+    const r = Number(btn.dataset.range);
+    if (r !== 30 && r !== 90) return;
+    if (r === wchartRange) return;
+    wchartRange = r;
+    renderWeightChart(anchoredNow());
+  });
 }
 
 // =============================================================================
@@ -1877,6 +2378,7 @@ async function boot() {
   wireTabs();
   wireMe();
   wireGridTaps();
+  wireWeightChart();
   wireReclaim();
   wireError();
   document.addEventListener('visibilitychange', onVisibility);

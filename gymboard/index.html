@@ -40,10 +40,11 @@
     </div>
   </header>
 
-  <!-- ===== TAB STRIP: Me | Grid. v3.1: ME is first + default-active, GRID second. ===== -->
+  <!-- ===== TAB STRIP: Me | Social. v4: ME is first + default-active, SOCIAL second.
+       The internal id/data-tab stays 'grid' to minimize churn (label-only rename). ===== -->
   <nav id="tabs" aria-label="Sections">
     <button class="tab is-active" data-tab="me" aria-pressed="true">ME</button>
-    <button class="tab" data-tab="grid" aria-pressed="false">GRID</button>
+    <button class="tab" data-tab="grid" aria-pressed="false">SOCIAL</button>
   </nav>
 
   <!-- ===== STAGE: the two screens. ME is default-active; only the inner scroll regions scroll. ===== -->
@@ -64,19 +65,21 @@
         <!-- NUTRITION: done toggle (the simple path) + meal log + quick meals -->
         <div class="me-card">
           <div class="me-card-title">NUTRITION</div>
-          <div class="me-hint">Log meals to auto-check, or just mark it done.</div>
+          <div id="me-nut-hint" class="me-hint">Log meals to auto-check, or just mark it done.</div>
 
           <!-- the simple path: a "mark nutrition done" toggle (sets the manual `ate` override) -->
           <div class="me-row"><span class="me-label">Nutrition</span><button id="me-nutdone" class="me-toggle" type="button">mark done</button></div>
 
-          <!-- running totals + thin progress bars (filled green/neutral, NEVER red) -->
-          <div class="me-track-sep"></div>
+          <!-- running totals + thin progress bars (filled green/neutral, NEVER red).
+               v4 (#6): each track row is wrapped so renderMe can show/hide it per the
+               person's nutritionMode (manual hides both; protein hides calories). -->
+          <div id="me-nut-tracks-sep" class="me-track-sep"></div>
           <div class="me-track">
-            <div class="me-track-row">
+            <div id="me-cal-row" class="me-track-row">
               <div class="me-track-head"><span class="me-track-lbl">CALORIES</span><span id="me-cal-fig" class="me-track-fig"></span></div>
               <div class="me-progress"><span id="me-cal-bar" class="me-progress-fill"></span></div>
             </div>
-            <div class="me-track-row">
+            <div id="me-pro-row" class="me-track-row">
               <div class="me-track-head"><span class="me-track-lbl">PROTEIN</span><span id="me-pro-fig" class="me-track-fig"></span></div>
               <div class="me-progress"><span id="me-pro-bar" class="me-progress-fill"></span></div>
             </div>
@@ -141,6 +144,14 @@
               <button id="me-save-goals" class="me-save" type="button">save goals</button>
             </div>
 
+            <!-- NUTRITION MODE (v4 #6): how nutrition auto-checks for this person -->
+            <div class="me-card">
+              <div class="me-card-title">NUTRITION MODE</div>
+              <div class="me-hint">How a day's nutrition counts as done.</div>
+              <div id="me-nutmode" class="me-seg"></div>
+              <div id="me-nutmode-hint" class="me-hint" style="margin-top:10px;margin-bottom:0;"></div>
+            </div>
+
             <!-- REST DAYS -->
             <div class="me-card">
               <div class="me-card-title">REST DAYS</div>
@@ -157,6 +168,9 @@
                 <input id="me-qm-kcal" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="kcal">
                 <input id="me-qm-protein" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="protein g">
                 <input id="me-qm-label" class="me-input me-meal-in" type="text" maxlength="24" placeholder="label (optional)">
+              </div>
+              <div class="me-meal-add">
+                <input id="me-qm-note" class="me-input me-meal-in" type="text" maxlength="80" placeholder="note (optional)">
                 <button id="me-qm-add" class="me-meal-btn" type="button">SAVE</button>
                 <button id="me-qm-cancel" class="me-textbtn hidden" type="button">cancel</button>
               </div>
@@ -170,8 +184,8 @@
               <button id="me-save-types" class="me-save" type="button">save types</button>
             </div>
 
-            <!-- PROFILE -->
-            <div class="me-card">
+            <!-- PROFILE (v4 #10: me-profile scopes ALL inputs to one uniform width) -->
+            <div class="me-card me-profile">
               <div class="me-card-title">PROFILE</div>
               <div class="me-row me-row-input"><span class="me-label">Name</span><input id="me-name" class="me-input me-input-text" type="text" maxlength="24" placeholder="your name"></div>
               <div class="me-row"><span class="me-label">Day starts</span>
@@ -180,6 +194,11 @@
                 </label>
               </div>
               <div class="me-row"><span class="me-label">Hide my weight</span><button id="me-hideweight" class="me-toggle" type="button">shared</button></div>
+              <!-- v4 (#14): personal emoji picker — tap a curated symbol to set it -->
+              <div class="me-row me-row-stack">
+                <span class="me-label me-label-sub">Your symbol</span>
+                <div id="me-emoji" class="me-emoji-pick" aria-label="Pick your symbol"></div>
+              </div>
               <button id="me-save-settings" class="me-save" type="button">save profile</button>
             </div>
 
@@ -189,17 +208,34 @@
       </div>
     </section>
 
-    <!-- ---- GRID (read-only board; tap any cell -> read-only detail) ---- -->
-    <section id="screen-grid" class="screen" aria-label="Week grid" hidden>
+    <!-- ---- SOCIAL board (read-only; tap any cell -> read-only mini popover) ----
+         v4 order: head, legend (moved to TOP), grid scroller (flex:1), weight chart
+         (bottom third — placeholder for the chart phase). -->
+    <section id="screen-grid" class="screen" aria-label="Social board" hidden>
       <div id="grid-head">
         <div class="grid-title">THIS WEEK</div>
         <div id="grid-range" class="grid-range mono"></div>
       </div>
+      <!-- v4 (#11): legend at the TOP, with a labeled mini-cell diagram + color key. -->
+      <div class="grid-legend" id="grid-legend" aria-hidden="true"></div>
       <!-- CSS Grid (display:grid), NOT a <table>. Newest date at top. Built by ui.js. -->
       <div id="grid-scroll" class="scrolly">
         <div id="grid" role="table" aria-label="Week consistency grid"></div>
       </div>
-      <div class="grid-legend" id="grid-legend" aria-hidden="true"></div>
+      <!-- v4 (#3): weight-over-time chart. Pure inline-SVG line chart of every non-hidden
+           member's weight over the selected window; "me" in red, others in muted grays.
+           Occupies roughly the bottom third of the SOCIAL board. -->
+      <div id="social-chart" class="social-chart" aria-label="Weight over time">
+        <div class="wchart-head">
+          <span class="wchart-title">WEIGHT · <span id="wchart-range-label">30</span> DAYS</span>
+          <div class="wchart-toggle" id="wchart-toggle" role="group" aria-label="Chart range">
+            <button class="wc-range on" data-range="30" type="button" aria-pressed="true">30d</button>
+            <button class="wc-range" data-range="90" type="button" aria-pressed="false">90d</button>
+          </div>
+        </div>
+        <div id="wchart-svg" class="wchart-svg"></div>
+        <div id="wchart-empty" class="wchart-empty hidden">No shared weights yet.</div>
+      </div>
     </section>
 
   </main>
@@ -217,16 +253,13 @@
     <div id="reclaim-status" class="reclaim-status" aria-live="assertive"></div>
   </section>
 
-  <!-- ===== DAY DETAIL (tap ANY cell; read-only) ===== -->
-  <div id="daydetail-backdrop" class="hidden" aria-hidden="true"></div>
-  <section id="daydetail" class="hidden sheet" role="dialog" aria-modal="true" aria-labelledby="daydetail-title">
-    <div id="daydetail-title" class="sheet-title"></div>
-    <div id="daydetail-sub" class="sheet-sub"></div>
-    <div id="daydetail-body" class="sheet-body"></div>
-    <div class="sheet-actions">
-      <button id="daydetail-close" class="sheet-btn" type="button">close</button>
-    </div>
-  </section>
+  <!-- ===== DAY POPOVER (v4 #13: tap ANY cell; read-only mini popover anchored beside
+       the cell; no backdrop. Dismisses on outside tap and a ~5s auto-timeout). ===== -->
+  <div id="daypop" class="daypop hidden" role="dialog" aria-modal="false" aria-labelledby="daypop-title">
+    <div id="daypop-title" class="daypop-title"></div>
+    <div id="daypop-sub" class="daypop-sub"></div>
+    <div id="daypop-body" class="daypop-body"></div>
+  </div>
 
   <!-- ===== ERROR POPUP (app-chrome alert; MAY use red — this is chrome, not a nutrition state).
        Used for the rest-day-vs-workout mutual-exclusion block (and any future hard block). ===== -->
