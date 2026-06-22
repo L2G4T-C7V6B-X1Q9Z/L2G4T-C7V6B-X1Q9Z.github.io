@@ -518,6 +518,88 @@ export function weightTrend(weightsByDate, goal, asOfKey) {
   return { latestLb, dir, toward };
 }
 
+// ---- nutrition auto-check (derived from goals + running totals) --------------
+
+// Maintain band: kcal within +/-MAINTAIN_PCT of kcalGoal reads as on-target.
+// Stored once so the helper and its tests agree on the threshold (mirrors the
+// MAINTAIN_BAND_LB pattern weightTrend uses).
+const MAINTAIN_PCT = 0.1; // +/-10%
+
+/**
+ * nutritionStatus(day, opts) -> 'hit' | 'pending' | 'none'
+ *
+ * SPEC-v3 §2. Direction-aware nutrition auto-check derived from the day's running
+ * totals vs the member's goals. Nutrition NEVER uses red — these three values map
+ * to green (hit) / quiet fill (pending) / quiet gray (none), none of them red.
+ *
+ *   day  : the DayEntry { kcal?, protein?, ate?, macros?, ... } or undefined/null.
+ *   opts : { kcalGoal, proteinGoal, goal, isPast }
+ *          goal    : 'gain' | 'lose' | 'maintain' (anything else => 'maintain').
+ *          isPast  : true if dateKey < the subject's current business-date.
+ *                    The caller computes this via currentBusinessDate; this fn
+ *                    stays pure and only branches on the boolean.
+ *
+ * Returns:
+ *   'hit'     -> goals met (or manual override) — green.
+ *   'pending' -> today/future, not yet met — quiet fill (NEVER red).
+ *   'none'    -> a past day that never met goals — quiet gray (NEVER red).
+ *
+ * Order of resolution (see the §2 table + edge cases A-H):
+ *   1. Manual override: day.ate === true (or legacy day.macros === true) => 'hit'.
+ *      (Lets someone force a green when they ate well but didn't log numbers.)
+ *   2. Goals unset (kcalGoal/proteinGoal not BOTH finite): fall back to the manual
+ *      flag only — which already returned 'hit' at step 1 if set. So with no goals
+ *      and no manual flag => 'pending' (today/future) or 'none' (past). Never
+ *      auto-greens without goals. A half-configured user (only one goal set) is
+ *      treated as "goals not set" (edge E) to avoid an accidental silent pass.
+ *   3. Some intake required: kcal must be a finite number > 0. 0 kcal logged (or no
+ *      kcal at all) NEVER auto-checks — an empty day is not a "hit" (edge A).
+ *   4. Direction rule (K=kcal, P=protein||0, KG=kcalGoal, PG=proteinGoal):
+ *        lose     : K <= KG          AND P >= PG
+ *        gain     : K >= KG          AND P >= PG
+ *        maintain : |K - KG| <= band AND P >= PG     (band = MAINTAIN_PCT*KG)
+ *      The protein floor uses proteinGoal directly (both goals are finite here by
+ *      rule 2). Bounds are inclusive (<=/>=), so an exact-edge maintain day hits.
+ *   5. Direction rule met => 'hit'. Otherwise: isPast => 'none', else 'pending'.
+ *
+ * protein is treated as 0 when absent (so a kcal-only day can't pass the floor
+ * unless proteinGoal is 0). kcal absent/0 short-circuits at rule 3.
+ */
+export function nutritionStatus(day, opts = {}) {
+  const { kcalGoal, proteinGoal, goal, isPast } = opts;
+  const notMet = isPast ? 'none' : 'pending';
+
+  // 1. Manual override always wins (edges C, D). Legacy `macros` bool too.
+  if (day && (day.ate === true || day.macros === true)) return 'hit';
+
+  // 2. Both goals must be finite numbers to auto-check; else manual-only (edges
+  //    B, E). The manual flag already short-circuited above, so no goals => notMet.
+  if (!Number.isFinite(kcalGoal) || !Number.isFinite(proteinGoal)) return notMet;
+
+  // 3. Some real intake is required — an empty/0-kcal day never auto-greens (edge A).
+  const K = day && day.kcal;
+  if (!Number.isFinite(K) || K <= 0) return notMet;
+
+  const P = day && Number.isFinite(day.protein) ? day.protein : 0; // protein floor
+  const KG = kcalGoal;
+  const PG = proteinGoal;
+
+  // 4. Direction rule. Unknown goal falls back to maintain (matches weightTrend).
+  const proteinOk = P >= PG;
+  let calorieOk;
+  if (goal === 'lose') {
+    calorieOk = K <= KG;
+  } else if (goal === 'gain') {
+    calorieOk = K >= KG;
+  } else {
+    const band = MAINTAIN_PCT * KG; // maintain (and any unknown goal)
+    calorieOk = Math.abs(K - KG) <= band;
+  }
+
+  // 5. Both conditions => hit; otherwise past=>none, today/future=>pending (edge H).
+  return calorieOk && proteinOk ? 'hit' : notMet;
+}
+
 // ---- relative "last active" label --------------------------------------------
 
 const MIN_MS = 60 * 1000;

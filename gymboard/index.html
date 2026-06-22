@@ -52,15 +52,47 @@
     <section id="screen-me" class="screen" aria-label="Me" hidden>
       <div id="me-scroll" class="scrolly">
 
-        <!-- TODAY logging -->
+        <!-- TODAY tracker (the hero of the app: running food log + workout + weight) -->
         <div class="me-card">
-          <div class="me-card-title">TODAY</div>
+          <div class="me-card-title">TODAY<span id="me-today-date" class="me-card-date"></span></div>
+
+          <!-- running totals + thin progress bars (filled green/neutral, NEVER red) -->
+          <div class="me-track">
+            <div class="me-track-row">
+              <div class="me-track-head"><span class="me-track-lbl">CALORIES</span><span id="me-cal-fig" class="me-track-fig"></span></div>
+              <div class="me-progress"><span id="me-cal-bar" class="me-progress-fill"></span></div>
+            </div>
+            <div class="me-track-row">
+              <div class="me-track-head"><span class="me-track-lbl">PROTEIN</span><span id="me-pro-fig" class="me-track-fig"></span></div>
+              <div class="me-progress"><span id="me-pro-bar" class="me-progress-fill"></span></div>
+            </div>
+            <div id="me-nut-indicator" class="me-nut-indicator"></div>
+          </div>
+
+          <!-- add a meal: kcal + protein + ADD -->
+          <div class="me-meal-add">
+            <input id="me-add-kcal" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="kcal">
+            <input id="me-add-protein" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="protein g">
+            <button id="me-add-meal" class="me-meal-btn" type="button">ADD</button>
+          </div>
+          <div id="me-meals" class="me-meals" aria-label="Meals logged today"></div>
+
+          <!-- workout mark-done + optional type picker -->
+          <div class="me-track-sep"></div>
           <div class="me-row"><span class="me-label">Workout</span><button id="me-workout" class="me-toggle" type="button">mark done</button></div>
-          <div class="me-row"><span class="me-label">Nutrition</span><button id="me-ate" class="me-toggle" type="button">hit it</button></div>
-          <div class="me-row"><span class="me-label">Calories</span><input id="me-kcal" class="me-input" type="number" inputmode="numeric" placeholder="kcal"></div>
-          <div class="me-row"><span class="me-label">Protein</span><input id="me-protein" class="me-input" type="number" inputmode="numeric" placeholder="g"></div>
-          <div class="me-row"><span class="me-label">Weight</span><input id="me-weight" class="me-input" type="number" inputmode="decimal" placeholder="lb"></div>
-          <button id="me-save-log" class="me-save" type="button">save today</button>
+          <div class="me-row me-row-stack">
+            <span class="me-label me-label-sub">Type <span class="me-opt">(optional)</span></span>
+            <div id="me-wtype" class="me-typepick"></div>
+          </div>
+
+          <!-- ad-hoc rest day (surfaces the existing `off` flag) -->
+          <div class="me-track-sep"></div>
+          <button id="me-restday" class="me-restday-toggle" type="button">Make today a rest day</button>
+          <div class="me-hint me-restday-hint">A holiday or sick day. Today won't go red.</div>
+
+          <!-- weight quick-log -->
+          <div class="me-track-sep"></div>
+          <div class="me-row"><span class="me-label">Weight</span><input id="me-weight" class="me-input" type="number" inputmode="decimal" placeholder="lb"><button id="me-log-weight" class="me-meal-btn" type="button">LOG</button></div>
         </div>
 
         <!-- REST DAYS -->
@@ -70,11 +102,15 @@
           <div id="me-restdays" class="me-weekdays"></div>
         </div>
 
-        <!-- GOAL -->
+        <!-- GOAL (drives the weight arrow AND the nutrition auto-check direction) -->
         <div class="me-card">
           <div class="me-card-title">GOAL</div>
-          <div class="me-hint">Colors your weight trend arrow.</div>
+          <div class="me-hint">Colors your weight arrow and sets the nutrition direction.</div>
           <div id="me-goal" class="me-seg"></div>
+          <div class="me-row"><span class="me-label">Calorie goal</span><input id="me-kcalgoal" class="me-input" type="number" inputmode="numeric" placeholder="kcal"></div>
+          <div class="me-row"><span class="me-label">Protein goal</span><input id="me-proteingoal" class="me-input" type="number" inputmode="numeric" placeholder="g"></div>
+          <div class="me-hint">We auto-check nutrition when you hit these.</div>
+          <button id="me-save-goals" class="me-save" type="button">save goals</button>
         </div>
 
         <!-- PROFILE -->
@@ -113,10 +149,10 @@
       <span class="wt-sub"></span>
       <span class="wt-unsynced" aria-hidden="true" title="not yet synced"></span>
     </button>
-    <button id="macros-tile" class="workout-tile macros-tile" aria-label="Mark today's nutrition hit">
-      <span class="wt-label">MACROS</span>
-      <span class="wt-sub"></span>
-      <span class="wt-unsynced" aria-hidden="true" title="not yet synced"></span>
+    <!-- v3: "+ FOOD" jumps to ME and focuses the meal kcal input; it writes nothing. -->
+    <button id="food-tile" class="workout-tile food-tile" aria-label="Log a meal">
+      <span class="wt-label">+ FOOD</span>
+      <span class="wt-sub">log a meal</span>
     </button>
   </div>
 
@@ -140,6 +176,10 @@
     <div id="dayedit-date" class="sheet-sub"></div>
     <div class="sheet-body">
       <div class="me-row"><span class="me-label">Workout</span><button id="de-workout" class="me-toggle" type="button">done</button></div>
+      <div class="me-row me-row-stack">
+        <span class="me-label me-label-sub">Type <span class="me-opt">(optional)</span></span>
+        <div id="de-wtype" class="me-typepick"></div>
+      </div>
       <div class="me-row"><span class="me-label">Day off</span><button id="de-off" class="me-toggle" type="button">off</button></div>
       <div class="me-row"><span class="me-label">Nutrition</span><button id="de-ate" class="me-toggle" type="button">hit it</button></div>
       <div class="me-row"><span class="me-label">Calories</span><input id="de-kcal" class="me-input" type="number" inputmode="numeric" placeholder="kcal"></div>

@@ -56,11 +56,9 @@
   --st-missed:#9e342c;      /* workout MISSED (nutrition never uses red) */
   --st-rest:var(--g2);      /* workout REST — neutral */
   --st-off:var(--g3);       /* workout OFF — neutral + dash hint */
-  --st-none:#202020;        /* nutrition past-not-hit — quiet gray */
-  --st-pending:#141414;     /* faint fill under the pending hatch */
-  --st-divider:rgba(0,0,0,.72);
-  --st-divider-hi:rgba(255,255,255,.10);
-  --st-pending-line:rgba(120,120,120,.30);
+  --st-none:#202020;        /* nutrition past-not-hit — quiet gray (NEVER red) */
+  --st-pending:#141414;     /* flat quiet fill for pending/empty cells (no hatch) */
+  /* v3: the diagonal-divider + pending-hatch tokens are gone — cells are flat now. */
 }
 
 /* ============ BASE ============ */
@@ -357,20 +355,23 @@ button:disabled { cursor:default; }
 .gcell-corner { background:transparent; }
 .ghead {
   flex-direction:column; align-items:center; justify-content:flex-end; gap:3px;
-  min-height:98px; padding-bottom:4px;
+  min-height:64px; padding-bottom:4px;
   background:transparent; border:none; overflow:hidden;
 }
+/* v3: inline HORIZONTAL name (no vertical rotation), ellipsis-truncated in the
+   narrow column; the `title` attr carries the full name on hover/long-press. */
 .ghead-v {
-  writing-mode:vertical-rl; text-orientation:mixed; transform:rotate(180deg);
   font-size:10px; font-weight:700; letter-spacing:.04em; color:var(--txt3);
-  text-transform:uppercase; max-height:66px; overflow:hidden; white-space:nowrap;
+  text-transform:uppercase; max-width:100%; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; writing-mode:horizontal-tb; transform:none;
 }
 .ghead.me .ghead-v { color:var(--red); }
 
 /* ---- under-name stat stack: flame+streak / weight+arrow / last-active ---- */
 .gh-stack { display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.2; max-width:100%; }
 .gh-streak { font-size:8.5px; font-weight:700; color:var(--txt2); white-space:nowrap; }
-.gh-flame { font-size:8px; margin-right:1px; }
+/* v3: a tiny monochrome pip before the streak number (NO fire emoji). */
+.gh-streak-pip { display:inline-block; width:3px; height:3px; border-radius:50%; background:var(--txt3); margin-right:3px; vertical-align:middle; }
 .gh-wt { font-size:8.5px; color:var(--txt2); font-variant-numeric:tabular-nums lining-nums; white-space:nowrap; }
 .gh-arrow { margin-left:1px; font-size:8px; font-weight:700; }
 .gh-active { font-size:8px; color:var(--txt3); white-space:nowrap; }
@@ -407,18 +408,23 @@ button:disabled { cursor:default; }
 .gdate.today { color:var(--txt); }
 .gdate.today .gdate-dow { color:var(--red); }
 
-/* ---- grid status CELLS: status palette + SHAPE (11px-safe, grayscale-safe) ---- */
-/* ---- v2 diagonal-split cell: UL triangle = workout (--w), LR triangle = nutrition (--n) ---- */
+/* ---- grid status CELLS: V1 HORIZONTAL split (flat, no diagonal, no hatch) ---- */
+/* top band = WORKOUT (--w), bottom band = NUTRITION (--n), 1px var(--g0) divider.
+   Geometry copied from `.v1 .cell` in _design/candidates-v3.html (Soren's pick). */
 .gcell {
   position:relative; aspect-ratio:1 / 1; min-height:40px;
   border-radius:var(--r-sm); border:1px solid var(--hairline);
   overflow:hidden; color:transparent;
   --w:var(--g2); --n:var(--g2);
-  background:
-    linear-gradient(135deg, transparent calc(50% - 1.4px), var(--st-divider-hi) calc(50% - 1.4px), var(--st-divider-hi) calc(50% - 0.7px), transparent calc(50% - 0.7px)),
-    linear-gradient(135deg, transparent calc(50% - 0.7px), var(--st-divider) calc(50% - 0.7px), var(--st-divider) calc(50% + 0.7px), transparent calc(50% + 0.7px)),
-    conic-gradient(from 135deg at 50% 50%, var(--n) 0 180deg, transparent 180deg 360deg),
-    var(--w);
+  background:var(--st-pending); /* flat fill behind the two bands */
+}
+.gcell .seg-w {
+  position:absolute; left:0; right:0; top:0; height:56%;
+  background:var(--w);
+}
+.gcell .seg-n {
+  position:absolute; left:0; right:0; bottom:0; height:44%;
+  background:var(--n); border-top:1px solid var(--g0);
 }
 .gcell.w-done    { --w:var(--st-done); }
 .gcell.w-missed  { --w:var(--st-missed); }
@@ -428,12 +434,17 @@ button:disabled { cursor:default; }
 .gcell.n-hit     { --n:var(--st-done); }
 .gcell.n-none    { --n:var(--st-none); }
 .gcell.n-pending { --n:var(--st-pending); }
-.gcell.w-off::before { content:''; position:absolute; z-index:3; top:34%; left:34%; transform:translate(-50%,-50%) rotate(-45deg); width:9px; height:1.5px; background:var(--txt3); border-radius:1px; }
-.gcell .pend-w, .gcell .pend-n { position:absolute; inset:0; z-index:2; pointer-events:none; }
-.gcell.w-pending .pend-w { background:repeating-linear-gradient(135deg, transparent 0 3px, var(--st-pending-line) 3px 4px); -webkit-mask:conic-gradient(from -45deg at 50% 50%, #000 0 90deg, transparent 90deg); mask:conic-gradient(from -45deg at 50% 50%, #000 0 90deg, transparent 90deg); }
-.gcell.n-pending .pend-n { background:repeating-linear-gradient(135deg, transparent 0 3px, var(--st-pending-line) 3px 4px); -webkit-mask:conic-gradient(from 135deg at 50% 50%, #000 0 90deg, transparent 90deg); mask:conic-gradient(from 135deg at 50% 50%, #000 0 90deg, transparent 90deg); }
+/* OFF keeps a single neutral tick (a tick, not a hatch) — reads as "excused". */
+.gcell.w-off .seg-w::before { content:''; position:absolute; z-index:3; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-45deg); width:9px; height:1.5px; background:var(--txt3); border-radius:1px; }
+/* tiny dim corner tag for a typed workout — decoration only, never colored red. */
+.gcell-wtag {
+  position:absolute; top:1px; right:2px; z-index:3;
+  font-size:7px; font-weight:700; line-height:1; letter-spacing:0;
+  color:var(--txt3); font-family:var(--font-mono);
+  -webkit-text-stroke:0; pointer-events:none;
+}
 .gcell.prejoin { --w:var(--g1); --n:var(--g1); border-color:var(--hairline); clip-path:polygon(9px 0, 100% 0, 100% 100%, 0 100%, 0 9px); }
-.gcell.prejoin .pend-w, .gcell.prejoin .pend-n, .gcell.prejoin.w-off::before { display:none; }
+.gcell.prejoin .seg-w::before, .gcell.prejoin .gcell-wtag { display:none; }
 .gcell.me { box-shadow:inset 2px 0 0 var(--red); }
 
 /* grid legend strip */
@@ -444,34 +455,15 @@ button:disabled { cursor:default; }
   border-top:1px solid var(--hairline); background:var(--g1);
 }
 .leg { display:inline-flex; align-items:center; gap:6px; font-size:9px; letter-spacing:.06em; color:var(--txt3); text-transform:uppercase; }
-.leg .swatch {
-  width:16px; height:16px; border-radius:4px; flex:0 0 auto; position:relative; overflow:hidden;
-  border:1px solid var(--hairline); --w:var(--g2); --n:var(--g2);
-  background:
-    linear-gradient(135deg, transparent calc(50% - 1.2px), var(--st-divider-hi) calc(50% - 1.2px), var(--st-divider-hi) calc(50% - 0.6px), transparent calc(50% - 0.6px)),
-    linear-gradient(135deg, transparent calc(50% - 0.6px), var(--st-divider) calc(50% - 0.6px), var(--st-divider) calc(50% + 0.6px), transparent calc(50% + 0.6px)),
-    conic-gradient(from 135deg at 50% 50%, var(--n) 0 180deg, transparent 180deg 360deg),
-    var(--w);
-}
-.leg .swatch.w-done { --w:var(--st-done); }
-.leg .swatch.w-missed { --w:var(--st-missed); }
-.leg .swatch.w-rest { --w:var(--st-rest); }
-.leg .swatch.w-off { --w:var(--st-off); }
-.leg .swatch.w-pending { --w:var(--st-pending); }
-.leg .swatch.n-hit { --n:var(--st-done); }
-.leg .swatch.n-none { --n:var(--st-none); }
-.leg .swatch.n-pending { --n:var(--st-pending); }
 
-/* legend uses .leg-cell (same diagonal as the real cell, hatch omitted) */
+/* legend uses .leg-cell — the SAME horizontal split as the real grid cell. */
 .leg-cell {
   width:16px; height:16px; border-radius:4px; flex:0 0 auto; position:relative; overflow:hidden;
   border:1px solid var(--hairline); --w:var(--g2); --n:var(--g2);
-  background:
-    linear-gradient(135deg, transparent calc(50% - 1.2px), var(--st-divider-hi) calc(50% - 1.2px), var(--st-divider-hi) calc(50% - 0.6px), transparent calc(50% - 0.6px)),
-    linear-gradient(135deg, transparent calc(50% - 0.6px), var(--st-divider) calc(50% - 0.6px), var(--st-divider) calc(50% + 0.6px), transparent calc(50% + 0.6px)),
-    conic-gradient(from 135deg at 50% 50%, var(--n) 0 180deg, transparent 180deg 360deg),
-    var(--w);
+  background:var(--st-pending);
 }
+.leg-cell .seg-w { position:absolute; left:0; right:0; top:0; height:56%; background:var(--w); }
+.leg-cell .seg-n { position:absolute; left:0; right:0; bottom:0; height:44%; background:var(--n); border-top:1px solid var(--g0); }
 .leg-cell.w-done { --w:var(--st-done); }
 .leg-cell.w-missed { --w:var(--st-missed); }
 .leg-cell.w-rest { --w:var(--st-rest); }
@@ -480,7 +472,6 @@ button:disabled { cursor:default; }
 .leg-cell.n-hit { --n:var(--st-done); }
 .leg-cell.n-none { --n:var(--st-none); }
 .leg-cell.n-pending { --n:var(--st-pending); }
-.leg-cell .pend-w, .leg-cell .pend-n { display:none; }
 
 /* ============ LOUD RECLAIM MODAL ============ */
 #reclaim-backdrop {
@@ -575,11 +566,13 @@ button:disabled { cursor:default; }
    (Diagonal grid cell CSS is integrated separately.)
    ============================================================================ */
 
-/* ---- two-button action bar: WORKOUT | MACROS ---- */
+/* ---- two-button action bar: WORKOUT | + FOOD ---- */
 #action.action-2 { display:flex; gap:10px; }
-.action-2 .workout-tile { flex:1; width:auto; height:72px; }
+.action-2 .workout-tile { flex:1; width:auto; height:72px; box-shadow:0 6px 18px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04); }
 .action-2 .workout-tile .wt-label { font-size:17px; letter-spacing:.16em; }
-/* MACROS shares .workout-tile; .done flips it green just like WORKOUT (same green). */
+/* "+ FOOD" is a neutral shortcut tile (writes nothing) — never flips green/red. */
+.food-tile .wt-label { color:var(--txt2); }
+.food-tile:active:not(:disabled) { background:var(--g4); }
 
 /* ---- ME page ---- */
 #me-scroll { flex:1 1 auto; min-height:0; padding:10px 12px 16px; overflow-y:auto; }
@@ -593,20 +586,70 @@ button:disabled { cursor:default; }
 .me-input:focus { outline:none; border-color:var(--red-wash-bd); }
 .me-input-sm { width:52px; text-align:center; }
 .me-suffix { font-size:12px; color:var(--txt3); margin-left:-4px; }
-.me-toggle { min-width:96px; height:34px; padding:0 14px; background:var(--g3); border:1px solid var(--bd); border-radius:999px; color:var(--txt2); font-family:var(--font-mono); font-size:11.5px; font-weight:700; letter-spacing:.08em; transition:background 140ms ease, color 140ms ease, border-color 140ms ease; }
+/* v3 restyle: softer radius (--r-sm, not 999px pills), hairline borders, less noise. */
+.me-toggle { min-width:96px; height:34px; padding:0 14px; background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm); color:var(--txt2); font-family:var(--font-mono); font-size:11.5px; font-weight:700; letter-spacing:.04em; transition:background 140ms ease, color 140ms ease, border-color 140ms ease; }
 .me-toggle:active { transform:scale(.97); }
 .me-toggle.on { background:#1f7a4d; border-color:#1f7a4d; color:#eafaf1; }
 .me-toggle.neutral-on { background:var(--g4); border-color:var(--etch); color:var(--txt); }
 /* day-off in the editor is "excused", not "earned" — neutral, never the done-green */
 #de-off.on { background:var(--g4); border-color:var(--etch); color:var(--txt); }
-.me-save { width:100%; height:42px; margin-top:12px; background:var(--ctl-grad); border:1px solid var(--bd); border-radius:var(--r-md); color:var(--txt); font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:.12em; }
-.me-save:active { transform:scale(.99); background:var(--g4); }
+.me-save { width:100%; height:42px; margin-top:12px; background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm); color:var(--txt); font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:.1em; }
+.me-save:active { transform:scale(.99); background:var(--g3); }
 .me-weekdays { display:flex; gap:6px; }
 .me-weekday { flex:1; height:40px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:11px; font-weight:700; }
+/* rest-day selection is NEUTRAL (rest isn't an accent state). */
 .me-weekday.rest { background:var(--g3); border-color:var(--etch); color:var(--txt); }
 .me-seg { display:flex; gap:6px; }
-.me-seg-btn { flex:1; height:40px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:11.5px; font-weight:700; letter-spacing:.06em; }
+.me-seg-btn { flex:1; height:40px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:11.5px; font-weight:700; letter-spacing:.04em; }
+/* GOAL uses the red-wash accent for its active segment (it's a chrome control). */
 .me-seg-btn.on { background:var(--red-wash); border-color:var(--red-wash-bd); color:var(--red); }
+
+/* ---- v3 ME TODAY tracker: progress bars, meal form, meal chips, type picker ---- */
+.me-card-date { font-weight:400; color:var(--txt3); letter-spacing:.02em; }
+.me-track { margin-bottom:12px; }
+.me-track-row { margin-bottom:10px; }
+.me-track-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:5px; }
+.me-track-lbl { font-size:10px; font-weight:700; letter-spacing:.12em; color:var(--txt3); }
+.me-track-fig { font-size:12px; font-weight:700; color:var(--txt); font-variant-numeric:tabular-nums lining-nums; }
+/* the thin progress track + fill — fill is green/neutral, NEVER red (even over goal). */
+.me-progress { height:3px; border-radius:2px; background:var(--g3); overflow:hidden; }
+.me-progress-fill { display:block; height:100%; width:0%; background:var(--st-done); opacity:.7; transition:width 220ms var(--ease-out); }
+.me-progress-fill.full { opacity:.9; }
+/* nutrition indicator (HIT / on track / pending) — green for hit, muted otherwise. */
+.me-nut-indicator { font-size:10.5px; font-weight:700; letter-spacing:.08em; color:var(--txt3); }
+.me-nut-indicator.hit { color:var(--st-done); }
+.me-nut-indicator.pending { color:var(--txt3); }
+.me-track-sep { height:1px; background:var(--hairline); margin:12px 0; }
+
+/* add-meal form: two inputs + ADD */
+.me-meal-add { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+.me-meal-in { flex:1; width:auto; min-width:0; text-align:left; }
+.me-meal-btn { flex:0 0 auto; height:34px; padding:0 14px; border-radius:var(--r-sm); background:var(--red); border:1px solid var(--red); color:#fff; font-family:var(--font-mono); font-size:11.5px; font-weight:700; letter-spacing:.06em; }
+.me-meal-btn:active:not(:disabled) { filter:brightness(.9); }
+.me-meal-btn:disabled { opacity:.5; }
+
+/* meals-today list: compact chips (newest first), tap-to-remove */
+.me-meals { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:0; }
+.me-meal-chip { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 8px 0 10px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:10.5px; font-weight:700; font-variant-numeric:tabular-nums lining-nums; }
+.me-meal-chip:active { background:var(--g3); }
+.me-chip-fig { letter-spacing:.02em; }
+.me-chip-x { color:var(--txt3); font-size:11px; }
+.me-meal-note { font-size:10px; color:var(--txt3); letter-spacing:.02em; }
+
+/* workout-type picker (ME today + day editor): 7 small segmented buttons that wrap */
+.me-row-stack { flex-direction:column; align-items:stretch; gap:6px; }
+.me-label-sub { flex:0 0 auto; font-size:11px; color:var(--txt2); }
+.me-opt { color:var(--txt3); font-weight:400; }
+.me-typepick { display:flex; flex-wrap:wrap; gap:5px; }
+.me-type-btn { flex:1 1 auto; min-width:46px; height:30px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:10.5px; font-weight:700; letter-spacing:.02em; }
+/* a chosen type uses the neutral filled face (workout type isn't an accent). */
+.me-type-btn.on { background:var(--g4); border-color:var(--etch); color:var(--txt); }
+
+/* "make today a rest day" toggle — neutral, full-width, never green/red. */
+.me-restday-toggle { width:100%; height:40px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:.06em; }
+.me-restday-toggle.on { background:var(--g4); border-color:var(--etch); color:var(--txt); }
+.me-restday-toggle:active { transform:scale(.99); }
+.me-restday-hint { margin-top:8px; margin-bottom:0; }
 
 /* ---- bottom-sheet modals (day editor + read-only detail) ---- */
 #dayedit-backdrop, #daydetail-backdrop { position:absolute; inset:0; z-index:100; background:rgba(0,0,0,.78); animation:fadein 160ms ease; }

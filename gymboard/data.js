@@ -101,6 +101,12 @@ const LS_OFFSET = 'gymboard.serverOffsetMs';
 
 const TOKEN_RE = /^[0-9a-f]{32}$/; // rules: ^[0-9a-f]{32}$ (128-bit hex), pre-get shape gate
 
+// v3: the optional workout-type enum (lowercase storage, matches the rule's
+// `workoutType in [...]` check). Defined up here (not next to VALID_GOALS below)
+// because commitWorkoutBatch references it; const hoisting is fine since the
+// batch only runs at call time, but a top-level decl keeps it unambiguous.
+const WORKOUT_TYPES = ['upper', 'lower', 'push', 'pull', 'legs', 'full', 'cardio'];
+
 // =============================================================================
 // small internal helpers
 // =============================================================================
@@ -754,13 +760,21 @@ function rollupUpdateFields(businessDate, done, streakCache) {
  * Both stamped with serverTimestamp via the day doc's updatedAt (the rule
  * requires updatedAt == request.time on the day cell).
  */
-async function commitWorkoutBatch(userId, businessDate, done, streakCache) {
+async function commitWorkoutBatch(userId, businessDate, done, streakCache, workoutType) {
   const batch = writeBatch(_db);
   const dayRef = doc(_db, 'users', userId, 'days', businessDate);
   const userRef = doc(_db, 'users', userId);
 
-  // merge so we never clobber splitLabel/macros/off set by other flows.
-  batch.set(dayRef, { workout: done, updatedAt: serverTimestamp() }, { merge: true });
+  // merge so we never clobber ate/kcal/protein/meals/off set by other flows.
+  const dayPatch = { workout: done, updatedAt: serverTimestamp() };
+  // v3: a typed mark-done also stamps the (lowercase enum) workoutType. Only on a
+  // DONE mark — undo (done===false) leaves whatever type is there (clearing a type
+  // on a non-trained day is cosmetic; we skip it). Validated against the enum so a
+  // bad value never reaches the rule's `in [...]` check.
+  if (done && workoutType && WORKOUT_TYPES.includes(workoutType)) {
+    dayPatch.workoutType = workoutType;
+  }
+  batch.set(dayRef, dayPatch, { merge: true });
   batch.update(userRef, rollupUpdateFields(businessDate, done, streakCache));
 
   await batch.commit();
@@ -796,10 +810,14 @@ export async function markWorkout(userId, businessDate, done, opts = {}) {
   }
   const value = done !== false; // coerce to bool; default true
   const streakCache = Number.isFinite(opts.streakCache) ? opts.streakCache : undefined;
+  // v3: optional workout type, validated against the enum (ignored on undo).
+  const workoutType =
+    value && opts.workoutType && WORKOUT_TYPES.includes(opts.workoutType) ? opts.workoutType : undefined;
   const key = outboxKey(id, businessDate, 'workout');
 
   // Record intent in the durable outbox BEFORE the attempt, so a crash mid-flight
-  // still replays. Idempotent upsert keyed on (user,date,workout).
+  // still replays. Idempotent upsert keyed on (user,date,workout). The workoutType
+  // rides along so an offline-queued typed workout replays WITH its type.
   enqueueOutbox({
     key,
     userId: id,
@@ -807,12 +825,13 @@ export async function markWorkout(userId, businessDate, done, opts = {}) {
     field: 'workout',
     value,
     streakCache,
+    workoutType,
     authoredAtMs: anchoredNow(),
   });
 
   const sentAt = Date.now();
   try {
-    await commitWorkoutBatch(id, businessDate, value, streakCache);
+    await commitWorkoutBatch(id, businessDate, value, streakCache, workoutType);
     dequeueOutbox(key);
     // Refine offset from the day doc's resolved updatedAt (best-effort).
     try {
@@ -863,7 +882,7 @@ async function flushOutbox() {
         continue;
       }
       try {
-        await commitWorkoutBatch(item.userId, item.businessDate, item.value, item.streakCache);
+        await commitWorkoutBatch(item.userId, item.businessDate, item.value, item.streakCache, item.workoutType);
         dequeueOutbox(item.key);
       } catch (err) {
         if (isPermissionDenied(err)) {
@@ -1114,15 +1133,183 @@ export async function setMacros(businessDate, macros = {}) {
 // setDayOff Ã¢â‚¬â€ toggle the one-off day-off flag on own day cell
 // =============================================================================
 
+const MAX_MEALS_PER_DAY = 50; // matches the rule's meals.size() <= 50 cap.
+
+/**
+ * addMeal(businessDate, { kcal, protein }) -> Promise<void>
+ *
+ * READ-MODIFY-WRITE a meal onto the bound owner's own day cell (SPEC-v3 §3):
+ *   1. getDoc the day cell.
+ *   2. newKcal = (existing.kcal||0)+mealKcal, newProtein = (existing.protein||0)+
+ *      mealProtein, newMeals = (existing.meals||[]).concat([{kcal,protein,at}]).
+ *      `at` is a CLIENT-clocked Timestamp.fromMillis(anchoredNow()) because
+ *      Firestore forbids serverTimestamp() sentinels INSIDE array elements; it's
+ *      server-anchored via the offset (within seconds) and display-only.
+ *   3. set(merge) { kcal, protein, meals, updatedAt:serverTimestamp() } + a
+ *      lastActive bump, in one atomic 2-write batch (this is a LOG action).
+ *
+ * Validation: meal kcal 0..10000 (REQUIRED, > 0), protein 0..1000 (optional => 0).
+ * Rejects 'gymboard/bad-value' if the RESULTING total would exceed 10000/1000
+ * ("daily total too high") or if meals.length >= 50 ("too many meals today").
+ *
+ * NOT outbox-queued: a queued meal-add would replay against a stale base and
+ * double-count, so meal-add is online-only (Firestore's offline cache still queues
+ * the single set; we surface any error so ui.js can react — SPEC §3).
+ */
+export async function addMeal(businessDate, meal = {}) {
+  assertInit();
+  const id = _userId;
+  if (!id) throw taggedError('gymboard/not-bound', 'addMeal: no bound userId.');
+  if (!isDayKey(businessDate)) {
+    throw taggedError('gymboard/bad-date', `addMeal: businessDate not a day-key: ${businessDate}`);
+  }
+  if (!meal || typeof meal !== 'object') {
+    throw taggedError('gymboard/bad-value', 'addMeal: meal must be { kcal, protein? }.');
+  }
+
+  const mealKcal = validateNumber(meal.kcal, 0, 10000, 'meal kcal', 0);
+  if (!(mealKcal > 0)) {
+    throw taggedError('gymboard/bad-value', 'addMeal: a meal needs some calories.');
+  }
+  const mealProtein =
+    meal.protein === undefined || meal.protein === null
+      ? 0
+      : validateNumber(meal.protein, 0, 1000, 'meal protein', 0);
+
+  const dayRef = doc(_db, 'users', id, 'days', businessDate);
+
+  let snap;
+  try {
+    snap = await getDoc(dayRef);
+  } catch (err) {
+    if (maybeFireReclaim(err)) {
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected - this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+  const existing = snap.exists() ? snap.data() : {};
+  const prevMeals = Array.isArray(existing.meals) ? existing.meals : [];
+
+  if (prevMeals.length >= MAX_MEALS_PER_DAY) {
+    throw taggedError('gymboard/bad-value', 'too many meals today');
+  }
+
+  const newKcal = (Number.isFinite(existing.kcal) ? existing.kcal : 0) + mealKcal;
+  const newProtein = (Number.isFinite(existing.protein) ? existing.protein : 0) + mealProtein;
+  if (newKcal > 10000) {
+    throw taggedError('gymboard/bad-value', 'daily total too high (calories)');
+  }
+  if (newProtein > 1000) {
+    throw taggedError('gymboard/bad-value', 'daily total too high (protein)');
+  }
+
+  const at = Timestamp.fromMillis(anchoredNow()); // the one client-clocked field.
+  const newMeals = prevMeals.concat([{ kcal: mealKcal, protein: mealProtein, at }]);
+
+  const batch = writeBatch(_db);
+  batch.set(
+    dayRef,
+    { kcal: newKcal, protein: newProtein, meals: newMeals, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+  bumpLastActiveInBatch(batch, id);
+
+  const sentAt = Date.now();
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected - this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+  try {
+    const after = await getDoc(dayRef);
+    const ts = after.exists() ? after.data().updatedAt : null;
+    if (ts instanceof Timestamp) refineOffsetFromServerTimestamp(ts, sentAt);
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+/**
+ * removeMeal(businessDate, index) -> Promise<void>
+ *
+ * READ-MODIFY-WRITE: drop meals[index], recompute scalar kcal/protein as the SUM of
+ * the REMAINING array (re-summing, not subtraction, self-heals any prior drift).
+ * Write back { kcal, protein, meals, updatedAt } + a lastActive bump.
+ *
+ * Caveat (SPEC §3): a day whose total included a pre-array manual number loses that
+ * amount on the first remove (the array never held it). Acceptable for a ~5-person
+ * app; the day editor can re-set the number. Empty array => totals go to 0.
+ */
+export async function removeMeal(businessDate, index) {
+  assertInit();
+  const id = _userId;
+  if (!id) throw taggedError('gymboard/not-bound', 'removeMeal: no bound userId.');
+  if (!isDayKey(businessDate)) {
+    throw taggedError('gymboard/bad-date', `removeMeal: businessDate not a day-key: ${businessDate}`);
+  }
+  const idx = Number(index);
+  if (!Number.isInteger(idx) || idx < 0) {
+    throw taggedError('gymboard/bad-value', `removeMeal: bad index ${index}.`);
+  }
+
+  const dayRef = doc(_db, 'users', id, 'days', businessDate);
+  let snap;
+  try {
+    snap = await getDoc(dayRef);
+  } catch (err) {
+    if (maybeFireReclaim(err)) {
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected - this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+  const existing = snap.exists() ? snap.data() : {};
+  const prevMeals = Array.isArray(existing.meals) ? existing.meals : [];
+  if (idx >= prevMeals.length) {
+    throw taggedError('gymboard/bad-value', `removeMeal: index ${idx} out of range.`);
+  }
+
+  const newMeals = prevMeals.slice(0, idx).concat(prevMeals.slice(idx + 1));
+  let newKcal = 0;
+  let newProtein = 0;
+  for (const mDoc of newMeals) {
+    if (mDoc && Number.isFinite(mDoc.kcal)) newKcal += mDoc.kcal;
+    if (mDoc && Number.isFinite(mDoc.protein)) newProtein += mDoc.protein;
+  }
+
+  const batch = writeBatch(_db);
+  batch.set(
+    dayRef,
+    { kcal: newKcal, protein: newProtein, meals: newMeals, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+  bumpLastActiveInBatch(batch, id);
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected - this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+}
+
+
+// =============================================================================
+// setDayOff - toggle the one-off day-off flag on own day cell
+// =============================================================================
+
 /**
  * setDayOff(businessDate, off) -> Promise<void>
  *
  * Toggle the one-off `off` flag on the bound owner's own day cell (a day off is
- * NOT a miss; logic.missed() honors it). This is a LOG action, so it bumps
- * lastActiveAt in the same batch:
- *   write 1: set /users/{me}/days/{bizDate} { off, updatedAt } (merge)
- *   write 2: set /users/{me}            { lastActiveAt }        (merge)
- * Merge-safe: leaves workout/ate/kcal/protein untouched. `off` is coerced bool.
+ * NOT a miss; logic.missed() honors it). LOG action; bumps lastActiveAt.
+ * Merge-safe: leaves workout/ate/kcal/protein/meals untouched. `off` coerced bool.
  */
 export async function setDayOff(businessDate, off) {
   assertInit();
@@ -1240,6 +1427,34 @@ export async function setGoal(goal) {
     throw taggedError('gymboard/bad-value', `setGoal: goal must be one of ${VALID_GOALS.join('/')}.`);
   }
   await updateOwnUser({ goal }, 'setGoal');
+}
+
+/**
+ * setNutritionGoals({ kcalGoal?, proteinGoal? }) -> Promise<void>
+ *
+ * v3: set the daily calorie + protein goals on own user doc. These drive the
+ * nutritionStatus() auto-check (direction comes from `goal`). One combined writer so
+ * changing both in the GOAL card costs one round-trip. Validation: kcalGoal
+ * 800..10000, proteinGoal 0..500 (both integers via validateNumber). At least one
+ * must be provided. This is a SETTING, so it does NOT bump lastActiveAt (consistent
+ * with setGoal/setRollover). Only the provided keys are written (merge), so setting
+ * just the protein goal leaves an existing kcalGoal intact.
+ */
+export async function setNutritionGoals(goals = {}) {
+  if (!goals || typeof goals !== 'object') {
+    throw taggedError('gymboard/bad-value', 'setNutritionGoals: opts must be { kcalGoal?, proteinGoal? }.');
+  }
+  const patch = {};
+  if (goals.kcalGoal !== undefined && goals.kcalGoal !== null) {
+    patch.kcalGoal = validateNumber(goals.kcalGoal, 800, 10000, 'kcalGoal', 0);
+  }
+  if (goals.proteinGoal !== undefined && goals.proteinGoal !== null) {
+    patch.proteinGoal = validateNumber(goals.proteinGoal, 0, 500, 'proteinGoal', 0);
+  }
+  if (Object.keys(patch).length === 0) {
+    throw taggedError('gymboard/bad-value', 'setNutritionGoals: provide kcalGoal and/or proteinGoal.');
+  }
+  await updateOwnUser(patch, 'setNutritionGoals');
 }
 
 /**

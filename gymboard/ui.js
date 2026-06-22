@@ -14,14 +14,19 @@
 // and passes THAT into currentBusinessDate()/missed()/computeStreak() so every viewer
 // agrees through the rollover edge (DESIGN.md "Whose clock is now?").
 //
-// v2 scope (per SPEC-v2.md): two tabs GRID + ME (the old Today screen is GONE).
-// The grid shows WORKOUT and NUTRITION per person per day (diagonal cells), plus
-// per-person streak, weight+trend arrow, and last-active under each (vertical) name.
-// Bottom bar = WORKOUT | MACROS, both tap-to-toggle. Day editor (tap own cell, any
-// visible day = backfill) + read-only day detail (tap another person's cell). The
-// LOUD reclaim modal, the offline outbox for WORKOUT, the optimistic overlay, and
-// the autonomous missed->red repaint on a DST-safe next-rollover timer all remain.
-// Scroll-back to past weeks is intentionally out of scope for this pass.
+// v3 scope (per SPEC-v3.md): two tabs GRID + ME. The grid shows WORKOUT (top band)
+// and NUTRITION (bottom band) per person per day in a flat horizontal-split cell
+// (no diagonal, no hatch), plus per-person streak (a quiet pip, no fire emoji),
+// weight+trend arrow, and last-active under each inline horizontal name. Nutrition is
+// AUTO-CHECKED via logic.nutritionStatus (calories+protein, direction-aware) — no
+// binary toggle. Bottom bar = WORKOUT (optimistic toggle) | + FOOD (jump to ME +
+// focus the meal input). ME is the primary daily app: a running food tracker (meal
+// add/remove, progress bars), workout mark-done + 7-type picker, ad-hoc rest toggle,
+// and a weight quick-log. Day editor (tap own cell, any visible day = backfill, now
+// with a type picker) + read-only day detail (tap another person's cell, now with a
+// Type line). The LOUD reclaim modal, the offline outbox for WORKOUT (carrying the
+// workoutType), the optimistic overlay, and the autonomous missed->red repaint on a
+// DST-safe next-rollover timer all remain. Nutrition NEVER uses red, anywhere.
 // =============================================================================
 
 import {
@@ -33,6 +38,7 @@ import {
   computeStreak,
   weightTrend,
   relativeTime,
+  nutritionStatus,
   isDayKey,
 } from './logic.js';
 
@@ -64,7 +70,7 @@ const elGrid = $('grid');
 const elGridRange = $('grid-range');
 const elGridLegend = $('grid-legend');
 const elWorkoutTile = $('workout-tile');
-const elMacrosTile = $('macros-tile');
+const elFoodTile = $('food-tile'); // v3: "+ FOOD" — jumps to ME + focuses the meal input
 const elReclaim = $('reclaim');
 const elReclaimBackdrop = $('reclaim-backdrop');
 const elReclaimBtn = $('reclaim-btn');
@@ -73,14 +79,26 @@ const elBoot = $('boot');
 const elToast = $('toast');
 
 // ME page handles
+const elMeTodayDate = $('me-today-date');
+const elMeCalFig = $('me-cal-fig');
+const elMeCalBar = $('me-cal-bar');
+const elMeProFig = $('me-pro-fig');
+const elMeProBar = $('me-pro-bar');
+const elMeNutInd = $('me-nut-indicator');
+const elMeAddKcal = $('me-add-kcal');
+const elMeAddProtein = $('me-add-protein');
+const elMeAddMeal = $('me-add-meal');
+const elMeMeals = $('me-meals');
 const elMeWorkout = $('me-workout');
-const elMeAte = $('me-ate');
-const elMeKcal = $('me-kcal');
-const elMeProtein = $('me-protein');
+const elMeWType = $('me-wtype'); // workout-type picker (ME today card)
+const elMeRestday = $('me-restday'); // "make today a rest day" toggle
 const elMeWeight = $('me-weight');
-const elMeSaveLog = $('me-save-log');
+const elMeLogWeight = $('me-log-weight');
 const elMeRestdays = $('me-restdays');
 const elMeGoal = $('me-goal');
+const elMeKcalGoal = $('me-kcalgoal');
+const elMeProteinGoal = $('me-proteingoal');
+const elMeSaveGoals = $('me-save-goals');
 const elMeName = $('me-name');
 const elMeRollover = $('me-rollover');
 const elMeHideWeight = $('me-hideweight');
@@ -91,6 +109,7 @@ const elDayEdit = $('dayedit');
 const elDayEditBackdrop = $('dayedit-backdrop');
 const elDayEditDate = $('dayedit-date');
 const elDeWorkout = $('de-workout');
+const elDeWType = $('de-wtype'); // workout-type picker (day editor)
 const elDeOff = $('de-off');
 const elDeAte = $('de-ate');
 const elDeKcal = $('de-kcal');
@@ -135,6 +154,20 @@ const GOALS = [
   { key: 'lose', label: 'Lose' },
   { key: 'maintain', label: 'Maintain' },
 ];
+
+// v3 workout types (lowercase stored). `label` = the picker button text; `tag` = the
+// tiny 1-2 letter corner glyph painted on a done WORKOUT band in the grid.
+const WORKOUT_TYPES = [
+  { key: 'upper', label: 'Upper', tag: 'U' },
+  { key: 'lower', label: 'Lower', tag: 'Lo' },
+  { key: 'push', label: 'Push', tag: 'Ps' },
+  { key: 'pull', label: 'Pull', tag: 'Pl' },
+  { key: 'legs', label: 'Legs', tag: 'Lg' },
+  { key: 'full', label: 'Full', tag: 'F' },
+  { key: 'cardio', label: 'Cardio', tag: 'C' },
+];
+const WTYPE_LABEL = Object.fromEntries(WORKOUT_TYPES.map((t) => [t.key, t.label]));
+const WTYPE_TAG = Object.fromEntries(WORKOUT_TYPES.map((t) => [t.key, t.tag]));
 
 // =============================================================================
 // SMALL HELPERS
@@ -181,6 +214,11 @@ function subjectOf(member) {
     restPattern: Array.isArray(member.restPattern) ? member.restPattern : [],
     perDateOverrides: member.perDateOverrides || {},
     profile: member.profile || {},
+    // v3: nutrition auto-check needs the goal direction + goal numbers, which live
+    // on the public /users doc. Carried here so classifyDay's signature is unchanged.
+    goal: member.goal || 'maintain',
+    kcalGoal: Number.isFinite(member.kcalGoal) ? member.kcalGoal : null,
+    proteinGoal: Number.isFinite(member.proteinGoal) ? member.proteinGoal : null,
   };
 }
 
@@ -255,19 +293,18 @@ function classifyDay(subject, dateKey, now, day) {
     wStatus = 'pending';
   }
 
-  // ---- NUTRITION side (new) ----
-  // BACK-COMPAT read of the hit flag: prefer `ate`, fall back to legacy `macros`.
-  const ateHit = !!(day && (day.ate === true || day.macros === true));
-  let nStatus;
-  if (ateHit) {
-    nStatus = 'hit';
-  } else {
-    // today (the subject's current business-date) or any future day is undecided
-    // => 'pending'; a past day with no hit is 'none' (gray, NEVER red).
-    const { h, m } = { h: subject.rolloverHour, m: subject.rolloverMinute };
-    const cur = currentBusinessDate(now, subject.ianaTz, h, m);
-    nStatus = dateKey >= cur ? 'pending' : 'none';
-  }
+  // ---- NUTRITION side (v3: derived from goals + running totals) ----
+  // nutritionStatus() encodes the full §2 contract: manual `ate`/`macros` override,
+  // goals-unset fallback, the 0-kcal short-circuit, and the direction rule. It NEVER
+  // returns red — 'hit'|'pending'|'none' map to green/quiet-fill/quiet-gray.
+  const { h, m } = { h: subject.rolloverHour, m: subject.rolloverMinute };
+  const cur = currentBusinessDate(now, subject.ianaTz, h, m);
+  const nStatus = nutritionStatus(day, {
+    kcalGoal: subject.kcalGoal,
+    proteinGoal: subject.proteinGoal,
+    goal: subject.goal || 'maintain',
+    isPast: dateKey < cur,
+  });
 
   return { wStatus, nStatus };
 }
@@ -319,7 +356,7 @@ function headStackHtml(member, now, viewerBiz) {
   const subject = subjectOf(member);
   const parts = [];
 
-  // (a) flame + streak — hidden when streak === 0.
+  // (a) streak — a quiet monochrome pip + the number (NO fire emoji). Hidden at 0.
   let streak = 0;
   try {
     streak = computeStreak(effectiveDays(uid), subject, now);
@@ -328,7 +365,7 @@ function headStackHtml(member, now, viewerBiz) {
   }
   if (streak > 0) {
     parts.push(
-      `<span class="gh-streak" aria-label="streak ${streak}"><span class="gh-flame" aria-hidden="true">🔥</span>${streak}</span>`
+      `<span class="gh-streak" aria-label="streak ${streak}"><span class="gh-streak-pip" aria-hidden="true"></span>${streak}</span>`
     );
   }
 
@@ -414,11 +451,18 @@ function renderGrid(now) {
       const { wStatus, nStatus } = classifyDay(subject, dk, now, day);
       const prejoin = wStatus === 'prejoin';
       const aria = `${displayNameOf(m)} ${dk} — workout ${CELL_LABEL[wStatus] || wStatus}, nutrition ${nStatus}`;
+      // v3 cell body: a TOP workout band + a BOTTOM nutrition band (V1 horizontal
+      // split). A tiny dim corner tag on the workout band when a typed workout is done
+      // (decoration only — never changes the done/missed color).
+      let wtag = '';
+      if (day && day.workout === true && day.workoutType && WTYPE_TAG[day.workoutType]) {
+        wtag = `<span class="gcell-wtag" aria-hidden="true">${escapeHtml(WTYPE_TAG[day.workoutType])}</span>`;
+      }
       cells.push(
         `<div class="gcell w-${wStatus} n-${nStatus}${isMe ? ' me' : ''}${prejoin ? ' prejoin' : ''}" ` +
           `style="opacity:${op}" data-uid="${escapeHtml(uid)}" data-date="${escapeHtml(dk)}" ` +
           `role="button" tabindex="0" aria-label="${escapeHtml(aria)}">` +
-          `<i class="pend-w"></i><i class="pend-n"></i></div>`
+          `<div class="seg-w">${wtag}</div><div class="seg-n"></div></div>`
       );
     }
   }
@@ -427,12 +471,13 @@ function renderGrid(now) {
   const first = keys[keys.length - 1];
   elGridRange.textContent = `${fmtDateGutter(first).md} – ${fmtDateGutter(cur).md}`;
 
-  // Legend: diagonal swatches mirroring the cell encoding (done/ate together).
+  // Legend: horizontal-split swatches mirroring the new cell encoding (workout band
+  // on top, nutrition band on the bottom).
   if (!elGridLegend.dataset.built) {
     const legCell = (w, n, label) =>
-      `<span class="leg"><span class="leg-cell w-${w} n-${n}"><i class="pend-w"></i><i class="pend-n"></i></span>${label}</span>`;
+      `<span class="leg"><span class="leg-cell w-${w} n-${n}"><span class="seg-w"></span><span class="seg-n"></span></span>${label}</span>`;
     elGridLegend.innerHTML =
-      legCell('done', 'hit', 'done / ate') +
+      legCell('done', 'hit', 'done / hit') +
       legCell('missed', 'none', 'missed') +
       legCell('rest', 'none', 'rest') +
       legCell('off', 'none', 'day off') +
@@ -442,7 +487,7 @@ function renderGrid(now) {
 }
 
 // =============================================================================
-// RENDER: BOTTOM BAR  (WORKOUT | MACROS — both tap-to-toggle today)
+// RENDER: BOTTOM BAR  (WORKOUT [optimistic toggle] | + FOOD [jump to ME])
 // =============================================================================
 function renderBottomBar(now) {
   const me = memberById(myUserId);
@@ -452,11 +497,7 @@ function renderBottomBar(now) {
       const s = elWorkoutTile.querySelector('.wt-sub');
       if (s) s.textContent = '';
     }
-    if (elMacrosTile) {
-      elMacrosTile.disabled = true;
-      const s = elMacrosTile.querySelector('.wt-sub');
-      if (s) s.textContent = '';
-    }
+    if (elFoodTile) elFoodTile.disabled = true;
     return;
   }
   const subject = subjectOf(me);
@@ -464,7 +505,7 @@ function renderBottomBar(now) {
   const days = effectiveDays(myUserId);
   const day = days[cur];
 
-  // WORKOUT tile
+  // WORKOUT tile (unchanged: optimistic toggle + outbox + unsynced dot).
   const done = !!(day && day.workout === true);
   const wkey = `${myUserId}|${cur}`;
   const wpending = unsynced.has(wkey);
@@ -478,15 +519,8 @@ function renderBottomBar(now) {
     else wsub.textContent = 'tap when you finish';
   }
 
-  // MACROS tile (sets `ate`; back-compat read of legacy `macros`).
-  if (elMacrosTile) {
-    const ate = !!(day && (day.ate === true || day.macros === true));
-    elMacrosTile.dataset.bizdate = cur;
-    elMacrosTile.disabled = false;
-    elMacrosTile.classList.toggle('done', ate);
-    const msub = elMacrosTile.querySelector('.wt-sub');
-    if (msub) msub.textContent = ate ? 'hit · tap to undo' : 'tap when you eat clean';
-  }
+  // "+ FOOD" tile writes NOTHING — it just routes to ME + focuses the meal input.
+  if (elFoodTile) elFoodTile.disabled = false;
 }
 
 // =============================================================================
@@ -499,7 +533,7 @@ function repaint() {
   } else {
     renderGrid(now);
   }
-  // the action bar (WORKOUT | MACROS) is present on both screens.
+  // the action bar (WORKOUT | + FOOD) is present on both screens.
   renderBottomBar(now);
   updateSyncPip();
 }
@@ -580,19 +614,21 @@ function clearOptimistic(userId, dateKey) {
 // =============================================================================
 // BOTTOM-BAR WIRING
 //   WORKOUT: optimistic + outbox + unsynced dot; TAP TOGGLES (second tap clears).
-//   MACROS : await + toast on error (no outbox); TAP TOGGLES `ate`.
+//   + FOOD : no write — jumps to ME and focuses the meal kcal input.
 // =============================================================================
-async function commitWorkout(bd, done) {
+// `opts.workoutType` (v3) rides through to data.markWorkout so a typed mark-done
+// persists the type; it's ignored on an undo (done===false) by data.js.
+async function commitWorkout(bd, done, opts = {}) {
   if (!myUserId) return;
   const key = `${myUserId}|${bd}`;
 
-  // optimistic paint immediately
+  // optimistic paint immediately (workout bool only; type lands on the snapshot).
   setOptimistic(myUserId, bd, done);
   unsynced.add(key);
   repaint();
 
   try {
-    await data.markWorkout(myUserId, bd, done);
+    await data.markWorkout(myUserId, bd, done, opts.workoutType ? { workoutType: opts.workoutType } : {});
     // server acked: drop the unsynced flag. Keep the optimistic value until the
     // snapshot delivers the authoritative doc so there's no flash back to pending.
     unsynced.delete(key);
@@ -621,35 +657,27 @@ function onWorkoutTap() {
   if (isDone) toast('workout undone');
 }
 
-async function onMacrosTap() {
-  if (!elMacrosTile || elMacrosTile.disabled) return;
-  const bd = elMacrosTile.dataset.bizdate;
-  if (!isDayKey(bd)) return;
-  const days = effectiveDays(myUserId);
-  const isAte = !!(days[bd] && (days[bd].ate === true || days[bd].macros === true));
-  const next = !isAte;
-
-  // optimistic-ish: flip the class immediately for snappy feedback, await the write,
-  // and let the next snapshot/refetch confirm. No outbox for macros (per SPEC).
-  elMacrosTile.classList.toggle('done', next);
-  elMacrosTile.disabled = true;
-  try {
-    await data.setNutritionHit(bd, next);
-    await refetchMyDays();
-    toast(next ? 'nutrition logged' : 'nutrition undone');
-  } catch (err) {
-    const tag = String((err && (err.code || err.message)) || err);
-    if (/reclaim/i.test(tag)) showReclaim();
-    else toast('could not save — try again');
-  } finally {
-    elMacrosTile.disabled = false;
-    repaint();
-  }
+// "+ FOOD": pure navigation — switch to the ME tab and focus the meal kcal input so
+// logging a meal is one tap from anywhere. It writes NOTHING (no binary toggle).
+function onFoodTap() {
+  if (!elFoodTile || elFoodTile.disabled) return;
+  setTab('me');
+  // focus after the tab paints; scroll the ME card into view on the way.
+  setTimeout(() => {
+    if (elMeAddKcal) {
+      try {
+        elMeAddKcal.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } catch (_) {
+        /* non-fatal */
+      }
+      elMeAddKcal.focus();
+    }
+  }, 60);
 }
 
 function wireBottomBar() {
   if (elWorkoutTile) elWorkoutTile.addEventListener('click', onWorkoutTap);
-  if (elMacrosTile) elMacrosTile.addEventListener('click', onMacrosTap);
+  if (elFoodTile) elFoodTile.addEventListener('click', onFoodTap);
 }
 
 // =============================================================================
@@ -691,24 +719,59 @@ function renderMe(now) {
   const days = effectiveDays(myUserId);
   const day = days[cur];
 
-  // ---- TODAY card ----
+  // ---- TODAY tracker ----
+  if (elMeTodayDate) {
+    const g = fmtDateGutter(cur);
+    elMeTodayDate.textContent = ` · ${g.dow} ${g.md}`;
+  }
+
+  const kcal = day && Number.isFinite(day.kcal) ? day.kcal : 0;
+  const protein = day && Number.isFinite(day.protein) ? day.protein : 0;
+  const kcalGoal = Number.isFinite(me.kcalGoal) ? me.kcalGoal : null;
+  const proteinGoal = Number.isFinite(me.proteinGoal) ? me.proteinGoal : null;
+
+  // calorie + protein figures and progress bars (NEVER red, even when over).
+  renderTrackRow(elMeCalFig, elMeCalBar, kcal, kcalGoal, ''); // kcal unit blank
+  renderTrackRow(elMeProFig, elMeProBar, protein, proteinGoal, 'g');
+
+  // nutrition indicator from nutritionStatus (today is never past => never 'none').
+  if (elMeNutInd) {
+    const ns = nutritionStatus(day, {
+      kcalGoal,
+      proteinGoal,
+      goal: me.goal || 'maintain',
+      isPast: false, // this card is always today
+    });
+    elMeNutInd.classList.remove('hit', 'pending', 'none');
+    if (ns === 'hit') {
+      elMeNutInd.classList.add('hit');
+      elMeNutInd.textContent = 'HIT ✓';
+    } else {
+      elMeNutInd.classList.add('pending');
+      // a little nudge based on whether anything's logged yet.
+      elMeNutInd.textContent = kcal > 0 ? 'on track' : 'nothing logged yet';
+    }
+  }
+
+  // meals-today list (newest-first chips with tap-to-remove).
+  renderMealsList(day);
+
+  // workout mark-done + type picker.
   const done = !!(day && day.workout === true);
   if (elMeWorkout) {
     elMeWorkout.classList.toggle('on', done);
     elMeWorkout.textContent = done ? 'done ✓' : 'mark done';
   }
-  const ate = !!(day && (day.ate === true || day.macros === true));
-  if (elMeAte) {
-    elMeAte.classList.toggle('on', ate);
-    elMeAte.textContent = ate ? 'hit ✓' : 'hit it';
+  renderTypePicker(elMeWType, day && day.workoutType);
+
+  // rest-day toggle.
+  if (elMeRestday) {
+    const off = !!(day && day.off === true);
+    elMeRestday.classList.toggle('on', off);
+    elMeRestday.textContent = off ? 'Today is a rest day ✓' : 'Make today a rest day';
   }
-  // numeric inputs: reflect current stored values (don't stomp a field being edited).
-  if (elMeKcal && document.activeElement !== elMeKcal) {
-    elMeKcal.value = day && Number.isFinite(day.kcal) ? String(day.kcal) : '';
-  }
-  if (elMeProtein && document.activeElement !== elMeProtein) {
-    elMeProtein.value = day && Number.isFinite(day.protein) ? String(day.protein) : '';
-  }
+
+  // weight quick-log input (don't stomp a field being edited).
   if (elMeWeight && document.activeElement !== elMeWeight) {
     const w = (weightsByUser.get(myUserId) || {})[cur];
     elMeWeight.value = Number.isFinite(w) ? String(w) : '';
@@ -719,6 +782,12 @@ function renderMe(now) {
 
   // ---- GOAL card ----
   renderGoal(me);
+  if (elMeKcalGoal && document.activeElement !== elMeKcalGoal) {
+    elMeKcalGoal.value = Number.isFinite(me.kcalGoal) ? String(me.kcalGoal) : '';
+  }
+  if (elMeProteinGoal && document.activeElement !== elMeProteinGoal) {
+    elMeProteinGoal.value = Number.isFinite(me.proteinGoal) ? String(me.proteinGoal) : '';
+  }
 
   // ---- PROFILE card ----
   if (elMeName && document.activeElement !== elMeName) {
@@ -731,6 +800,81 @@ function renderMe(now) {
     const hidden = me.hideWeight === true;
     elMeHideWeight.classList.toggle('neutral-on', hidden);
     elMeHideWeight.textContent = hidden ? 'hidden' : 'shared';
+  }
+}
+
+// Render one CALORIES/PROTEIN row: the "total / goal" figure + a progress-bar fill.
+// Bar fill is green when at/over a constructive amount, neutral otherwise; NEVER red
+// (over-target just shows a full bar in a muted tone). Goals unset => just the total.
+function renderTrackRow(figEl, barEl, total, goal, unit) {
+  if (figEl) {
+    if (Number.isFinite(goal)) {
+      figEl.textContent = `${Math.round(total)}${unit} / ${Math.round(goal)}${unit}`;
+    } else {
+      figEl.textContent = `${Math.round(total)}${unit}`;
+    }
+  }
+  if (barEl) {
+    if (Number.isFinite(goal) && goal > 0) {
+      const pct = Math.max(0, Math.min(100, (total / goal) * 100));
+      barEl.style.width = `${pct}%`;
+      barEl.classList.toggle('full', total >= goal);
+    } else {
+      // no goal: a thin neutral hint proportional to "something logged" (capped).
+      barEl.style.width = total > 0 ? '12%' : '0%';
+      barEl.classList.remove('full');
+    }
+  }
+}
+
+// Render the meals-today list, newest-first, as chips with a tap-to-remove glyph.
+// When sum(meals) != day.kcal (a pre-array manual number), append the migration note.
+function renderMealsList(day) {
+  if (!elMeMeals) return;
+  const meals = day && Array.isArray(day.meals) ? day.meals : [];
+  if (!meals.length) {
+    // still surface a pre-array manual total if one exists (e.g. a v2 day).
+    if (day && Number.isFinite(day.kcal) && day.kcal > 0) {
+      elMeMeals.innerHTML = `<span class="me-meal-note">${Math.round(day.kcal)} kcal logged earlier</span>`;
+    } else {
+      elMeMeals.innerHTML = '';
+    }
+    return;
+  }
+  let mealsKcal = 0;
+  for (const m of meals) if (m && Number.isFinite(m.kcal)) mealsKcal += m.kcal;
+
+  const chips = [];
+  // newest-first: iterate from the end, but keep the ORIGINAL array index for removal.
+  for (let i = meals.length - 1; i >= 0; i--) {
+    const m = meals[i] || {};
+    const k = Number.isFinite(m.kcal) ? Math.round(m.kcal) : 0;
+    const p = Number.isFinite(m.protein) ? Math.round(m.protein) : 0;
+    chips.push(
+      `<button class="me-meal-chip" type="button" data-idx="${i}" aria-label="remove meal ${k} kcal ${p} grams protein">` +
+        `<span class="me-chip-fig">${k}/${p}g</span><span class="me-chip-x" aria-hidden="true">⌫</span></button>`
+    );
+  }
+  let html = chips.join('');
+  const total = day && Number.isFinite(day.kcal) ? day.kcal : 0;
+  if (Math.round(mealsKcal) !== Math.round(total)) {
+    const earlier = Math.round(total - mealsKcal);
+    if (earlier > 0) html += `<span class="me-meal-note">+${earlier} kcal logged earlier</span>`;
+  }
+  elMeMeals.innerHTML = html;
+}
+
+// Render a 7-button workout-type picker into `container`, marking `selected` active.
+function renderTypePicker(container, selected) {
+  if (!container) return;
+  if (!container.dataset.built) {
+    container.innerHTML = WORKOUT_TYPES.map(
+      (t) => `<button class="me-type-btn" type="button" data-wtype="${t.key}">${t.label}</button>`
+    ).join('');
+    container.dataset.built = '1';
+  }
+  for (const btn of container.querySelectorAll('.me-type-btn')) {
+    btn.classList.toggle('on', btn.dataset.wtype === selected);
   }
 }
 
@@ -806,17 +950,55 @@ async function meToggleWorkout() {
   renderMe(now);
 }
 
-async function meToggleAte() {
+// Today's business-date for the ME card (the owner's own clock).
+function myCurrentBiz() {
   const now = anchoredNow();
   const me = memberById(myUserId);
+  if (!me) return null;
+  const s = subjectOf(me);
+  return currentBusinessDate(now, s.ianaTz, s.rolloverHour, s.rolloverMinute);
+}
+
+// Add a meal: kcal (required) + protein (optional) -> data.addMeal, clear, repaint.
+async function meAddMeal() {
+  const me = memberById(myUserId);
   if (!me) return;
-  const subject = subjectOf(me);
-  const cur = currentBusinessDate(now, subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
-  const days = effectiveDays(myUserId);
-  const isAte = !!(days[cur] && (days[cur].ate === true || days[cur].macros === true));
+  const cur = myCurrentBiz();
+  if (!cur) return;
+  const kcal = readNumInput(elMeAddKcal);
+  const protein = readNumInput(elMeAddProtein);
+  if (kcal == null && protein == null) {
+    toast('enter a meal');
+    return;
+  }
+  if (kcal == null || !(kcal > 0)) {
+    toast('enter the calories');
+    return;
+  }
+  if (elMeAddMeal) elMeAddMeal.disabled = true;
   try {
-    await data.setNutritionHit(cur, !isAte);
+    await data.addMeal(cur, { kcal, protein: protein != null ? protein : 0 });
+    if (elMeAddKcal) elMeAddKcal.value = '';
+    if (elMeAddProtein) elMeAddProtein.value = '';
     await refetchMyDays();
+    toast('meal logged');
+  } catch (err) {
+    handleWriteError(err);
+  } finally {
+    if (elMeAddMeal) elMeAddMeal.disabled = false;
+    renderMe(anchoredNow());
+    renderBottomBar(anchoredNow());
+  }
+}
+
+// Remove a meal by its array index -> data.removeMeal, refetch, repaint.
+async function meRemoveMeal(idx) {
+  const cur = myCurrentBiz();
+  if (!cur) return;
+  try {
+    await data.removeMeal(cur, idx);
+    await refetchMyDays();
+    toast('meal removed');
   } catch (err) {
     handleWriteError(err);
   }
@@ -824,37 +1006,72 @@ async function meToggleAte() {
   renderBottomBar(anchoredNow());
 }
 
-async function meSaveLog() {
-  const now = anchoredNow();
+// Tap a workout type: mark done AND set the type in one optimistic write.
+async function meSetType(wtype) {
+  const cur = myCurrentBiz();
+  if (!cur) return;
+  await commitWorkout(cur, true, { workoutType: wtype });
+  renderMe(anchoredNow());
+}
+
+// Toggle "make today a rest day" -> data.setDayOff (neutral; never green/red).
+async function meToggleRestToday() {
+  const cur = myCurrentBiz();
+  if (!cur) return;
+  const days = effectiveDays(myUserId);
+  const isOff = !!(days[cur] && days[cur].off === true);
+  try {
+    await data.setDayOff(cur, !isOff);
+    await refetchMyDays();
+    toast(!isOff ? "today won't go red" : 'rest day cleared');
+  } catch (err) {
+    handleWriteError(err);
+  }
+  renderMe(anchoredNow());
+  renderBottomBar(anchoredNow());
+}
+
+// Weight quick-log: lb input + LOG -> data.setWeight, refetch, repaint.
+async function meLogWeight() {
+  const cur = myCurrentBiz();
+  if (!cur) return;
+  const weight = readNumInput(elMeWeight);
+  if (weight == null) {
+    toast('enter a weight');
+    return;
+  }
+  if (elMeLogWeight) elMeLogWeight.disabled = true;
+  try {
+    await data.setWeight(cur, weight);
+    await refetchWeights(myUserId);
+    toast('weight logged');
+  } catch (err) {
+    handleWriteError(err);
+  } finally {
+    if (elMeLogWeight) elMeLogWeight.disabled = false;
+    renderMe(anchoredNow());
+  }
+}
+
+// Save the calorie + protein goals (one combined write). SETTING, no lastActive bump.
+async function meSaveGoals() {
   const me = memberById(myUserId);
   if (!me) return;
-  const subject = subjectOf(me);
-  const cur = currentBusinessDate(now, subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
-
-  const kcal = readNumInput(elMeKcal);
-  const protein = readNumInput(elMeProtein);
-  const weight = readNumInput(elMeWeight);
-
-  let didSomething = false;
+  const kcalGoal = readNumInput(elMeKcalGoal);
+  const proteinGoal = readNumInput(elMeProteinGoal);
+  if (kcalGoal == null && proteinGoal == null) {
+    toast('enter a goal');
+    return;
+  }
   try {
-    const macros = {};
-    if (kcal != null) macros.kcal = kcal;
-    if (protein != null) macros.protein = protein;
-    if (Object.keys(macros).length) {
-      await data.setMacros(cur, macros);
-      didSomething = true;
-    }
-    if (weight != null) {
-      await data.setWeight(cur, weight);
-      didSomething = true;
-    }
-    if (!didSomething) {
-      toast('nothing to save');
-      return;
-    }
-    await refetchMyDays();
-    await refetchWeights(myUserId);
-    toast('saved');
+    const goals = {};
+    if (kcalGoal != null) goals.kcalGoal = kcalGoal;
+    if (proteinGoal != null) goals.proteinGoal = proteinGoal;
+    await data.setNutritionGoals(goals);
+    if (kcalGoal != null) me.kcalGoal = Math.round(kcalGoal);
+    if (proteinGoal != null) me.proteinGoal = Math.round(proteinGoal);
+    renderGrid(anchoredNow()); // goals drive the nutrition auto-check on the board
+    toast('goals saved');
   } catch (err) {
     handleWriteError(err);
   }
@@ -958,19 +1175,43 @@ function handleWriteError(err) {
 }
 
 function wireMe() {
+  // TODAY tracker
+  if (elMeAddMeal) elMeAddMeal.addEventListener('click', meAddMeal);
+  if (elMeAddKcal)
+    elMeAddKcal.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); meAddMeal(); }
+    });
+  if (elMeAddProtein)
+    elMeAddProtein.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); meAddMeal(); }
+    });
+  if (elMeMeals)
+    elMeMeals.addEventListener('click', (e) => {
+      const chip = e.target.closest('.me-meal-chip');
+      if (chip) meRemoveMeal(Number(chip.dataset.idx));
+    });
   if (elMeWorkout) elMeWorkout.addEventListener('click', meToggleWorkout);
-  if (elMeAte) elMeAte.addEventListener('click', meToggleAte);
-  if (elMeSaveLog) elMeSaveLog.addEventListener('click', meSaveLog);
+  if (elMeWType)
+    elMeWType.addEventListener('click', (e) => {
+      const btn = e.target.closest('.me-type-btn');
+      if (btn) meSetType(btn.dataset.wtype);
+    });
+  if (elMeRestday) elMeRestday.addEventListener('click', meToggleRestToday);
+  if (elMeLogWeight) elMeLogWeight.addEventListener('click', meLogWeight);
+  // REST DAYS
   if (elMeRestdays)
     elMeRestdays.addEventListener('click', (e) => {
       const btn = e.target.closest('.me-weekday');
       if (btn) meToggleRestDay(Number(btn.dataset.wd));
     });
+  // GOAL
   if (elMeGoal)
     elMeGoal.addEventListener('click', (e) => {
       const btn = e.target.closest('.me-seg-btn');
       if (btn) meSetGoal(btn.dataset.goal);
     });
+  if (elMeSaveGoals) elMeSaveGoals.addEventListener('click', meSaveGoals);
+  // PROFILE
   if (elMeHideWeight) elMeHideWeight.addEventListener('click', meToggleHideWeight);
   if (elMeSaveSettings) elMeSaveSettings.addEventListener('click', meSaveSettings);
 }
@@ -1004,6 +1245,11 @@ function openDayEditor(uid, dateKey) {
     elDeWorkout.classList.toggle('on', done);
     elDeWorkout.textContent = done ? 'done ✓' : 'done';
   }
+  // workout-type picker: pre-select the stored type (tap toggles in wireGridTaps).
+  if (elDeWType) {
+    elDeWType.dataset.selected = (day.workoutType && WTYPE_LABEL[day.workoutType]) ? day.workoutType : '';
+    renderTypePicker(elDeWType, elDeWType.dataset.selected || null);
+  }
   if (elDeOff) {
     elDeOff.classList.toggle('on', off);
     elDeOff.textContent = off ? 'off ✓' : 'off';
@@ -1034,6 +1280,7 @@ async function saveDayEditor() {
   const wantWorkout = elDeWorkout ? elDeWorkout.classList.contains('on') : day.workout === true;
   const wantOff = elDeOff ? elDeOff.classList.contains('on') : day.off === true;
   const wantAte = elDeAte ? elDeAte.classList.contains('on') : (day.ate === true || day.macros === true);
+  const wantType = (elDeWType && elDeWType.dataset.selected) || '';
   const kcal = readNumInput(elDeKcal);
   const protein = readNumInput(elDeProtein);
   const weight = readNumInput(elDeWeight);
@@ -1041,12 +1288,16 @@ async function saveDayEditor() {
   const wasWorkout = day.workout === true;
   const wasOff = day.off === true;
   const wasAte = day.ate === true || day.macros === true;
+  const wasType = (day.workoutType && WTYPE_LABEL[day.workoutType]) ? day.workoutType : '';
 
   if (elDeSave) elDeSave.disabled = true;
   try {
     // only write the fields that actually changed (keeps it merge-minimal + rule-safe).
-    if (wantWorkout !== wasWorkout) {
-      await data.markWorkout(myUserId, dateKey, wantWorkout);
+    // workout: write when the done bool changed OR (it's done and the type changed) so a
+    // type-only edit on an already-done day still persists. markWorkout only stamps the
+    // type on a DONE mark; an undo won't carry it.
+    if (wantWorkout !== wasWorkout || (wantWorkout && wantType !== wasType)) {
+      await data.markWorkout(myUserId, dateKey, wantWorkout, wantType ? { workoutType: wantType } : {});
     }
     if (wantOff !== wasOff) {
       await data.setDayOff(dateKey, wantOff);
@@ -1091,6 +1342,9 @@ function openDayDetail(member, dateKey) {
     const lines = [];
     const workoutVal = day.workout === true ? 'yes' : day.off === true ? 'off' : 'no';
     lines.push(line('Workout', workoutVal));
+    if (day.workout === true && day.workoutType && WTYPE_LABEL[day.workoutType]) {
+      lines.push(line('Type', WTYPE_LABEL[day.workoutType]));
+    }
     lines.push(line('Nutrition', day.ate === true || day.macros === true ? 'hit' : '—'));
     if (Number.isFinite(day.kcal)) lines.push(line('Calories', `${day.kcal}`));
     if (Number.isFinite(day.protein)) lines.push(line('Protein', `${day.protein}g`));
@@ -1138,6 +1392,20 @@ function wireGridTaps() {
   for (const btn of [elDeWorkout, elDeOff, elDeAte]) {
     if (btn) btn.addEventListener('click', () => btn.classList.toggle('on'));
   }
+  // editor workout-type picker: tap to select (tap-again to clear), stored on the
+  // container's dataset; tapping a type also auto-marks the Workout toggle on.
+  if (elDeWType)
+    elDeWType.addEventListener('click', (e) => {
+      const btn = e.target.closest('.me-type-btn');
+      if (!btn) return;
+      const wt = btn.dataset.wtype;
+      const cur = elDeWType.dataset.selected || '';
+      const next = cur === wt ? '' : wt;
+      elDeWType.dataset.selected = next;
+      renderTypePicker(elDeWType, next || null);
+      // selecting a type implies the workout was done.
+      if (next && elDeWorkout) elDeWorkout.classList.add('on');
+    });
   // detail wiring
   if (elDayDetailClose) elDayDetailClose.addEventListener('click', closeDayDetail);
   if (elDayDetailBackdrop) elDayDetailBackdrop.addEventListener('click', closeDayDetail);
