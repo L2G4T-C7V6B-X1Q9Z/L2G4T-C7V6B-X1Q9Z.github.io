@@ -122,6 +122,7 @@
         <!-- WEIGHT quick-log -->
         <div class="me-card">
           <div class="me-card-title">⚖️ WEIGHT</div>
+          <div id="me-weight-logged" class="me-weight-logged hidden"></div>
           <div class="me-row"><span class="me-label">Today's weight</span><input id="me-weight" class="me-input" type="number" inputmode="decimal" placeholder="lb"><button id="me-log-weight" class="me-meal-btn" type="button">LOG</button></div>
         </div>
 
@@ -213,7 +214,7 @@
     <!-- ---- SOCIAL board (read-only; tap any cell -> read-only mini popover) ----
          v4 order: head, legend (moved to TOP), grid scroller (flex:1), weight chart
          (bottom third — placeholder for the chart phase). -->
-    <section id="screen-grid" class="screen" aria-label="Social board" hidden>
+    <section id="screen-grid" class="screen" aria-label="Social board" aria-hidden="true">
       <div id="grid-head">
         <div class="grid-title">THIS WEEK</div>
         <div id="grid-range" class="grid-range mono"></div>
@@ -229,14 +230,19 @@
            Occupies roughly the bottom third of the SOCIAL board. -->
       <div id="social-chart" class="social-chart" aria-label="Weight over time">
         <div class="wchart-head">
-          <span class="wchart-title">WEIGHT · <span id="wchart-range-label">30</span> DAYS</span>
+          <button class="wchart-collapse" id="wchart-collapse" type="button" aria-expanded="true" aria-label="Collapse or expand the weight chart">
+            <span class="wchart-caret" aria-hidden="true">▾</span>
+            <span class="wchart-title">WEIGHT · <span id="wchart-range-label">30</span> DAYS</span>
+          </button>
           <div class="wchart-toggle" id="wchart-toggle" role="group" aria-label="Chart range">
             <button class="wc-range on" data-range="30" type="button" aria-pressed="true">30d</button>
             <button class="wc-range" data-range="90" type="button" aria-pressed="false">90d</button>
           </div>
         </div>
-        <div id="wchart-svg" class="wchart-svg"></div>
-        <div id="wchart-empty" class="wchart-empty hidden">No shared weights yet.</div>
+        <div class="wchart-body" id="wchart-body">
+          <div id="wchart-svg" class="wchart-svg"></div>
+          <div id="wchart-empty" class="wchart-empty hidden">No shared weights yet.</div>
+        </div>
       </div>
     </section>
 

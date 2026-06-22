@@ -82,6 +82,7 @@ let wchartRange = 30; // selected window in days (30d default; 90d via the toggl
 // repaint whose signature matches it skips the (expensive) SVG rebuild + innerHTML parse.
 // Set _wchartSig = null to FORCE the next rebuild (e.g. the 30d/90d toggle).
 let _wchartSig = null;
+let _wchartGeom = null; // last-built chart geometry, for the tap/drag scrubber
 
 // =============================================================================
 // DOM HANDLES
@@ -118,6 +119,7 @@ const elMeNutHint = $('me-nut-hint'); // v4 (#6): the NUTRITION card hint (adapt
 const elMeCalRow = $('me-cal-row'); // v4 (#6): wrapper around the CALORIES track row
 const elMeProRow = $('me-pro-row'); // v4 (#6): wrapper around the PROTEIN track row
 const elMeNutTracksSep = $('me-nut-tracks-sep'); // separator above the tracks (hidden in manual)
+const elMeWeightLogged = $('me-weight-logged'); // v4.5: "already logged today" indicator
 const elMeNutDone = $('me-nutdone'); // v3.1 "mark nutrition done" toggle (sets `ate`)
 const elMeAddKcal = $('me-add-kcal');
 const elMeAddProtein = $('me-add-protein');
@@ -584,26 +586,18 @@ function renderGrid(now) {
   // bottom=nutrition) plus the color key. Off is merged into rest (#1); nutrition is
   // NEVER red, and the "missed = workout only" note makes that explicit.
   if (!elGridLegend.dataset.built) {
-    const legCell = (w, n, label) =>
-      `<span class="leg"><span class="leg-cell w-${w} n-${n}"><span class="seg-w"></span><span class="seg-n"></span></span>${label}</span>`;
-    // the labeled mini-cell diagram (a bigger split cell + side labels).
-    const diagram =
-      `<span class="leg-diagram" aria-label="cell key: top is workout, bottom is nutrition">` +
-        `<span class="leg-cell leg-cell-big w-done n-hit"><span class="seg-w"></span><span class="seg-n"></span></span>` +
-        `<span class="leg-diag-labels">` +
-          `<span class="leg-diag-top">top = workout</span>` +
-          `<span class="leg-diag-bot">bottom = nutrition</span>` +
-        `</span>` +
-      `</span>`;
+    // v4.5: one clean row. A single example cell whose TOP half is the workout and BOTTOM
+    // half is the nutrition (labeled right beside it), then a compact color key.
     elGridLegend.innerHTML =
-      diagram +
-      legCell('done', 'hit', 'done / hit') +
-      legCell('missed', 'none', 'missed') +
-      `<span class="leg-missed-note">(workout only)</span>` +
-      legCell('rest', 'none', 'rest') +
-      legCell('pending', 'pending', 'pending') +
-      legCell('pending', 'hit', 'nutrition hit') +
-      legCell('pending', 'none', 'nutrition none');
+      `<span class="lgex" aria-label="cell key: top half is workout, bottom half is nutrition">` +
+        `<span class="leg-cell leg-cell-big w-done n-hit"><span class="seg-w"></span><span class="seg-n"></span></span>` +
+        `<span class="lgex-labels"><span class="lgex-t">top · workout</span><span class="lgex-b">bottom · nutrition</span></span>` +
+      `</span>` +
+      `<span class="lgkey">` +
+        `<span class="lgchip"><span class="lgsw lg-done"></span>done</span>` +
+        `<span class="lgchip"><span class="lgsw lg-missed"></span>missed</span>` +
+        `<span class="lgchip"><span class="lgsw lg-rest"></span>rest</span>` +
+      `</span>`;
     elGridLegend.dataset.built = '1';
   }
 
@@ -711,8 +705,17 @@ function renderWeightChart(now) {
 function buildWeightChart(now) {
   if (!elSocialChart || !elWchartSvg) return;
 
-  // ---- X: the ordered window of business-dates, oldest..newest, DST-safe. dateIndex maps
-  // a dateKey -> its 0-based position from the OLDEST in-window day (for the x coordinate).
+  // ---- container geometry. Render at the host's REAL pixel aspect so the chart FILLS the
+  // box (the old fixed 300x90 viewBox + "meet" letterboxed inside a taller box => a dead
+  // empty strip at the bottom). vbH tracks the host; a bigger PAD_L holds the LEFT y-axis
+  // labels (moved off the right edge, where they collided with the emoji end-labels).
+  const hostW = elWchartSvg.clientWidth || 320;
+  const hostH = elWchartSvg.clientHeight || 132;
+  const vbW = 300;
+  const vbH = Math.max(76, Math.min(220, Math.round(vbW * (hostH / Math.max(1, hostW)))));
+  const PAD_L = 28, PAD_R = 16, PAD_T = 10, PAD_B = 12;
+
+  // ---- X: the ordered window of business-dates, oldest..newest, DST-safe.
   const cur = viewerBusinessDate(now);
   const rangeDays = wchartRange;
   const keysNewestFirst = [cur];
@@ -721,9 +724,9 @@ function buildWeightChart(now) {
   const dateIndex = new Map();
   keysOldestFirst.forEach((k, i) => dateIndex.set(k, i));
 
-  const innerW = WCHART_VB_W - WCHART_PAD_L - WCHART_PAD_R;
-  const innerH = WCHART_VB_H - WCHART_PAD_T - WCHART_PAD_B;
-  const xOf = (idx) => WCHART_PAD_L + (rangeDays <= 1 ? innerW : (idx / (rangeDays - 1)) * innerW);
+  const innerW = vbW - PAD_L - PAD_R;
+  const innerH = vbH - PAD_T - PAD_B;
+  const xOf = (idx) => PAD_L + (rangeDays <= 1 ? innerW : (idx / (rangeDays - 1)) * innerW);
 
   // ---- gather each visible member's in-range points. Hidden members (fetchWeights -> {})
   // and members with zero in-range points are omitted. "me" first so its red draws on top.
@@ -754,6 +757,7 @@ function buildWeightChart(now) {
   // ---- empty: zero shared in-range points across everyone -> hide SVG, show the note.
   if (!series.length) {
     elWchartSvg.innerHTML = '';
+    _wchartGeom = null;
     if (elWchartEmpty) elWchartEmpty.classList.remove('hidden');
     elSocialChart.classList.remove('hidden');
     return;
@@ -761,16 +765,14 @@ function buildWeightChart(now) {
   if (elWchartEmpty) elWchartEmpty.classList.add('hidden');
   elSocialChart.classList.remove('hidden');
 
-  // ---- Y: auto-fit with padding. Single distinct value -> pad to [v-2, v+2] so the line
-  // sits mid-canvas instead of dividing by zero.
+  // ---- Y: auto-fit with padding. Single distinct value -> pad to [v-2, v+2].
   let lo = Math.floor(yMin - 1);
   let hi = Math.ceil(yMax + 1);
   if (lo === hi) { lo = yMin - 2; hi = yMax + 2; }
   const span = hi - lo || 1;
-  const yOf = (lb) => WCHART_PAD_T + (1 - (lb - lo) / span) * innerH;
+  const yOf = (lb) => PAD_T + (1 - (lb - lo) / span) * innerH;
 
-  // ---- assign colors: "me" is red; others cycle the muted gray palette deterministically
-  // by their order among the non-me series (red is never reused for an "other").
+  // ---- assign colors: "me" is red; others cycle the tokenized grays.
   let otherI = 0;
   for (const s of series) {
     if (s.isMe) {
@@ -787,32 +789,33 @@ function buildWeightChart(now) {
 
   // ---- build the SVG.
   const parts = [];
-  // gridlines: 3 faint hairlines (bottom / mid / top) with tiny right-edge lb labels.
-  const gridVals = [lo, Math.round((lo + hi) / 2), hi];
-  const seenG = new Set();
+  // gridlines at NICE round steps (1/2/5/10) so labels land on whole numbers and the
+  // user's own weight line is always among them (fixes "146/148/149 but no 147 line").
+  // Value labels sit on the LEFT, freeing the right edge for the emoji end-labels.
+  const rng = hi - lo;
+  const gstep = rng <= 6 ? 1 : rng <= 15 ? 2 : rng <= 40 ? 5 : 10;
+  const gridVals = [];
+  for (let g = Math.ceil(lo / gstep) * gstep; g <= hi + 0.001; g += gstep) gridVals.push(g);
+  if (!gridVals.length) gridVals.push(lo, hi);
   for (const gv of gridVals) {
-    if (seenG.has(gv)) continue;
-    seenG.add(gv);
     const gy = yOf(gv).toFixed(2);
     parts.push(
-      `<line x1="${WCHART_PAD_L}" y1="${gy}" x2="${(WCHART_VB_W - WCHART_PAD_R).toFixed(2)}" y2="${gy}" ` +
-        `stroke="var(--hairline)" stroke-width="0.5" />`
+      `<line x1="${PAD_L}" y1="${gy}" x2="${(vbW - PAD_R).toFixed(2)}" y2="${gy}" ` +
+        `stroke="var(--hairline)" stroke-width="0.6" />`
     );
     parts.push(
-      `<text x="${(WCHART_VB_W - WCHART_PAD_R + 2).toFixed(2)}" y="${(yOf(gv) + 2.4).toFixed(2)}" ` +
-        `font-size="7" fill="var(--txt3)" text-anchor="start">${Math.round(gv)}</text>`
+      `<text x="${(PAD_L - 5).toFixed(2)}" y="${(yOf(gv) + 3).toFixed(2)}" ` +
+        `font-size="9" fill="var(--txt3)" text-anchor="end">${Math.round(gv)}</text>`
     );
   }
 
-  // one line (or dot) per member; collect the end-labels for a vertical-dodge pass so the
-  // emojis don't overlap when several members sit at very close weights.
+  // one line (or dot) per member; collect the RIGHT-edge end-labels for a vertical-dodge.
   const labels = [];
   for (const s of series) {
     const coords = s.pts.map((p) => ({ x: xOf(p.idx), y: yOf(p.lb) }));
     const last = coords[coords.length - 1];
     if (coords.length === 1) {
-      // single point -> a 3px (radius 1.6) dot, no path.
-      parts.push(`<circle cx="${last.x.toFixed(2)}" cy="${last.y.toFixed(2)}" r="1.6" fill="${s.color}" opacity="${s.opacity}" />`);
+      parts.push(`<circle cx="${last.x.toFixed(2)}" cy="${last.y.toFixed(2)}" r="2.2" fill="${s.color}" opacity="${s.opacity}" />`);
     } else {
       const d = smoothPath(coords);
       parts.push(
@@ -820,25 +823,18 @@ function buildWeightChart(now) {
           `stroke-linecap="round" stroke-linejoin="round" opacity="${s.opacity}" />`
       );
     }
-    // end-label: the member's emoji (REQ 14) else first initial, just right of the last
-    // point, clamped inside the canvas (placed left if it would overflow).
     const emoji = emojiOf({ emoji: s.member.emoji, id: s.uid });
-    const text = emoji || (displayNameOf(s.member).charAt(0) || '?');
-    const wouldOverflow = last.x + 8 > WCHART_VB_W;
     labels.push({
-      x: wouldOverflow ? last.x - 3 : last.x + 3,
-      anchor: wouldOverflow ? 'end' : 'start',
+      x: vbW - PAD_R + 2, anchor: 'start',
       idealY: last.y, y: last.y,
       fill: s.isMe ? 'var(--red)' : s.color,
-      text,
+      text: emoji || (displayNameOf(s.member).charAt(0) || '?'),
     });
   }
-  // vertical-dodge: sort by ideal y, push each at least LBL_GAP below the previous, then
-  // shift the whole stack up if it overran the bottom and clamp to the top. Lines stay at
-  // their true end positions; only the text labels move so they never overlap.
-  const LBL_GAP = 8;
-  const lblTop = WCHART_PAD_T + 3;
-  const lblBot = WCHART_VB_H - WCHART_PAD_B - 1;
+  // vertical-dodge the end-labels so emojis never overlap when weights are close.
+  const LBL_GAP = 11;
+  const lblTop = PAD_T + 4;
+  const lblBot = vbH - PAD_B + 1;
   labels.sort((a, b) => a.idealY - b.idealY);
   for (let i = 0; i < labels.length; i++) {
     labels[i].y = i > 0 ? Math.max(labels[i].idealY, labels[i - 1].y + LBL_GAP) : labels[i].idealY;
@@ -848,14 +844,17 @@ function buildWeightChart(now) {
   for (const L of labels) {
     if (L.y < lblTop) L.y = lblTop;
     parts.push(
-      `<text x="${L.x.toFixed(2)}" y="${(L.y + 2.4).toFixed(2)}" font-size="7" ` +
+      `<text x="${L.x.toFixed(2)}" y="${(L.y + 3).toFixed(2)}" font-size="11" ` +
         `fill="${L.fill}" text-anchor="${L.anchor}">${escapeHtml(L.text)}</text>`
     );
   }
 
   elWchartSvg.innerHTML =
-    `<svg viewBox="0 0 ${WCHART_VB_W} ${WCHART_VB_H}" preserveAspectRatio="xMidYMid meet" ` +
+    `<svg viewBox="0 0 ${vbW} ${vbH}" preserveAspectRatio="xMidYMid meet" ` +
     `role="img" aria-label="Weight over time, last ${rangeDays} days">${parts.join('')}</svg>`;
+
+  // stash geometry for the tap/drag scrubber (wired separately).
+  _wchartGeom = { vbW, vbH, PAD_L, PAD_R, PAD_T, PAD_B, innerW, rangeDays, keysOldestFirst, xOf, series };
 }
 
 // =============================================================================
@@ -1017,13 +1016,16 @@ function setTab(tab) {
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
+  // v4.5: screens stay in the DOM and SLIDE via CSS transform (see .screen in styles.css),
+  // so we toggle is-active + aria-hidden instead of `hidden` (display:none would kill the
+  // transition). #stage clips the off-screen one.
   if (elScreens.grid) {
     elScreens.grid.classList.toggle('is-active', tab === 'grid');
-    elScreens.grid.hidden = tab !== 'grid';
+    elScreens.grid.setAttribute('aria-hidden', tab === 'grid' ? 'false' : 'true');
   }
   if (elScreens.me) {
     elScreens.me.classList.toggle('is-active', tab === 'me');
-    elScreens.me.hidden = tab !== 'me';
+    elScreens.me.setAttribute('aria-hidden', tab === 'me' ? 'false' : 'true');
   }
   repaint();
 }
@@ -1193,6 +1195,22 @@ function renderMe(now) {
   if (elMeWeight && document.activeElement !== elMeWeight) {
     const w = (weightsByUser.get(myUserId) || {})[cur];
     elMeWeight.value = Number.isFinite(w) ? String(w) : '';
+  }
+
+  // v4.5: "already logged today" indicator — today's weight + ~how long ago (best-effort
+  // from lastActiveAt; the per-weigh-in timestamp isn't loaded into the chart map).
+  if (elMeWeightLogged) {
+    const todayW = (weightsByUser.get(myUserId) || {})[cur];
+    if (Number.isFinite(todayW)) {
+      const la = me && me.lastActiveAt;
+      const laMs = la && typeof la.toMillis === 'function' ? la.toMillis() : null;
+      const rt = relativeTime(laMs, now);
+      elMeWeightLogged.textContent =
+        `✓ Logged today: ${todayW} lb` + (rt.text && rt.text !== 'now' ? ` · ${rt.text} ago` : '');
+      elMeWeightLogged.classList.remove('hidden');
+    } else {
+      elMeWeightLogged.classList.add('hidden');
+    }
   }
 
   // ======== SETTINGS zone (collapsible; rendered regardless of collapse state) ========
@@ -2250,6 +2268,23 @@ function wireGridTaps() {
   });
 }
 
+// v4.5: collapsible weight chart. Tapping the title bar collapses the body to just the
+// header; the state is persisted. Re-fitting (the dynamic viewBox needs the real height)
+// is forced on EXPAND because the chart wasn't laid out while collapsed.
+function wireChartCollapse() {
+  const btn = $('wchart-collapse');
+  if (!btn || !elSocialChart) return;
+  try { if (localStorage.getItem('gymboard.chartCollapsed') === '1') elSocialChart.classList.add('collapsed'); } catch (_) {}
+  const sync = () => btn.setAttribute('aria-expanded', elSocialChart.classList.contains('collapsed') ? 'false' : 'true');
+  sync();
+  btn.addEventListener('click', () => {
+    const collapsed = elSocialChart.classList.toggle('collapsed');
+    try { localStorage.setItem('gymboard.chartCollapsed', collapsed ? '1' : '0'); } catch (_) {}
+    sync();
+    if (!collapsed) { _wchartSig = null; renderWeightChart(anchoredNow()); }
+  });
+}
+
 // v4 (#3): the 30d/90d range toggle is a PURE re-render — the 90-day weights window is
 // already fetched (WEIGHT_WINDOW_DAYS=90), so switching never refetches.
 function wireWeightChart() {
@@ -2557,6 +2592,7 @@ async function boot() {
   wireMe();
   wireGridTaps();
   wireWeightChart();
+  wireChartCollapse();
   wireReclaim();
   wireError();
   document.addEventListener('visibilitychange', onVisibility);

@@ -189,8 +189,15 @@ button:disabled { cursor:default; }
 
 /* ============ STAGE + SCREENS ============ */
 #stage { flex:1 1 auto; position:relative; overflow:hidden; min-height:0; }
-.screen { position:absolute; inset:0; display:none; flex-direction:column; overflow:hidden; min-height:0; }
-.screen.is-active { display:flex; }
+/* v4.5: both screens stay mounted and SLIDE horizontally via transform (a real swipe
+   animation); #stage clips the off-screen one. ME is the left screen, SOCIAL the right. */
+.screen { position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden; min-height:0;
+  transition:transform 300ms var(--ease-out); will-change:transform; }
+#screen-me { transform:translateX(-100%); }
+#screen-me.is-active { transform:translateX(0); }
+#screen-grid { transform:translateX(100%); }
+#screen-grid.is-active { transform:translateX(0); }
+@media (prefers-reduced-motion: reduce) { .screen { transition:none; } }
 
 /* the ONLY scrollers in the whole app */
 .scrolly { overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
@@ -457,10 +464,25 @@ button:disabled { cursor:default; }
 /* grid legend strip — v4 (#11): now at the TOP of the SOCIAL board (border-BOTTOM). */
 .grid-legend {
   flex:0 0 auto;
-  display:flex; flex-wrap:wrap; gap:3px 8px; justify-content:center; align-items:center;
-  padding:4px 8px;
+  display:flex; flex-wrap:nowrap; align-items:center; gap:10px; justify-content:flex-start;
+  padding:6px 12px;
   border-bottom:1px solid var(--hairline); background:var(--g1);
+  overflow-x:auto; -webkit-overflow-scrolling:touch;
 }
+/* v4.5 legend: ONE clean row — a labeled example cell (top half = workout, bottom half =
+   nutrition) on the left, then a compact color key. Replaces the old wrapping two-row key. */
+.lgex { display:inline-flex; align-items:center; gap:7px; flex:0 0 auto; }
+.lgex .leg-cell-big { width:19px; height:19px; border-radius:4px; }
+.lgex-labels { display:flex; flex-direction:column; gap:1px; line-height:1.18; }
+.lgex-t, .lgex-b { font-size:8px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; white-space:nowrap; }
+.lgex-t { color:var(--txt2); }
+.lgex-b { color:var(--txt3); }
+.lgkey { display:inline-flex; align-items:center; gap:10px; flex:0 0 auto; padding-left:10px; border-left:1px solid var(--hairline); }
+.lgchip { display:inline-flex; align-items:center; gap:4px; font-size:8.5px; letter-spacing:.03em; color:var(--txt3); text-transform:uppercase; white-space:nowrap; }
+.lgsw { width:10px; height:10px; border-radius:2px; flex:0 0 auto; }
+.lgsw.lg-done { background:var(--st-done); }
+.lgsw.lg-missed { background:var(--st-missed); }
+.lgsw.lg-rest { background:var(--st-rest); border:1px solid var(--etch); }
 .leg { display:inline-flex; align-items:center; gap:3px; font-size:7.5px; letter-spacing:.03em; color:var(--txt3); text-transform:uppercase; }
 .leg-missed-note { font-size:8px; color:var(--txt3); opacity:.8; }
 
@@ -649,6 +671,9 @@ button:disabled { cursor:default; }
 .me-nut-indicator.hit { color:var(--st-done); }
 .me-nut-indicator.pending { color:var(--txt3); }
 .me-track-sep { height:1px; background:var(--hairline); margin:12px 0; }
+/* v4.5: "already logged today" weight indicator (green, above the weight input). */
+.me-weight-logged { font-size:11px; color:var(--st-done); font-weight:700; letter-spacing:.02em; margin-bottom:9px; }
+.me-weight-logged.hidden { display:none; }
 
 /* add-meal form: two inputs + ADD */
 .me-meal-add { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
@@ -824,17 +849,24 @@ button:disabled { cursor:default; }
    SVG, no libraries. "me" line is red; others are muted gray/white tints. Dark palette;
    these are NOT status colors (no green/red status semantics here). ---- */
 .social-chart {
-  flex:0 0 18%; min-height:84px; max-height:150px;
+  flex:0 0 auto;
   display:flex; flex-direction:column;
   border-top:1px solid var(--hairline); background:var(--g0);
-  padding:5px 12px max(5px,env(safe-area-inset-bottom));
   overflow:hidden;
 }
+.social-chart.collapsed .wchart-body { display:none; }
 .social-chart.hidden { display:none; }
 .wchart-head {
   display:flex; align-items:center; justify-content:space-between;
-  margin-bottom:4px; flex:0 0 auto;
+  flex:0 0 auto; padding:6px 12px 4px; gap:8px;
 }
+.wchart-collapse {
+  display:inline-flex; align-items:center; gap:6px; flex:1 1 auto; min-width:0;
+  background:none; border:none; padding:0; cursor:pointer; color:inherit; text-align:left;
+  -webkit-tap-highlight-color:transparent;
+}
+.wchart-caret { font-size:9px; color:var(--txt3); transition:transform 200ms var(--ease-out); }
+.social-chart.collapsed .wchart-caret { transform:rotate(-90deg); }
 .wchart-title {
   font-size:9px; letter-spacing:.12em; color:var(--txt3); font-weight:700;
   text-transform:uppercase; white-space:nowrap;
@@ -848,6 +880,7 @@ button:disabled { cursor:default; }
 }
 .wchart-toggle .wc-range.on { background:var(--g4); color:var(--txt); border-color:var(--edge); }
 /* the SVG host fills the remaining height; the <svg> stretches to it. */
+.wchart-body { flex:0 0 auto; height:152px; padding:2px 12px max(6px,env(safe-area-inset-bottom)); display:flex; flex-direction:column; min-height:0; }
 .wchart-svg { flex:1 1 auto; min-height:0; width:100%; }
 .wchart-svg svg { display:block; width:100%; height:100%; }
 .wchart-empty {
