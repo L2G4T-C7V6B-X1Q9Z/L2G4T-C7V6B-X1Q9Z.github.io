@@ -427,15 +427,16 @@ button:disabled { cursor:default; }
   --w:var(--g2); --n:var(--g2);
   background:var(--st-pending); /* flat fill behind the two bands */
 }
-/* v4 (#2): EXACT 50/50 split — top band = workout, bottom band = nutrition. The 1px
-   var(--g0) divider sits on the bottom band's top edge, visually at the 50% line. */
+/* v4.7: DIAGONAL split — upper-left triangle = workout, lower-right triangle = nutrition
+   (Soren's pick). The triangles meet on the anti-diagonal; a perfect day (done + hit, both
+   green) reads as a solid square, which is intentional. */
 .gcell .seg-w {
-  position:absolute; left:0; right:0; top:0; height:50%;
-  background:var(--w);
+  position:absolute; inset:0;
+  background:var(--w); clip-path:polygon(0 0, 100% 0, 0 100%);
 }
 .gcell .seg-n {
-  position:absolute; left:0; right:0; bottom:0; height:50%;
-  background:var(--n); border-top:1px solid var(--g0);
+  position:absolute; inset:0;
+  background:var(--n); clip-path:polygon(100% 0, 100% 100%, 0 100%);
 }
 .gcell.w-done    { --w:var(--st-done); }
 .gcell.w-missed  { --w:var(--st-missed); }
@@ -448,12 +449,11 @@ button:disabled { cursor:default; }
 .gcell.n-none    { --n:var(--st-none); }
 .gcell.n-pending { --n:var(--st-pending); }
 /* REST + OFF (v4 #1): both say "rest" in small letters, no diagonal/mark. */
-.gcell.w-rest .seg-w, .gcell.w-off .seg-w { display:flex; align-items:center; justify-content:center; }
-.gcell.w-rest .seg-w::after, .gcell.w-off .seg-w::after { content:'rest'; font-size:7px; font-weight:700; letter-spacing:.02em; color:var(--txt3); text-transform:lowercase; line-height:1; }
+.gcell.w-rest .seg-w::after, .gcell.w-off .seg-w::after { content:'rest'; position:absolute; top:3px; left:3px; font-size:7px; font-weight:700; letter-spacing:.02em; color:var(--txt3); text-transform:lowercase; line-height:1; }
 /* tiny dim corner tag for a typed workout — decoration only, never colored red. */
 .gcell-wtag {
-  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:3;
-  font-size:8px; font-weight:700; line-height:1; letter-spacing:.02em;
+  position:absolute; top:2.5px; left:3px; z-index:3;
+  font-size:7.5px; font-weight:700; line-height:1; letter-spacing:.01em;
   color:rgba(255,255,255,.92); font-family:var(--font-mono); text-transform:uppercase;
   -webkit-text-stroke:0; pointer-events:none; white-space:nowrap;
 }
@@ -495,14 +495,14 @@ button:disabled { cursor:default; }
   font-size:8px; font-weight:700; letter-spacing:.04em; color:var(--txt3); text-transform:uppercase; white-space:nowrap;
 }
 
-/* legend uses .leg-cell — the SAME horizontal split as the real grid cell. */
+/* legend uses .leg-cell — the SAME diagonal split as the real grid cell. */
 .leg-cell {
   width:11px; height:11px; border-radius:3px; flex:0 0 auto; position:relative; overflow:hidden;
   border:1px solid var(--hairline); --w:var(--g2); --n:var(--g2);
   background:var(--st-pending);
 }
-.leg-cell .seg-w { position:absolute; left:0; right:0; top:0; height:50%; background:var(--w); }
-.leg-cell .seg-n { position:absolute; left:0; right:0; bottom:0; height:50%; background:var(--n); border-top:1px solid var(--g0); }
+.leg-cell .seg-w { position:absolute; inset:0; background:var(--w); clip-path:polygon(0 0, 100% 0, 0 100%); }
+.leg-cell .seg-n { position:absolute; inset:0; background:var(--n); clip-path:polygon(100% 0, 100% 100%, 0 100%); }
 .leg-cell.w-done { --w:var(--st-done); }
 .leg-cell.w-missed { --w:var(--st-missed); }
 .leg-cell.w-rest { --w:var(--st-rest); }

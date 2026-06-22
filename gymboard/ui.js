@@ -591,7 +591,7 @@ function renderGrid(now) {
     elGridLegend.innerHTML =
       `<span class="lgex" aria-label="cell key: top half is workout, bottom half is nutrition">` +
         `<span class="leg-cell leg-cell-big w-done n-hit"><span class="seg-w"></span><span class="seg-n"></span></span>` +
-        `<span class="lgex-labels"><span class="lgex-t">top · workout</span><span class="lgex-b">bottom · nutrition</span></span>` +
+        `<span class="lgex-labels"><span class="lgex-t">↖ workout</span><span class="lgex-b">↘ nutrition</span></span>` +
       `</span>` +
       `<span class="lgkey">` +
         `<span class="lgchip"><span class="lgsw lg-done"></span>done</span>` +
