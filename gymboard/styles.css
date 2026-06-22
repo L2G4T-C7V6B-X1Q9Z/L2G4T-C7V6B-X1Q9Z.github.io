@@ -452,10 +452,10 @@ button:disabled { cursor:default; }
 .gcell.w-rest .seg-w::after, .gcell.w-off .seg-w::after { content:'rest'; font-size:7px; font-weight:700; letter-spacing:.02em; color:var(--txt3); text-transform:lowercase; line-height:1; }
 /* tiny dim corner tag for a typed workout — decoration only, never colored red. */
 .gcell-wtag {
-  position:absolute; top:1px; right:2px; z-index:3;
-  font-size:7px; font-weight:700; line-height:1; letter-spacing:0;
-  color:var(--txt3); font-family:var(--font-mono);
-  -webkit-text-stroke:0; pointer-events:none;
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:3;
+  font-size:8px; font-weight:700; line-height:1; letter-spacing:.02em;
+  color:rgba(255,255,255,.92); font-family:var(--font-mono); text-transform:uppercase;
+  -webkit-text-stroke:0; pointer-events:none; white-space:nowrap;
 }
 .gcell.prejoin { --w:var(--g1); --n:var(--g1); border-color:var(--hairline); clip-path:polygon(9px 0, 100% 0, 100% 100%, 0 100%, 0 9px); }
 .gcell.prejoin .seg-w::before, .gcell.prejoin .gcell-wtag { display:none; }

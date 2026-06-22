@@ -210,13 +210,13 @@ const NUTMODE_HINT = Object.fromEntries(NUTRITION_MODES.map((m) => [m.key, m.hin
 // v3 workout types (lowercase stored). `label` = the picker button text; `tag` = the
 // tiny 1-2 letter corner glyph painted on a done WORKOUT band in the grid.
 const WORKOUT_TYPES = [
-  { key: 'upper', label: 'Upper', tag: 'U' },
-  { key: 'lower', label: 'Lower', tag: 'Lo' },
-  { key: 'push', label: 'Push', tag: 'Ps' },
-  { key: 'pull', label: 'Pull', tag: 'Pl' },
-  { key: 'legs', label: 'Legs', tag: 'Lg' },
-  { key: 'full', label: 'Full', tag: 'F' },
-  { key: 'cardio', label: 'Cardio', tag: 'C' },
+  { key: 'upper', label: 'Upper', tag: 'UP' },
+  { key: 'lower', label: 'Lower', tag: 'LOW' },
+  { key: 'push', label: 'Push', tag: 'PUSH' },
+  { key: 'pull', label: 'Pull', tag: 'PULL' },
+  { key: 'legs', label: 'Legs', tag: 'LEGS' },
+  { key: 'full', label: 'Full', tag: 'FULL' },
+  { key: 'cardio', label: 'Cardio', tag: 'CARD' },
 ];
 const WTYPE_LABEL = Object.fromEntries(WORKOUT_TYPES.map((t) => [t.key, t.label]));
 const WTYPE_TAG = Object.fromEntries(WORKOUT_TYPES.map((t) => [t.key, t.tag]));
