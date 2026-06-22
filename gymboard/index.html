@@ -92,7 +92,10 @@
             <input id="me-add-protein" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="protein g">
             <button id="me-add-meal" class="me-meal-btn" type="button">ADD</button>
           </div>
-          <button id="me-save-quickmeal" class="me-textbtn" type="button">+ save as quick meal</button>
+          <div class="me-qm-save">
+            <input id="me-qm-name" class="me-input me-meal-in" type="text" maxlength="24" placeholder="name (optional)">
+            <button id="me-save-quickmeal" class="me-textbtn" type="button">+ save as quick meal</button>
+          </div>
           <div id="me-meals" class="me-meals" aria-label="Meals logged today"></div>
         </div>
 
@@ -155,6 +158,7 @@
                 <input id="me-qm-protein" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="protein g">
                 <input id="me-qm-label" class="me-input me-meal-in" type="text" maxlength="24" placeholder="label (optional)">
                 <button id="me-qm-add" class="me-meal-btn" type="button">SAVE</button>
+                <button id="me-qm-cancel" class="me-textbtn hidden" type="button">cancel</button>
               </div>
             </div>
 

@@ -112,6 +112,9 @@ const elMeQmKcal = $('me-qm-kcal');
 const elMeQmProtein = $('me-qm-protein');
 const elMeQmLabel = $('me-qm-label');
 const elMeQmAdd = $('me-qm-add');
+const elMeQmName = $('me-qm-name'); // optional name for the TODAY "+ save as quick meal"
+const elMeQmCancel = $('me-qm-cancel'); // cancel an in-progress SETTINGS quick-meal edit
+let qmEditIdx = null; // index of the SETTINGS quick-meal being edited, or null
 const elMeTypeChooser = $('me-typechooser'); // which workout types show in the picker
 const elMeSaveTypes = $('me-save-types');
 
@@ -911,6 +914,7 @@ function renderQuickMealManager(member) {
   const presets = savedMealsOf(member);
   if (!presets.length) {
     elMeQmManage.innerHTML = '';
+    syncQmEditUI();
     return;
   }
   const rows = presets.map((m, i) => {
@@ -918,14 +922,16 @@ function renderQuickMealManager(member) {
     const p = Number.isFinite(m.protein) ? Math.round(m.protein) : 0;
     const label = (typeof m.label === 'string' && m.label.trim()) ? m.label.trim() : `${k} kcal`;
     return (
-      `<div class="me-qm-row">` +
+      `<div class="me-qm-row${qmEditIdx === i ? ' editing' : ''}">` +
       `<span class="qm-row-label">${escapeHtml(label)}</span>` +
       `<span class="qm-row-fig">${k} / ${p}g</span>` +
+      `<button class="qm-row-edit" type="button" data-qm-edit="${i}" aria-label="edit ${escapeHtml(label)}">edit</button>` +
       `<button class="qm-row-x" type="button" data-qm-rm="${i}" aria-label="remove ${escapeHtml(label)}">✕</button>` +
       `</div>`
     );
   });
   elMeQmManage.innerHTML = rows.join('');
+  syncQmEditUI();
 }
 
 // v3.1: SETTINGS workout-type chooser — all 7 canonical types, the enabled ones marked
@@ -1216,25 +1222,38 @@ async function meSaveQuickMeal(fromSettings) {
     return;
   }
   const preset = { kcal, protein: protein != null ? protein : 0 };
-  if (fromSettings && elMeQmLabel) {
-    const label = elMeQmLabel.value.trim();
+  const nameEl = fromSettings ? elMeQmLabel : elMeQmName;
+  if (nameEl) {
+    const label = nameEl.value.trim();
     if (label) preset.label = label;
   }
   const current = savedMealsOf(me);
-  if (current.length >= 20) {
+  const editing = fromSettings && qmEditIdx != null && qmEditIdx >= 0 && qmEditIdx < current.length;
+  if (!editing && current.length >= 20) {
     toast('quick-meal limit reached (20)');
     return;
   }
   try {
-    await data.addSavedMeal(current, preset);
-    me.savedMeals = current.concat([preset]); // reflect locally pre-snapshot
+    let next;
+    if (editing) {
+      next = current.slice();
+      next[qmEditIdx] = preset;
+      await data.setSavedMeals(next);
+    } else {
+      next = current.concat([preset]);
+      await data.addSavedMeal(current, preset);
+    }
+    me.savedMeals = next; // reflect locally pre-snapshot
     if (fromSettings) {
       if (elMeQmKcal) elMeQmKcal.value = '';
       if (elMeQmProtein) elMeQmProtein.value = '';
       if (elMeQmLabel) elMeQmLabel.value = '';
+      qmEditIdx = null;
+    } else if (elMeQmName) {
+      elMeQmName.value = '';
     }
     renderMe(anchoredNow());
-    toast('quick meal saved');
+    toast(editing ? 'quick meal updated' : 'quick meal saved');
   } catch (err) {
     handleWriteError(err);
   }
@@ -1249,11 +1268,43 @@ async function meRemoveQuickMeal(idx) {
   try {
     await data.removeSavedMeal(current, idx);
     me.savedMeals = current.slice(0, idx).concat(current.slice(idx + 1));
+    if (qmEditIdx != null) meCancelQmEdit(); // a remove invalidates any in-progress edit index
     renderMe(anchoredNow());
     toast('quick meal removed');
   } catch (err) {
     handleWriteError(err);
   }
+}
+
+// v3.1: reflect the SETTINGS quick-meal edit state on the SAVE/cancel controls.
+function syncQmEditUI() {
+  if (elMeQmAdd) elMeQmAdd.textContent = qmEditIdx != null ? 'UPDATE' : 'SAVE';
+  if (elMeQmCancel) elMeQmCancel.classList.toggle('hidden', qmEditIdx == null);
+}
+
+// v3.1: load a saved preset into the SETTINGS manager form to edit it (name/kcal/protein).
+function meEditQuickMeal(idx) {
+  const me = memberById(myUserId);
+  if (!me) return;
+  const m = savedMealsOf(me)[idx];
+  if (!m) return;
+  qmEditIdx = idx;
+  if (elMeQmKcal) elMeQmKcal.value = Number.isFinite(m.kcal) ? String(Math.round(m.kcal)) : '';
+  if (elMeQmProtein) elMeQmProtein.value = Number.isFinite(m.protein) ? String(Math.round(m.protein)) : '';
+  if (elMeQmLabel) elMeQmLabel.value = (typeof m.label === 'string') ? m.label : '';
+  renderQuickMealManager(me); // highlight the editing row + flip SAVE->UPDATE
+  if (elMeQmKcal) elMeQmKcal.focus();
+}
+
+// v3.1: abandon an in-progress quick-meal edit (clear the form, drop the edit index).
+function meCancelQmEdit() {
+  qmEditIdx = null;
+  if (elMeQmKcal) elMeQmKcal.value = '';
+  if (elMeQmProtein) elMeQmProtein.value = '';
+  if (elMeQmLabel) elMeQmLabel.value = '';
+  const me = memberById(myUserId);
+  if (me) renderQuickMealManager(me);
+  else syncQmEditUI();
 }
 
 // v3.1: toggle a type in the SETTINGS chooser's PENDING selection (persisted on save).
@@ -1436,8 +1487,11 @@ function wireMe() {
   if (elMeSaveGoals) elMeSaveGoals.addEventListener('click', meSaveGoals);
   // ---- SETTINGS: QUICK MEALS manager ----
   if (elMeQmAdd) elMeQmAdd.addEventListener('click', () => meSaveQuickMeal(true));
+  if (elMeQmCancel) elMeQmCancel.addEventListener('click', meCancelQmEdit);
   if (elMeQmManage)
     elMeQmManage.addEventListener('click', (e) => {
+      const ed = e.target.closest('.qm-row-edit');
+      if (ed) { meEditQuickMeal(Number(ed.dataset.qmEdit)); return; }
       const x = e.target.closest('.qm-row-x');
       if (x) meRemoveQuickMeal(Number(x.dataset.qmRm));
     });

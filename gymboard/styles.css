@@ -390,8 +390,16 @@ button:disabled { cursor:default; }
 .gcell.n-hit     { --n:var(--st-done); }
 .gcell.n-none    { --n:var(--st-none); }
 .gcell.n-pending { --n:var(--st-pending); }
-/* OFF keeps a single neutral tick (a tick, not a hatch) — reads as "excused". */
-.gcell.w-off .seg-w::before { content:''; position:absolute; z-index:3; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-45deg); width:9px; height:1.5px; background:var(--txt3); border-radius:1px; }
+/* REST (scheduled rest day) — say "rest" in small letters, no diagonal/mark. */
+.gcell.w-rest .seg-w { display:flex; align-items:center; justify-content:center; }
+.gcell.w-rest .seg-w::after { content:'rest'; font-size:7px; font-weight:700; letter-spacing:.02em; color:var(--txt3); text-transform:lowercase; line-height:1; }
+/* DAY OFF (ad-hoc holiday/sick day) — diagonal GREEN lines, so it clearly reads as
+   intentional time off, NOT a missed workout (which is red). */
+.gcell.w-off .seg-w {
+  background:
+    repeating-linear-gradient(45deg, var(--st-done) 0 1.5px, transparent 1.5px 5px),
+    var(--st-off);
+}
 /* tiny dim corner tag for a typed workout — decoration only, never colored red. */
 .gcell-wtag {
   position:absolute; top:1px; right:2px; z-index:3;
@@ -428,6 +436,8 @@ button:disabled { cursor:default; }
 .leg-cell.n-hit { --n:var(--st-done); }
 .leg-cell.n-none { --n:var(--st-none); }
 .leg-cell.n-pending { --n:var(--st-pending); }
+/* legend: DAY OFF swatch mirrors the grid's green diagonal lines */
+.leg-cell.w-off .seg-w { background: repeating-linear-gradient(45deg, var(--st-done) 0 1px, transparent 1px 3.5px), var(--st-off); }
 
 /* ============ LOUD RECLAIM MODAL ============ */
 #reclaim-backdrop {
@@ -654,6 +664,14 @@ button:disabled { cursor:default; }
 .me-qm-row .qm-row-fig { flex:0 0 auto; font-size:10.5px; color:var(--txt3); font-variant-numeric:tabular-nums lining-nums; }
 .me-qm-row .qm-row-x { flex:0 0 auto; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:var(--r-sm); background:transparent; border:none; color:var(--txt3); font-size:14px; }
 .me-qm-row .qm-row-x:active { background:var(--g3); color:var(--txt2); }
+.me-qm-row .qm-row-edit { flex:0 0 auto; height:28px; padding:0 9px; display:inline-flex; align-items:center; border-radius:var(--r-sm); background:transparent; border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.04em; }
+.me-qm-row .qm-row-edit:active { background:var(--g3); color:var(--txt); }
+.me-qm-row.editing { border-color:var(--red-wash-bd); background:var(--red-wash); }
+/* TODAY "save as quick meal" row: optional name + the save button */
+.me-qm-save { display:flex; gap:8px; align-items:center; margin:2px 0 6px; }
+.me-qm-save .me-textbtn { flex:0 0 auto; margin-bottom:0; padding:6px 0; white-space:nowrap; }
+/* solo figure on an unnamed quick-meal chip reads a touch larger than the sub-figure */
+.me-qm-chip .qm-fig.solo { font-size:11px; font-weight:700; color:var(--txt); }
 
 /* WORKOUT TYPES chooser reuses .me-typepick / .me-type-btn (a chosen type = filled face). */
 
