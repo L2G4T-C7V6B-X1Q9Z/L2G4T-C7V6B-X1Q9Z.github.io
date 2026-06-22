@@ -803,7 +803,9 @@ function buildWeightChart(now) {
     );
   }
 
-  // one line (or dot) + end-label per member.
+  // one line (or dot) per member; collect the end-labels for a vertical-dodge pass so the
+  // emojis don't overlap when several members sit at very close weights.
+  const labels = [];
   for (const s of series) {
     const coords = s.pts.map((p) => ({ x: xOf(p.idx), y: yOf(p.lb) }));
     const last = coords[coords.length - 1];
@@ -820,13 +822,33 @@ function buildWeightChart(now) {
     // end-label: the member's emoji (REQ 14) else first initial, just right of the last
     // point, clamped inside the canvas (placed left if it would overflow).
     const emoji = emojiOf({ emoji: s.member.emoji, id: s.uid });
-    const label = emoji || (displayNameOf(s.member).charAt(0) || '?');
+    const text = emoji || (displayNameOf(s.member).charAt(0) || '?');
     const wouldOverflow = last.x + 8 > WCHART_VB_W;
-    const lx = wouldOverflow ? last.x - 3 : last.x + 3;
-    const anchor = wouldOverflow ? 'end' : 'start';
+    labels.push({
+      x: wouldOverflow ? last.x - 3 : last.x + 3,
+      anchor: wouldOverflow ? 'end' : 'start',
+      idealY: last.y, y: last.y,
+      fill: s.isMe ? 'var(--red)' : s.color,
+      text,
+    });
+  }
+  // vertical-dodge: sort by ideal y, push each at least LBL_GAP below the previous, then
+  // shift the whole stack up if it overran the bottom and clamp to the top. Lines stay at
+  // their true end positions; only the text labels move so they never overlap.
+  const LBL_GAP = 8;
+  const lblTop = WCHART_PAD_T + 3;
+  const lblBot = WCHART_VB_H - WCHART_PAD_B - 1;
+  labels.sort((a, b) => a.idealY - b.idealY);
+  for (let i = 0; i < labels.length; i++) {
+    labels[i].y = i > 0 ? Math.max(labels[i].idealY, labels[i - 1].y + LBL_GAP) : labels[i].idealY;
+  }
+  const overflow = labels.length ? labels[labels.length - 1].y - lblBot : 0;
+  if (overflow > 0) for (const L of labels) L.y -= overflow;
+  for (const L of labels) {
+    if (L.y < lblTop) L.y = lblTop;
     parts.push(
-      `<text x="${lx.toFixed(2)}" y="${(last.y + 2.4).toFixed(2)}" font-size="7" ` +
-        `fill="${s.isMe ? 'var(--red)' : s.color}" text-anchor="${anchor}">${escapeHtml(label)}</text>`
+      `<text x="${L.x.toFixed(2)}" y="${(L.y + 2.4).toFixed(2)}" font-size="7" ` +
+        `fill="${L.fill}" text-anchor="${L.anchor}">${escapeHtml(L.text)}</text>`
     );
   }
 
