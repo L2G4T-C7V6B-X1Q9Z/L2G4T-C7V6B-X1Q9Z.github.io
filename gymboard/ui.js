@@ -69,8 +69,6 @@ const elScreens = { grid: $('screen-grid'), me: $('screen-me') };
 const elGrid = $('grid');
 const elGridRange = $('grid-range');
 const elGridLegend = $('grid-legend');
-const elWorkoutTile = $('workout-tile');
-const elFoodTile = $('food-tile'); // v3: "+ FOOD" — jumps to ME + focuses the meal input
 const elReclaim = $('reclaim');
 const elReclaimBackdrop = $('reclaim-backdrop');
 const elReclaimBtn = $('reclaim-btn');
@@ -85,9 +83,12 @@ const elMeCalBar = $('me-cal-bar');
 const elMeProFig = $('me-pro-fig');
 const elMeProBar = $('me-pro-bar');
 const elMeNutInd = $('me-nut-indicator');
+const elMeNutDone = $('me-nutdone'); // v3.1 "mark nutrition done" toggle (sets `ate`)
 const elMeAddKcal = $('me-add-kcal');
 const elMeAddProtein = $('me-add-protein');
 const elMeAddMeal = $('me-add-meal');
+const elMeSaveQuickMeal = $('me-save-quickmeal'); // v3.1 "+ save as quick meal"
+const elMeQuickMeals = $('me-quickmeals'); // v3.1 quick-meal preset chips (TODAY)
 const elMeMeals = $('me-meals');
 const elMeWorkout = $('me-workout');
 const elMeWType = $('me-wtype'); // workout-type picker (ME today card)
@@ -103,26 +104,30 @@ const elMeName = $('me-name');
 const elMeRollover = $('me-rollover');
 const elMeHideWeight = $('me-hideweight');
 const elMeSaveSettings = $('me-save-settings');
+// v3.1 SETTINGS handles
+const elMeSettings = $('me-settings'); // the collapsible SETTINGS wrapper
+const elMeSettingsToggle = $('me-settings-toggle');
+const elMeQmManage = $('me-qm-manage'); // quick-meal manager (add/remove presets)
+const elMeQmKcal = $('me-qm-kcal');
+const elMeQmProtein = $('me-qm-protein');
+const elMeQmLabel = $('me-qm-label');
+const elMeQmAdd = $('me-qm-add');
+const elMeTypeChooser = $('me-typechooser'); // which workout types show in the picker
+const elMeSaveTypes = $('me-save-types');
 
-// Day editor / detail handles
-const elDayEdit = $('dayedit');
-const elDayEditBackdrop = $('dayedit-backdrop');
-const elDayEditDate = $('dayedit-date');
-const elDeWorkout = $('de-workout');
-const elDeWType = $('de-wtype'); // workout-type picker (day editor)
-const elDeOff = $('de-off');
-const elDeAte = $('de-ate');
-const elDeKcal = $('de-kcal');
-const elDeProtein = $('de-protein');
-const elDeWeight = $('de-weight');
-const elDeCancel = $('de-cancel');
-const elDeSave = $('de-save');
+// Read-only day-detail handles (the editor is gone in v3.1)
 const elDayDetail = $('daydetail');
 const elDayDetailBackdrop = $('daydetail-backdrop');
 const elDayDetailTitle = $('daydetail-title');
 const elDayDetailSub = $('daydetail-sub');
 const elDayDetailBody = $('daydetail-body');
 const elDayDetailClose = $('daydetail-close');
+
+// Error popup (app-chrome alert — used for the rest-day/workout mutual-exclusion block).
+const elErrPop = $('errpop');
+const elErrPopBackdrop = $('errpop-backdrop');
+const elErrPopBody = $('errpop-body');
+const elErrPopBtn = $('errpop-btn');
 
 // =============================================================================
 // SESSION STATE (UI-side only; data.js owns Firebase truth)
@@ -131,7 +136,7 @@ let myUserId = null;
 let members = []; // latest /users snapshot (archived==false), as data.js hands it over
 let daysByUser = new Map(); // userId -> { [dateKey]: DayEntry }  (fetched window)
 let weightsByUser = new Map(); // userId -> { [dateKey]: lb }  ({} == hidden)
-let activeTab = 'grid';
+let activeTab = 'me'; // v3.1: ME is the default-active tab
 
 // Optimistic overlay: while a WORKOUT write for (userId+businessDate) is in flight (or
 // failed pre-rollback), we paint from THIS map, not the snapshot, and we never repaint
@@ -143,9 +148,6 @@ const unsynced = new Set();
 let rolloverTimer = null;
 let heartbeatTimer = null;
 let booted = false;
-
-// the (uid,dateKey) the day editor is currently open for.
-let editTarget = null;
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; // display order
 const WEEKDAY_NUMS = [1, 2, 3, 4, 5, 6, 0]; // logic weekday for each label (0=Sun..6=Sat)
@@ -168,6 +170,7 @@ const WORKOUT_TYPES = [
 ];
 const WTYPE_LABEL = Object.fromEntries(WORKOUT_TYPES.map((t) => [t.key, t.label]));
 const WTYPE_TAG = Object.fromEntries(WORKOUT_TYPES.map((t) => [t.key, t.tag]));
+const WTYPE_KEYS = WORKOUT_TYPES.map((t) => t.key); // canonical order/enum
 
 // =============================================================================
 // SMALL HELPERS
@@ -225,6 +228,21 @@ function subjectOf(member) {
 function displayNameOf(member) {
   const n = member && member.profile && member.profile.displayName;
   return (typeof n === 'string' && n.trim()) ? n.trim() : 'Member';
+}
+
+// v3.1: the workout types this member has enabled for their picker. An unset/empty list
+// means "all 7" (back-compat); we also filter out any stale value not in the canonical
+// enum so a corrupt doc can't render a junk button.
+function enabledTypesOf(member) {
+  const raw = member && Array.isArray(member.enabledWorkoutTypes) ? member.enabledWorkoutTypes : [];
+  const filtered = raw.filter((k) => WTYPE_KEYS.includes(k));
+  return filtered.length ? filtered : WTYPE_KEYS.slice();
+}
+
+// v3.1: this member's saved quick-meal presets (validated shape; defensive filter).
+function savedMealsOf(member) {
+  const raw = member && Array.isArray(member.savedMeals) ? member.savedMeals : [];
+  return raw.filter((m) => m && Number.isFinite(m.kcal));
 }
 
 function memberById(userId) {
@@ -422,14 +440,16 @@ function renderGrid(now) {
   elGrid.style.gridTemplateColumns = `44px repeat(${cols.length}, minmax(40px, 1fr))`;
 
   const cells = [];
-  // header row: corner + vertical member-name headers WITH the under-name stat stack.
+  // header row: corner + member-name headers. v3.1: emit the stat stack FIRST and the
+  // NAME LAST so the fixed-height flex-end .ghead pins every name to a common bottom
+  // baseline (stats float above it). Names stay inline-horizontal.
   cells.push('<div class="gcell-corner"></div>');
   for (const m of cols) {
     const isMe = idOf(m) === myUserId;
     cells.push(
       `<div class="ghead${isMe ? ' me' : ''}" title="${escapeHtml(displayNameOf(m))}">` +
-        `<span class="ghead-v">${escapeHtml(displayNameOf(m))}</span>` +
         headStackHtml(m, now, cur) +
+        `<span class="ghead-v">${escapeHtml(displayNameOf(m))}</span>` +
         `</div>`
     );
   }
@@ -487,44 +507,8 @@ function renderGrid(now) {
 }
 
 // =============================================================================
-// RENDER: BOTTOM BAR  (WORKOUT [optimistic toggle] | + FOOD [jump to ME])
-// =============================================================================
-function renderBottomBar(now) {
-  const me = memberById(myUserId);
-  if (!myUserId || !me) {
-    if (elWorkoutTile) {
-      elWorkoutTile.disabled = true;
-      const s = elWorkoutTile.querySelector('.wt-sub');
-      if (s) s.textContent = '';
-    }
-    if (elFoodTile) elFoodTile.disabled = true;
-    return;
-  }
-  const subject = subjectOf(me);
-  const cur = currentBusinessDate(now, subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
-  const days = effectiveDays(myUserId);
-  const day = days[cur];
-
-  // WORKOUT tile (unchanged: optimistic toggle + outbox + unsynced dot).
-  const done = !!(day && day.workout === true);
-  const wkey = `${myUserId}|${cur}`;
-  const wpending = unsynced.has(wkey);
-  elWorkoutTile.dataset.bizdate = cur;
-  elWorkoutTile.disabled = false;
-  elWorkoutTile.classList.toggle('done', done);
-  elWorkoutTile.classList.toggle('unsynced', wpending);
-  const wsub = elWorkoutTile.querySelector('.wt-sub');
-  if (wsub) {
-    if (done) wsub.textContent = wpending ? 'logged · syncing…' : 'logged · tap to undo';
-    else wsub.textContent = 'tap when you finish';
-  }
-
-  // "+ FOOD" tile writes NOTHING — it just routes to ME + focuses the meal input.
-  if (elFoodTile) elFoodTile.disabled = false;
-}
-
-// =============================================================================
 // FULL REPAINT (called on snapshot, on tap, on rollover, on heartbeat)
+// v3.1: no bottom bar — repaint just renders the active screen + the sync pip.
 // =============================================================================
 function repaint() {
   const now = anchoredNow();
@@ -533,8 +517,6 @@ function repaint() {
   } else {
     renderGrid(now);
   }
-  // the action bar (WORKOUT | + FOOD) is present on both screens.
-  renderBottomBar(now);
   updateSyncPip();
 }
 
@@ -612,12 +594,13 @@ function clearOptimistic(userId, dateKey) {
 }
 
 // =============================================================================
-// BOTTOM-BAR WIRING
-//   WORKOUT: optimistic + outbox + unsynced dot; TAP TOGGLES (second tap clears).
-//   + FOOD : no write — jumps to ME and focuses the meal kcal input.
+// OPTIMISTIC WORKOUT WRITE (commitWorkout) — the regression-critical path.
+//   Triggered from the ME "mark workout done" button (and the type picker). Keeps
+//   the optimistic paint + offline outbox + unsynced flag exactly as before; the
+//   only change vs v3 is the trigger moved from the bottom WORKOUT tile to ME.
+// `opts.workoutType` rides through to data.markWorkout so a typed mark-done persists
+// the type; it's ignored on an undo (done===false) by data.js.
 // =============================================================================
-// `opts.workoutType` (v3) rides through to data.markWorkout so a typed mark-done
-// persists the type; it's ignored on an undo (done===false) by data.js.
 async function commitWorkout(bd, done, opts = {}) {
   if (!myUserId) return;
   const key = `${myUserId}|${bd}`;
@@ -647,41 +630,31 @@ async function commitWorkout(bd, done, opts = {}) {
   }
 }
 
-function onWorkoutTap() {
-  if (!elWorkoutTile || elWorkoutTile.disabled) return;
-  const bd = elWorkoutTile.dataset.bizdate;
-  if (!isDayKey(bd)) return;
-  const days = effectiveDays(myUserId);
-  const isDone = !!(days[bd] && days[bd].workout === true);
-  commitWorkout(bd, !isDone); // TAP TOGGLES
-  if (isDone) toast('workout undone');
+// =============================================================================
+// ERROR POPUP (app-chrome alert) — the reusable hard-block dialog. Used by the
+// rest-day/workout mutual exclusion (#7). MAY use red (chrome, not a nutrition state).
+// =============================================================================
+function showError(msg) {
+  if (!elErrPop || !elErrPopBackdrop) {
+    toast(msg); // graceful fallback if the popup markup is somehow absent
+    return;
+  }
+  if (elErrPopBody) elErrPopBody.textContent = msg;
+  elErrPopBackdrop.classList.remove('hidden');
+  elErrPop.classList.remove('hidden');
+  if (elErrPopBtn) elErrPopBtn.focus();
 }
-
-// "+ FOOD": pure navigation — switch to the ME tab and focus the meal kcal input so
-// logging a meal is one tap from anywhere. It writes NOTHING (no binary toggle).
-function onFoodTap() {
-  if (!elFoodTile || elFoodTile.disabled) return;
-  setTab('me');
-  // focus after the tab paints; scroll the ME card into view on the way.
-  setTimeout(() => {
-    if (elMeAddKcal) {
-      try {
-        elMeAddKcal.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      } catch (_) {
-        /* non-fatal */
-      }
-      elMeAddKcal.focus();
-    }
-  }, 60);
+function hideError() {
+  if (elErrPopBackdrop) elErrPopBackdrop.classList.add('hidden');
+  if (elErrPop) elErrPop.classList.add('hidden');
 }
-
-function wireBottomBar() {
-  if (elWorkoutTile) elWorkoutTile.addEventListener('click', onWorkoutTap);
-  if (elFoodTile) elFoodTile.addEventListener('click', onFoodTap);
+function wireError() {
+  if (elErrPopBtn) elErrPopBtn.addEventListener('click', hideError);
+  if (elErrPopBackdrop) elErrPopBackdrop.addEventListener('click', hideError);
 }
 
 // =============================================================================
-// TABS  (GRID | ME)
+// TABS  (ME | GRID)
 // =============================================================================
 function setTab(tab) {
   if (tab !== 'grid' && tab !== 'me') return;
@@ -734,14 +707,14 @@ function renderMe(now) {
   renderTrackRow(elMeCalFig, elMeCalBar, kcal, kcalGoal, ''); // kcal unit blank
   renderTrackRow(elMeProFig, elMeProBar, protein, proteinGoal, 'g');
 
-  // nutrition indicator from nutritionStatus (today is never past => never 'none').
+  // nutrition status from nutritionStatus (today is never past => never 'none').
+  const ns = nutritionStatus(day, {
+    kcalGoal,
+    proteinGoal,
+    goal: me.goal || 'maintain',
+    isPast: false, // this card is always today
+  });
   if (elMeNutInd) {
-    const ns = nutritionStatus(day, {
-      kcalGoal,
-      proteinGoal,
-      goal: me.goal || 'maintain',
-      isPast: false, // this card is always today
-    });
     elMeNutInd.classList.remove('hit', 'pending', 'none');
     if (ns === 'hit') {
       elMeNutInd.classList.add('hit');
@@ -753,16 +726,30 @@ function renderMe(now) {
     }
   }
 
+  // v3.1 "mark nutrition done" toggle — reflects the manual `ate` override OR an
+  // auto-hit (so it reads as "done ✓" whenever nutrition is green for any reason).
+  if (elMeNutDone) {
+    const manualAte = !!(day && (day.ate === true || day.macros === true));
+    const isHit = ns === 'hit';
+    elMeNutDone.classList.toggle('on', isHit);
+    elMeNutDone.textContent = isHit ? 'done ✓' : 'mark done';
+    // remember just the manual flag so a tap toggles the override (not the auto-hit).
+    elMeNutDone.dataset.ate = manualAte ? '1' : '';
+  }
+
+  // quick-meal preset chips (tap to log instantly).
+  renderQuickMeals(me);
+
   // meals-today list (newest-first chips with tap-to-remove).
   renderMealsList(day);
 
-  // workout mark-done + type picker.
+  // workout mark-done + ENABLED-type picker (only the user's chosen types show).
   const done = !!(day && day.workout === true);
   if (elMeWorkout) {
     elMeWorkout.classList.toggle('on', done);
     elMeWorkout.textContent = done ? 'done ✓' : 'mark done';
   }
-  renderTypePicker(elMeWType, day && day.workoutType);
+  renderTypePicker(elMeWType, day && day.workoutType, enabledTypesOf(me));
 
   // rest-day toggle.
   if (elMeRestday) {
@@ -777,6 +764,8 @@ function renderMe(now) {
     elMeWeight.value = Number.isFinite(w) ? String(w) : '';
   }
 
+  // ======== SETTINGS zone (collapsible; rendered regardless of collapse state) ========
+
   // ---- REST DAYS card ----
   renderRestDays(me);
 
@@ -788,6 +777,12 @@ function renderMe(now) {
   if (elMeProteinGoal && document.activeElement !== elMeProteinGoal) {
     elMeProteinGoal.value = Number.isFinite(me.proteinGoal) ? String(me.proteinGoal) : '';
   }
+
+  // ---- QUICK MEALS manager ----
+  renderQuickMealManager(me);
+
+  // ---- WORKOUT TYPES chooser ----
+  renderTypeChooser(me);
 
   // ---- PROFILE card ----
   if (elMeName && document.activeElement !== elMeName) {
@@ -864,17 +859,94 @@ function renderMealsList(day) {
   elMeMeals.innerHTML = html;
 }
 
-// Render a 7-button workout-type picker into `container`, marking `selected` active.
-function renderTypePicker(container, selected) {
+// Render a workout-type picker into `container`, marking `selected` active. v3.1: an
+// optional `enabledKeys` subset limits which of the 7 canonical types render (defaults to
+// all). The set of rendered keys is cached on the container so we rebuild only when it
+// actually changes (a settings edit), not on every paint.
+function renderTypePicker(container, selected, enabledKeys) {
   if (!container) return;
-  if (!container.dataset.built) {
-    container.innerHTML = WORKOUT_TYPES.map(
-      (t) => `<button class="me-type-btn" type="button" data-wtype="${t.key}">${t.label}</button>`
-    ).join('');
-    container.dataset.built = '1';
+  const keys = Array.isArray(enabledKeys) && enabledKeys.length ? enabledKeys : WTYPE_KEYS;
+  // keep canonical order regardless of the order stored in enabledWorkoutTypes.
+  const ordered = WTYPE_KEYS.filter((k) => keys.includes(k));
+  const sig = ordered.join(',');
+  if (container.dataset.sig !== sig) {
+    container.innerHTML = ordered
+      .map((k) => `<button class="me-type-btn" type="button" data-wtype="${k}">${WTYPE_LABEL[k]}</button>`)
+      .join('');
+    container.dataset.sig = sig;
   }
   for (const btn of container.querySelectorAll('.me-type-btn')) {
     btn.classList.toggle('on', btn.dataset.wtype === selected);
+  }
+}
+
+// v3.1: TODAY quick-meal preset chips — tap one to log it via data.addMeal.
+function renderQuickMeals(member) {
+  if (!elMeQuickMeals) return;
+  const presets = savedMealsOf(member);
+  if (!presets.length) {
+    elMeQuickMeals.innerHTML = '';
+    return;
+  }
+  const chips = presets.map((m, i) => {
+    const k = Math.round(m.kcal);
+    const p = Number.isFinite(m.protein) ? Math.round(m.protein) : 0;
+    const custom = (typeof m.label === 'string' && m.label.trim()) ? m.label.trim() : '';
+    const fig = `${k} / ${p}g`;
+    const inner = custom
+      ? `<span class="qm-label">${escapeHtml(custom)}</span><span class="qm-fig">${fig}</span>`
+      : `<span class="qm-fig solo">${escapeHtml(fig)}</span>`;
+    return (
+      `<button class="me-qm-chip" type="button" data-qm="${i}" ` +
+      `aria-label="log ${escapeHtml(custom || (k + ' kcal'))} ${k} kcal ${p} grams protein">` +
+      `${inner}</button>`
+    );
+  });
+  elMeQuickMeals.innerHTML = chips.join('');
+}
+
+// v3.1: SETTINGS quick-meal manager — list saved presets with a remove button each.
+function renderQuickMealManager(member) {
+  if (!elMeQmManage) return;
+  const presets = savedMealsOf(member);
+  if (!presets.length) {
+    elMeQmManage.innerHTML = '';
+    return;
+  }
+  const rows = presets.map((m, i) => {
+    const k = Math.round(m.kcal);
+    const p = Number.isFinite(m.protein) ? Math.round(m.protein) : 0;
+    const label = (typeof m.label === 'string' && m.label.trim()) ? m.label.trim() : `${k} kcal`;
+    return (
+      `<div class="me-qm-row">` +
+      `<span class="qm-row-label">${escapeHtml(label)}</span>` +
+      `<span class="qm-row-fig">${k} / ${p}g</span>` +
+      `<button class="qm-row-x" type="button" data-qm-rm="${i}" aria-label="remove ${escapeHtml(label)}">✕</button>` +
+      `</div>`
+    );
+  });
+  elMeQmManage.innerHTML = rows.join('');
+}
+
+// v3.1: SETTINGS workout-type chooser — all 7 canonical types, the enabled ones marked
+// active. Tapping toggles a pending selection on the container's dataset; "save types"
+// persists it. Built once (the full 7 never change).
+function renderTypeChooser(member) {
+  if (!elMeTypeChooser) return;
+  if (!elMeTypeChooser.dataset.built) {
+    elMeTypeChooser.innerHTML = WORKOUT_TYPES.map(
+      (t) => `<button class="me-type-btn" type="button" data-wtype="${t.key}">${t.label}</button>`
+    ).join('');
+    elMeTypeChooser.dataset.built = '1';
+  }
+  // don't stomp an in-progress selection the user is editing (only reset from the doc
+  // when the chooser hasn't been touched since the last save).
+  if (!elMeTypeChooser.dataset.dirty) {
+    elMeTypeChooser.dataset.pending = enabledTypesOf(member).join(',');
+  }
+  const pending = new Set((elMeTypeChooser.dataset.pending || '').split(',').filter(Boolean));
+  for (const btn of elMeTypeChooser.querySelectorAll('.me-type-btn')) {
+    btn.classList.toggle('on', pending.has(btn.dataset.wtype));
   }
 }
 
@@ -945,9 +1017,33 @@ async function meToggleWorkout() {
   const cur = currentBusinessDate(now, subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
   const days = effectiveDays(myUserId);
   const isDone = !!(days[cur] && days[cur].workout === true);
-  // route through the optimistic+outbox path (same as the bottom bar) for parity.
+  // v3.1 (#7): rest-day and worked-out are mutually exclusive. If today is a rest day and
+  // the user tries to MARK a workout done, block with an error popup and do NOT write.
+  // (Un-marking a workout is always allowed — it can't create the both-true conflict.)
+  if (!isDone && !!(days[cur] && days[cur].off === true)) {
+    showError('You marked today as a rest day. Clear the rest day first to log a workout.');
+    return;
+  }
+  // route through the optimistic+outbox path for parity.
   await commitWorkout(cur, !isDone);
   renderMe(now);
+}
+
+// v3.1 "mark nutrition done" toggle — sets the manual `ate` override (greens nutrition
+// regardless of numbers). Tapping again clears the manual flag. This is the simple path
+// alongside meal logging.
+async function meToggleNutritionDone() {
+  const cur = myCurrentBiz();
+  if (!cur) return;
+  const wasManual = elMeNutDone && elMeNutDone.dataset.ate === '1';
+  try {
+    await data.setNutritionHit(cur, !wasManual);
+    await refetchMyDays();
+    toast(!wasManual ? 'nutrition marked done' : 'nutrition cleared');
+  } catch (err) {
+    handleWriteError(err);
+  }
+  renderMe(anchoredNow());
 }
 
 // Today's business-date for the ME card (the owner's own clock).
@@ -987,7 +1083,6 @@ async function meAddMeal() {
   } finally {
     if (elMeAddMeal) elMeAddMeal.disabled = false;
     renderMe(anchoredNow());
-    renderBottomBar(anchoredNow());
   }
 }
 
@@ -1003,23 +1098,52 @@ async function meRemoveMeal(idx) {
     handleWriteError(err);
   }
   renderMe(anchoredNow());
-  renderBottomBar(anchoredNow());
 }
 
 // Tap a workout type: mark done AND set the type in one optimistic write.
+// v3.1 (#7): blocked if today is a rest day (setting a type implies a workout).
 async function meSetType(wtype) {
   const cur = myCurrentBiz();
   if (!cur) return;
+  const days = effectiveDays(myUserId);
+  if (!!(days[cur] && days[cur].off === true)) {
+    showError('You marked today as a rest day. Clear the rest day first to log a workout.');
+    return;
+  }
   await commitWorkout(cur, true, { workoutType: wtype });
   renderMe(anchoredNow());
 }
 
+// Tap a quick-meal preset -> log it via data.addMeal (reuses the meal-add path).
+async function meLogQuickMeal(presetIdx) {
+  const me = memberById(myUserId);
+  if (!me) return;
+  const cur = myCurrentBiz();
+  if (!cur) return;
+  const presets = savedMealsOf(me);
+  const m = presets[presetIdx];
+  if (!m) return;
+  try {
+    await data.addMeal(cur, { kcal: m.kcal, protein: Number.isFinite(m.protein) ? m.protein : 0 });
+    await refetchMyDays();
+    toast('meal logged');
+  } catch (err) {
+    handleWriteError(err);
+  }
+  renderMe(anchoredNow());
+}
+
 // Toggle "make today a rest day" -> data.setDayOff (neutral; never green/red).
+// v3.1 (#7): blocked if a workout is already logged today (mutual exclusion).
 async function meToggleRestToday() {
   const cur = myCurrentBiz();
   if (!cur) return;
   const days = effectiveDays(myUserId);
   const isOff = !!(days[cur] && days[cur].off === true);
+  if (!isOff && !!(days[cur] && days[cur].workout === true)) {
+    showError('You already logged a workout today. Undo the workout first to mark a rest day.');
+    return;
+  }
   try {
     await data.setDayOff(cur, !isOff);
     await refetchMyDays();
@@ -1028,7 +1152,6 @@ async function meToggleRestToday() {
     handleWriteError(err);
   }
   renderMe(anchoredNow());
-  renderBottomBar(anchoredNow());
 }
 
 // Weight quick-log: lb input + LOG -> data.setWeight, refetch, repaint.
@@ -1076,6 +1199,94 @@ async function meSaveGoals() {
     handleWriteError(err);
   }
   renderMe(anchoredNow());
+}
+
+// v3.1: save a quick-meal preset. From the TODAY "+ save as quick meal" affordance it
+// reads the just-entered kcal/protein in the add-meal form; called from SETTINGS it reads
+// the manager's own kcal/protein/label inputs. `fromSettings` picks the input set.
+async function meSaveQuickMeal(fromSettings) {
+  const me = memberById(myUserId);
+  if (!me) return;
+  const kEl = fromSettings ? elMeQmKcal : elMeAddKcal;
+  const pEl = fromSettings ? elMeQmProtein : elMeAddProtein;
+  const kcal = readNumInput(kEl);
+  const protein = readNumInput(pEl);
+  if (kcal == null || !(kcal > 0)) {
+    toast('enter the calories first');
+    return;
+  }
+  const preset = { kcal, protein: protein != null ? protein : 0 };
+  if (fromSettings && elMeQmLabel) {
+    const label = elMeQmLabel.value.trim();
+    if (label) preset.label = label;
+  }
+  const current = savedMealsOf(me);
+  if (current.length >= 20) {
+    toast('quick-meal limit reached (20)');
+    return;
+  }
+  try {
+    await data.addSavedMeal(current, preset);
+    me.savedMeals = current.concat([preset]); // reflect locally pre-snapshot
+    if (fromSettings) {
+      if (elMeQmKcal) elMeQmKcal.value = '';
+      if (elMeQmProtein) elMeQmProtein.value = '';
+      if (elMeQmLabel) elMeQmLabel.value = '';
+    }
+    renderMe(anchoredNow());
+    toast('quick meal saved');
+  } catch (err) {
+    handleWriteError(err);
+  }
+}
+
+// v3.1: remove a saved quick-meal preset by index.
+async function meRemoveQuickMeal(idx) {
+  const me = memberById(myUserId);
+  if (!me) return;
+  const current = savedMealsOf(me);
+  if (idx < 0 || idx >= current.length) return;
+  try {
+    await data.removeSavedMeal(current, idx);
+    me.savedMeals = current.slice(0, idx).concat(current.slice(idx + 1));
+    renderMe(anchoredNow());
+    toast('quick meal removed');
+  } catch (err) {
+    handleWriteError(err);
+  }
+}
+
+// v3.1: toggle a type in the SETTINGS chooser's PENDING selection (persisted on save).
+function meToggleTypeChoice(wtype) {
+  if (!elMeTypeChooser || !WTYPE_KEYS.includes(wtype)) return;
+  const cur = new Set((elMeTypeChooser.dataset.pending || '').split(',').filter(Boolean));
+  if (cur.has(wtype)) cur.delete(wtype);
+  else cur.add(wtype);
+  // keep canonical order in the stored signature.
+  elMeTypeChooser.dataset.pending = WTYPE_KEYS.filter((k) => cur.has(k)).join(',');
+  elMeTypeChooser.dataset.dirty = '1';
+  const me = memberById(myUserId);
+  if (me) renderTypeChooser(me);
+}
+
+// v3.1: persist the enabled workout types from the chooser's pending selection.
+async function meSaveTypes() {
+  const me = memberById(myUserId);
+  if (!me || !elMeTypeChooser) return;
+  const pending = (elMeTypeChooser.dataset.pending || '').split(',').filter(Boolean);
+  if (!pending.length) {
+    toast('keep at least one type');
+    return;
+  }
+  try {
+    await data.setEnabledWorkoutTypes(pending);
+    me.enabledWorkoutTypes = pending.slice();
+    elMeTypeChooser.dataset.dirty = ''; // accept the doc value again on next paint
+    renderMe(anchoredNow()); // the TODAY picker now reflects the new enabled set
+    toast('workout types saved');
+  } catch (err) {
+    handleWriteError(err);
+  }
 }
 
 async function meToggleRestDay(wd) {
@@ -1175,7 +1386,8 @@ function handleWriteError(err) {
 }
 
 function wireMe() {
-  // TODAY tracker
+  // ---- TODAY: NUTRITION ----
+  if (elMeNutDone) elMeNutDone.addEventListener('click', meToggleNutritionDone);
   if (elMeAddMeal) elMeAddMeal.addEventListener('click', meAddMeal);
   if (elMeAddKcal)
     elMeAddKcal.addEventListener('keydown', (e) => {
@@ -1185,11 +1397,18 @@ function wireMe() {
     elMeAddProtein.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); meAddMeal(); }
     });
+  if (elMeSaveQuickMeal) elMeSaveQuickMeal.addEventListener('click', () => meSaveQuickMeal(false));
+  if (elMeQuickMeals)
+    elMeQuickMeals.addEventListener('click', (e) => {
+      const chip = e.target.closest('.me-qm-chip');
+      if (chip) meLogQuickMeal(Number(chip.dataset.qm));
+    });
   if (elMeMeals)
     elMeMeals.addEventListener('click', (e) => {
       const chip = e.target.closest('.me-meal-chip');
       if (chip) meRemoveMeal(Number(chip.dataset.idx));
     });
+  // ---- TODAY: WORKOUT ----
   if (elMeWorkout) elMeWorkout.addEventListener('click', meToggleWorkout);
   if (elMeWType)
     elMeWType.addEventListener('click', (e) => {
@@ -1197,27 +1416,54 @@ function wireMe() {
       if (btn) meSetType(btn.dataset.wtype);
     });
   if (elMeRestday) elMeRestday.addEventListener('click', meToggleRestToday);
+  // ---- TODAY: WEIGHT ----
   if (elMeLogWeight) elMeLogWeight.addEventListener('click', meLogWeight);
-  // REST DAYS
+
+  // ---- SETTINGS: collapse/expand ----
+  if (elMeSettingsToggle) elMeSettingsToggle.addEventListener('click', toggleSettings);
+  // ---- SETTINGS: REST DAYS ----
   if (elMeRestdays)
     elMeRestdays.addEventListener('click', (e) => {
       const btn = e.target.closest('.me-weekday');
       if (btn) meToggleRestDay(Number(btn.dataset.wd));
     });
-  // GOAL
+  // ---- SETTINGS: GOAL ----
   if (elMeGoal)
     elMeGoal.addEventListener('click', (e) => {
       const btn = e.target.closest('.me-seg-btn');
       if (btn) meSetGoal(btn.dataset.goal);
     });
   if (elMeSaveGoals) elMeSaveGoals.addEventListener('click', meSaveGoals);
-  // PROFILE
+  // ---- SETTINGS: QUICK MEALS manager ----
+  if (elMeQmAdd) elMeQmAdd.addEventListener('click', () => meSaveQuickMeal(true));
+  if (elMeQmManage)
+    elMeQmManage.addEventListener('click', (e) => {
+      const x = e.target.closest('.qm-row-x');
+      if (x) meRemoveQuickMeal(Number(x.dataset.qmRm));
+    });
+  // ---- SETTINGS: WORKOUT TYPES chooser ----
+  if (elMeTypeChooser)
+    elMeTypeChooser.addEventListener('click', (e) => {
+      const btn = e.target.closest('.me-type-btn');
+      if (btn) meToggleTypeChoice(btn.dataset.wtype);
+    });
+  if (elMeSaveTypes) elMeSaveTypes.addEventListener('click', meSaveTypes);
+  // ---- SETTINGS: PROFILE ----
   if (elMeHideWeight) elMeHideWeight.addEventListener('click', meToggleHideWeight);
   if (elMeSaveSettings) elMeSaveSettings.addEventListener('click', meSaveSettings);
 }
 
+// v3.1: SETTINGS collapse/expand. Collapsed by default (the `.collapsed` class is on the
+// wrapper in the markup). Toggles the class + the aria-expanded state.
+function toggleSettings() {
+  if (!elMeSettings || !elMeSettingsToggle) return;
+  const nowCollapsed = elMeSettings.classList.toggle('collapsed');
+  elMeSettingsToggle.setAttribute('aria-expanded', nowCollapsed ? 'false' : 'true');
+}
+
 // =============================================================================
-// DAY EDITOR (own cell) + DAY DETAIL (other person's cell)
+// DAY DETAIL (tap ANY cell — own or other — read-only). v3.1: the editor is gone;
+// the grid is read-only, and ME edits TODAY only.
 // =============================================================================
 function openSheet(sheet, backdrop) {
   if (backdrop) backdrop.classList.remove('hidden');
@@ -1226,104 +1472,6 @@ function openSheet(sheet, backdrop) {
 function closeSheet(sheet, backdrop) {
   if (backdrop) backdrop.classList.add('hidden');
   if (sheet) sheet.classList.add('hidden');
-}
-
-function openDayEditor(uid, dateKey) {
-  editTarget = { uid, dateKey };
-  const days = effectiveDays(uid);
-  const day = days[dateKey] || {};
-  const wt = (weightsByUser.get(uid) || {})[dateKey];
-
-  if (elDayEditDate) {
-    const g = fmtDateGutter(dateKey);
-    elDayEditDate.textContent = `${g.dow} ${g.md}`;
-  }
-  const done = day.workout === true;
-  const off = day.off === true;
-  const ate = day.ate === true || day.macros === true;
-  if (elDeWorkout) {
-    elDeWorkout.classList.toggle('on', done);
-    elDeWorkout.textContent = done ? 'done ✓' : 'done';
-  }
-  // workout-type picker: pre-select the stored type (tap toggles in wireGridTaps).
-  if (elDeWType) {
-    elDeWType.dataset.selected = (day.workoutType && WTYPE_LABEL[day.workoutType]) ? day.workoutType : '';
-    renderTypePicker(elDeWType, elDeWType.dataset.selected || null);
-  }
-  if (elDeOff) {
-    elDeOff.classList.toggle('on', off);
-    elDeOff.textContent = off ? 'off ✓' : 'off';
-  }
-  if (elDeAte) {
-    elDeAte.classList.toggle('on', ate);
-    elDeAte.textContent = ate ? 'hit ✓' : 'hit it';
-  }
-  if (elDeKcal) elDeKcal.value = Number.isFinite(day.kcal) ? String(day.kcal) : '';
-  if (elDeProtein) elDeProtein.value = Number.isFinite(day.protein) ? String(day.protein) : '';
-  if (elDeWeight) elDeWeight.value = Number.isFinite(wt) ? String(wt) : '';
-
-  openSheet(elDayEdit, elDayEditBackdrop);
-}
-
-function closeDayEditor() {
-  editTarget = null;
-  closeSheet(elDayEdit, elDayEditBackdrop);
-}
-
-async function saveDayEditor() {
-  if (!editTarget) return;
-  const { dateKey } = editTarget; // always MY column (only own cells open the editor)
-  const days = effectiveDays(myUserId);
-  const day = days[dateKey] || {};
-  const wtNow = (weightsByUser.get(myUserId) || {})[dateKey];
-
-  const wantWorkout = elDeWorkout ? elDeWorkout.classList.contains('on') : day.workout === true;
-  const wantOff = elDeOff ? elDeOff.classList.contains('on') : day.off === true;
-  const wantAte = elDeAte ? elDeAte.classList.contains('on') : (day.ate === true || day.macros === true);
-  const wantType = (elDeWType && elDeWType.dataset.selected) || '';
-  const kcal = readNumInput(elDeKcal);
-  const protein = readNumInput(elDeProtein);
-  const weight = readNumInput(elDeWeight);
-
-  const wasWorkout = day.workout === true;
-  const wasOff = day.off === true;
-  const wasAte = day.ate === true || day.macros === true;
-  const wasType = (day.workoutType && WTYPE_LABEL[day.workoutType]) ? day.workoutType : '';
-
-  if (elDeSave) elDeSave.disabled = true;
-  try {
-    // only write the fields that actually changed (keeps it merge-minimal + rule-safe).
-    // workout: write when the done bool changed OR (it's done and the type changed) so a
-    // type-only edit on an already-done day still persists. markWorkout only stamps the
-    // type on a DONE mark; an undo won't carry it.
-    if (wantWorkout !== wasWorkout || (wantWorkout && wantType !== wasType)) {
-      await data.markWorkout(myUserId, dateKey, wantWorkout, wantType ? { workoutType: wantType } : {});
-    }
-    if (wantOff !== wasOff) {
-      await data.setDayOff(dateKey, wantOff);
-    }
-    if (wantAte !== wasAte) {
-      await data.setNutritionHit(dateKey, wantAte);
-    }
-    const macros = {};
-    if (kcal != null && kcal !== day.kcal) macros.kcal = kcal;
-    if (protein != null && protein !== day.protein) macros.protein = protein;
-    if (Object.keys(macros).length) {
-      await data.setMacros(dateKey, macros);
-    }
-    if (weight != null && weight !== wtNow) {
-      await data.setWeight(dateKey, weight);
-    }
-    await refetchMyDays();
-    await refetchWeights(myUserId);
-    toast('saved');
-    closeDayEditor();
-  } catch (err) {
-    handleWriteError(err);
-  } finally {
-    if (elDeSave) elDeSave.disabled = false;
-    repaint();
-  }
 }
 
 function openDayDetail(member, dateKey) {
@@ -1362,18 +1510,16 @@ function closeDayDetail() {
   closeSheet(elDayDetail, elDayDetailBackdrop);
 }
 
+// v3.1: the grid is READ-ONLY. Tapping ANY cell (own or other) opens the read-only
+// day-detail popup. No editing from the grid.
 function onGridCellActivate(target) {
   const cell = target.closest && target.closest('.gcell');
   if (!cell) return;
   const uid = cell.dataset.uid;
   const dateKey = cell.dataset.date;
   if (!uid || !isDayKey(dateKey)) return;
-  if (uid === myUserId) {
-    openDayEditor(uid, dateKey);
-  } else {
-    const member = memberById(uid);
-    if (member) openDayDetail(member, dateKey);
-  }
+  const member = memberById(uid);
+  if (member) openDayDetail(member, dateKey);
 }
 
 function wireGridTaps() {
@@ -1384,29 +1530,7 @@ function wireGridTaps() {
       onGridCellActivate(e.target);
     }
   });
-  // editor wiring
-  if (elDeCancel) elDeCancel.addEventListener('click', closeDayEditor);
-  if (elDayEditBackdrop) elDayEditBackdrop.addEventListener('click', closeDayEditor);
-  if (elDeSave) elDeSave.addEventListener('click', saveDayEditor);
-  // editor toggle buttons flip their own `on` class; save reads the class state.
-  for (const btn of [elDeWorkout, elDeOff, elDeAte]) {
-    if (btn) btn.addEventListener('click', () => btn.classList.toggle('on'));
-  }
-  // editor workout-type picker: tap to select (tap-again to clear), stored on the
-  // container's dataset; tapping a type also auto-marks the Workout toggle on.
-  if (elDeWType)
-    elDeWType.addEventListener('click', (e) => {
-      const btn = e.target.closest('.me-type-btn');
-      if (!btn) return;
-      const wt = btn.dataset.wtype;
-      const cur = elDeWType.dataset.selected || '';
-      const next = cur === wt ? '' : wt;
-      elDeWType.dataset.selected = next;
-      renderTypePicker(elDeWType, next || null);
-      // selecting a type implies the workout was done.
-      if (next && elDeWorkout) elDeWorkout.classList.add('on');
-    });
-  // detail wiring
+  // read-only detail wiring (the only sheet left).
   if (elDayDetailClose) elDayDetailClose.addEventListener('click', closeDayDetail);
   if (elDayDetailBackdrop) elDayDetailBackdrop.addEventListener('click', closeDayDetail);
 }
@@ -1697,10 +1821,10 @@ async function boot() {
 
   // wire interactions + timers
   wireTabs();
-  wireBottomBar();
   wireMe();
   wireGridTaps();
   wireReclaim();
+  wireError();
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('focus', onVisibility);
   startHeartbeat();

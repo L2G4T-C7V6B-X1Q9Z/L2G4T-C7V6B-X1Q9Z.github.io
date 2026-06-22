@@ -279,61 +279,12 @@ button:disabled { cursor:default; }
   background:var(--st-macrodot); border:1.5px solid var(--g0);
 }
 
-/* ============ ACTION BAR — single full-width WORKOUT tile (NOT red) ============ */
-#action {
-  flex:0 0 auto;
-  padding:8px 12px max(16px,env(safe-area-inset-bottom)) 12px;
-  background:var(--g1);
-  border-top:1px solid var(--hairline);
-  box-shadow:inset 0 1px 0 var(--edge);
-  position:relative; z-index:20;
-}
-.workout-tile {
-  width:100%; height:76px;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
-  background:var(--ctl-grad);              /* NEUTRAL --g3 -> --g4 face, never red */
-  border:1px solid var(--bd);
-  border-radius:var(--r-lg);
-  box-shadow:var(--elev);
-  position:relative;
-  transition:transform 160ms var(--spring), background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
-}
-.workout-tile:active:not(:disabled) { transform:scale(.985); background:var(--g4); }
-.workout-tile .wt-label {
-  font-weight:700; font-size:20px; letter-spacing:.2em; color:var(--txt);
-}
-.workout-tile .wt-sub {
-  font-size:10px; letter-spacing:.1em; color:var(--txt3); min-height:12px;
-}
-.workout-tile .wt-glyph { display:none; }
-/* DONE state: the tile flips to STATUS green (the only post-tap color) + check glyph */
-.workout-tile.done {
-  background:linear-gradient(180deg,#19342440,#10231a);
-  border-color:#2c6043;
-}
-.workout-tile.done .wt-label { color:#cdeedb; }
-.workout-tile.done .wt-label::before { content:'\2713 '; color:var(--st-done); }
-.workout-tile.done .wt-sub { color:var(--st-done); }
-/* the tiny "unsynced" dot — an optimistic write is queued but not yet server-acked */
-.workout-tile .wt-unsynced {
-  position:absolute; top:10px; right:12px;
-  width:9px; height:9px; border-radius:50%;
-  background:var(--red); opacity:0;
-  transition:opacity 160ms ease;
-  animation:syncpulse 1.4s ease-in-out infinite;
-}
-.workout-tile.unsynced .wt-unsynced { opacity:1; }
-/* disabled (out-of-window / not yet bound / browsing-only states) */
-.workout-tile:disabled { opacity:.4; box-shadow:none; }
-/* long-press-to-undo affordance: a thin red fill that grows while held */
-.workout-tile .wt-hold {
-  position:absolute; left:0; bottom:0; height:100%; width:0;
-  background:rgba(255,59,48,.12); border-radius:var(--r-lg);
-  pointer-events:none;
-}
-.workout-tile.holding .wt-hold { width:100%; transition:width 520ms linear; }
+/* v3.1: the bottom action bar (#action / .workout-tile / + FOOD) is GONE — all logging
+   lives on the ME screen now. Its CSS has been removed. The optimistic workout write
+   path stays (triggered from the ME "mark done" button); the "unsynced" pulse is
+   surfaced via the header #pip-sync pip instead of a tile dot. */
 
-/* ============ GRID (one tap off Today) ============ */
+/* ============ GRID (read-only board; tap any cell -> read-only detail) ============ */
 #grid-head {
   flex:0 0 auto;
   display:flex; align-items:baseline; justify-content:space-between;
@@ -353,9 +304,14 @@ button:disabled { cursor:default; }
   touch-action:manipulation;
 }
 .gcell-corner { background:transparent; }
+/* v3.1: FIXED-HEIGHT header block. The stat stack is emitted FIRST and the name span
+   LAST, so justify-content:flex-end pins every column's NAME to a common bottom baseline
+   (just above the first cell row) while the optional stats float above it. Height is
+   fixed (not min-height) so a column with fewer stats still aligns its name with a
+   column that has all three. */
 .ghead {
-  flex-direction:column; align-items:center; justify-content:flex-end; gap:3px;
-  min-height:64px; padding-bottom:4px;
+  flex-direction:column; align-items:center; justify-content:flex-end; gap:2px;
+  height:66px; flex:0 0 66px; padding-bottom:4px;
   background:transparent; border:none; overflow:hidden;
 }
 /* v3: inline HORIZONTAL name (no vertical rotation), ellipsis-truncated in the
@@ -548,8 +504,7 @@ button:disabled { cursor:default; }
 /* ============ REDUCED MOTION ============ */
 @media (prefers-reduced-motion:reduce) {
   *, *::before, *::after { animation-duration:120ms !important; transition-duration:120ms !important; }
-  #pip-sync.pending, .workout-tile .wt-unsynced, .reclaim-icon { animation:none; }
-  .workout-tile.holding .wt-hold { transition:width 520ms linear; } /* keep the hold meter */
+  #pip-sync.pending, .reclaim-icon { animation:none; }
 }
 
 /* ============ COMPACT VIEWPORTS (SE / Safari-with-toolbars) ============ */
@@ -557,22 +512,13 @@ button:disabled { cursor:default; }
   #hero { padding:18px 16px 14px; }
   #hero-pct { font-size:60px; }
   #hero-pct .hero-sign { font-size:24px; }
-  .workout-tile { height:66px; }
   .prow { padding:11px 16px; }
 }
 
 /* ============================================================================
-   v2 ADDITIONS — two-button action bar, ME page, day-editor/detail sheets.
+   ME page + read-only detail sheet (v3.1).
    (Diagonal grid cell CSS is integrated separately.)
    ============================================================================ */
-
-/* ---- two-button action bar: WORKOUT | + FOOD ---- */
-#action.action-2 { display:flex; gap:10px; }
-.action-2 .workout-tile { flex:1; width:auto; height:72px; box-shadow:0 6px 18px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04); }
-.action-2 .workout-tile .wt-label { font-size:17px; letter-spacing:.16em; }
-/* "+ FOOD" is a neutral shortcut tile (writes nothing) — never flips green/red. */
-.food-tile .wt-label { color:var(--txt2); }
-.food-tile:active:not(:disabled) { background:var(--g4); }
 
 /* ---- ME page ---- */
 #me-scroll { flex:1 1 auto; min-height:0; padding:10px 12px 16px; overflow-y:auto; }
@@ -584,15 +530,31 @@ button:disabled { cursor:default; }
 .me-label { flex:1; font-size:12.5px; color:var(--txt); letter-spacing:.02em; }
 .me-input { width:104px; height:34px; text-align:right; background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm); color:var(--txt); font-family:var(--font-mono); font-size:13px; padding:0 10px; }
 .me-input:focus { outline:none; border-color:var(--red-wash-bd); }
-.me-input-sm { width:52px; text-align:center; }
-.me-suffix { font-size:12px; color:var(--txt3); margin-left:-4px; }
+/* v3.1 fix (#9): text fields (name) read LEFT-aligned + flex to fill — right-aligning a
+   short text value looked broken. Numeric fields keep right-align (they read as figures). */
+.me-row-input { align-items:center; }
+.me-input-text { flex:1 1 auto; width:auto; min-width:0; text-align:left; }
+
+/* v3.1 fix (#9): "day starts" is ONE cohesive bordered box containing the hour + ":00",
+   so ":00" reads as part of the field instead of floating outside a tiny box. */
+.me-hourbox {
+  display:inline-flex; align-items:center; height:34px; padding:0 10px 0 12px;
+  background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm);
+  cursor:text;
+}
+.me-hourbox:focus-within { border-color:var(--red-wash-bd); }
+.me-hour-in {
+  width:26px; height:100%; background:transparent; border:none; outline:none;
+  color:var(--txt); font-family:var(--font-mono); font-size:13px; text-align:right; padding:0;
+  -moz-appearance:textfield;
+}
+.me-hour-in::-webkit-outer-spin-button, .me-hour-in::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+.me-hour-suffix { font-size:13px; color:var(--txt2); letter-spacing:.02em; }
 /* v3 restyle: softer radius (--r-sm, not 999px pills), hairline borders, less noise. */
 .me-toggle { min-width:96px; height:34px; padding:0 14px; background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm); color:var(--txt2); font-family:var(--font-mono); font-size:11.5px; font-weight:700; letter-spacing:.04em; transition:background 140ms ease, color 140ms ease, border-color 140ms ease; }
 .me-toggle:active { transform:scale(.97); }
 .me-toggle.on { background:#1f7a4d; border-color:#1f7a4d; color:#eafaf1; }
 .me-toggle.neutral-on { background:var(--g4); border-color:var(--etch); color:var(--txt); }
-/* day-off in the editor is "excused", not "earned" — neutral, never the done-green */
-#de-off.on { background:var(--g4); border-color:var(--etch); color:var(--txt); }
 .me-save { width:100%; height:42px; margin-top:12px; background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm); color:var(--txt); font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:.1em; }
 .me-save:active { transform:scale(.99); background:var(--g3); }
 .me-weekdays { display:flex; gap:6px; }
@@ -651,8 +613,95 @@ button:disabled { cursor:default; }
 .me-restday-toggle:active { transform:scale(.99); }
 .me-restday-hint { margin-top:8px; margin-bottom:0; }
 
-/* ---- bottom-sheet modals (day editor + read-only detail) ---- */
-#dayedit-backdrop, #daydetail-backdrop { position:absolute; inset:0; z-index:100; background:rgba(0,0,0,.78); animation:fadein 160ms ease; }
+/* ============================================================================
+   v3.1 ME — TWO-ZONE LAYOUT (TODAY daily logging vs collapsible SETTINGS).
+   ============================================================================ */
+
+/* zone heading above the TODAY cards — sets the daily logging apart from SETTINGS. */
+.me-zone-title {
+  font-size:13px; font-weight:700; letter-spacing:.18em; color:var(--txt2);
+  text-transform:uppercase; padding:2px 2px 10px;
+}
+
+/* a plain inline text button ("+ save as quick meal") — quiet, no heavy chrome. */
+.me-textbtn {
+  background:none; border:none; color:var(--txt3); font-family:var(--font-mono);
+  font-size:10.5px; font-weight:700; letter-spacing:.04em; padding:6px 0 2px; margin-bottom:6px;
+}
+.me-textbtn:active { color:var(--txt2); }
+
+/* quick-meal preset chips (TODAY) — tap to log instantly. Neutral, never red/green. */
+.me-quickmeals { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 10px; }
+.me-quickmeals:empty { display:none; }
+.me-qm-chip {
+  display:inline-flex; flex-direction:column; align-items:flex-start; gap:1px;
+  min-height:36px; padding:5px 10px; border-radius:var(--r-sm);
+  background:var(--g2); border:1px solid var(--hairline); color:var(--txt);
+  font-family:var(--font-mono); text-align:left;
+}
+.me-qm-chip:active { background:var(--g3); }
+.me-qm-chip .qm-label { font-size:11px; font-weight:700; letter-spacing:.02em; }
+.me-qm-chip .qm-fig { font-size:9.5px; color:var(--txt3); font-variant-numeric:tabular-nums lining-nums; }
+
+/* SETTINGS quick-meal MANAGER rows (add/remove presets) */
+.me-qm-manage { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+.me-qm-manage:empty { display:none; }
+.me-qm-row {
+  display:flex; align-items:center; gap:10px; height:38px; padding:0 6px 0 10px;
+  background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm);
+}
+.me-qm-row .qm-row-label { flex:1 1 auto; min-width:0; font-size:12px; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.me-qm-row .qm-row-fig { flex:0 0 auto; font-size:10.5px; color:var(--txt3); font-variant-numeric:tabular-nums lining-nums; }
+.me-qm-row .qm-row-x { flex:0 0 auto; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:var(--r-sm); background:transparent; border:none; color:var(--txt3); font-size:14px; }
+.me-qm-row .qm-row-x:active { background:var(--g3); color:var(--txt2); }
+
+/* WORKOUT TYPES chooser reuses .me-typepick / .me-type-btn (a chosen type = filled face). */
+
+/* ---- collapsible SETTINGS section (collapsed by default) ---- */
+.me-settings { margin-top:6px; border-top:1px solid var(--hairline); padding-top:14px; }
+.me-settings-header {
+  width:100%; display:flex; align-items:center; gap:10px;
+  background:var(--g1); border:1px solid var(--hairline); border-radius:var(--r-md);
+  padding:12px 14px; text-align:left;
+}
+.me-settings-header:active { background:var(--g2); }
+.me-settings-label { font-size:12px; font-weight:700; letter-spacing:.18em; color:var(--txt2); text-transform:uppercase; flex:0 0 auto; }
+.me-settings-sub { flex:1 1 auto; min-width:0; font-size:9.5px; color:var(--txt3); letter-spacing:.02em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.me-settings-caret { flex:0 0 auto; font-size:12px; color:var(--txt3); transition:transform 160ms var(--ease-out); }
+.me-settings:not(.collapsed) .me-settings-caret { transform:rotate(90deg); }
+.me-settings-body { padding-top:12px; }
+.me-settings.collapsed .me-settings-body { display:none; }
+
+/* ============ ERROR POPUP (app-chrome alert; MAY use red — chrome, not nutrition) ============ */
+#errpop-backdrop { position:absolute; inset:0; z-index:100; background:rgba(0,0,0,.82); animation:fadein 160ms ease; }
+#errpop {
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  z-index:110; width:min(340px,calc(100% - 36px));
+  background:linear-gradient(180deg,#1a0f0e,#120b0a);
+  border:1px solid var(--red-wash-bd); border-radius:18px;
+  box-shadow:0 18px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(255,59,48,.18), inset 0 1px 0 rgba(255,255,255,.05);
+  padding:24px 22px 20px;
+  display:flex; flex-direction:column; align-items:center; text-align:center;
+  animation:reclaimpop 300ms var(--spring);
+}
+.errpop-icon {
+  width:42px; height:42px; border-radius:50%;
+  background:var(--red-wash); border:1px solid var(--red-wash-bd);
+  display:flex; align-items:center; justify-content:center;
+  font-size:24px; font-weight:700; color:var(--red); margin-bottom:12px;
+}
+.errpop-title { font-weight:700; font-size:14px; letter-spacing:.12em; color:var(--red); margin-bottom:9px; }
+.errpop-body { font-size:12.5px; line-height:1.55; color:var(--txt2); margin-bottom:18px; }
+.errpop-btn {
+  width:100%; min-height:46px;
+  background:var(--g3); color:var(--txt); border:1px solid var(--bd); border-radius:var(--r-md);
+  font-weight:700; font-size:12px; letter-spacing:.12em;
+  transition:transform 160ms var(--spring), background 120ms ease;
+}
+.errpop-btn:active { transform:scale(.98); background:var(--g4); }
+
+/* ---- bottom-sheet modal (read-only detail) ---- */
+#daydetail-backdrop { position:absolute; inset:0; z-index:100; background:rgba(0,0,0,.78); animation:fadein 160ms ease; }
 .sheet { position:absolute; left:50%; bottom:0; transform:translateX(-50%); z-index:110; width:min(440px,100%); background:linear-gradient(180deg,#161616,#0e0e0e); border:1px solid var(--hairline); border-bottom:none; border-radius:18px 18px 0 0; box-shadow:0 -18px 50px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04); padding:18px 18px max(18px,env(safe-area-inset-bottom)); animation:sheetup 280ms var(--spring); }
 @keyframes sheetup { from { transform:translate(-50%,100%);} to { transform:translate(-50%,0);} }
 .sheet-title { font-weight:700; font-size:13px; letter-spacing:.14em; color:var(--txt); text-transform:uppercase; }

@@ -1537,6 +1537,106 @@ export async function setRestPattern(pattern) {
   await updateOwnUser({ restPattern: pattern }, 'setRestPattern');
 }
 
+const MAX_SAVED_MEALS = 20; // matches the rule's savedMeals.size() <= 20 cap.
+
+/**
+ * setSavedMeals(arr) -> Promise<void>
+ *
+ * v3.1: merge-SET the whole savedMeals preset array on the owner user doc. Each entry is
+ * { kcal:number(0..10000), protein:number(0..1000), label?:string(<=24 chars) }. Validates
+ * + normalizes every element (kcal/protein snapped to integers, label trimmed), caps the
+ * list at 20. This is a SETTING, so it does NOT bump lastActiveAt (consistent with
+ * setGoal/setRollover/setRestPattern). Per-element shape is CLIENT-trusted by the rules
+ * (same posture as restPattern); this is the friendly front-line validator. A non-array
+ * or an over-cap list is rejected before the write.
+ */
+export async function setSavedMeals(arr) {
+  if (!Array.isArray(arr)) {
+    throw taggedError('gymboard/bad-value', 'setSavedMeals: expected an array of presets.');
+  }
+  if (arr.length > MAX_SAVED_MEALS) {
+    throw taggedError('gymboard/bad-value', `setSavedMeals: too many presets (max ${MAX_SAVED_MEALS}).`);
+  }
+  const clean = arr.map((m, i) => {
+    if (!m || typeof m !== 'object') {
+      throw taggedError('gymboard/bad-value', `setSavedMeals: entry ${i} must be an object.`);
+    }
+    const kcal = validateNumber(m.kcal, 0, 10000, `savedMeals[${i}].kcal`, 0);
+    const protein = validateNumber(m.protein, 0, 1000, `savedMeals[${i}].protein`, 0);
+    const out = { kcal, protein };
+    if (m.label !== undefined && m.label !== null && m.label !== '') {
+      if (typeof m.label !== 'string') {
+        throw taggedError('gymboard/bad-value', `setSavedMeals: entry ${i} label must be a string.`);
+      }
+      const label = m.label.trim();
+      if (label.length > 24) {
+        throw taggedError('gymboard/bad-value', `setSavedMeals: entry ${i} label exceeds 24 characters.`);
+      }
+      if (label) out.label = label;
+    }
+    return out;
+  });
+  await updateOwnUser({ savedMeals: clean }, 'setSavedMeals');
+}
+
+/**
+ * addSavedMeal(currentArr, meal) -> Promise<void>
+ * Convenience wrapper: append one preset to the caller-supplied current array and re-set
+ * the whole list (the rules require the full array; there is no arrayUnion path here).
+ */
+export async function addSavedMeal(currentArr, meal) {
+  const base = Array.isArray(currentArr) ? currentArr.slice() : [];
+  base.push(meal);
+  await setSavedMeals(base);
+}
+
+/**
+ * removeSavedMeal(currentArr, index) -> Promise<void>
+ * Convenience wrapper: drop the preset at `index` from the caller-supplied current array
+ * and re-set the whole list.
+ */
+export async function removeSavedMeal(currentArr, index) {
+  const base = Array.isArray(currentArr) ? currentArr.slice() : [];
+  const idx = Number(index);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= base.length) {
+    throw taggedError('gymboard/bad-value', `removeSavedMeal: bad index ${index}.`);
+  }
+  base.splice(idx, 1);
+  await setSavedMeals(base);
+}
+
+// the canonical workout-type enum (matches WORKOUT_TYPES above + the rule's `in [...]`).
+const ENABLED_TYPES_ENUM = WORKOUT_TYPES;
+
+/**
+ * setEnabledWorkoutTypes(arr) -> Promise<void>
+ *
+ * v3.1: merge-SET the enabledWorkoutTypes subset on the owner user doc — which of the 7
+ * canonical types appear in the daily picker. Validates every element is in the canonical
+ * enum, dedupes (preserving first-seen order), caps at 7. An empty/unset array means "all
+ * 7" at the UI layer (back-compat), so we permit an empty array through. This is a SETTING
+ * (no lastActiveAt bump).
+ */
+export async function setEnabledWorkoutTypes(arr) {
+  if (!Array.isArray(arr)) {
+    throw taggedError('gymboard/bad-value', 'setEnabledWorkoutTypes: expected an array of type keys.');
+  }
+  const seen = new Set();
+  const clean = [];
+  for (const t of arr) {
+    if (!ENABLED_TYPES_ENUM.includes(t)) {
+      throw taggedError('gymboard/bad-value', `setEnabledWorkoutTypes: ${t} is not a canonical type.`);
+    }
+    if (seen.has(t)) continue; // dedupe
+    seen.add(t);
+    clean.push(t);
+  }
+  if (clean.length > 7) {
+    throw taggedError('gymboard/bad-value', 'setEnabledWorkoutTypes: too many types (max 7).');
+  }
+  await updateOwnUser({ enabledWorkoutTypes: clean }, 'setEnabledWorkoutTypes');
+}
+
 
 // =============================================================================
 // fetchWeights Ã¢â‚¬â€ read a member's weights window (permission-denied => hidden)

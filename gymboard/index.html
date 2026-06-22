@@ -25,8 +25,9 @@
 <!--
   APP SHELL — the gym-timer-v4 fixed-flex pattern (NO page scroll, NO sticky bars).
   #app is position:fixed/inset:0/100dvh/flex-column/overflow:hidden. The ONLY scroller is
-  the per-person list (#today-list). The tab strip and the bottom action bar are fixed-
-  height flex children that never scroll. See DESIGN.md "App shell" + styles.css.
+  the per-screen scroll region. The tab strip is a fixed-height flex child that never
+  scrolls. v3.1: the bottom action bar is GONE (all logging happens on ME), so the stage
+  fills down to the safe-area bottom. See DESIGN.md "App shell" + styles.css.
 -->
 <div id="app">
 
@@ -39,24 +40,37 @@
     </div>
   </header>
 
-  <!-- ===== TAB STRIP: Today | Grid (Phase 1 only — Weigh-in/Profile deferred) ===== -->
+  <!-- ===== TAB STRIP: Me | Grid. v3.1: ME is first + default-active, GRID second. ===== -->
   <nav id="tabs" aria-label="Sections">
-    <button class="tab is-active" data-tab="grid" aria-pressed="true">GRID</button>
-    <button class="tab" data-tab="me" aria-pressed="false">ME</button>
+    <button class="tab is-active" data-tab="me" aria-pressed="true">ME</button>
+    <button class="tab" data-tab="grid" aria-pressed="false">GRID</button>
   </nav>
 
-  <!-- ===== STAGE: the two screens. Only the inner list inside #screen-today scrolls. ===== -->
+  <!-- ===== STAGE: the two screens. ME is default-active; only the inner scroll regions scroll. ===== -->
   <main id="stage">
 
-    <!-- ---- ME (your inputs: logging on top, settings below) ---- -->
-    <section id="screen-me" class="screen" aria-label="Me" hidden>
+    <!--
+      ME (v3.1) — the MAIN screen. Two clearly demarcated zones:
+        TOP  = "TODAY" daily logging (always visible).
+        BOT  = "SETTINGS" — a collapsible (collapsed-by-default) set-once config block.
+      ME is the default-active tab, so it is NOT hidden on load (GRID is).
+    -->
+    <section id="screen-me" class="screen is-active" aria-label="Me">
       <div id="me-scroll" class="scrolly">
 
-        <!-- TODAY tracker (the hero of the app: running food log + workout + weight) -->
+        <!-- ============ ZONE 1: TODAY (daily logging — always visible) ============ -->
+        <div class="me-zone-title">TODAY<span id="me-today-date" class="me-card-date"></span></div>
+
+        <!-- NUTRITION: done toggle (the simple path) + meal log + quick meals -->
         <div class="me-card">
-          <div class="me-card-title">TODAY<span id="me-today-date" class="me-card-date"></span></div>
+          <div class="me-card-title">NUTRITION</div>
+          <div class="me-hint">Log meals to auto-check, or just mark it done.</div>
+
+          <!-- the simple path: a "mark nutrition done" toggle (sets the manual `ate` override) -->
+          <div class="me-row"><span class="me-label">Nutrition</span><button id="me-nutdone" class="me-toggle" type="button">mark done</button></div>
 
           <!-- running totals + thin progress bars (filled green/neutral, NEVER red) -->
+          <div class="me-track-sep"></div>
           <div class="me-track">
             <div class="me-track-row">
               <div class="me-track-head"><span class="me-track-lbl">CALORIES</span><span id="me-cal-fig" class="me-track-fig"></span></div>
@@ -69,16 +83,22 @@
             <div id="me-nut-indicator" class="me-nut-indicator"></div>
           </div>
 
-          <!-- add a meal: kcal + protein + ADD -->
+          <!-- quick-meal preset chips (saved presets, one tap to log) -->
+          <div id="me-quickmeals" class="me-quickmeals" aria-label="Quick meals"></div>
+
+          <!-- add a meal: kcal + protein + ADD + "save as quick meal" -->
           <div class="me-meal-add">
             <input id="me-add-kcal" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="kcal">
             <input id="me-add-protein" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="protein g">
             <button id="me-add-meal" class="me-meal-btn" type="button">ADD</button>
           </div>
+          <button id="me-save-quickmeal" class="me-textbtn" type="button">+ save as quick meal</button>
           <div id="me-meals" class="me-meals" aria-label="Meals logged today"></div>
+        </div>
 
-          <!-- workout mark-done + optional type picker -->
-          <div class="me-track-sep"></div>
+        <!-- WORKOUT: mark-done + enabled-type picker -->
+        <div class="me-card">
+          <div class="me-card-title">WORKOUT</div>
           <div class="me-row"><span class="me-label">Workout</span><button id="me-workout" class="me-toggle" type="button">mark done</button></div>
           <div class="me-row me-row-stack">
             <span class="me-label me-label-sub">Type <span class="me-opt">(optional)</span></span>
@@ -89,44 +109,84 @@
           <div class="me-track-sep"></div>
           <button id="me-restday" class="me-restday-toggle" type="button">Make today a rest day</button>
           <div class="me-hint me-restday-hint">A holiday or sick day. Today won't go red.</div>
-
-          <!-- weight quick-log -->
-          <div class="me-track-sep"></div>
-          <div class="me-row"><span class="me-label">Weight</span><input id="me-weight" class="me-input" type="number" inputmode="decimal" placeholder="lb"><button id="me-log-weight" class="me-meal-btn" type="button">LOG</button></div>
         </div>
 
-        <!-- REST DAYS -->
+        <!-- WEIGHT quick-log -->
         <div class="me-card">
-          <div class="me-card-title">REST DAYS</div>
-          <div class="me-hint">Days you rest. Those never go red.</div>
-          <div id="me-restdays" class="me-weekdays"></div>
+          <div class="me-card-title">WEIGHT</div>
+          <div class="me-row"><span class="me-label">Today's weight</span><input id="me-weight" class="me-input" type="number" inputmode="decimal" placeholder="lb"><button id="me-log-weight" class="me-meal-btn" type="button">LOG</button></div>
         </div>
 
-        <!-- GOAL (drives the weight arrow AND the nutrition auto-check direction) -->
-        <div class="me-card">
-          <div class="me-card-title">GOAL</div>
-          <div class="me-hint">Colors your weight arrow and sets the nutrition direction.</div>
-          <div id="me-goal" class="me-seg"></div>
-          <div class="me-row"><span class="me-label">Calorie goal</span><input id="me-kcalgoal" class="me-input" type="number" inputmode="numeric" placeholder="kcal"></div>
-          <div class="me-row"><span class="me-label">Protein goal</span><input id="me-proteingoal" class="me-input" type="number" inputmode="numeric" placeholder="g"></div>
-          <div class="me-hint">We auto-check nutrition when you hit these.</div>
-          <button id="me-save-goals" class="me-save" type="button">save goals</button>
-        </div>
+        <!-- ============ ZONE 2: SETTINGS (collapsible, collapsed by default) ============ -->
+        <div id="me-settings" class="me-settings collapsed">
+          <button id="me-settings-toggle" class="me-settings-header" type="button" aria-expanded="false" aria-controls="me-settings-body">
+            <span class="me-settings-label">SETTINGS</span>
+            <span class="me-settings-sub">goal · rest days · quick meals · workout types · profile</span>
+            <span class="me-settings-caret" aria-hidden="true">▸</span>
+          </button>
 
-        <!-- PROFILE -->
-        <div class="me-card">
-          <div class="me-card-title">PROFILE</div>
-          <div class="me-row"><span class="me-label">Name</span><input id="me-name" class="me-input" type="text" maxlength="24" placeholder="your name"></div>
-          <div class="me-row"><span class="me-label">Day starts</span><input id="me-rollover" class="me-input me-input-sm" type="number" inputmode="numeric" min="0" max="23" placeholder="4"><span class="me-suffix">:00</span></div>
-          <div class="me-row"><span class="me-label">Hide my weight</span><button id="me-hideweight" class="me-toggle" type="button">shared</button></div>
-          <button id="me-save-settings" class="me-save" type="button">save settings</button>
+          <div id="me-settings-body" class="me-settings-body">
+
+            <!-- GOAL (drives the weight arrow AND the nutrition auto-check direction) -->
+            <div class="me-card">
+              <div class="me-card-title">GOAL</div>
+              <div class="me-hint">Colors your weight arrow and sets the nutrition direction.</div>
+              <div id="me-goal" class="me-seg"></div>
+              <div class="me-row"><span class="me-label">Calorie goal</span><input id="me-kcalgoal" class="me-input" type="number" inputmode="numeric" placeholder="kcal"></div>
+              <div class="me-row"><span class="me-label">Protein goal</span><input id="me-proteingoal" class="me-input" type="number" inputmode="numeric" placeholder="g"></div>
+              <div class="me-hint">We auto-check nutrition when you hit these.</div>
+              <button id="me-save-goals" class="me-save" type="button">save goals</button>
+            </div>
+
+            <!-- REST DAYS -->
+            <div class="me-card">
+              <div class="me-card-title">REST DAYS</div>
+              <div class="me-hint">Days you rest. Those never go red.</div>
+              <div id="me-restdays" class="me-weekdays"></div>
+            </div>
+
+            <!-- QUICK MEALS manager (add / remove presets) -->
+            <div class="me-card">
+              <div class="me-card-title">QUICK MEALS</div>
+              <div class="me-hint">Saved presets you can tap to log instantly (max 20).</div>
+              <div id="me-qm-manage" class="me-qm-manage" aria-label="Saved quick meals"></div>
+              <div class="me-meal-add">
+                <input id="me-qm-kcal" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="kcal">
+                <input id="me-qm-protein" class="me-input me-meal-in" type="number" inputmode="numeric" placeholder="protein g">
+                <input id="me-qm-label" class="me-input me-meal-in" type="text" maxlength="24" placeholder="label (optional)">
+                <button id="me-qm-add" class="me-meal-btn" type="button">SAVE</button>
+              </div>
+            </div>
+
+            <!-- WORKOUT TYPES chooser (which of the 7 canonical types show in the picker) -->
+            <div class="me-card">
+              <div class="me-card-title">WORKOUT TYPES</div>
+              <div class="me-hint">Pick which types show in your daily picker.</div>
+              <div id="me-typechooser" class="me-typepick"></div>
+              <button id="me-save-types" class="me-save" type="button">save types</button>
+            </div>
+
+            <!-- PROFILE -->
+            <div class="me-card">
+              <div class="me-card-title">PROFILE</div>
+              <div class="me-row me-row-input"><span class="me-label">Name</span><input id="me-name" class="me-input me-input-text" type="text" maxlength="24" placeholder="your name"></div>
+              <div class="me-row"><span class="me-label">Day starts</span>
+                <label class="me-hourbox" for="me-rollover">
+                  <input id="me-rollover" class="me-hour-in" type="number" inputmode="numeric" min="0" max="23" placeholder="4"><span class="me-hour-suffix">:00</span>
+                </label>
+              </div>
+              <div class="me-row"><span class="me-label">Hide my weight</span><button id="me-hideweight" class="me-toggle" type="button">shared</button></div>
+              <button id="me-save-settings" class="me-save" type="button">save profile</button>
+            </div>
+
+          </div>
         </div>
 
       </div>
     </section>
 
-    <!-- ---- GRID (one tap off Today) ---- -->
-    <section id="screen-grid" class="screen is-active" aria-label="Week grid">
+    <!-- ---- GRID (read-only board; tap any cell -> read-only detail) ---- -->
+    <section id="screen-grid" class="screen" aria-label="Week grid" hidden>
       <div id="grid-head">
         <div class="grid-title">THIS WEEK</div>
         <div id="grid-range" class="grid-range mono"></div>
@@ -139,22 +199,6 @@
     </section>
 
   </main>
-
-  <!-- ===== ACTION BAR: ONE full-width WORKOUT tile (MACROS omitted this phase) ===== -->
-  <!-- NEUTRAL (--g3 -> --g4), NOT red. Turns status-green only AFTER the tap. Optimistic
-       with an "unsynced" dot; long-press = undo (gated by the client edit window). -->
-  <div id="action" class="action-2">
-    <button id="workout-tile" class="workout-tile" aria-label="Mark today's workout done">
-      <span class="wt-label">WORKOUT</span>
-      <span class="wt-sub"></span>
-      <span class="wt-unsynced" aria-hidden="true" title="not yet synced"></span>
-    </button>
-    <!-- v3: "+ FOOD" jumps to ME and focuses the meal kcal input; it writes nothing. -->
-    <button id="food-tile" class="workout-tile food-tile" aria-label="Log a meal">
-      <span class="wt-label">+ FOOD</span>
-      <span class="wt-sub">log a meal</span>
-    </button>
-  </div>
 
   <!-- ===== LOUD RECLAIM MODAL (signed out elsewhere). Wired to data.onReclaimNeeded. ===== -->
   <div id="reclaim-backdrop" class="hidden" aria-hidden="true"></div>
@@ -169,30 +213,7 @@
     <div id="reclaim-status" class="reclaim-status" aria-live="assertive"></div>
   </section>
 
-  <!-- ===== DAY EDITOR (tap your OWN cell; backfill any recent day) ===== -->
-  <div id="dayedit-backdrop" class="hidden" aria-hidden="true"></div>
-  <section id="dayedit" class="hidden sheet" role="dialog" aria-modal="true" aria-labelledby="dayedit-title">
-    <div id="dayedit-title" class="sheet-title">EDIT DAY</div>
-    <div id="dayedit-date" class="sheet-sub"></div>
-    <div class="sheet-body">
-      <div class="me-row"><span class="me-label">Workout</span><button id="de-workout" class="me-toggle" type="button">done</button></div>
-      <div class="me-row me-row-stack">
-        <span class="me-label me-label-sub">Type <span class="me-opt">(optional)</span></span>
-        <div id="de-wtype" class="me-typepick"></div>
-      </div>
-      <div class="me-row"><span class="me-label">Day off</span><button id="de-off" class="me-toggle" type="button">off</button></div>
-      <div class="me-row"><span class="me-label">Nutrition</span><button id="de-ate" class="me-toggle" type="button">hit it</button></div>
-      <div class="me-row"><span class="me-label">Calories</span><input id="de-kcal" class="me-input" type="number" inputmode="numeric" placeholder="kcal"></div>
-      <div class="me-row"><span class="me-label">Protein</span><input id="de-protein" class="me-input" type="number" inputmode="numeric" placeholder="g"></div>
-      <div class="me-row"><span class="me-label">Weight</span><input id="de-weight" class="me-input" type="number" inputmode="decimal" placeholder="lb"></div>
-    </div>
-    <div class="sheet-actions">
-      <button id="de-cancel" class="sheet-btn" type="button">cancel</button>
-      <button id="de-save" class="sheet-btn sheet-btn-go" type="button">save</button>
-    </div>
-  </section>
-
-  <!-- ===== DAY DETAIL (tap someone ELSE's cell; read-only) ===== -->
+  <!-- ===== DAY DETAIL (tap ANY cell; read-only) ===== -->
   <div id="daydetail-backdrop" class="hidden" aria-hidden="true"></div>
   <section id="daydetail" class="hidden sheet" role="dialog" aria-modal="true" aria-labelledby="daydetail-title">
     <div id="daydetail-title" class="sheet-title"></div>
@@ -201,6 +222,16 @@
     <div class="sheet-actions">
       <button id="daydetail-close" class="sheet-btn" type="button">close</button>
     </div>
+  </section>
+
+  <!-- ===== ERROR POPUP (app-chrome alert; MAY use red — this is chrome, not a nutrition state).
+       Used for the rest-day-vs-workout mutual-exclusion block (and any future hard block). ===== -->
+  <div id="errpop-backdrop" class="hidden" aria-hidden="true"></div>
+  <section id="errpop" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="errpop-title" aria-describedby="errpop-body">
+    <div class="errpop-icon" aria-hidden="true">!</div>
+    <div id="errpop-title" class="errpop-title">CAN'T DO THAT</div>
+    <div id="errpop-body" class="errpop-body"></div>
+    <button id="errpop-btn" class="errpop-btn" type="button">OK</button>
   </section>
 
   <!-- ===== FATAL / BOOT BANNER (bad link, App Check fail, etc.) ===== -->
