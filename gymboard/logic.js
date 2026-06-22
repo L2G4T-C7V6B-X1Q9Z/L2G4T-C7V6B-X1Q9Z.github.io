@@ -663,7 +663,7 @@ export function nutritionStatus(day, opts = {}) {
  */
 export function computeCompliance(daysMap, subject, nowInstant, opts = {}) {
   const windowDays =
-    Number.isFinite(opts.windowDays) && opts.windowDays > 0 ? opts.windowDays : 30;
+    Number.isFinite(opts.windowDays) && opts.windowDays > 0 ? Math.floor(opts.windowDays) : 30;
   const empty = {
     workout: { expected: 0, completed: 0, percent: null },
     nutrition: { expected: 0, completed: 0, percent: null },

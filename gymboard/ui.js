@@ -78,13 +78,9 @@ const WCHART_PAD_B = 8;
 const WCHART_OTHER_COLORS = ['#cfcfcf', '#9c9c9c', '#6e6e6e', '#bdbdbd', '#808080'];
 let wchartRange = 30; // selected window in days (30d default; 90d via the toggle)
 // v4 (#1): weight-chart perf. _wchartSig is the signature of the LAST real rebuild; a
-// repaint whose signature matches it skips the (expensive) SVG rebuild + innerHTML parse
-// entirely. The rebuild itself is coalesced into one requestAnimationFrame so the burst of
-// back-to-back repaints (heartbeat + the double onMembers paint + rollover) collapses to a
-// single parse. Set _wchartSig = null to FORCE the next rebuild (e.g. the 30d/90d toggle).
+// repaint whose signature matches it skips the (expensive) SVG rebuild + innerHTML parse.
+// Set _wchartSig = null to FORCE the next rebuild (e.g. the 30d/90d toggle).
 let _wchartSig = null;
-let _wchartRafPending = false;
-let _wchartRafNow = 0; // the latest `now` to build with when the rAF fires
 
 // =============================================================================
 // DOM HANDLES
@@ -642,9 +638,14 @@ function smoothPath(points) {
     const p2 = points[i + 1];
     const p3 = points[i + 2] || p2;
     const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
+    let c1y = p1.y + (p2.y - p0.y) / 6;
     const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
+    let c2y = p2.y - (p3.y - p1.y) / 6;
+    // clamp control-point Y to this segment's endpoints so the curve can't overshoot the
+    // chart bounds on sparse/spiky weight data (the comment above promised this).
+    const segLo = Math.min(p1.y, p2.y), segHi = Math.max(p1.y, p2.y);
+    c1y = c1y < segLo ? segLo : c1y > segHi ? segHi : c1y;
+    c2y = c2y < segLo ? segLo : c2y > segHi ? segHi : c2y;
     d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
   }
   return d;
@@ -657,8 +658,10 @@ function smoothPath(points) {
 function weightChartSig(now) {
   const cur = viewerBusinessDate(now);
   const rangeDays = wchartRange;
-  // walk back the window once, collecting the in-range keys (oldest..newest order isn't
-  // needed for the sig — only counts + first/last + lastLb).
+  // capture EVERY in-range point (key=lb) per visible member, PLUS the emoji label — i.e.
+  // everything the chart actually draws. Editing any point (interior/first/last) or changing
+  // an emoji changes the sig, so the dirty-check can never leave a stale chart. Cheap:
+  // <=rangeDays lookups x members, string concat only.
   const keys = [cur];
   for (let i = 1; i < rangeDays; i++) keys.push(prevBusinessDate(keys[i - 1]));
   const width = (elWchartSvg && elWchartSvg.clientWidth) || (elSocialChart && elSocialChart.clientWidth) || 0;
@@ -667,22 +670,13 @@ function weightChartSig(now) {
     const uid = idOf(m);
     if (uid !== myUserId && m.hideWeight === true) continue; // mirror the render's gate (#2)
     const wmap = weightsByUser.get(uid) || {};
-    let count = 0;
-    let firstKey = '';
-    let lastKey = '';
-    let lastLb = '';
-    // keys is newest-first; iterate oldest-first so first/last read naturally.
+    let pts = '';
     for (let i = keys.length - 1; i >= 0; i--) {
       const dk = keys[i];
       const lb = wmap[dk];
-      if (Number.isFinite(lb)) {
-        if (!count) firstKey = dk;
-        lastKey = dk;
-        lastLb = String(lb);
-        count++;
-      }
+      if (Number.isFinite(lb)) pts += dk + '=' + lb + ',';
     }
-    parts.push(`${uid}:${count}:${firstKey}:${lastKey}:${lastLb}`);
+    parts.push(uid + ':' + emojiOf(m) + ':' + pts);
   }
   return parts.join('|');
 }
