@@ -39,9 +39,11 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Network-first: always try the live copy; cache it for offline; on a network
-  // failure (offline) serve the last-known cached copy.
+  // failure (offline) serve the last-known cached copy. `cache:'no-store'` is
+  // CRUCIAL — a plain fetch(req) would still hit the browser HTTP cache and could
+  // serve stale code, defeating the whole point; no-store forces a real network hit.
   event.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-store' })
       .then((resp) => {
         if (resp && resp.ok) {
           const copy = resp.clone();

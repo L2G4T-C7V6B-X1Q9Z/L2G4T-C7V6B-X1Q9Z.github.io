@@ -812,6 +812,16 @@ function renderWeightChart(now) {
   buildWeightChart(now);
 }
 
+// A "nice" gridline step (1/2/5 x 10^n) targeting ~`ticks` lines, so the chart shows a few
+// clean reference lines instead of one every 10 lb (v5.3: was 7+ cramped lines).
+function niceStep(range, ticks) {
+  const raw = Math.max(1e-6, range / Math.max(1, ticks));
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag; // 1..10
+  const nice = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
+  return nice * mag;
+}
+
 // The actual SVG build (expensive: string assembly + innerHTML parse). Only ever reached
 // from renderWeightChart after the dirty-check found a real change, coalesced via rAF.
 function buildWeightChart(now) {
@@ -825,7 +835,7 @@ function buildWeightChart(now) {
   const hostH = elWchartSvg.clientHeight || 132;
   const vbW = 300;
   const vbH = Math.max(76, Math.min(220, Math.round(vbW * (hostH / Math.max(1, hostW)))));
-  const PAD_L = 28, PAD_R = 16, PAD_T = 10, PAD_B = 12;
+  const PAD_L = 28, PAD_R = 16, PAD_T = 8, PAD_B = 6; // v5.3: tighter top/bottom so data fills the box
 
   // ---- X: the ordered window of business-dates, oldest..newest, DST-safe.
   const cur = viewerBusinessDate(now);
@@ -901,11 +911,10 @@ function buildWeightChart(now) {
 
   // ---- build the SVG.
   const parts = [];
-  // gridlines at NICE round steps (1/2/5/10) so labels land on whole numbers and the
-  // user's own weight line is always among them (fixes "146/148/149 but no 147 line").
-  // Value labels sit on the LEFT, freeing the right edge for the emoji end-labels.
+  // gridlines at NICE round steps targeting ~4 lines (v5.3: was every 10 lb => 7+ cramped
+  // lines). Value labels sit on the LEFT, freeing the right edge for the emoji end-labels.
   const rng = hi - lo;
-  const gstep = rng <= 6 ? 1 : rng <= 15 ? 2 : rng <= 40 ? 5 : 10;
+  const gstep = niceStep(rng, 4);
   const gridVals = [];
   for (let g = Math.ceil(lo / gstep) * gstep; g <= hi + 0.001; g += gstep) gridVals.push(g);
   if (!gridVals.length) gridVals.push(lo, hi);

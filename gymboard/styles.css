@@ -1099,7 +1099,11 @@ button:disabled { cursor:default; }
 }
 .wchart-toggle .wc-range.on { background:var(--g4); color:var(--txt); border-color:var(--edge); }
 /* the SVG host fills the remaining height; the <svg> stretches to it. */
-.wchart-body { flex:0 0 auto; height:152px; padding:2px 12px max(6px,env(safe-area-inset-bottom)); display:flex; flex-direction:column; min-height:0; }
+.wchart-body {
+  flex:0 0 auto; height:152px;
+  padding:2px 12px max(6px, calc(env(safe-area-inset-bottom) - 18px)); /* v5.3: trim excess bottom space */
+  display:flex; flex-direction:column; min-height:0;
+}
 .wchart-svg { flex:1 1 auto; min-height:0; width:100%; }
 .wchart-svg svg { display:block; width:100%; height:100%; }
 .wchart-empty {
