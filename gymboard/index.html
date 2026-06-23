@@ -382,5 +382,16 @@
 -->
 <script type="module" src="ui.js"></script>
 
+<!-- Register the network-first service worker so every online load gets the latest code
+     (no more stale-cache lock-in). Inline + non-module so it always runs, even if the
+     module cache is stale. Cross-origin (Firebase/Spotify/Worker) is never intercepted. -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () { /* non-fatal */ });
+    });
+  }
+</script>
+
 </body>
 </html>
