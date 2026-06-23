@@ -30,3 +30,12 @@ export const recaptchaSiteKey = '';
 
 // ---- Optional: App Check debug token (LOCAL DEV ONLY) -----------------------
 export const appCheckDebugToken = undefined;
+
+// ---- Spotify-sync Worker (v5.2) ---------------------------------------------
+// The one-owner Cloudflare Worker that auto-creates + fills the real Spotify
+// playlists (one per themed week-half). `secret` is a PUBLIC bot-gate (the Worker
+// is add-only/create-only + rate-limited), so shipping it here is fine.
+export const spotifyWorker = {
+  url: 'https://gymboard-spotify.christensen-soren-k.workers.dev',
+  secret: '2596802057de3ba21674856376307c93372b04e87c92f056',
+};
