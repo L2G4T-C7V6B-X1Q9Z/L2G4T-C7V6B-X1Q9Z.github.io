@@ -1896,7 +1896,7 @@ const VALID_SONG_SOURCES = ['spotify', 'ytmusic', 'url', 'text']; // matches the
  * outage / CORS / rate-limit must not affect the add. The Authorization secret
  * is a public-app bot-gate by design (documented in worker/worker.js).
  */
-function pushSongToWorker(payload) {
+function pushSongToWorker(payload, workerCtx = {}) {
   if (!_spotifyWorker) return;
   let body = null;
   if (payload.source === 'spotify' && payload.url) {
@@ -1909,6 +1909,12 @@ function pushSongToWorker(payload) {
     if (q) body = { query: q, title: payload.title, artist: payload.artist || '' };
   }
   if (!body) return; // ytmusic / generic url / empty -> nothing Spotify can resolve
+  // v5.2: tell the Worker which themed slot this is. If the slot already has a real
+  // Spotify playlist, pass its id (the Worker adds to it); if not, pass a name and
+  // the Worker CREATES it, returns the id, and we persist that below.
+  if (payload.slot) body.slot = payload.slot;
+  if (workerCtx.playlistId) body.playlistId = workerCtx.playlistId;
+  if (workerCtx.playlistName) body.playlistName = workerCtx.playlistName;
   try {
     fetch(`${_spotifyWorker.url}/add`, {
       method: 'POST',
@@ -1918,10 +1924,42 @@ function pushSongToWorker(payload) {
       },
       body: JSON.stringify(body),
       keepalive: true, // let it finish even if the tab navigates away
-    }).catch(() => {}); // swallow network/CORS errors — mirror is best-effort
+    })
+      .then(async (resp) => {
+        if (!resp.ok) return;
+        const data = await resp.json().catch(() => null);
+        // first song of a slot -> the Worker just created the real playlist; persist
+        // its id so every later add targets it (instead of creating another).
+        if (data && data.created && data.playlistId && payload.slot) {
+          recordSlotPlaylist(payload.slot, data.playlistId, data.playlistUrl || '');
+        }
+      })
+      .catch(() => {}); // swallow network/CORS errors — mirror is best-effort
   } catch (_) {
     /* swallow — never let the mirror affect the add path */
   }
+}
+
+/**
+ * recordSlotPlaylist(slot, playlistId, playlistUrl) -> void   [v5.2, internal]
+ *
+ * Persist the Spotify playlist the Worker auto-created for a themed slot, MERGED
+ * into /playlistSlots/{slot} so a rename (theme write) never clobbers it and vice
+ * versa. Best-effort: a failed write-back just means the next add re-creates a
+ * playlist (a harmless duplicate), so we swallow errors and never block.
+ */
+function recordSlotPlaylist(slot, playlistId, playlistUrl) {
+  if (!_userId || typeof slot !== 'string') return;
+  setDoc(
+    doc(_db, 'playlistSlots', slot),
+    {
+      spotifyPlaylistId: String(playlistId).slice(0, 64),
+      spotifyUrl: String(playlistUrl || '').slice(0, 2000),
+      updatedByUserId: _userId,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  ).catch(() => {});
 }
 
 /**
@@ -1975,7 +2013,7 @@ export function subscribePlaylist(cb) {
  * other writer uses); any other error propagates so ui.js can roll the optimistic
  * row back. No outbox (a song add is not the rollover-sensitive workout write).
  */
-export async function addSong(song = {}) {
+export async function addSong(song = {}, workerCtx = {}) {
   assertInit();
   const id = _userId;
   if (!id) throw taggedError('gymboard/not-bound', 'addSong: no bound userId.');
@@ -2025,7 +2063,7 @@ export async function addSong(song = {}) {
   }
   // Best-effort mirror into the owner's real Spotify playlist (no-op unless the
   // Worker is configured). Fire-and-forget: the wall write already succeeded.
-  pushSongToWorker(payload);
+  pushSongToWorker(payload, workerCtx);
   return songId;
 }
 

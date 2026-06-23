@@ -1682,6 +1682,19 @@ function viewedPlaylistSlot() {
   return { week, half: h, key: playlistSlotId(week, h), nowHalf: half };
 }
 
+// v5.2: the name the Worker gives the auto-created Spotify playlist for a slot — the half + its
+// theme + the week, e.g. "gymboard MON–WED: Hype · Jun 22" (or without the theme until it's set).
+const _PL_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function slotPlaylistName(slotKey) {
+  const us = slotKey.indexOf('_');
+  const weekKey = slotKey.slice(0, us);
+  const label = playlistSlotLabel(slotKey.slice(us + 1)); // MON–WED / THU–SUN
+  const theme = ((plSlots[slotKey] && plSlots[slotKey].theme) || '').trim();
+  const p = weekKey.split('-');
+  const wk = p.length === 3 ? `${_PL_MON[+p[1] - 1] || ''} ${+p[2]}` : weekKey;
+  return `gymboard ${label}${theme ? ': ' + theme : ''} · ${wk}`;
+}
+
 // The render list for the VIEWED slot = its snapshot songs MINUS optimistic removes, PLUS its
 // optimistic adds not yet in the snapshot. Both filtered to the viewed slot key (songs arrive
 // newest-first from orderBy('createdAt','desc'), so order is preserved). Optimistic adds render
@@ -1860,9 +1873,15 @@ async function submitSong() {
   // ONE id — onSongs reconciles by id (no temp-id swap, no flash, no duplicate) the moment the
   // server row lands in the snapshot. We write FIRST (Firestore's offline cache acks the local
   // write fast, even offline) so a hard reject surfaces before we paint a row that can't exist.
+  // v5.2: the Worker context — the slot's existing real playlist id (if any) so the Worker adds
+  // to it, plus the name to use if it has to create one. No-op unless the Worker is configured.
+  const workerCtx = {
+    playlistId: (plSlots[slot] && plSlots[slot].spotifyPlaylistId) || '',
+    playlistName: slotPlaylistName(slot),
+  };
   let songId;
   try {
-    songId = await data.addSong(payload); // addSong stamps addedBy* + createdAt; returns the id
+    songId = await data.addSong(payload, workerCtx); // stamps addedBy* + createdAt; returns the id
   } catch (err) {
     const code = String((err && (err.code || err.message)) || err);
     if (/reclaim/i.test(code)) { plHint('Signed out elsewhere — tap to reclaim.', 'err'); return; }
