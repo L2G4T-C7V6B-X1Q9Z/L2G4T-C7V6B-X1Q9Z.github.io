@@ -48,7 +48,8 @@ import {
   parseSongInput,
   playlistDedupeKey,
   spotifySearchUrl,
-  ytMusicSearchUrl,
+  // v5.1: rich-row display — a pasted Spotify link renders as an inline player.
+  spotifyEmbed,
 } from './logic.js';
 
 import * as data from './data.js';
@@ -129,7 +130,6 @@ const elPlAddBtn = $('pl-add-btn');
 const elPlAddHint = $('pl-add-hint');
 const elPlList = $('pl-list');
 const elPlOpenSpotify = $('pl-open-spotify');
-const elPlOpenYtm = $('pl-open-ytm');
 const elPlCollab = $('pl-collab');
 const elGridLegend = $('grid-legend');
 // v4 (#3): weight-over-time chart handles (the inline-SVG line chart on the SOCIAL board).
@@ -1562,39 +1562,66 @@ function songSearchText(song) {
   return [t, a].filter(Boolean).join(' ');
 }
 
-// Per-row deep-link plan for the two service buttons. For each service: OPEN the song's own url
-// when it's that service; else SEARCH the title+artist when we have a text query; else null
-// (no usable target — e.g. the cross-service button on a pasted link with no text). Returns
-// { sp:{href,mode}, yt:{href,mode} } with mode in 'open'|'search'|null.
+// Per-row Spotify deep-link plan for the SP button. OPEN the song's own url when it's a Spotify
+// link; else SEARCH the title+artist when we have a text query; else null (no usable target). A
+// generic ('url') pasted link with no text query opens verbatim. Returns { sp:{href,mode} } with
+// mode in 'open'|'search'|null. (v5.1: Spotify-only — the YT Music button was removed.)
 function songLinks(song) {
   const url = typeof song.url === 'string' && song.url.trim() ? song.url.trim() : '';
   const q = songSearchText(song);
   const sp = { href: '', mode: null };
-  const yt = { href: '', mode: null };
   if (song.source === 'spotify' && url) { sp.href = url; sp.mode = 'open'; }
   else if (q) { sp.href = spotifySearchUrl(q); sp.mode = 'search'; }
-  if (song.source === 'ytmusic' && url) { yt.href = url; yt.mode = 'open'; }
-  else if (q) { yt.href = ytMusicSearchUrl(q); yt.mode = 'search'; }
-  // a generic ('url') pasted link with no text query: let BOTH service buttons just open the
-  // verbatim link (better than a dead button — the link still plays SOMEwhere).
-  if (song.source === 'url' && url) {
-    if (!sp.mode) { sp.href = url; sp.mode = 'open'; }
-    if (!yt.mode) { yt.href = url; yt.mode = 'open'; }
-  }
-  return { sp, yt };
+  // a generic ('url') pasted link with no text query: open it verbatim (better than a dead button).
+  if (song.source === 'url' && url && !sp.mode) { sp.href = url; sp.mode = 'open'; }
+  return { sp };
 }
 
 // One escaped row. `pending` (an optimistic, not-yet-acked add) dims it slightly + disables ✕
 // until the snapshot confirms it (the id then matches a real doc and pending clears).
+//
+// v5.1 RICH DISPLAY: a pasted link's stored `title` is the raw URL (parseSongInput can't know
+// the song name without a network call), so we DON'T show the title for links — instead we
+// render the real thing: a Spotify link -> an inline player embed (cover art + title + artist +
+// play), a YouTube link -> a clickable cover-art tile that opens the video. Typed "Song - Artist"
+// rows (and any non-embeddable link) keep the plain text row + the SP/YT deep-link buttons.
 function songRowHtml(song, pending) {
   const uid = song.addedByUserId || '';
   const member = memberById(uid);
   const emoji = emojiOf({ emoji: member && member.emoji, id: uid });
   const who = member ? displayNameOf(member) : 'Someone';
+  const idAttr = escapeHtml(song.id || '');
+  const emojiSpan =
+    `<span class="pl-row-emoji" title="${escapeHtml(who)}" aria-label="added by ${escapeHtml(who)}">${escapeHtml(emoji)}</span>`;
+  const xBtn =
+    `<button class="pl-row-x" type="button" ${pending ? 'disabled' : ''} ` +
+    `data-id="${idAttr}" aria-label="remove ${escapeHtml(song.title || 'song')}">✕</button>`;
+
+  // --- RICH: a pasted Spotify link -> inline player (self-renders art/title/artist/play) ---
+  const spe = song.source === 'spotify' ? spotifyEmbed(song.url) : null;
+  if (spe) {
+    return (
+      `<div class="pl-row pl-row-embed${pending ? ' pending' : ''}" role="listitem" data-id="${idAttr}">` +
+        emojiSpan +
+        `<div class="pl-embed">` +
+          // NOTE: no loading="lazy" — native lazy-loading is flaky on iframes inserted via
+          // innerHTML (the intersection observer often never fires, leaving a blank player),
+          // so we load eagerly. Fine for a friend-group list; revisit with a manual
+          // IntersectionObserver mount only if the wall ever grows to dozens of embeds.
+          `<iframe src="${escapeHtml(spe.src)}" frameborder="0" ` +
+            `allow="encrypted-media; clipboard-write; picture-in-picture" ` +
+            `title="Spotify player for added song"></iframe>` +
+        `</div>` +
+        xBtn +
+      `</div>`
+    );
+  }
+
+  // --- PLAIN: typed "Song - Artist" or a non-embeddable link -> text + a Spotify button ---
   const title = escapeHtml(song.title || '');
   const artist = song.artist ? escapeHtml(song.artist) : '';
   const tag = SONG_SOURCE_TAG[song.source] || 'TYPED';
-  const { sp, yt } = songLinks(song);
+  const { sp } = songLinks(song);
 
   const svcBtn = (svc, plan, label) => {
     if (!plan.mode) {
@@ -1603,13 +1630,13 @@ function songRowHtml(song, pending) {
     const verb = plan.mode === 'open' ? 'open' : 'search';
     return (
       `<a class="pl-svc pl-svc-${svc}" href="${escapeHtml(plan.href)}" target="_blank" rel="noopener" ` +
-      `aria-label="${verb} ${escapeHtml(song.title || 'this song')} on ${svc === 'sp' ? 'Spotify' : 'YT Music'}">${label}</a>`
+      `aria-label="${verb} ${escapeHtml(song.title || 'this song')} on Spotify">${label}</a>`
     );
   };
 
   return (
-    `<div class="pl-row${pending ? ' pending' : ''}" role="listitem" data-id="${escapeHtml(song.id || '')}">` +
-      `<span class="pl-row-emoji" title="${escapeHtml(who)}" aria-label="added by ${escapeHtml(who)}">${escapeHtml(emoji)}</span>` +
+    `<div class="pl-row${pending ? ' pending' : ''}" role="listitem" data-id="${idAttr}">` +
+      emojiSpan +
       `<div class="pl-row-main">` +
         `<div class="pl-row-title">${title}</div>` +
         `<div class="pl-row-meta">` +
@@ -1617,9 +1644,8 @@ function songRowHtml(song, pending) {
           `<span class="pl-row-src mono">${tag}</span>` +
         `</div>` +
       `</div>` +
-      `<div class="pl-row-svcs">${svcBtn('sp', sp, 'SP')}${svcBtn('yt', yt, 'YT')}</div>` +
-      `<button class="pl-row-x" type="button" ${pending ? 'disabled' : ''} ` +
-        `data-id="${escapeHtml(song.id || '')}" aria-label="remove ${escapeHtml(song.title || 'song')}">✕</button>` +
+      `<div class="pl-row-svcs">${svcBtn('sp', sp, 'SP')}</div>` +
+      xBtn +
     `</div>`
   );
 }
@@ -1660,9 +1686,7 @@ function renderPlaylist() {
     .slice(0, 12)
     .join(' ');
   const spHref = wholeListQuery ? spotifySearchUrl(wholeListQuery) : 'https://open.spotify.com/search';
-  const ytHref = wholeListQuery ? ytMusicSearchUrl(wholeListQuery) : 'https://music.youtube.com/search';
   if (elPlOpenSpotify) elPlOpenSpotify.dataset.href = spHref;
-  if (elPlOpenYtm) elPlOpenYtm.dataset.href = ytHref;
   if (elPlCollab) {
     if (plCollabUrl) {
       elPlCollab.href = plCollabUrl;
@@ -1809,7 +1833,6 @@ function wirePlaylist() {
     if (href) window.open(href, '_blank', 'noopener');
   };
   if (elPlOpenSpotify) elPlOpenSpotify.addEventListener('click', () => openStashed(elPlOpenSpotify));
-  if (elPlOpenYtm) elPlOpenYtm.addEventListener('click', () => openStashed(elPlOpenYtm));
   // elPlCollab is a real <a href> (set in render) — no JS click needed.
 }
 
@@ -3235,12 +3258,13 @@ async function boot() {
   // firebase-config.js. It's a DYNAMIC import so a missing file (first run, before the
   // user copies the example) is caught here as a friendly banner rather than crashing the
   // whole module graph with an opaque resolver error.
-  let cfg, siteKey, debugToken;
+  let cfg, siteKey, debugToken, spotifyWorker;
   try {
     const conf = await import('./firebase-config.js');
     cfg = conf.firebaseConfig;
     siteKey = conf.recaptchaSiteKey;
     debugToken = conf.appCheckDebugToken;
+    spotifyWorker = conf.spotifyWorker; // v5.1: optional { url, secret } for real Spotify sync
   } catch (e) {
     fatal(
       'CONFIG MISSING',
@@ -3261,7 +3285,7 @@ async function boot() {
 
   try {
     // 1. App Check FIRST (before Auth + any Firestore call), then offline persistence.
-    await data.initApp(cfg, siteKey, { appCheckDebugToken: debugToken });
+    await data.initApp(cfg, siteKey, { appCheckDebugToken: debugToken, spotifyWorker });
   } catch (err) {
     fatal('STARTUP FAILED', 'App Check / Firebase init did not complete. Check the App Check site key and that this origin is an authorized domain. ' + escapeHtml(String((err && err.message) || err)));
     return;

@@ -91,6 +91,14 @@ let _serverOffsetEstablished = false;
 let _reclaimCb = null;
 let _reclaimFired = false; // de-dup: only fire the loud prompt once per detection
 
+// OPTIONAL Spotify-sync Worker (v5.1). When firebase-config.js sets
+// `spotifyWorker: { url, secret }`, a successful addSong ALSO best-effort POSTs
+// the song to the one-owner Cloudflare Worker, which adds it to the owner's real
+// Spotify playlist. Null = not configured => the song wall works exactly as
+// before (Firestore is always the source of truth; the Worker is a mirror, never
+// a dependency — a Worker failure never fails or blocks an add).
+let _spotifyWorker = null; // { url, secret } | null
+
 // live listeners + timers to detach on teardown.
 const _unsubs = new Set();
 
@@ -352,6 +360,13 @@ export async function initApp(firebaseConfig, appCheckSiteKey, opts = {}) {
       provider: new ReCaptchaV3Provider(appCheckSiteKey),
       isTokenAutoRefreshEnabled: true,
     });
+  }
+
+  // Optional Spotify-sync Worker config (v5.1). Stored only when both url+secret
+  // are non-empty strings; otherwise stays null (feature off, app unchanged).
+  const sw = opts.spotifyWorker;
+  if (sw && typeof sw.url === 'string' && sw.url.trim() && typeof sw.secret === 'string' && sw.secret.trim()) {
+    _spotifyWorker = { url: sw.url.trim().replace(/\/+$/, ''), secret: sw.secret.trim() };
   }
 
   // (1) Auth (anonymous provider; sign-in happens in authAndBind()).
@@ -1869,6 +1884,47 @@ export async function fetchOlderDays(userId, fromKey, toKey) {
 const VALID_SONG_SOURCES = ['spotify', 'ytmusic', 'url', 'text']; // matches the rule enum.
 
 /**
+ * pushSongToWorker(payload) -> void   (v5.1, best-effort, fire-and-forget)
+ *
+ * Mirror a just-added song into the owner's REAL Spotify playlist via the
+ * one-owner Cloudflare Worker (see worker/). No-op unless `spotifyWorker` is
+ * configured. A Spotify-track link sends its URL as { uri } (the Worker
+ * normalizes it); a typed "Song - Artist" sends { query } for the Worker to
+ * search. A YouTube/other link is skipped (its stored title is the raw URL, so
+ * there's nothing reliable to resolve against Spotify). NEVER awaited and NEVER
+ * throws: Firestore is the source of truth; the Worker is a mirror, so an
+ * outage / CORS / rate-limit must not affect the add. The Authorization secret
+ * is a public-app bot-gate by design (documented in worker/worker.js).
+ */
+function pushSongToWorker(payload) {
+  if (!_spotifyWorker) return;
+  let body = null;
+  if (payload.source === 'spotify' && payload.url) {
+    body = { uri: payload.url };
+  } else if (payload.source === 'text' && payload.title) {
+    const q = [payload.title, payload.artist]
+      .filter((x) => typeof x === 'string' && x.trim())
+      .join(' ')
+      .trim();
+    if (q) body = { query: q, title: payload.title, artist: payload.artist || '' };
+  }
+  if (!body) return; // ytmusic / generic url / empty -> nothing Spotify can resolve
+  try {
+    fetch(`${_spotifyWorker.url}/add`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${_spotifyWorker.secret}`,
+      },
+      body: JSON.stringify(body),
+      keepalive: true, // let it finish even if the tab navigates away
+    }).catch(() => {}); // swallow network/CORS errors — mirror is best-effort
+  } catch (_) {
+    /* swallow — never let the mirror affect the add path */
+  }
+}
+
+/**
  * subscribePlaylist(cb) -> unsubscribeFn (sync return)
  *
  * onSnapshot on /playlist ordered by createdAt DESC (newest song first); cb is
@@ -1961,6 +2017,9 @@ export async function addSong(song = {}) {
     }
     throw err;
   }
+  // Best-effort mirror into the owner's real Spotify playlist (no-op unless the
+  // Worker is configured). Fire-and-forget: the wall write already succeeded.
+  pushSongToWorker(payload);
   return songId;
 }
 

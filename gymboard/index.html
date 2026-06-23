@@ -292,7 +292,7 @@
       <!-- header: title + a live "· N SONGS" count (not a date window — it's one evolving list). -->
       <div id="pl-head" class="pl-head">
         <div class="pl-title">PLAYLIST<span id="pl-count" class="pl-count mono" aria-live="polite"></span></div>
-        <div class="pl-sub">Shared song wall · tap a row to open it in Spotify or YT Music.</div>
+        <div class="pl-sub">Shared song wall · paste a Spotify link and it plays right here.</div>
       </div>
       <!-- fixed add-bar: paste a link OR type "Song - Artist". One input + ADD. The hint line
            below it doubles as the "already added" pulse target. -->
@@ -300,8 +300,8 @@
         <div class="pl-add-row">
           <input id="pl-input" class="me-input me-input-text pl-in" type="text" inputmode="text"
                  autocapitalize="off" autocorrect="off" spellcheck="false"
-                 placeholder="Paste a link or type Song - Artist"
-                 aria-label="Paste a song link or type Song - Artist">
+                 placeholder="Paste a Spotify link or type Song - Artist"
+                 aria-label="Paste a Spotify link or type Song - Artist">
           <button id="pl-add-btn" class="me-meal-btn pl-add-btn" type="button">ADD</button>
         </div>
         <div id="pl-add-hint" class="pl-add-hint" aria-live="polite"></div>
@@ -314,7 +314,6 @@
            collaborative-playlist link. -->
       <div id="pl-foot" class="pl-foot">
         <button id="pl-open-spotify" class="pl-foot-btn" type="button" aria-label="Search the whole list on Spotify">OPEN ON SPOTIFY ↗</button>
-        <button id="pl-open-ytm" class="pl-foot-btn" type="button" aria-label="Search the whole list on YT Music">OPEN ON YT MUSIC ↗</button>
         <a id="pl-collab" class="pl-foot-btn pl-collab hidden" target="_blank" rel="noopener" href="#" aria-label="Open the shared collaborative playlist">OPEN SHARED PLAYLIST ↗</a>
       </div>
     </section>

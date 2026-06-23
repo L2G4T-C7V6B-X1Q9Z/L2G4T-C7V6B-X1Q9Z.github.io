@@ -963,3 +963,34 @@ export function ytMusicSearchUrl(q) {
   if (typeof q !== 'string' || !q.trim()) return '';
   return `https://music.youtube.com/search?q=${encodeURIComponent(q.trim())}`;
 }
+
+// ---- playlist: Spotify embed helper (rich row display, v5.1) ------------------
+// Turn a stored Spotify URL into the embed URL the row needs to render an inline
+// player (cover art + title + artist + play) instead of a bare URL. A PURE URL
+// parser — it never fetches. Returns null when the URL isn't an embeddable
+// Spotify resource, so the caller falls back to the plain text row. This is what
+// fixes the "a pasted link just shows the URL" problem: parseSongInput stores a
+// link's title AS the raw URL (it can't know the song name without a network
+// call), so the row must show the embed, not the title.
+
+/**
+ * spotifyEmbed(url) -> { type, id, src } | null
+ * Recognize an open.spotify.com link (or a spotify: URI) for a track / album /
+ * playlist / episode / show and build the matching embed URL
+ * (open.spotify.com/embed/<type>/<id>, which renders an inline player with cover
+ * art + title + artist + a play button, no auth). Tolerates a locale path prefix
+ * (/intl-de/) and ?si= tracking params. Spotify ids are 22-char base62. Returns
+ * null if the URL isn't an embeddable Spotify resource.
+ */
+export function spotifyEmbed(url) {
+  if (typeof url !== 'string' || !url.trim()) return null;
+  const s = url.trim();
+  // spotify:track:<id> URI form (rare from a paste, but handle it).
+  let m = s.match(/spotify:(track|album|playlist|episode|show):([A-Za-z0-9]{22})/i);
+  // https://open.spotify.com/[intl-xx/]<type>/<id>[?si=..]
+  if (!m) m = s.match(/open\.spotify\.com\/(?:[a-z-]+\/)?(track|album|playlist|episode|show)\/([A-Za-z0-9]{22})/i);
+  if (!m) return null;
+  const type = m[1].toLowerCase();
+  const id = m[2];
+  return { type, id, src: `https://open.spotify.com/embed/${type}/${id}` };
+}
