@@ -1074,17 +1074,22 @@ button:disabled { cursor:default; }
   display:flex; align-items:center; justify-content:space-between;
   flex:0 0 auto; padding:6px 12px 4px; gap:8px;
 }
+/* v5.3: an OBVIOUS pill/tab so it's clear the chart collapses (was a bare caret). */
 .wchart-collapse {
-  display:inline-flex; align-items:center; gap:6px; flex:1 1 auto; min-width:0;
-  background:none; border:none; padding:0; cursor:pointer; color:inherit; text-align:left;
+  display:inline-flex; align-items:center; gap:6px; flex:0 1 auto; min-width:0;
+  background:var(--g2); border:1px solid var(--hairline); border-radius:999px;
+  padding:4px 11px; cursor:pointer; color:var(--txt2); text-align:left;
   -webkit-tap-highlight-color:transparent;
 }
-.wchart-caret { font-size:9px; color:var(--txt3); transition:transform 200ms var(--ease-out); }
+.wchart-collapse:active { background:var(--g3); }
+.wchart-caret { font-size:11px; color:var(--txt2); line-height:1; transition:transform 200ms var(--ease-out); }
 .social-chart.collapsed .wchart-caret { transform:rotate(-90deg); }
 .wchart-title {
-  font-size:9px; letter-spacing:.12em; color:var(--txt3); font-weight:700;
+  font-size:9px; letter-spacing:.12em; color:var(--txt2); font-weight:700;
   text-transform:uppercase; white-space:nowrap;
 }
+/* collapsed = just the tab; the 30d/90d range picker is meaningless with no chart. */
+.social-chart.collapsed .wchart-toggle { display:none; }
 .wchart-toggle { display:flex; gap:2px; }
 .wchart-toggle .wc-range {
   font:inherit; font-size:9px; letter-spacing:.04em; line-height:1;
