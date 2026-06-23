@@ -293,9 +293,12 @@
            editable theme line for the half on screen (v5.2: two themed playlists per week). -->
       <div id="pl-head" class="pl-head">
         <div class="pl-title">PLAYLIST<span id="pl-count" class="pl-count mono" aria-live="polite"></span></div>
-        <div id="pl-halves" class="pl-halves" role="tablist" aria-label="Which half of the week">
-          <button id="pl-half-a" class="pl-half" type="button" role="tab" data-half="a">MON–WED</button>
-          <button id="pl-half-b" class="pl-half" type="button" role="tab" data-half="b">THU–SUN</button>
+        <div class="pl-halfrow">
+          <div id="pl-halves" class="pl-halves" role="tablist" aria-label="Which half of the week">
+            <button id="pl-half-a" class="pl-half" type="button" role="tab" data-half="a">MON–WED</button>
+            <button id="pl-half-b" class="pl-half" type="button" role="tab" data-half="b">THU–SUN</button>
+          </div>
+          <span id="pl-reset" class="pl-reset mono" aria-live="polite"></span>
         </div>
         <div id="pl-theme" class="pl-theme">
           <span id="pl-theme-name" class="pl-theme-name" role="button" tabindex="0" title="Tap to name this playlist’s theme">…</span>

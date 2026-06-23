@@ -569,8 +569,10 @@ button:disabled { cursor:default; }
 .pl-title { font-size:13px; font-weight:700; letter-spacing:.1em; color:var(--txt2); text-transform:uppercase; }
 .pl-count { color:var(--red); font-weight:700; letter-spacing:.04em; }
 
-/* v5.2: the Mon–Wed / Thu–Sun half toggle (a segmented control). */
-.pl-halves { display:flex; margin-top:9px; max-width:260px; border:1px solid var(--hairline); border-radius:var(--r-sm); overflow:hidden; }
+/* v5.2: the Mon–Wed / Thu–Sun half toggle (a segmented control) + the reset countdown. */
+.pl-halfrow { display:flex; align-items:center; gap:10px; margin-top:9px; }
+.pl-halves { display:flex; flex:0 0 auto; max-width:260px; border:1px solid var(--hairline); border-radius:var(--r-sm); overflow:hidden; }
+.pl-reset { margin-left:auto; flex:0 0 auto; font-size:10px; color:var(--txt3); letter-spacing:.04em; white-space:nowrap; }
 .pl-half {
   flex:1 1 0; position:relative; padding:7px 8px; background:var(--g2); border:none; border-right:1px solid var(--hairline);
   color:var(--txt3); font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.08em;

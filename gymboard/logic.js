@@ -1025,3 +1025,31 @@ export function playlistSlotLabel(dateKeyOrHalf) {
   const half = dateKeyOrHalf === 'a' || dateKeyOrHalf === 'b' ? dateKeyOrHalf : playlistHalf(dateKeyOrHalf);
   return half === 'a' ? 'MON–WED' : 'THU–SUN';
 }
+
+/**
+ * playlistNextResetDayKey(dateKey) -> the YYYY-MM-DD when the CURRENT half ends and
+ * the next themed playlist goes live: from a Mon–Wed slot -> that week's Thursday;
+ * from a Thu–Sun slot -> the FOLLOWING Monday. (The flip happens at the business-day
+ * rollover on that day; the UI turns this into the countdown badge.)
+ */
+export function playlistNextResetDayKey(dateKey) {
+  const monday = businessWeekKey(dateKey);
+  const steps = playlistHalf(dateKey) === 'a' ? 3 : 7; // Mon->Thu = +3 ; Mon->next Mon = +7
+  let key = monday;
+  for (let i = 0; i < steps; i++) key = nextDayKey(key);
+  return key;
+}
+
+/**
+ * formatResetCountdown(ms) -> a coarse "time remaining" badge: "3D" when >= 1 day
+ * out, else "5H" (whole hours, floored to a minimum of 1). 'now' for a
+ * non-positive / non-number input.
+ */
+export function formatResetCountdown(ms) {
+  if (typeof ms !== 'number' || !(ms > 0)) return 'now';
+  const DAY = 86400000;
+  const HR = 3600000;
+  const days = Math.floor(ms / DAY);
+  if (days >= 1) return `${days}D`;
+  return `${Math.max(1, Math.floor(ms / HR))}H`;
+}

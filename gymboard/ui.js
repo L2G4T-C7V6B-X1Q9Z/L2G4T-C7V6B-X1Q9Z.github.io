@@ -55,6 +55,8 @@ import {
   playlistHalf,
   playlistSlotId,
   playlistSlotLabel,
+  playlistNextResetDayKey,
+  formatResetCountdown,
 } from './logic.js';
 
 import * as data from './data.js';
@@ -142,6 +144,7 @@ const elPlHalfB = $('pl-half-b');
 const elPlThemeName = $('pl-theme-name');
 const elPlThemeEdit = $('pl-theme-edit');
 const elPlThemeInput = $('pl-theme-input');
+const elPlReset = $('pl-reset'); // v5.2: countdown to the next half-week reset
 const elGridLegend = $('grid-legend');
 // v4 (#3): weight-over-time chart handles (the inline-SVG line chart on the SOCIAL board).
 const elSocialChart = $('social-chart');
@@ -1596,8 +1599,10 @@ function songLinks(song) {
   return { sp };
 }
 
-// One escaped row. `pending` (an optimistic, not-yet-acked add) dims it slightly + disables ✕
-// until the snapshot confirms it (the id then matches a real doc and pending clears).
+// One escaped row. `pending` (an optimistic, not-yet-acked add) dims it slightly until the
+// snapshot confirms it (the id then matches a real doc and pending clears). v5.2: songs are
+// PERMANENT (no remove ✕) — the Worker is add-only so a wall-remove could never reach Spotify
+// (they'd drift), and the wall already wipes fresh each half-week.
 //
 // v5.1 RICH DISPLAY: a pasted link's stored `title` is the raw URL (parseSongInput can't know
 // the song name without a network call), so we DON'T show the title for links — instead we
@@ -1612,9 +1617,6 @@ function songRowHtml(song, pending) {
   const idAttr = escapeHtml(song.id || '');
   const emojiSpan =
     `<span class="pl-row-emoji" title="${escapeHtml(who)}" aria-label="added by ${escapeHtml(who)}">${escapeHtml(emoji)}</span>`;
-  const xBtn =
-    `<button class="pl-row-x" type="button" ${pending ? 'disabled' : ''} ` +
-    `data-id="${idAttr}" aria-label="remove ${escapeHtml(song.title || 'song')}">✕</button>`;
 
   // --- RICH: a pasted Spotify link -> inline player (self-renders art/title/artist/play) ---
   const spe = song.source === 'spotify' ? spotifyEmbed(song.url) : null;
@@ -1631,7 +1633,6 @@ function songRowHtml(song, pending) {
             `allow="encrypted-media; clipboard-write; picture-in-picture" ` +
             `title="Spotify player for added song"></iframe>` +
         `</div>` +
-        xBtn +
       `</div>`
     );
   }
@@ -1664,7 +1665,6 @@ function songRowHtml(song, pending) {
         `</div>` +
       `</div>` +
       `<div class="pl-row-svcs">${svcBtn('sp', sp, 'SP')}</div>` +
-      xBtn +
     `</div>`
   );
 }
@@ -1693,6 +1693,21 @@ function slotPlaylistName(slotKey) {
   const p = weekKey.split('-');
   const wk = p.length === 3 ? `${_PL_MON[+p[1] - 1] || ''} ${+p[2]}` : weekKey;
   return `gymboard ${label}${theme ? ': ' + theme : ''} · ${wk}`;
+}
+
+// v5.2: refresh the "resets in 3D / 5H" badge — time until the CURRENT live half flips to the
+// next themed playlist (Mon–Wed -> Thu, Thu–Sun -> next Mon, at the business-day rollover).
+// Coarse (days, else hours). Called on render + a 60s tick (text-only, never reloads embeds).
+function updateResetBadge() {
+  if (!elPlReset || !myUserId) return;
+  const me = memberById(myUserId);
+  if (!me) return;
+  const s = subjectOf(me);
+  const today = currentBusinessDate(new Date(), s.ianaTz, s.rolloverHour, s.rolloverMinute);
+  const p = playlistNextResetDayKey(today).split('-').map(Number);
+  // boundary instant ≈ the reset day at the rollover hour, in local time (fine for a coarse badge).
+  const boundary = new Date(p[0], p[1] - 1, p[2], s.rolloverHour || 0, s.rolloverMinute || 0, 0).getTime();
+  elPlReset.textContent = `resets in ${formatResetCountdown(boundary - Date.now())}`;
 }
 
 // The render list for the VIEWED slot = its snapshot songs MINUS optimistic removes, PLUS its
@@ -1729,6 +1744,7 @@ function renderPlaylist() {
     elPlThemeName.textContent = theme || 'name this week’s vibe';
     elPlThemeName.classList.toggle('unset', !theme);
   }
+  updateResetBadge();
 
   // live "· N SONGS" count in the header (now scoped to the viewed themed slot).
   if (elPlCount) elPlCount.textContent = total ? ` · ${total} SONG${total === 1 ? '' : 'S'}` : '';
@@ -1909,22 +1925,6 @@ async function submitSong() {
   renderPlaylist();
 }
 
-// Remove a song (anyone can). Optimistic hide, then the real delete; on failure, un-hide.
-async function removeSongRow(songId) {
-  if (!songId) return;
-  plOptimisticRemoves.add(songId);
-  renderPlaylist();
-  try {
-    await data.removeSong(songId);
-  } catch (err) {
-    plOptimisticRemoves.delete(songId); // un-hide on failure
-    renderPlaylist();
-    const code = String((err && (err.code || err.message)) || err);
-    if (/reclaim/i.test(code)) plHint('Signed out elsewhere — tap to reclaim.', 'err');
-    else plHint('Could not remove that song.', 'err');
-  }
-}
-
 function wirePlaylist() {
   if (elPlAddBtn) elPlAddBtn.addEventListener('click', () => { submitSong(); });
   if (elPlInput) {
@@ -1934,14 +1934,6 @@ function wirePlaylist() {
     // clear a stale "already added" pulse as soon as they edit the box.
     elPlInput.addEventListener('input', () => {
       if (elPlAddHint && elPlAddHint.textContent) plHint('');
-    });
-  }
-  // delegated remove (anyone-can-remove ✕ on every row).
-  if (elPlList) {
-    elPlList.addEventListener('click', (e) => {
-      const x = e.target.closest('.pl-row-x');
-      if (!x || x.disabled) return;
-      removeSongRow(x.dataset.id);
     });
   }
   // footer open-buttons: open the whole-list search (href stashed on the dataset by render).
@@ -1965,6 +1957,9 @@ function wirePlaylist() {
     });
     elPlThemeInput.addEventListener('blur', () => { commitThemeEdit(); });
   }
+  // v5.2: keep the reset countdown fresh while the playlist tab is open (text-only tick, so it
+  // never re-renders the list / reloads the embeds).
+  setInterval(() => { if (activeTab === 'playlist') updateResetBadge(); }, 60000);
 }
 
 // =============================================================================
