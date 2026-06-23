@@ -50,6 +50,11 @@ import {
   spotifySearchUrl,
   // v5.1: rich-row display — a pasted Spotify link renders as an inline player.
   spotifyEmbed,
+  // v5.2: two themed playlists per week (Mon–Wed 'a' / Thu–Sun 'b').
+  businessWeekKey,
+  playlistHalf,
+  playlistSlotId,
+  playlistSlotLabel,
 } from './logic.js';
 
 import * as data from './data.js';
@@ -131,6 +136,12 @@ const elPlAddHint = $('pl-add-hint');
 const elPlList = $('pl-list');
 const elPlOpenSpotify = $('pl-open-spotify');
 const elPlCollab = $('pl-collab');
+// v5.2: the two-themed-playlists chrome (half toggle + editable theme line).
+const elPlHalfA = $('pl-half-a');
+const elPlHalfB = $('pl-half-b');
+const elPlThemeName = $('pl-theme-name');
+const elPlThemeEdit = $('pl-theme-edit');
+const elPlThemeInput = $('pl-theme-input');
 const elGridLegend = $('grid-legend');
 // v4 (#3): weight-over-time chart handles (the inline-SVG line chart on the SOCIAL board).
 const elSocialChart = $('social-chart');
@@ -240,8 +251,15 @@ let _monthFetchSig = null;
 // snapshot drops them. Reconciled in onSongs.
 let songs = [];
 let plCollabUrl = null;
-let plOptimisticAdds = []; // [{ id, title, artist, url, source, addedByUserId }]
+let plOptimisticAdds = []; // [{ id, title, artist, url, source, slot, addedByUserId }]
 const plOptimisticRemoves = new Set(); // song ids hidden pending the snapshot
+// v5.2: two themed playlists per week. `plSlots` is the /playlistSlots snapshot
+// (slotKey -> { theme?, spotifyPlaylistId?, spotifyUrl? }). `plViewHalf` is which
+// half of THIS week is on screen ('a'|'b'); null means "default to the current
+// half by today's date" (reset whenever the tab is opened).
+let plSlots = {};
+let plViewHalf = null;
+let plThemeEditing = false; // true while the theme input is open (so render won't stomp it)
 
 // Optimistic overlay: while a WORKOUT write for (userId+businessDate) is in flight (or
 // failed pre-rollback), we paint from THIS map, not the snapshot, and we never repaint
@@ -1125,6 +1143,7 @@ function setTab(tab) {
   // re-entering — either way the tab opens fresh as "my current month".)
   monthSubjectUid = myUserId;
   monthOffset = 0;
+  plViewHalf = null; // v5.2: PLAYLIST always opens on the current half (by today's date)
   activeTab = tab;
   for (const btn of elTabs.querySelectorAll('.tab')) {
     const on = btn.dataset.tab === tab;
@@ -1650,13 +1669,29 @@ function songRowHtml(song, pending) {
   );
 }
 
-// The render list = the snapshot MINUS optimistically-removed ids, PLUS any optimistic adds
-// whose id hasn't appeared in the snapshot yet (so a just-added song shows instantly without a
-// duplicate once the server row lands). Optimistic adds render at the TOP (newest).
+// v5.2: the playlist's current week (Monday key) + the half for "now", from the viewer's clock.
+function currentPlaylistSlot() {
+  const today = viewerBusinessDate(new Date());
+  return { week: businessWeekKey(today), half: playlistHalf(today) };
+}
+// The slot being VIEWED: this week, the selected half (defaults to the current-by-day half until
+// the user taps the other one). `nowHalf` = which half is the live one by today's date.
+function viewedPlaylistSlot() {
+  const { week, half } = currentPlaylistSlot();
+  const h = plViewHalf || half;
+  return { week, half: h, key: playlistSlotId(week, h), nowHalf: half };
+}
+
+// The render list for the VIEWED slot = its snapshot songs MINUS optimistic removes, PLUS its
+// optimistic adds not yet in the snapshot. Both filtered to the viewed slot key (songs arrive
+// newest-first from orderBy('createdAt','desc'), so order is preserved). Optimistic adds render
+// at the TOP (newest).
 function playlistRenderList() {
+  const { key } = viewedPlaylistSlot();
+  const inSlot = (s) => s.slot === key;
   const snapIds = new Set(songs.map((s) => s.id));
-  const visibleSnap = songs.filter((s) => !plOptimisticRemoves.has(s.id));
-  const pendingAdds = plOptimisticAdds.filter((s) => !snapIds.has(s.id));
+  const visibleSnap = songs.filter((s) => inSlot(s) && !plOptimisticRemoves.has(s.id));
+  const pendingAdds = plOptimisticAdds.filter((s) => inSlot(s) && !snapIds.has(s.id));
   return { pendingAdds, visibleSnap };
 }
 
@@ -1665,11 +1700,28 @@ function renderPlaylist() {
   const { pendingAdds, visibleSnap } = playlistRenderList();
   const total = pendingAdds.length + visibleSnap.length;
 
-  // live "· N SONGS" count in the header (no date window — one evolving list).
+  // v5.2: half toggle (mark the viewed half active + tag which half is "now" by date) + the
+  // editable theme line for the viewed slot.
+  const { half, key, nowHalf } = viewedPlaylistSlot();
+  if (elPlHalfA && elPlHalfB) {
+    elPlHalfA.classList.toggle('active', half === 'a');
+    elPlHalfB.classList.toggle('active', half === 'b');
+    elPlHalfA.classList.toggle('now', nowHalf === 'a');
+    elPlHalfB.classList.toggle('now', nowHalf === 'b');
+    elPlHalfA.setAttribute('aria-selected', half === 'a' ? 'true' : 'false');
+    elPlHalfB.setAttribute('aria-selected', half === 'b' ? 'true' : 'false');
+  }
+  if (elPlThemeName && !plThemeEditing) {
+    const theme = plSlots[key] && typeof plSlots[key].theme === 'string' ? plSlots[key].theme.trim() : '';
+    elPlThemeName.textContent = theme || 'name this week’s vibe';
+    elPlThemeName.classList.toggle('unset', !theme);
+  }
+
+  // live "· N SONGS" count in the header (now scoped to the viewed themed slot).
   if (elPlCount) elPlCount.textContent = total ? ` · ${total} SONG${total === 1 ? '' : 'S'}` : '';
 
   if (!total) {
-    elPlList.innerHTML = '<div class="empty-note">No songs yet. Paste a link or type a song above to start the wall.</div>';
+    elPlList.innerHTML = '<div class="empty-note">No songs in this playlist yet. Paste a Spotify link or type a song to start it.</div>';
   } else {
     const rows = [];
     for (const s of pendingAdds) rows.push(songRowHtml(s, true));
@@ -1711,6 +1763,47 @@ function onSongs(songsArray) {
   if (activeTab === 'playlist') renderPlaylist();
 }
 
+// v5.2: /playlistSlots snapshot handler — store the theme/spotify map, repaint if live.
+function onSlots(slotsMap) {
+  plSlots = slotsMap && typeof slotsMap === 'object' ? slotsMap : {};
+  if (activeTab === 'playlist') renderPlaylist();
+}
+
+// v5.2: theme editing — tap the name (or ✎) to swap in an inline input; Enter/blur saves,
+// Esc cancels. The write is optimistic (reflect immediately, then persist via setPlaylistTheme).
+function startThemeEdit() {
+  if (!elPlThemeInput || !elPlThemeName) return;
+  const { key } = viewedPlaylistSlot();
+  plThemeEditing = true;
+  elPlThemeInput.value = (plSlots[key] && plSlots[key].theme) || '';
+  elPlThemeInput.classList.remove('hidden');
+  elPlThemeName.classList.add('hidden');
+  if (elPlThemeEdit) elPlThemeEdit.classList.add('hidden');
+  elPlThemeInput.focus();
+  elPlThemeInput.select();
+}
+function endThemeEdit() {
+  plThemeEditing = false;
+  if (elPlThemeInput) elPlThemeInput.classList.add('hidden');
+  if (elPlThemeName) elPlThemeName.classList.remove('hidden');
+  if (elPlThemeEdit) elPlThemeEdit.classList.remove('hidden');
+}
+async function commitThemeEdit() {
+  if (!plThemeEditing) return; // already committed/cancelled (blur after Enter, etc.)
+  const { key } = viewedPlaylistSlot();
+  const val = (elPlThemeInput.value || '').trim().slice(0, 60);
+  endThemeEdit();
+  plSlots[key] = { ...(plSlots[key] || {}), theme: val }; // optimistic
+  renderPlaylist();
+  try {
+    await data.setPlaylistTheme(key, val);
+  } catch (err) {
+    const code = String((err && (err.code || err.message)) || err);
+    if (/reclaim/i.test(code)) plHint('Signed out elsewhere — tap to reclaim.', 'err');
+    else plHint('Could not save the theme.', 'err');
+  }
+}
+
 // A short red "already added" pulse on the add-bar hint (client-side dedupe feedback). Cleared
 // on the next keystroke / successful add.
 let _plPulseTimer = null;
@@ -1738,11 +1831,15 @@ async function submitSong() {
 
   // map parser kind -> stored source enum (the parser uses 'spotify'|'ytmusic'|'url'|'text').
   const source = ['spotify', 'ytmusic', 'url', 'text'].includes(parsed.kind) ? parsed.kind : 'text';
+  // v5.2: the song lands in whichever themed half is on screen (both halves of THIS week are
+  // addable — you can pre-load the upcoming one).
+  const slot = viewedPlaylistSlot().key;
   const payload = {
     title: (parsed.title || '').trim(),
     artist: (parsed.artist || '').trim(),
     url: parsed.url || '',
     source,
+    slot,
   };
   if (!payload.title) { plHint('Type a song or paste a link first.', 'err'); return; }
 
@@ -1786,6 +1883,7 @@ async function submitSong() {
       artist: payload.artist,
       url: payload.url,
       source: payload.source,
+      slot: payload.slot,
       addedByUserId: myUserId,
     });
   }
@@ -1834,6 +1932,20 @@ function wirePlaylist() {
   };
   if (elPlOpenSpotify) elPlOpenSpotify.addEventListener('click', () => openStashed(elPlOpenSpotify));
   // elPlCollab is a real <a href> (set in render) — no JS click needed.
+
+  // v5.2: half toggle (Mon–Wed / Thu–Sun) — switch which themed playlist is on screen.
+  if (elPlHalfA) elPlHalfA.addEventListener('click', () => { plViewHalf = 'a'; renderPlaylist(); });
+  if (elPlHalfB) elPlHalfB.addEventListener('click', () => { plViewHalf = 'b'; renderPlaylist(); });
+  // v5.2: inline theme edit (tap the name or ✎; Enter/blur saves, Esc cancels).
+  if (elPlThemeName) elPlThemeName.addEventListener('click', startThemeEdit);
+  if (elPlThemeEdit) elPlThemeEdit.addEventListener('click', startThemeEdit);
+  if (elPlThemeInput) {
+    elPlThemeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commitThemeEdit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); endThemeEdit(); renderPlaylist(); }
+    });
+    elPlThemeInput.addEventListener('blur', () => { commitThemeEdit(); });
+  }
 }
 
 // =============================================================================
@@ -3339,6 +3451,7 @@ async function boot() {
   // tracked inside data.subscribePlaylist (detached by data.teardown).
   try {
     data.subscribePlaylist(onSongs);
+    data.subscribePlaylistSlots(onSlots); // v5.2: themed-slot names (+ spotify ids in phase 2)
   } catch (e) {
     /* non-fatal: the playlist tab degrades to empty */
   }

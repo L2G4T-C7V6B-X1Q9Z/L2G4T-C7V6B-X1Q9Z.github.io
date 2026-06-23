@@ -289,10 +289,19 @@
          or open an Admin-stored collaborative-playlist link. Same `hidden`-until-first-setTab
          handling as MONTH. ---- -->
     <section id="screen-playlist" class="screen" aria-label="Playlist" aria-hidden="true" hidden>
-      <!-- header: title + a live "· N SONGS" count (not a date window — it's one evolving list). -->
+      <!-- header: title + a live "· N SONGS" count, the Mon–Wed / Thu–Sun half toggle, and the
+           editable theme line for the half on screen (v5.2: two themed playlists per week). -->
       <div id="pl-head" class="pl-head">
         <div class="pl-title">PLAYLIST<span id="pl-count" class="pl-count mono" aria-live="polite"></span></div>
-        <div class="pl-sub">Shared song wall · paste a Spotify link and it plays right here.</div>
+        <div id="pl-halves" class="pl-halves" role="tablist" aria-label="Which half of the week">
+          <button id="pl-half-a" class="pl-half" type="button" role="tab" data-half="a">MON–WED</button>
+          <button id="pl-half-b" class="pl-half" type="button" role="tab" data-half="b">THU–SUN</button>
+        </div>
+        <div id="pl-theme" class="pl-theme">
+          <span id="pl-theme-name" class="pl-theme-name" role="button" tabindex="0" title="Tap to name this playlist’s theme">…</span>
+          <button id="pl-theme-edit" class="pl-theme-edit" type="button" aria-label="Rename this playlist’s theme">✎</button>
+          <input id="pl-theme-input" class="pl-theme-input hidden" type="text" maxlength="60" autocomplete="off" autocapitalize="words" placeholder="name this week’s vibe">
+        </div>
       </div>
       <!-- fixed add-bar: paste a link OR type "Song - Artist". One input + ADD. The hint line
            below it doubles as the "already added" pulse target. -->

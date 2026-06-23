@@ -568,7 +568,37 @@ button:disabled { cursor:default; }
 }
 .pl-title { font-size:13px; font-weight:700; letter-spacing:.1em; color:var(--txt2); text-transform:uppercase; }
 .pl-count { color:var(--red); font-weight:700; letter-spacing:.04em; }
-.pl-sub { margin-top:3px; font-size:10.5px; color:var(--txt3); letter-spacing:.01em; }
+
+/* v5.2: the Mon–Wed / Thu–Sun half toggle (a segmented control). */
+.pl-halves { display:flex; margin-top:9px; max-width:260px; border:1px solid var(--hairline); border-radius:var(--r-sm); overflow:hidden; }
+.pl-half {
+  flex:1 1 0; position:relative; padding:7px 8px; background:var(--g2); border:none; border-right:1px solid var(--hairline);
+  color:var(--txt3); font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; cursor:pointer; touch-action:manipulation; user-select:none;
+}
+.pl-half:last-child { border-right:none; }
+.pl-half.active { background:var(--red); color:#fff; }
+/* a small "now" dot marks whichever half is live by today's date, when it isn't the active one. */
+.pl-half.now:not(.active)::after {
+  content:""; position:absolute; top:6px; right:6px; width:5px; height:5px; border-radius:50%; background:var(--red);
+}
+
+/* v5.2: the editable theme line for the half on screen. */
+.pl-theme { display:flex; align-items:center; gap:6px; margin-top:9px; min-height:24px; }
+.pl-theme-name {
+  font-size:14px; font-weight:600; color:var(--txt); cursor:text; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.pl-theme-name.unset { color:var(--txt3); font-weight:400; font-style:italic; }
+.pl-theme-edit {
+  flex:0 0 auto; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center;
+  border:none; background:transparent; color:var(--txt3); font-size:12px; cursor:pointer; border-radius:6px;
+}
+.pl-theme-edit:active { background:var(--g3); color:var(--txt2); }
+.pl-theme-input {
+  flex:1 1 auto; min-width:0; max-width:300px; font-size:14px; font-weight:600; color:var(--txt);
+  background:var(--g2); border:1px solid var(--red); border-radius:6px; padding:3px 8px; outline:none;
+}
 
 /* fixed add-bar: one wide input + ADD (reuses .me-input + .me-meal-btn), then a hint line that
    doubles as the "already added" pulse target. */

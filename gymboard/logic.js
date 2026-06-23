@@ -994,3 +994,34 @@ export function spotifyEmbed(url) {
   const id = m[2];
   return { type, id, src: `https://open.spotify.com/embed/${type}/${id}` };
 }
+
+// ---- playlist: weekly themed "slots" (v5.2) -----------------------------------
+// The song wall splits into TWO themed playlists per week: the FIRST HALF
+// (Mon–Wed) and the SECOND HALF (Thu–Sun). Each (week, half) is one "slot" with
+// its own theme + its own songs; every new week starts fresh. These PURE helpers
+// turn a business-date key into the slot it belongs to. A slot id is
+// "<weekMonday>_<half>" (e.g. "2026-06-22_a") — stable, human-readable, and
+// slash-free so it's a valid Firestore doc id.
+
+/** playlistHalf(dateKey) -> 'a' (Mon–Wed) | 'b' (Thu–Sun). */
+export function playlistHalf(dateKey) {
+  if (!isDayKey(dateKey)) throw new TypeError(`playlistHalf: not a YYYY-MM-DD key: ${dateKey}`);
+  const dow = weekdayOf(dateKey); // 0=Sun..6=Sat
+  return dow >= 1 && dow <= 3 ? 'a' : 'b'; // Mon,Tue,Wed -> a ; Thu,Fri,Sat,Sun -> b
+}
+
+/** playlistSlotKey(dateKey) -> "<weekMonday>_<half>", the themed-playlist slot id. */
+export function playlistSlotKey(dateKey) {
+  return `${businessWeekKey(dateKey)}_${playlistHalf(dateKey)}`;
+}
+
+/** playlistSlotId(weekKey, half) -> the slot id from an explicit week Monday + half. */
+export function playlistSlotId(weekKey, half) {
+  return `${weekKey}_${half}`;
+}
+
+/** playlistSlotLabel(dateKeyOrHalf) -> 'MON–WED' | 'THU–SUN' (the half's day range). */
+export function playlistSlotLabel(dateKeyOrHalf) {
+  const half = dateKeyOrHalf === 'a' || dateKeyOrHalf === 'b' ? dateKeyOrHalf : playlistHalf(dateKeyOrHalf);
+  return half === 'a' ? 'MON–WED' : 'THU–SUN';
+}

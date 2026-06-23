@@ -2006,6 +2006,12 @@ export async function addSong(song = {}) {
   if (typeof song.url === 'string' && song.url.trim()) {
     payload.url = song.url.trim().slice(0, 2000);
   }
+  // v5.2: the themed weekly slot this song belongs to ("<weekMonday>_<half>",
+  // e.g. "2026-06-22_a"). ui.js computes it from the adder's current business
+  // date. Format-checked here to fail fast (the rule enforces it server-side too).
+  if (typeof song.slot === 'string' && /^\d{4}-\d{2}-\d{2}_[ab]$/.test(song.slot)) {
+    payload.slot = song.slot;
+  }
 
   const songId = newSongId();
   try {
@@ -2021,6 +2027,60 @@ export async function addSong(song = {}) {
   // Worker is configured). Fire-and-forget: the wall write already succeeded.
   pushSongToWorker(payload);
   return songId;
+}
+
+/**
+ * subscribePlaylistSlots(cb) -> unsubscribeFn (sync return)   [v5.2]
+ *
+ * onSnapshot on /playlistSlots; cb gets a plain map { [slotKey]: { theme?,
+ * spotifyPlaylistId?, spotifyUrl? } } on every change. One small doc per themed
+ * week-half, so this is cheap. Tracked in _unsubs for teardown. A permission
+ * denial routes to reclaim (same posture as the song stream); any other stream
+ * error is non-fatal (themes just stop live-updating).
+ */
+export function subscribePlaylistSlots(cb) {
+  assertInit();
+  const onNext = (qs) => {
+    const map = {};
+    qs.forEach((d) => { map[d.id] = d.data() || {}; });
+    try { cb(map); } catch (_) { /* render errors are the caller's problem */ }
+  };
+  const onErr = (err) => {
+    if (isPermissionDenied(err)) maybeFireReclaim(err);
+  };
+  const unsub = onSnapshot(collection(_db, 'playlistSlots'), onNext, onErr);
+  _unsubs.add(unsub);
+  return unsub;
+}
+
+/**
+ * setPlaylistTheme(slotKey, theme) -> Promise<void>   [v5.2]
+ *
+ * Create/update one themed slot's name (anyone-names). MERGES so a Worker-written
+ * spotifyPlaylistId/url (phase 2) is never clobbered by a rename. Stamps
+ * updatedByUserId + a server updatedAt (the rule requires == request.time). A
+ * binding-mismatch denial routes to reclaim; any other error propagates.
+ */
+export async function setPlaylistTheme(slotKey, theme) {
+  assertInit();
+  if (!_userId) throw taggedError('gymboard/not-bound', 'setPlaylistTheme: no bound userId.');
+  if (typeof slotKey !== 'string' || !/^\d{4}-\d{2}-\d{2}_[ab]$/.test(slotKey)) {
+    throw taggedError('gymboard/bad-value', `setPlaylistTheme: bad slotKey ${slotKey}.`);
+  }
+  const clean = typeof theme === 'string' ? theme.trim().slice(0, 60) : '';
+  try {
+    await setDoc(
+      doc(_db, 'playlistSlots', slotKey),
+      { theme: clean, updatedByUserId: _userId, updatedAt: serverTimestamp() },
+      { merge: true }
+    );
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Theme write rejected - this device was signed out elsewhere.');
+    }
+    throw err;
+  }
 }
 
 /**
