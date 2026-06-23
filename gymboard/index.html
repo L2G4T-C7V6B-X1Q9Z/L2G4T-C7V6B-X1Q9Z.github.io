@@ -16,6 +16,14 @@
      gym-timer-v4.html approach verbatim. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- warm the Firebase SDK origin + preload the 4 pinned modules so the cold DNS+TLS and the
+     SDK download start at the first HTML byte (in parallel) instead of lazily mid-JS-exec.
+     Keep these URLs byte-identical to data.js's imports (currently v12.15.0) or they're dead weight. -->
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-check.js" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=optional" rel="stylesheet" media="print" onload="this.media='all'">
 
 <!-- apply saved theme before first paint so light mode never flashes dark -->

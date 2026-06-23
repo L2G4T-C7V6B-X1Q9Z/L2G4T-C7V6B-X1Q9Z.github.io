@@ -601,7 +601,9 @@ function headStackHtml(member, now, viewerBiz) {
       lastMs = null;
     }
   }
-  const rt = relativeTime(lastMs, now);
+  // duration vs true-UTC serverTimestamp: use raw Date.now(), not the (possibly stale)
+  // server-offset anchoredNow(); see weigh-in indicator note for the 6h-skew rationale.
+  const rt = relativeTime(lastMs, Date.now());
   if (rt.text) {
     parts.push(`<span class="gh-active${rt.stale ? ' stale' : ''}">${escapeHtml(rt.text)}</span>`);
   }
@@ -2087,7 +2089,10 @@ function renderMe(now) {
     if (Number.isFinite(todayW)) {
       const la = me && me.lastActiveAt;
       const laMs = la && typeof la.toMillis === 'function' ? la.toMillis() : null;
-      const rt = relativeTime(laMs, now);
+      // 'X ago' is a wall-clock DURATION: compare the true-UTC serverTimestamp against
+      // raw Date.now(), NOT anchoredNow(). A stale server offset (e.g. derived under a VPN)
+      // would otherwise push `now` hours ahead and show a just-logged weigh-in as '6h ago'.
+      const rt = relativeTime(laMs, Date.now());
       elMeWeightLogged.textContent =
         `✓ Logged today: ${todayW} lb` + (rt.text && rt.text !== 'now' ? ` · ${rt.text} ago` : '');
       elMeWeightLogged.classList.remove('hidden');
