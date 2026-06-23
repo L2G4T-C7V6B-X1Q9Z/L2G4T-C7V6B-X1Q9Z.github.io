@@ -294,8 +294,8 @@ const NUTMODE_HINT = Object.fromEntries(NUTRITION_MODES.map((m) => [m.key, m.hin
 // v3 workout types (lowercase stored). `label` = the picker button text; `tag` = the
 // tiny 1-2 letter corner glyph painted on a done WORKOUT band in the grid.
 const WORKOUT_TYPES = [
-  { key: 'upper', label: 'Upper', tag: 'UP' },
-  { key: 'lower', label: 'Lower', tag: 'LOW' },
+  { key: 'upper', label: 'Upper', tag: 'Upper' },
+  { key: 'lower', label: 'Lower', tag: 'Lower' },
   { key: 'push', label: 'Push', tag: 'PUSH' },
   { key: 'pull', label: 'Pull', tag: 'PULL' },
   { key: 'legs', label: 'Legs', tag: 'LEGS' },
@@ -3022,6 +3022,31 @@ function buildDayPopBody(member, dateKey) {
   }
   lines.push(line('Nutrition 30d', nPct == null ? '—' : `${nPct}%`, 'dd-foot'));
 
+  // v5.4 TAP-TO-EDIT: on the viewer's OWN cell, for today or a past day (never future,
+  // never pre-join), show edit controls. Writes go through the existing owner-scoped paths
+  // (commitWorkout / setNutritionHit), so the security model is unchanged.
+  const ownEditable =
+    uid === myUserId && dateKey <= cur && (!subject.joinDate || dateKey >= subject.joinDate);
+  if (ownEditable) {
+    const curType = day.workout === true ? (day.workoutType || '') : '';
+    const typeBtns = enabledTypesOf(member)
+      .map(
+        (k) =>
+          `<button class="me-type-btn dd-edit-btn${k === curType ? ' on' : ''}" type="button" data-edit-wtype="${escapeHtml(k)}">${escapeHtml(WTYPE_LABEL[k])}</button>`
+      )
+      .join('');
+    const nutHit = ns === 'hit';
+    lines.push(
+      `<div class="dd-edit" data-edit-date="${escapeHtml(dateKey)}">` +
+        `<div class="dd-edit-h">Edit · workout</div>` +
+        `<div class="dd-edit-types">${typeBtns}</div>` +
+        `<button class="dd-edit-act" type="button" data-edit-workout="clear">Clear workout</button>` +
+        `<div class="dd-edit-h">Edit · nutrition</div>` +
+        `<button class="dd-edit-act${nutHit ? ' on' : ''}" type="button" data-edit-nut="${nutHit ? 'clear' : 'hit'}">${nutHit ? 'Clear nutrition hit' : 'Mark nutrition hit'}</button>` +
+      `</div>`
+    );
+  }
+
   return lines.join('');
 }
 
@@ -3066,9 +3091,12 @@ function openDayPopover(member, dateKey, cellEl) {
   daypopOpen = true;
   daypopAnchor = { uid: idOf(member), date: dateKey }; // v4 (#4): remember what it points at
 
-  // auto-dismiss after ~5s.
+  // auto-dismiss after ~5s — but NOT while the owner is editing their own day (the 5s
+  // timer would close it mid-edit). Editable popovers rely on the outside-tap close.
+  const editable =
+    idOf(member) === myUserId && isDayKey(dateKey) && (() => { const c = myCurrentBiz(); return !c || dateKey <= c; })();
   clearTimeout(daypopTimer);
-  daypopTimer = setTimeout(closeDayPopover, DAYPOP_AUTO_MS);
+  if (!editable) daypopTimer = setTimeout(closeDayPopover, DAYPOP_AUTO_MS);
 
   // dismiss on the NEXT outside tap (defer attach so the opening click doesn't close it).
   removeDayPopOutside();
@@ -3146,6 +3174,35 @@ function onGridCellActivate(target) {
   if (member) openDayPopover(member, dateKey, cell);
 }
 
+// v5.4 TAP-TO-EDIT: the edit buttons inside the open day popover write the viewer's OWN
+// day via the existing owner-scoped paths. Delegated on the popover body so it survives the
+// in-place body rebuild after each write. Works for both grid AND month taps (both open the
+// same popover). Re-checks ownership + not-future on every click — never trusts the markup.
+async function onDayPopEditClick(e) {
+  const btn =
+    e.target.closest && e.target.closest('[data-edit-wtype],[data-edit-workout],[data-edit-nut]');
+  if (!btn || !daypopAnchor) return;
+  const { uid, date } = daypopAnchor;
+  if (uid !== myUserId || !isDayKey(date)) return; // own cells only
+  const cur = myCurrentBiz();
+  if (cur && date > cur) return; // never edit a future day
+  try {
+    if (btn.dataset.editWtype) {
+      await commitWorkout(date, true, { workoutType: btn.dataset.editWtype });
+    } else if (btn.dataset.editWorkout === 'clear') {
+      await commitWorkout(date, false);
+    } else if (btn.dataset.editNut) {
+      await data.setNutritionHit(date, btn.dataset.editNut === 'hit');
+      await refetchMyDays();
+    }
+  } catch (err) {
+    handleWriteError(err);
+  }
+  // rebuild the popover body in place so it reflects the new state (delegation persists).
+  const member = memberById(uid);
+  if (member && elDayPopBody) elDayPopBody.innerHTML = buildDayPopBody(member, date);
+}
+
 function wireGridTaps() {
   elGrid.addEventListener('click', (e) => onGridCellActivate(e.target));
   elGrid.addEventListener('keydown', (e) => {
@@ -3154,6 +3211,8 @@ function wireGridTaps() {
       onGridCellActivate(e.target);
     }
   });
+  // own-day edit buttons inside the popover (delegated; covers both grid + month taps).
+  if (elDayPopBody) elDayPopBody.addEventListener('click', onDayPopEditClick);
 }
 
 // v4.5: collapsible weight chart. Tapping the title bar collapses the body to just the
@@ -3379,12 +3438,26 @@ function onMembers(usersArray) {
   }
   // paint immediately from the rollup-bearing /users docs so the board isn't blank.
   repaint();
+  hideLoading(); // board has painted — drop the loading overlay + re-enable taps
+}
+
+// =============================================================================
+// LOADING OVERLAY — shown until the board first paints; blocks taps so nobody clicks a
+// not-yet-interactive board. Hidden on the first render or when a fatal banner shows.
+// =============================================================================
+let _loadingHidden = false;
+function hideLoading() {
+  if (_loadingHidden) return;
+  _loadingHidden = true;
+  const el = document.getElementById('loading');
+  if (el) el.classList.add('hidden');
 }
 
 // =============================================================================
 // FATAL BANNER
 // =============================================================================
 function fatal(title, bodyHtml) {
+  hideLoading();
   elBoot.innerHTML =
     `<div class="boot-title">${escapeHtml(title)}</div><div class="boot-body">${bodyHtml}</div>`;
   elBoot.classList.remove('hidden');
@@ -3394,6 +3467,9 @@ function fatal(title, bodyHtml) {
 // BOOT SEQUENCE (order is load-bearing)
 // =============================================================================
 async function boot() {
+  // safety net: if the first Firestore snapshot never arrives (offline / permission), still
+  // drop the loading overlay after 12s so the app is never stuck behind the spinner.
+  setTimeout(hideLoading, 12000);
   // pull the PUBLIC firebase web config + App Check site key from the gitignored
   // firebase-config.js. It's a DYNAMIC import so a missing file (first run, before the
   // user copies the example) is caught here as a friendly banner rather than crashing the

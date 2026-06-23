@@ -353,6 +353,11 @@
     <div id="reclaim-status" class="reclaim-status" aria-live="assertive"></div>
   </section>
 
+  <!-- ===== LOADING OVERLAY (v5.4): covers the app until the board first paints; blocks
+       taps so nobody clicks a not-yet-interactive board. ui.js hides it on first render
+       (onMembers) or when a fatal banner shows. ===== -->
+  <div id="loading" class="loading-overlay" role="status" aria-label="Loading"><div class="spinner" aria-hidden="true"></div></div>
+
   <!-- ===== DAY POPOVER (v4 #13: tap ANY cell; read-only mini popover anchored beside
        the cell; no backdrop. Dismisses on outside tap and a ~5s auto-timeout). ===== -->
   <div id="daypop" class="daypop hidden" role="dialog" aria-modal="false" aria-labelledby="daypop-title">
