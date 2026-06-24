@@ -672,15 +672,11 @@ export async function ensureUserDoc(userId) {
   }
 
   if (snap.exists()) {
-    // Opportunistically refine the server offset from the existing createdAt.
-    const data = snap.data();
-    if (data && data.createdAt instanceof Timestamp) {
-      // We didn't author this write, so we can't bound it tightly; only adopt if
-      // we have nothing better yet (don't override a write-derived offset).
-      if (!_serverOffsetEstablished) {
-        refineOffsetFromServerTimestamp(data.createdAt, data.createdAt.toMillis());
-      }
-    }
+    // (Removed a no-op "offset refine" that passed createdAt as BOTH the server stamp
+    // and the client-sent time, so it always computed 0 and persisted a fake offset.
+    // A stored historical createdAt carries no latency info and can't bound the offset;
+    // pure viewers correctly fall back to device time until their first write establishes
+    // the real offset via the setDoc read-back below, where sentAt is captured pre-write.)
     return;
   }
 
@@ -727,14 +723,9 @@ export function subscribeUsers(cb) {
     qs.forEach((d) => {
       users.push({ id: d.id, ...d.data() });
     });
-    // Opportunistically refine offset from OUR OWN doc's updatedAt-class field
-    // if present (createdAt is the stable owned server stamp here).
-    if (_userId) {
-      const mine = users.find((u) => u.id === _userId);
-      if (mine && mine.createdAt instanceof Timestamp && !_serverOffsetEstablished) {
-        refineOffsetFromServerTimestamp(mine.createdAt, mine.createdAt.toMillis());
-      }
-    }
+    // (Removed a no-op offset refine here too: it passed createdAt as both args, so it
+    // only ever set offset=0. The real offset is established on the first WRITE's
+    // read-back, where sentAt is captured pre-write.)
     if (typeof cb === 'function') cb(users);
   };
 

@@ -854,7 +854,8 @@ function buildWeightChart(now) {
   const xOf = (idx) => PAD_L + (rangeDays <= 1 ? innerW : (idx / (rangeDays - 1)) * innerW);
 
   // ---- gather each visible member's in-range points. Hidden members (fetchWeights -> {})
-  // and members with zero in-range points are omitted. "me" first so its red draws on top.
+  // and members with zero in-range points are omitted. "me" is collected first for color
+  // assignment, but DRAWN last (see drawOrder below) so its red line paints on top.
   const cols = orderedMembers();
   const series = [];
   let yMin = Infinity;
@@ -914,6 +915,13 @@ function buildWeightChart(now) {
 
   // ---- build the SVG.
   const parts = [];
+  // v5.4: soft red gradient used to fill under the ME line ONLY (instant self-locating).
+  parts.push(
+    '<defs><linearGradient id="wcMeFill" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="var(--red)" stop-opacity="0.18"/>' +
+      '<stop offset="1" stop-color="var(--red)" stop-opacity="0"/>' +
+      '</linearGradient></defs>'
+  );
   // gridlines at NICE round steps targeting ~4 lines (v5.3: was every 10 lb => 7+ cramped
   // lines). Value labels sit on the LEFT, freeing the right edge for the emoji end-labels.
   const rng = hi - lo;
@@ -938,13 +946,25 @@ function buildWeightChart(now) {
   // their emoji next to their real last point. layoutChartEndLabels (logic.js)
   // resolves the x (own point, nudged, capped at the edge) + the vertical-dodge.
   const labels = [];
-  for (const s of series) {
+  // v5.4: draw "me" LAST so its red line/fill paints ON TOP of the gray others (SVG paints
+  // in document order; whatever is emitted first sits underneath). Colors are already
+  // assigned on each series above, so reordering the draw is purely about z-stacking.
+  const drawOrder = series.slice().sort((a, b) => (a.isMe ? 1 : 0) - (b.isMe ? 1 : 0));
+  for (const s of drawOrder) {
     const coords = s.pts.map((p) => ({ x: xOf(p.idx), y: yOf(p.lb) }));
     const last = coords[coords.length - 1];
     if (coords.length === 1) {
       parts.push(`<circle cx="${last.x.toFixed(2)}" cy="${last.y.toFixed(2)}" r="2.2" fill="${s.color}" opacity="${s.opacity}" />`);
     } else {
       const d = smoothPath(coords);
+      if (s.isMe) {
+        // v5.4: translucent red area under the ME line so you can find yourself at a glance.
+        const bottomY = (vbH - PAD_B).toFixed(2);
+        parts.push(
+          `<path d="${d} L ${last.x.toFixed(2)} ${bottomY} L ${coords[0].x.toFixed(2)} ${bottomY} Z" ` +
+            `fill="url(#wcMeFill)" stroke="none" />`
+        );
+      }
       parts.push(
         `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width}" ` +
           `stroke-linecap="round" stroke-linejoin="round" opacity="${s.opacity}" />`
@@ -1072,6 +1092,33 @@ function clearOptimistic(userId, dateKey) {
   if (!ov) return;
   delete ov[dateKey];
   if (!Object.keys(ov).length) optimistic.delete(userId);
+}
+
+// =============================================================================
+// OFFLINE-TOLERANT WRITE HELPERS (v5.4)
+//   Firestore's batch.commit()/setDoc resolve only on SERVER ack; offline or on
+//   flaky signal (the literal gym case) they stay PENDING forever — they do NOT
+//   reject, and the local cache already accepted the write and will sync on
+//   reconnect. The nutrition/weight/meal/rest handlers used to `await` that write
+//   before re-enabling the button / giving feedback, so a pending write bricked the
+//   button until reload. These wrappers bound the wait: after `ms` the write is
+//   treated as "queued" (it will sync), so the handler always finishes and gives
+//   feedback, while a REAL rejection (rules/permission) still surfaces as an error.
+// =============================================================================
+function commitWithTimeout(promise, ms = 7000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const t = setTimeout(() => { if (!settled) { settled = true; resolve('queued'); } }, ms);
+    promise.then(
+      () => { if (!settled) { settled = true; clearTimeout(t); resolve('ok'); } },
+      (err) => { if (!settled) { settled = true; clearTimeout(t); reject(err); } }
+    );
+    promise.catch(() => {}); // swallow a late rejection after a timeout (no unhandled rejection)
+  });
+}
+// Await a best-effort refetch but never let it hang the handler (getDocs can stall offline).
+function withSoftTimeout(promise, ms = 3000) {
+  return Promise.race([Promise.resolve(promise).catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
 }
 
 // =============================================================================
@@ -1518,6 +1565,11 @@ function renderMonth(now) {
     k = nextDayKey(k);
   }
   elMonthGrid.innerHTML = cells.join('');
+
+  // v5.4 (#6): keep an open MONTH popover pinned to its rebuilt cell (or close it if the day
+  // fell off this month), mirroring renderGrid. Without this a month repaint (heartbeat /
+  // snapshot / the on-demand fetch below) left a stale popover floating at old coords.
+  reanchorDayPopover();
 
   // on-demand fetch (skip weights): if this subject's month is outside the cached window,
   // ensureMonthDays merges it in and resolves true; we then repaint once (still on this tab +
@@ -2443,9 +2495,10 @@ async function meToggleNutritionDone() {
   if (!cur) return;
   const wasManual = elMeNutDone && elMeNutDone.dataset.ate === '1';
   try {
-    await data.setNutritionHit(cur, !wasManual);
-    await refetchMyDays();
-    toast(!wasManual ? 'nutrition marked done' : 'nutrition cleared');
+    const status = await commitWithTimeout(data.setNutritionHit(cur, !wasManual));
+    await withSoftTimeout(refetchMyDays());
+    const sfx = status === 'queued' ? ' · will sync' : '';
+    toast((!wasManual ? 'nutrition marked done' : 'nutrition cleared') + sfx);
   } catch (err) {
     handleWriteError(err);
   }
@@ -2479,11 +2532,11 @@ async function meAddMeal() {
   }
   if (elMeAddMeal) elMeAddMeal.disabled = true;
   try {
-    await data.addMeal(cur, { kcal, protein: protein != null ? protein : 0 });
+    const status = await commitWithTimeout(data.addMeal(cur, { kcal, protein: protein != null ? protein : 0 }));
     if (elMeAddKcal) elMeAddKcal.value = '';
     if (elMeAddProtein) elMeAddProtein.value = '';
-    await refetchMyDays();
-    toast('meal logged');
+    await withSoftTimeout(refetchMyDays());
+    toast(status === 'queued' ? 'meal saved · will sync' : 'meal logged');
   } catch (err) {
     handleWriteError(err);
   } finally {
@@ -2497,9 +2550,9 @@ async function meRemoveMeal(idx) {
   const cur = myCurrentBiz();
   if (!cur) return;
   try {
-    await data.removeMeal(cur, idx);
-    await refetchMyDays();
-    toast('meal removed');
+    const status = await commitWithTimeout(data.removeMeal(cur, idx));
+    await withSoftTimeout(refetchMyDays());
+    toast(status === 'queued' ? 'meal removed · will sync' : 'meal removed');
   } catch (err) {
     handleWriteError(err);
   }
@@ -2535,9 +2588,9 @@ async function meLogQuickMeal(presetIdx) {
     if (typeof m.label === 'string' && m.label.trim()) mealArg.label = m.label.trim();
     // v4 (#7): also forward the preset's note so it rides through to the logged meal.
     if (m.note) mealArg.note = m.note;
-    await data.addMeal(cur, mealArg);
-    await refetchMyDays();
-    toast('meal logged');
+    const status = await commitWithTimeout(data.addMeal(cur, mealArg));
+    await withSoftTimeout(refetchMyDays());
+    toast(status === 'queued' ? 'meal saved · will sync' : 'meal logged');
   } catch (err) {
     handleWriteError(err);
   }
@@ -2556,9 +2609,10 @@ async function meToggleRestToday() {
     return;
   }
   try {
-    await data.setDayOff(cur, !isOff);
-    await refetchMyDays();
-    toast(!isOff ? "today won't go red" : 'rest day cleared');
+    const status = await commitWithTimeout(data.setDayOff(cur, !isOff));
+    await withSoftTimeout(refetchMyDays());
+    const sfx = status === 'queued' ? ' · will sync' : '';
+    toast((!isOff ? "today won't go red" : 'rest day cleared') + sfx);
   } catch (err) {
     handleWriteError(err);
   }
@@ -2576,9 +2630,9 @@ async function meLogWeight() {
   }
   if (elMeLogWeight) elMeLogWeight.disabled = true;
   try {
-    await data.setWeight(cur, weight);
-    await refetchWeights(myUserId);
-    toast('weight logged');
+    const status = await commitWithTimeout(data.setWeight(cur, weight));
+    await withSoftTimeout(refetchWeights(myUserId));
+    toast(status === 'queued' ? 'weight saved · will sync' : 'weight logged');
   } catch (err) {
     handleWriteError(err);
   } finally {
@@ -3028,8 +3082,12 @@ function buildDayPopBody(member, dateKey) {
   // v5.4 TAP-TO-EDIT: on the viewer's OWN cell, for today or a past day (never future,
   // never pre-join), show edit controls. Writes go through the existing owner-scoped paths
   // (commitWorkout / setNutritionHit), so the security model is unchanged.
+  // v5.4 (#9): joinDate lives at profile.joinDate (subjectOf stores `profile`, never a
+  // top-level joinDate), so the old `subject.joinDate` was always undefined and this
+  // pre-join guard never fired. Read the canonical path, matching ui.js:433 / logic.js.
+  const jd = subject.profile && subject.profile.joinDate;
   const ownEditable =
-    uid === myUserId && dateKey <= cur && (!subject.joinDate || dateKey >= subject.joinDate);
+    uid === myUserId && dateKey <= cur && (!isDayKey(jd) || dateKey >= jd);
   if (ownEditable) {
     const curType = day.workout === true ? (day.workoutType || '') : '';
     const typeBtns = enabledTypesOf(member)
@@ -3058,13 +3116,19 @@ function buildDayPopBody(member, dateKey) {
 // left as-is — read-only — and the original auto-dismiss timer + outside-tap listener keep
 // running, so nothing is duplicated or leaked). If the cell fell out of the window, close.
 function reanchorDayPopover() {
-  if (!daypopOpen || !daypopAnchor || !elDayPop || !elGrid) return;
-  const sel = `.gcell[data-uid="${cssAttrEscape(daypopAnchor.uid)}"][data-date="${cssAttrEscape(daypopAnchor.date)}"]`;
-  const cell = elGrid.querySelector(sel);
+  if (!daypopOpen || !daypopAnchor || !elDayPop) return;
+  // v5.4 (#6): the popover can be anchored to a SOCIAL grid cell OR a MONTH cell. Re-query the
+  // ACTIVE tab's container only — grid and month cells share .gcell + data-uid/data-date, so
+  // querying both would cross-match the offscreen tab's stale node.
+  const inMonth = activeTab === 'month';
+  const container = inMonth ? elMonthGrid : elGrid;
+  if (!container) return;
+  const sel = `${inMonth ? '.month-cell' : '.gcell'}[data-uid="${cssAttrEscape(daypopAnchor.uid)}"][data-date="${cssAttrEscape(daypopAnchor.date)}"]`;
+  const cell = container.querySelector(sel);
   if (cell) {
     positionDayPop(cell); // re-pin to the rebuilt node; don't touch the timer/listener
   } else {
-    closeDayPopover(); // the anchored day is no longer on the grid
+    closeDayPopover(); // the anchored day is no longer on the visible board
   }
 }
 
@@ -3189,14 +3253,28 @@ async function onDayPopEditClick(e) {
   if (uid !== myUserId || !isDayKey(date)) return; // own cells only
   const cur = myCurrentBiz();
   if (cur && date > cur) return; // never edit a future day
+  // v5.4 (#9): mirror buildDayPopBody's pre-join guard at the WRITE so a stale popover can't
+  // backfill a pre-join own day. joinDate lives at profile.joinDate.
+  const me = memberById(myUserId);
+  const jd = me && me.profile && me.profile.joinDate;
+  if (isDayKey(jd) && date < jd) return;
   try {
     if (btn.dataset.editWtype) {
+      // v5.4 (#7): a workout and a rest day are mutually exclusive. On a rest day the rule
+      // rejects workout:true and data.markWorkout misreads the denial as a RECLAIM (the loud
+      // "signed out elsewhere" modal). Block here exactly like the ME card does (meSetType).
+      const days = effectiveDays(myUserId);
+      if (days[date] && days[date].off === true) {
+        showError('You marked this a rest day. Clear the rest day first to log a workout.');
+        return;
+      }
       await commitWorkout(date, true, { workoutType: btn.dataset.editWtype });
     } else if (btn.dataset.editWorkout === 'clear') {
       await commitWorkout(date, false);
     } else if (btn.dataset.editNut) {
-      await data.setNutritionHit(date, btn.dataset.editNut === 'hit');
-      await refetchMyDays();
+      const status = await commitWithTimeout(data.setNutritionHit(date, btn.dataset.editNut === 'hit'));
+      await withSoftTimeout(refetchMyDays());
+      if (status === 'queued') toast('nutrition saved · will sync');
     }
   } catch (err) {
     handleWriteError(err);
@@ -3231,7 +3309,28 @@ function wireChartCollapse() {
     const collapsed = elSocialChart.classList.toggle('collapsed');
     try { localStorage.setItem('gymboard.chartCollapsed', collapsed ? '1' : '0'); } catch (_) {}
     sync();
-    if (!collapsed) { _wchartSig = null; renderWeightChart(anchoredNow()); }
+    // v5.4: the body now ANIMATES open (height 0 -> 152px). The SVG reads clientHeight for
+    // its viewBox, so rebuild only AFTER the height transition finishes — rebuilding
+    // mid-slide (height ~0) yields a wrong aspect. Collapsing needs no rebuild. (No rAF —
+    // a prior rAF-wrapped rebuild silently never fired; a transitionend + timeout fallback
+    // is robust, incl. prefers-reduced-motion where no transitionend fires.)
+    if (!collapsed) {
+      const body = elSocialChart.querySelector('.wchart-body');
+      const rebuild = () => { _wchartSig = null; renderWeightChart(anchoredNow()); };
+      if (body && typeof body.addEventListener === 'function') {
+        let done = false;
+        const once = (ev) => {
+          if (ev.propertyName !== 'height') return;
+          done = true;
+          body.removeEventListener('transitionend', once);
+          rebuild();
+        };
+        body.addEventListener('transitionend', once);
+        setTimeout(() => { if (!done) { body.removeEventListener('transitionend', once); rebuild(); } }, 320);
+      } else {
+        rebuild();
+      }
+    }
   });
 }
 

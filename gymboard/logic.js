@@ -598,7 +598,7 @@ export function nutritionStatus(day, opts = {}) {
 
   // 3. PROTEIN: auto-hit when protein >= proteinGoal; calories ignored entirely.
   if (mode === 'protein') {
-    if (!Number.isFinite(proteinGoal)) return notMet; // unset -> manual-only
+    if (!Number.isFinite(proteinGoal) || proteinGoal < 0) return notMet; // unset/negative -> manual-only (v5.4 #22)
     const P = day && Number.isFinite(day.protein) ? day.protein : 0;
     // 0 intake never auto-hits, but ONLY when there's a positive goal to meet; a
     // proteinGoal of 0 is satisfied by 0 (0>=0), matching 'both' mode's goal-0 floor.
@@ -607,8 +607,9 @@ export function nutritionStatus(day, opts = {}) {
   }
 
   // 4. BOTH (default): calories-in-range (by goal direction) AND protein floor.
-  // 4a. Both goals must be finite; half-configured treated as unset (manual-only).
-  if (!Number.isFinite(kcalGoal) || !Number.isFinite(proteinGoal)) return notMet;
+  // 4a. Both goals must be finite AND non-negative; half-configured or negative treated as
+  // unset (manual-only). Negative slips past Number.isFinite, so check it explicitly (v5.4 #22).
+  if (!Number.isFinite(kcalGoal) || !Number.isFinite(proteinGoal) || kcalGoal < 0 || proteinGoal < 0) return notMet;
 
   // 4b. Some real intake required — an empty/0-kcal day never auto-greens.
   const K = day && day.kcal;
@@ -674,7 +675,7 @@ export function nutritionStatus(day, opts = {}) {
  */
 export function computeCompliance(daysMap, subject, nowInstant, opts = {}) {
   const windowDays =
-    Number.isFinite(opts.windowDays) && opts.windowDays > 0 ? Math.floor(opts.windowDays) : 30;
+    Number.isFinite(opts.windowDays) && opts.windowDays > 0 ? Math.max(1, Math.floor(opts.windowDays)) : 30;
   const empty = {
     workout: { expected: 0, completed: 0, percent: null },
     nutrition: { expected: 0, completed: 0, percent: null },
@@ -1046,9 +1047,11 @@ export function spotifyEmbed(url) {
   if (typeof url !== 'string' || !url.trim()) return null;
   const s = url.trim();
   // spotify:track:<id> URI form (rare from a paste, but handle it).
-  let m = s.match(/spotify:(track|album|playlist|episode|show):([A-Za-z0-9]{22})/i);
-  // https://open.spotify.com/[intl-xx/]<type>/<id>[?si=..]
-  if (!m) m = s.match(/open\.spotify\.com\/(?:[a-z-]+\/)?(track|album|playlist|episode|show)\/([A-Za-z0-9]{22})/i);
+  let m = s.match(/spotify:(track|album|playlist|episode|show):([A-Za-z0-9]{22})(?![A-Za-z0-9])/i);
+  // https://open.spotify.com/[intl-xx/]<type>/<id>[?si=..]. The trailing (?![A-Za-z0-9])
+  // boundary (v5.4 #21) makes a malformed 23+ char id fail instead of silently matching its
+  // first 22 chars (a different/truncated track). Real ids are exactly 22 base62 chars.
+  if (!m) m = s.match(/open\.spotify\.com\/(?:[a-z-]+\/)?(track|album|playlist|episode|show)\/([A-Za-z0-9]{22})(?![A-Za-z0-9])/i);
   if (!m) return null;
   const type = m[1].toLowerCase();
   const id = m[2];
