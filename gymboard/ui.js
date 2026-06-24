@@ -40,6 +40,7 @@ import {
   computeCompliance,
   weightTrend,
   relativeTime,
+  layoutChartEndLabels,
   nutritionStatus,
   emojiOf,
   EMOJI_SET,
@@ -932,7 +933,10 @@ function buildWeightChart(now) {
     );
   }
 
-  // one line (or dot) per member; collect the RIGHT-edge end-labels for a vertical-dodge.
+  // one line (or dot) per member; collect end-labels anchored to each member's OWN
+  // last point (NOT the chart's right edge) so a member who lapsed mid-window gets
+  // their emoji next to their real last point. layoutChartEndLabels (logic.js)
+  // resolves the x (own point, nudged, capped at the edge) + the vertical-dodge.
   const labels = [];
   for (const s of series) {
     const coords = s.pts.map((p) => ({ x: xOf(p.idx), y: yOf(p.lb) }));
@@ -948,24 +952,23 @@ function buildWeightChart(now) {
     }
     const emoji = emojiOf({ emoji: s.member.emoji, id: s.uid });
     labels.push({
-      x: vbW - PAD_R + 2, anchor: 'start',
-      idealY: last.y, y: last.y,
+      pointX: last.x, anchor: 'start',
+      idealY: last.y,
       fill: s.isMe ? 'var(--red)' : s.color,
       text: emoji || (displayNameOf(s.member).charAt(0) || '?'),
     });
   }
-  // vertical-dodge the end-labels so emojis never overlap when weights are close.
-  const LBL_GAP = 11;
-  const lblTop = PAD_T + 4;
-  const lblBot = vbH - PAD_B + 1;
-  labels.sort((a, b) => a.idealY - b.idealY);
-  for (let i = 0; i < labels.length; i++) {
-    labels[i].y = i > 0 ? Math.max(labels[i].idealY, labels[i - 1].y + LBL_GAP) : labels[i].idealY;
-  }
-  const overflow = labels.length ? labels[labels.length - 1].y - lblBot : 0;
-  if (overflow > 0) for (const L of labels) L.y -= overflow;
+  // dodge only WITHIN an x-cluster — a far-left lapsed emoji must not be shoved
+  // vertically to clear the recent right-edge group (that was the old bug).
+  layoutChartEndLabels(labels, {
+    rightEdgeX: vbW - PAD_R + 2,
+    nudge: 4,
+    gap: 11,
+    top: PAD_T + 4,
+    bot: vbH - PAD_B + 1,
+    overlapX: 12,
+  });
   for (const L of labels) {
-    if (L.y < lblTop) L.y = lblTop;
     parts.push(
       `<text x="${L.x.toFixed(2)}" y="${(L.y + 3).toFixed(2)}" font-size="11" ` +
         `fill="${L.fill}" text-anchor="${L.anchor}">${escapeHtml(L.text)}</text>`

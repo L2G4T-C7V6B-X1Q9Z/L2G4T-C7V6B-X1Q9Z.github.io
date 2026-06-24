@@ -825,6 +825,66 @@ export function relativeTime(fromMs, nowMs) {
   return { text: `${Math.floor(gap / WEEK_MS)}w`, stale };
 }
 
+/**
+ * layoutChartEndLabels(labels, opts) -> the same labels, with resolved {x, y}.
+ *
+ * Positions the weight-chart end-labels (the per-member emoji at the end of each
+ * line). The fix this encodes: anchor each label to its OWN last data point's x
+ * (nudged just right), NOT the chart's right edge — so a member who stopped weighing
+ * in mid-window gets their emoji next to their actual last point instead of dragged
+ * to today's column and stacked with everyone else.
+ *
+ * After x is resolved, a vertical-dodge runs WITHIN each horizontal cluster only:
+ * two emojis can visually collide only when their x are within `overlapX`, so labels
+ * far apart in x must never shove each other vertically (the old bug was a single
+ * global right-edge dodge that dragged a lapsed member's emoji to clear the recent
+ * cluster). Within a cluster: sort by idealY, push >= `gap` apart, shift the whole
+ * cluster up if it overruns `bot`, then clamp to `top`.
+ *
+ *   labels : array of { pointX, idealY, ...passthrough } — pointX is the member's own
+ *            last point x (SVG units); idealY is that point's y.
+ *   opts   : { rightEdgeX, nudge, gap, top, bot, overlapX }
+ *
+ * Mutates + returns the same label objects (input order preserved), each gaining a
+ * numeric `x` (draw x) and `y` (dodged draw y). Pure: no globals, no clock read.
+ */
+export function layoutChartEndLabels(labels, opts) {
+  const list = Array.isArray(labels) ? labels : [];
+  const { rightEdgeX, nudge = 4, gap = 11, top = 0, bot = Infinity, overlapX = 12 } = opts || {};
+  // 1. resolve each label's x: its own point nudged right, never past the edge.
+  for (const L of list) {
+    const px = Number.isFinite(L.pointX) ? L.pointX : rightEdgeX;
+    L.x = Number.isFinite(rightEdgeX) ? Math.min(px + nudge, rightEdgeX) : px + nudge;
+    L.y = L.idealY; // default; the dodge below may push it
+  }
+  if (!list.length) return list;
+  // 2. cluster by x-proximity: a new cluster opens when the x-gap to the running
+  //    cluster max exceeds overlapX (emojis that far apart can't horizontally overlap).
+  const sorted = list.slice().sort((a, b) => a.x - b.x || a.idealY - b.idealY);
+  const clusters = [];
+  for (const L of sorted) {
+    const cur = clusters.length ? clusters[clusters.length - 1] : null;
+    if (cur && L.x - cur.maxX <= overlapX) {
+      cur.items.push(L);
+      cur.maxX = Math.max(cur.maxX, L.x);
+    } else {
+      clusters.push({ items: [L], maxX: L.x });
+    }
+  }
+  // 3. vertical-dodge each cluster independently (the v4.3 algorithm, scoped to the cluster).
+  for (const c of clusters) {
+    const g = c.items;
+    g.sort((a, b) => a.idealY - b.idealY);
+    for (let i = 0; i < g.length; i++) {
+      g[i].y = i > 0 ? Math.max(g[i].idealY, g[i - 1].y + gap) : g[i].idealY;
+    }
+    const overflow = g[g.length - 1].y - bot;
+    if (overflow > 0) for (const L of g) L.y -= overflow;
+    for (const L of g) if (L.y < top) L.y = top;
+  }
+  return list;
+}
+
 // ---- playlist: song-input parsing + cross-service deep-link builders ----------
 // The shared song wall (v5) stores exactly what's typed/pasted and deep-links out
 // to Spotify + YT Music — it NEVER fetches metadata (no Cloud Function, the SPA
