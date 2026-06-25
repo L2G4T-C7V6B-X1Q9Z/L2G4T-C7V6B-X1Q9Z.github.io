@@ -716,7 +716,7 @@ function renderGrid(now) {
         wtag = `<span class="gcell-wtag" aria-hidden="true">${escapeHtml(WTYPE_TAG[day.workoutType])}</span>`;
       }
       cells.push(
-        `<div class="gcell w-${wStatus} n-${nStatus}${isMe ? ' me' : ''}${prejoin ? ' prejoin' : ''}${memberInactive(m) ? ' inactive' : ''}" ` +
+        `<div class="gcell w-${wStatus} n-${nStatus}${isMe ? ' me' : ''}${prejoin ? ' prejoin' : ''}${memberInactive(m) ? ' inactive' : ''}${daypopSelected && daypopSelected.uid === uid && daypopSelected.date === dk ? ' gcell-selected' : ''}" ` +
           `style="opacity:${op}" data-uid="${escapeHtml(uid)}" data-date="${escapeHtml(dk)}" ` +
           `role="button" tabindex="0" aria-label="${escapeHtml(aria)}">` +
           `<div class="seg-w">${wtag}</div><div class="seg-n"></div></div>`
@@ -1010,6 +1010,16 @@ function buildWeightChart(now) {
       parts.push(
         `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width}" ` +
           `stroke-linecap="round" stroke-linejoin="round" opacity="${s.opacity}" />`
+      );
+    }
+    // v7.1: per-point hover targets — hover any datapoint to see that person's weight + date
+    // (native SVG <title>). Transparent r=5 circles keep the chart clean but make every point hoverable.
+    for (const p of s.pts) {
+      const dk = keysOldestFirst[p.idx];
+      parts.push(
+        `<circle cx="${xOf(p.idx).toFixed(2)}" cy="${yOf(p.lb).toFixed(2)}" r="5" fill="transparent">` +
+          `<title>${escapeHtml(displayNameOf(s.member))} — ${p.lb} lb${dk ? ' · ' + escapeHtml(fmtDateShort(dk)) : ''}</title>` +
+        `</circle>`
       );
     }
     // v7.1: a clean uppercase 3-letter tag instead of the person emoji (emoji end-labels read
@@ -3329,6 +3339,7 @@ let daypopTimer = null; // the ~5s auto-dismiss timer
 let daypopOutsideHandler = null; // the document outside-tap listener (removed on close)
 let daypopOpen = false;
 let daypopHover = false; // v7.1: true when opened via HOVER (transient preview) vs click (pinned)
+let daypopSelected = null; // v7.1: {uid,date} of the CLICK-selected own cell (red ring), or null
 let daypopAnchor = null; // v4 (#4): {uid, date} the open popover is anchored to, so a
                          // repaint can RE-ANCHOR it to the rebuilt cell instead of closing.
 
@@ -3461,6 +3472,10 @@ function openDayPopover(member, dateKey, cellEl, opts) {
   removeDayPopOutside();
   if (hover) return; // a hover preview is managed by the grid mouseover/mouseleave handlers.
 
+  // CLICK-opened (pinned): mark this cell SELECTED — a red ring that stays until you click away.
+  daypopSelected = { uid: idOf(member), date: dateKey };
+  if (cellEl && cellEl.classList) cellEl.classList.add('gcell-selected');
+
   // CLICK-opened: auto-dismiss after ~5s — but NOT while the owner is editing their own day
   // (the 5s timer would close it mid-edit). Editable popovers rely on the outside-tap close.
   const editable =
@@ -3527,6 +3542,8 @@ function closeDayPopover() {
   daypopOpen = false;
   daypopHover = false;
   daypopAnchor = null; // v4 (#4)
+  daypopSelected = null;
+  document.querySelectorAll('.gcell-selected').forEach((c) => c.classList.remove('gcell-selected'));
   clearTimeout(daypopTimer);
   daypopTimer = null;
   removeDayPopOutside();
@@ -3539,6 +3556,7 @@ function onGridCellActivate(target) {
   const uid = cell.dataset.uid;
   const dateKey = cell.dataset.date;
   if (!uid || !isDayKey(dateKey)) return;
+  if (uid !== myUserId) return; // v7.1: CLICK acts on your OWN cells only (others are hover-preview only)
   const member = memberById(uid);
   if (member) openDayPopover(member, dateKey, cell);
 }

@@ -504,6 +504,9 @@ button:disabled { cursor:default; }
   letter-spacing:.05em; color:var(--txt3); text-transform:uppercase; line-height:1; }
 .gcell.inactive { filter:grayscale(1) opacity(.5); }
 
+/* v7.1: a CLICK-selected own cell — a red ring that pops + stays until you click away. */
+.gcell.gcell-selected { position:relative; z-index:3; box-shadow:0 0 0 2px var(--red), 0 3px 12px rgba(0,0,0,.45); }
+
 /* Soren 6/25: drop the nutrition hint line (cringe). */
 #me-nut-hint { display:none; }
 
