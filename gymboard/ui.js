@@ -1034,7 +1034,7 @@ function buildWeightChart(now) {
   });
   for (const L of labels) {
     parts.push(
-      `<text x="${L.x.toFixed(2)}" y="${(L.y + 3).toFixed(2)}" font-size="11" ` +
+      `<text x="${L.x.toFixed(2)}" y="${(L.y + 2).toFixed(2)}" font-size="8" ` +
         `fill="${L.fill}" text-anchor="${L.anchor}">${escapeHtml(L.text)}</text>`
     );
   }
@@ -3328,6 +3328,7 @@ function toggleSettings() {
 let daypopTimer = null; // the ~5s auto-dismiss timer
 let daypopOutsideHandler = null; // the document outside-tap listener (removed on close)
 let daypopOpen = false;
+let daypopHover = false; // v7.1: true when opened via HOVER (transient preview) vs click (pinned)
 let daypopAnchor = null; // v4 (#4): {uid, date} the open popover is anchored to, so a
                          // repaint can RE-ANCHOR it to the rebuilt cell instead of closing.
 
@@ -3435,8 +3436,11 @@ function cssAttrEscape(s) {
   return str.replace(/["\\]/g, '\\$&');
 }
 
-function openDayPopover(member, dateKey, cellEl) {
+function openDayPopover(member, dateKey, cellEl, opts) {
   if (!elDayPop) return;
+  const hover = !!(opts && opts.hover); // v7.1: HOVER = transient preview (no 5s timer, no
+  // outside-tap; closes on mouseleave). CLICK (default) = pinned, with the 5s/outside-tap
+  // dismiss so own-cell edit buttons stay usable.
   const emoji = emojiOf({ emoji: member.emoji, id: idOf(member) });
   if (elDayPopTitle) elDayPopTitle.innerHTML =
     `<span aria-hidden="true">${escapeHtml(emoji)}</span><span>${escapeHtml(displayNameOf(member))}</span>`;
@@ -3450,17 +3454,20 @@ function openDayPopover(member, dateKey, cellEl) {
   elDayPop.classList.remove('hidden');
   positionDayPop(cellEl);
   daypopOpen = true;
+  daypopHover = hover;
   daypopAnchor = { uid: idOf(member), date: dateKey }; // v4 (#4): remember what it points at
 
-  // auto-dismiss after ~5s — but NOT while the owner is editing their own day (the 5s
-  // timer would close it mid-edit). Editable popovers rely on the outside-tap close.
+  clearTimeout(daypopTimer);
+  removeDayPopOutside();
+  if (hover) return; // a hover preview is managed by the grid mouseover/mouseleave handlers.
+
+  // CLICK-opened: auto-dismiss after ~5s — but NOT while the owner is editing their own day
+  // (the 5s timer would close it mid-edit). Editable popovers rely on the outside-tap close.
   const editable =
     idOf(member) === myUserId && isDayKey(dateKey) && (() => { const c = myCurrentBiz(); return !c || dateKey <= c; })();
-  clearTimeout(daypopTimer);
   if (!editable) daypopTimer = setTimeout(closeDayPopover, DAYPOP_AUTO_MS);
 
   // dismiss on the NEXT outside tap (defer attach so the opening click doesn't close it).
-  removeDayPopOutside();
   daypopOutsideHandler = (e) => {
     if (elDayPop.contains(e.target)) return; // taps inside stay open
     closeDayPopover();
@@ -3518,6 +3525,7 @@ function removeDayPopOutside() {
 function closeDayPopover() {
   if (elDayPop) elDayPop.classList.add('hidden');
   daypopOpen = false;
+  daypopHover = false;
   daypopAnchor = null; // v4 (#4)
   clearTimeout(daypopTimer);
   daypopTimer = null;
@@ -3585,6 +3593,26 @@ function wireGridTaps() {
       e.preventDefault();
       onGridCellActivate(e.target);
     }
+  });
+  // v7.1: HOVER preview on desktop — moving over a social cell opens the popover instantly;
+  // moving off the cell (or off the grid) closes it. A CLICK-pinned popover (daypopOpen &&
+  // !daypopHover) is never disturbed, so its edit buttons stay usable.
+  let hoverCell = null;
+  elGrid.addEventListener('mouseover', (e) => {
+    if (!isDesktop()) return;
+    if (daypopOpen && !daypopHover) return; // a clicked/pinned popover is open — leave it
+    const cell = e.target.closest && e.target.closest('.gcell');
+    if (!cell) { if (daypopHover) closeDayPopover(); hoverCell = null; return; }
+    if (cell === hoverCell && daypopOpen) return; // already previewing this exact cell
+    hoverCell = cell;
+    const uid = cell.dataset.uid, dk = cell.dataset.date;
+    if (!uid || !isDayKey(dk)) return;
+    const member = memberById(uid);
+    if (member) openDayPopover(member, dk, cell, { hover: true });
+  });
+  elGrid.addEventListener('mouseleave', () => {
+    hoverCell = null;
+    if (daypopHover) closeDayPopover();
   });
   // own-day edit buttons inside the popover (delegated; covers both grid + month taps).
   if (elDayPopBody) elDayPopBody.addEventListener('click', onDayPopEditClick);
