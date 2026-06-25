@@ -935,7 +935,7 @@ function buildWeightChart(now) {
   // gridlines at NICE round steps targeting ~4 lines (v5.3: was every 10 lb => 7+ cramped
   // lines). Value labels sit on the LEFT, freeing the right edge for the emoji end-labels.
   const rng = hi - lo;
-  const gstep = niceStep(rng, 4);
+  const gstep = niceStep(rng, 6);
   const gridVals = [];
   for (let g = Math.ceil(lo / gstep) * gstep; g <= hi + 0.001; g += gstep) gridVals.push(g);
   if (!gridVals.length) gridVals.push(lo, hi);

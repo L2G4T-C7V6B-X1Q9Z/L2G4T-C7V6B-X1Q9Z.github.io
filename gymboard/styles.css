@@ -54,7 +54,7 @@
   /* ---- v2 diagonal-cell status tokens (override/extend the above) ---- */
   --st-done:#1f7a4d;        /* workout DONE / nutrition HIT — same green for both halves */
   --st-missed:#9e342c;      /* workout MISSED (nutrition never uses red) */
-  --st-rest:var(--g2);      /* workout REST — neutral */
+  --st-rest:#2b4d39;        /* workout REST — light green (Soren 6/25; was neutral g2) */
   --st-off:var(--g3);       /* workout OFF — neutral + dash hint */
   --st-none:#202020;        /* nutrition past-not-hit — quiet gray (NEVER red) */
   --st-pending:#141414;     /* flat quiet fill for pending/empty cells (no hatch) */
@@ -76,7 +76,7 @@
   --elev:0 8px 24px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.6);
   --red-wash:#ffe9e7; --red-wash-bd:#f0aaa3;
   --st-done:#2f9e63; --st-done-bg:#dcf2e6; --st-bonus:#37b377;
-  --st-missed:#d8443a; --st-rest:var(--g2); --st-off:var(--g3);
+  --st-missed:#d8443a; --st-rest:#c7ebd5; --st-off:var(--g3);
   --st-none:#e4e4e6; --st-pending:#ededef; --st-macrodot:#2f9e63;
   --wc-o1:#9a9a9e; --wc-o2:#76767a; --wc-o3:#54545a; --wc-o4:#88888c; --wc-o5:#646468;
 }
@@ -1152,7 +1152,7 @@ button:disabled { cursor:default; }
   #stage {
     display:grid;
     grid-template-columns:clamp(360px, 30%, 480px) 1fr 1fr;
-    grid-template-rows:minmax(0, 320px) minmax(0, 1fr);
+    grid-template-rows:min-content minmax(0, 1fr);
     grid-template-areas:
       "me social month"
       "me social playlist";
