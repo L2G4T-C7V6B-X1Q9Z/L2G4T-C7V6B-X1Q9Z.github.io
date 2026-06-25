@@ -622,6 +622,17 @@ function headStackHtml(member, now, viewerBiz) {
   return `<div class="gh-stack">${parts.join('')}</div>`;
 }
 
+// v7.1 (Soren 6/25): a member is INACTIVE when their last activity was >=3 days ago — gray out
+// their whole board column + show an "(inactive)" tag in the header. A never-active member (no
+// lastActiveAt) is NOT flagged, so a just-joined person isn't grayed before their first log.
+function memberInactive(m) {
+  const la = m && m.lastActiveAt;
+  if (!la || typeof la.toMillis !== 'function') return false;
+  let ms;
+  try { ms = la.toMillis(); } catch (e) { return false; }
+  return (Date.now() - ms) >= 3 * 86400000;
+}
+
 function renderGrid(now) {
   if (!members.length) {
     // no cells to anchor to anymore — close any open popover before blanking the grid.
@@ -650,8 +661,10 @@ function renderGrid(now) {
     // v4 (#14): the per-person emoji sits ABOVE the name (between the stat stack and the
     // name span). emojiOf falls back to a deterministic id-hash for demo users with none.
     const emoji = emojiOf({ emoji: m.emoji, id: idOf(m) });
+    const inactive = memberInactive(m);
     cells.push(
-      `<div class="ghead${isMe ? ' me' : ''}" title="${escapeHtml(displayNameOf(m))}">` +
+      `<div class="ghead${isMe ? ' me' : ''}${inactive ? ' inactive' : ''}" title="${escapeHtml(displayNameOf(m))}">` +
+        (inactive ? `<span class="ghead-inactive">inactive</span>` : '') +
         headStackHtml(m, now, today) +
         `<span class="ghead-emoji" aria-hidden="true">${escapeHtml(emoji)}</span>` +
         `<span class="ghead-v">${escapeHtml(displayNameOf(m))}</span>` +
@@ -684,7 +697,7 @@ function renderGrid(now) {
         wtag = `<span class="gcell-wtag" aria-hidden="true">${escapeHtml(WTYPE_TAG[day.workoutType])}</span>`;
       }
       cells.push(
-        `<div class="gcell w-${wStatus} n-${nStatus}${isMe ? ' me' : ''}${prejoin ? ' prejoin' : ''}" ` +
+        `<div class="gcell w-${wStatus} n-${nStatus}${isMe ? ' me' : ''}${prejoin ? ' prejoin' : ''}${memberInactive(m) ? ' inactive' : ''}" ` +
           `style="opacity:${op}" data-uid="${escapeHtml(uid)}" data-date="${escapeHtml(dk)}" ` +
           `role="button" tabindex="0" aria-label="${escapeHtml(aria)}">` +
           `<div class="seg-w">${wtag}</div><div class="seg-n"></div></div>`
@@ -980,12 +993,14 @@ function buildWeightChart(now) {
           `stroke-linecap="round" stroke-linejoin="round" opacity="${s.opacity}" />`
       );
     }
-    const emoji = emojiOf({ emoji: s.member.emoji, id: s.uid });
+    // v7.1: a clean uppercase INITIAL instead of the person emoji — emoji end-labels on the
+    // weight chart read as cringe (Soren 6/25). The emoji identity stays everywhere else.
+    const initial = (displayNameOf(s.member).trim().charAt(0) || '?').toUpperCase();
     labels.push({
       pointX: last.x, anchor: 'start',
       idealY: last.y,
       fill: s.isMe ? 'var(--red)' : s.color,
-      text: emoji || (displayNameOf(s.member).charAt(0) || '?'),
+      text: initial,
     });
   }
   // dodge only WITHIN an x-cluster — a far-left lapsed emoji must not be shoved

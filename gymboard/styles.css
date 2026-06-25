@@ -494,6 +494,16 @@ button:disabled { cursor:default; }
 .gcell.prejoin .seg-w::before, .gcell.prejoin .gcell-wtag { display:none; }
 .gcell.me { box-shadow:inset 2px 0 0 var(--red); }
 
+/* v7.1 (Soren 6/25): a member inactive >=3 days — gray their whole column + an "(inactive)"
+   tag in the header. grayscale desaturates; cells keep their row-fade opacity. The tag stays
+   full-strength so it reads. */
+.ghead.inactive .gh-stack,
+.ghead.inactive .ghead-emoji,
+.ghead.inactive .ghead-v { filter:grayscale(1); opacity:.45; }
+.ghead-inactive { display:block; margin-bottom:3px; font-size:7px; font-weight:700;
+  letter-spacing:.05em; color:var(--txt3); text-transform:uppercase; line-height:1; }
+.gcell.inactive { filter:grayscale(1) opacity(.5); }
+
 /* =================================================================================
    MONTH TAB (v5 #4) — a per-person calendar. The day cells REUSE .gcell (above) so the
    diagonal workout/nutrition split + every w-/n- color match the SOCIAL board for free;
