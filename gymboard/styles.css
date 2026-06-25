@@ -1151,11 +1151,11 @@ button:disabled { cursor:default; }
      only each pane's .scrolly does. */
   #stage {
     display:grid;
-    grid-template-columns:clamp(380px, 32%, 520px) 1fr 1fr;
-    grid-template-rows:1fr 1fr;
+    grid-template-columns:clamp(360px, 30%, 480px) 1fr 1fr;
+    grid-template-rows:minmax(0, 1fr) minmax(0, 2fr);
     grid-template-areas:
-      "me social playlist"
-      "me month  playlist";
+      "me social month"
+      "me social playlist";
     gap:1px;
     background:var(--hairline); /* the 1px gaps read as hairline dividers */
     overflow:hidden;
@@ -1172,10 +1172,10 @@ button:disabled { cursor:default; }
     border:none;
     background:var(--g0);
   }
-  #screen-me       { grid-area:me; border-right:1px solid var(--hairline); }
-  #screen-grid     { grid-area:social; }
-  #screen-month    { grid-area:month; border-top:1px solid var(--hairline); }
-  #screen-playlist { grid-area:playlist; border-left:1px solid var(--hairline); }
+  #screen-me       { grid-area:me; }       /* left, both rows */
+  #screen-grid     { grid-area:social; }   /* middle, both rows: board + chart */
+  #screen-month    { grid-area:month; }    /* top-right ~1/3: calendar */
+  #screen-playlist { grid-area:playlist; } /* bottom-right ~2/3: songs */
 
   /* each pane keeps its own scroll region; nothing scrolls the page. */
   .screen > .scrolly { flex:1 1 auto; min-height:0; }
