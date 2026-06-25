@@ -49,6 +49,7 @@ import {
   parseSongInput,
   playlistDedupeKey,
   spotifySearchUrl,
+  playlistLinkUrl,
   // v5.1: rich-row display — a pasted Spotify link renders as an inline player.
   spotifyEmbed,
   // v5.2: two themed playlists per week (Mon–Wed 'a' / Thu–Sun 'b').
@@ -1824,15 +1825,20 @@ function renderPlaylist() {
     elPlList.innerHTML = rows.join('');
   }
 
-  // footer: whole-list search on each service is built from up to ~12 titles (a long query
-  // helps neither engine); the shared-playlist link shows only when Admin-seeded.
+  // footer "OPEN ON SPOTIFY": open the slot's REAL auto-created playlist when it exists (the
+  // Worker made it and the app stored spotifyUrl). v5.4 FIX: it used to ALWAYS build a SEARCH
+  // from TYPED songs only, so a slot full of pasted Spotify links produced an empty query and
+  // the button just opened Spotify's home/search screen. Fall back to a whole-list search only
+  // when the slot has no playlist yet. (The Admin-seeded collab link is separate.)
   const wholeListQuery = visibleSnap
     .concat(pendingAdds)
     .map((s) => (s.source === 'text' ? [s.title, s.artist].filter(Boolean).join(' ') : ''))
     .filter(Boolean)
     .slice(0, 12)
     .join(' ');
-  const spHref = wholeListQuery ? spotifySearchUrl(wholeListQuery) : 'https://open.spotify.com/search';
+  const slotSpotifyUrl = plSlots[key] && plSlots[key].spotifyUrl;
+  const spSearch = wholeListQuery ? spotifySearchUrl(wholeListQuery) : '';
+  const spHref = playlistLinkUrl(slotSpotifyUrl, spSearch) || 'https://open.spotify.com/search';
   if (elPlOpenSpotify) elPlOpenSpotify.dataset.href = spHref;
   if (elPlCollab) {
     if (plCollabUrl) {

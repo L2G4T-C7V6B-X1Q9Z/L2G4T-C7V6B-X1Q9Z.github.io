@@ -1025,6 +1025,21 @@ export function ytMusicSearchUrl(q) {
   return `https://music.youtube.com/search?q=${encodeURIComponent(q.trim())}`;
 }
 
+/**
+ * playlistLinkUrl(playlistUrl, searchUrl) -> the URL an "open on <service>" button should use.
+ * Prefer the slot's REAL auto-created playlist URL; fall back to a whole-list search URL when
+ * the slot has no playlist yet; '' when neither (the caller supplies its own last resort).
+ * Fixes the bug where "OPEN ON SPOTIFY" opened Spotify's HOME: the button built a search from
+ * TYPED songs only, so a slot full of pasted links produced an empty search and the button
+ * never used the real playlist URL the Worker had already created. Service-agnostic (reused for
+ * the YouTube open-link in v6).
+ */
+export function playlistLinkUrl(playlistUrl, searchUrl) {
+  if (typeof playlistUrl === 'string' && playlistUrl.trim()) return playlistUrl.trim();
+  if (typeof searchUrl === 'string' && searchUrl.trim()) return searchUrl.trim();
+  return '';
+}
+
 // ---- playlist: Spotify embed helper (rich row display, v5.1) ------------------
 // Turn a stored Spotify URL into the embed URL the row needs to render an inline
 // player (cover art + title + artist + play) instead of a bare URL. A PURE URL
@@ -1056,6 +1071,44 @@ export function spotifyEmbed(url) {
   const type = m[1].toLowerCase();
   const id = m[2];
   return { type, id, src: `https://open.spotify.com/embed/${type}/${id}` };
+}
+
+// ---- playlist: YouTube embed + playlist helpers (v6 dual-service) -------------
+
+/**
+ * youtubeEmbed(url) -> { id, src } | null
+ * Recognize a YouTube VIDEO link (watch?v=, youtu.be/, music.youtube.com/watch?v=, /embed/,
+ * /shorts/) and build the inline-player embed URL (youtube.com/embed/<id>). Video ids are
+ * exactly 11 chars [A-Za-z0-9_-]; the trailing boundary makes a 12+ char garbage id fail
+ * (mirrors spotifyEmbed's #21 fix) instead of silently embedding a truncated id. Returns null
+ * for a playlist-only link or a non-YouTube URL so the caller falls back to the plain row.
+ */
+export function youtubeEmbed(url) {
+  if (typeof url !== 'string' || !url.trim()) return null;
+  const s = url.trim();
+  const m = s.match(
+    /(?:youtube\.com\/(?:watch\?(?:[^&\s]*&)*v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/i
+  );
+  if (!m) return null;
+  return { id: m[1], src: `https://www.youtube.com/embed/${m[1]}` };
+}
+
+/**
+ * youtubePlaylistUrl(listId) -> the public playlist URL, or '' for a blank/non-string id.
+ */
+export function youtubePlaylistUrl(listId) {
+  if (typeof listId !== 'string' || !listId.trim()) return '';
+  return `https://www.youtube.com/playlist?list=${encodeURIComponent(listId.trim())}`;
+}
+
+/**
+ * isSlotLive(viewedHalf, nowHalf) -> bool
+ * A themed half-week slot accepts new songs ONLY while it is the live half (the one "now" falls
+ * in). Past/future halves are frozen archives. Kept pure so the freeze gate is unit-tested
+ * rather than buried in ui.js.
+ */
+export function isSlotLive(viewedHalf, nowHalf) {
+  return viewedHalf === nowHalf && (viewedHalf === 'a' || viewedHalf === 'b');
 }
 
 // ---- playlist: weekly themed "slots" (v5.2) -----------------------------------
