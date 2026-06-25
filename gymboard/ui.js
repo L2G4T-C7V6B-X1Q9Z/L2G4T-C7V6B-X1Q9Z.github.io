@@ -105,6 +105,14 @@ let wchartRange = 30; // selected window in days (30d default; 90d via the toggl
 // Set _wchartSig = null to FORCE the next rebuild (e.g. the 30d/90d toggle).
 let _wchartSig = null;
 let _wchartGeom = null; // last-built chart geometry, for the tap/drag scrubber
+// v7.2: weight-chart interactions (scrubber + zoom/pan). _wzoom is the visible window when
+// zoomed (fractional date-index bounds i0..i1 + weight bounds lo..hi); null = the default
+// auto-fit full view, in which case buildWeightChart's output is byte-identical to before.
+let _wzoom = null;
+let _wscrubIdx = null;   // currently-scrubbed integer date index into keysOldestFirst; null = hidden
+let _wscrubWired = false;
+let _wscrubOverlay = null, _wscrubLine = null, _wscrubBox = null, _wscrubResetBtn = null;
+let _wscrubDots = [];
 
 // =============================================================================
 // DOM HANDLES
@@ -893,7 +901,20 @@ function buildWeightChart(now) {
 
   const innerW = vbW - PAD_L - PAD_R;
   const innerH = vbH - PAD_T - PAD_B;
-  const xOf = (idx) => PAD_L + (rangeDays <= 1 ? innerW : (idx / (rangeDays - 1)) * innerW);
+  // v7.2: X maps a (possibly fractional) date index -> svg x. The visible index window defaults
+  // to the FULL range (vx0..vx1 = 0..rangeDays-1), so the unzoomed chart is byte-identical to
+  // before. _wzoom narrows the window for pinch/wheel/pan zoom; idxAtX is the inverse (svg x ->
+  // fractional index) the scrubber + zoom math need.
+  const maxIdx = rangeDays - 1;
+  let vx0 = 0, vx1 = maxIdx;
+  if (_wzoom && Number.isFinite(_wzoom.i0) && Number.isFinite(_wzoom.i1) && _wzoom.i1 > _wzoom.i0) {
+    vx0 = Math.max(0, Math.min(maxIdx, _wzoom.i0));
+    vx1 = Math.max(0, Math.min(maxIdx, _wzoom.i1));
+    if (!(vx1 > vx0)) { vx0 = 0; vx1 = maxIdx; }
+  }
+  const xSpan = (vx1 - vx0) || 1;
+  const xOf = (idx) => PAD_L + (maxIdx <= 0 ? innerW : ((idx - vx0) / xSpan) * innerW);
+  const idxAtX = (x) => (maxIdx <= 0 ? 0 : vx0 + ((x - PAD_L) / innerW) * xSpan);
 
   // ---- gather each visible member's in-range points. Hidden members (fetchWeights -> {})
   // and members with zero in-range points are omitted. "me" is collected first for color
@@ -937,6 +958,13 @@ function buildWeightChart(now) {
   let lo = Math.floor(yMin - 1);
   let hi = Math.ceil(yMax + 1);
   if (lo === hi) { lo = yMin - 2; hi = yMax + 2; }
+  // v7.2: remember the data-fit bounds so a full zoom-out can snap back to auto. When _wzoom is
+  // set its weight window overrides lo/hi; null leaves the auto-fit untouched (no behavior change
+  // for the default chart).
+  const autoLo = lo, autoHi = hi;
+  if (_wzoom && Number.isFinite(_wzoom.lo) && Number.isFinite(_wzoom.hi) && _wzoom.hi > _wzoom.lo) {
+    lo = _wzoom.lo; hi = _wzoom.hi;
+  }
   const span = hi - lo || 1;
   const yOf = (lb) => PAD_T + (1 - (lb - lo) / span) * innerH;
 
@@ -964,6 +992,16 @@ function buildWeightChart(now) {
       '<stop offset="1" stop-color="var(--red)" stop-opacity="0"/>' +
       '</linearGradient></defs>'
   );
+  // v7.2: when zoomed, clip the data layer to the plot rect so off-window points/lines don't
+  // bleed into the axis gutter. The def + per-element clip attr are emitted ONLY while zoomed,
+  // so the unzoomed SVG markup is byte-identical to before.
+  if (_wzoom) {
+    parts.push(
+      `<clipPath id="wcPlotClip"><rect x="${(PAD_L - 0.5).toFixed(2)}" y="${(PAD_T - 4).toFixed(2)}" ` +
+        `width="${(innerW + 1).toFixed(2)}" height="${(innerH + 8).toFixed(2)}" /></clipPath>`
+    );
+  }
+  const clipAttr = _wzoom ? ' clip-path="url(#wcPlotClip)"' : '';
   // gridlines at NICE round steps targeting ~4 lines (v5.3: was every 10 lb => 7+ cramped
   // lines). Value labels sit on the LEFT, freeing the right edge for the emoji end-labels.
   const rng = hi - lo;
@@ -996,7 +1034,7 @@ function buildWeightChart(now) {
     const coords = s.pts.map((p) => ({ x: xOf(p.idx), y: yOf(p.lb) }));
     const last = coords[coords.length - 1];
     if (coords.length === 1) {
-      parts.push(`<circle cx="${last.x.toFixed(2)}" cy="${last.y.toFixed(2)}" r="2.2" fill="${s.color}" opacity="${s.opacity}" />`);
+      parts.push(`<circle cx="${last.x.toFixed(2)}" cy="${last.y.toFixed(2)}" r="2.2" fill="${s.color}" opacity="${s.opacity}"${clipAttr} />`);
     } else {
       const d = smoothPath(coords);
       if (s.isMe) {
@@ -1004,12 +1042,12 @@ function buildWeightChart(now) {
         const bottomY = (vbH - PAD_B).toFixed(2);
         parts.push(
           `<path d="${d} L ${last.x.toFixed(2)} ${bottomY} L ${coords[0].x.toFixed(2)} ${bottomY} Z" ` +
-            `fill="url(#wcMeFill)" stroke="none" />`
+            `fill="url(#wcMeFill)" stroke="none"${clipAttr} />`
         );
       }
       parts.push(
         `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width}" ` +
-          `stroke-linecap="round" stroke-linejoin="round" opacity="${s.opacity}" />`
+          `stroke-linecap="round" stroke-linejoin="round" opacity="${s.opacity}"${clipAttr} />`
       );
     }
     // v7.1: per-point hover targets — hover any datapoint to see that person's weight + date
@@ -1017,7 +1055,7 @@ function buildWeightChart(now) {
     for (const p of s.pts) {
       const dk = keysOldestFirst[p.idx];
       parts.push(
-        `<circle cx="${xOf(p.idx).toFixed(2)}" cy="${yOf(p.lb).toFixed(2)}" r="5" fill="transparent">` +
+        `<circle cx="${xOf(p.idx).toFixed(2)}" cy="${yOf(p.lb).toFixed(2)}" r="5" fill="transparent"${clipAttr}>` +
           `<title>${escapeHtml(displayNameOf(s.member))} — ${p.lb} lb${dk ? ' · ' + escapeHtml(fmtDateShort(dk)) : ''}</title>` +
         `</circle>`
       );
@@ -1053,8 +1091,16 @@ function buildWeightChart(now) {
     `<svg viewBox="0 0 ${vbW} ${vbH}" preserveAspectRatio="xMidYMid meet" ` +
     `role="img" aria-label="Weight over time, last ${rangeDays} days">${parts.join('')}</svg>`;
 
-  // stash geometry for the tap/drag scrubber (wired separately).
-  _wchartGeom = { vbW, vbH, PAD_L, PAD_R, PAD_T, PAD_B, innerW, rangeDays, keysOldestFirst, xOf, series };
+  // stash geometry for the tap/drag scrubber + zoom/pan (wired in wireWchartScrub). yOf/idxAtX
+  // let the scrubber map a pointer to the same coords the chart drew at; autoLo/autoHi + vx0/vx1
+  // let the zoom math know the current window and when a zoom-out reaches the full auto view.
+  _wchartGeom = {
+    vbW, vbH, PAD_L, PAD_R, PAD_T, PAD_B, innerW, innerH, rangeDays,
+    keysOldestFirst, xOf, idxAtX, yOf, lo, hi, autoLo, autoHi, vx0, vx1, series,
+  };
+  // a visible scrub must re-anchor after any rebuild (range toggle, a freshly-logged weight,
+  // a zoom step) since the geometry just changed. Rendered synchronously — never via rAF.
+  if (_wscrubIdx !== null) renderScrub();
 }
 
 // =============================================================================
@@ -3636,6 +3682,422 @@ function wireGridTaps() {
   if (elDayPopBody) elDayPopBody.addEventListener('click', onDayPopEditClick);
 }
 
+// =============================================================================
+// WEIGHT-CHART SCRUBBER + ZOOM/PAN (v7.2)
+// -----------------------------------------------------------------------------
+// TASK #1 — tap/click + drag a vertical scrubber across the chart to read every
+// person's weight at that date (works on touch, where there is no hover). TASK #2
+// — pinch (touch) / wheel + shift-drag (desktop) to zoom a time + weight window,
+// double-tap / dblclick / the reset chip to restore. All rendering is SYNCHRONOUS
+// (no requestAnimationFrame — a prior rAF on this chart silently never fired and
+// left it blank; that bug must not recur). The scrub is an HTML overlay layered
+// over the SVG, so it survives the innerHTML rebuilds buildWeightChart does.
+// =============================================================================
+
+// map a pointer's client x/y -> the inner-svg viewBox coords, honoring the svg's
+// preserveAspectRatio="xMidYMid meet" (which centers + letterboxes when the host
+// aspect doesn't match the viewBox). Returns null when the chart isn't measurable.
+function wchartViewBox(clientX, clientY) {
+  const g = _wchartGeom;
+  if (!g || !elWchartSvg) return null;
+  const rect = elWchartSvg.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const scale = Math.min(rect.width / g.vbW, rect.height / g.vbH);
+  if (!(scale > 0)) return null;
+  const offX = rect.left + (rect.width - g.vbW * scale) / 2;
+  const offY = rect.top + (rect.height - g.vbH * scale) / 2;
+  return {
+    x: (clientX - offX) / scale,
+    y: (clientY - offY) / scale,
+    rect, scale, offX, offY,
+  };
+}
+
+// invert yOf: a viewBox y -> a weight, using the geometry the chart was drawn with.
+function wchartLbAtY(vy, g) {
+  const span = (g.hi - g.lo) || 1;
+  return g.lo + (1 - (vy - g.PAD_T) / g.innerH) * span;
+}
+
+// the weight to read for a series at a (snapped) date index: the exact point if one
+// exists there, else a linear interpolation along the drawn line; clamped to the
+// series' own first/last point when the scrub sits outside their logged range.
+function wchartWeightAtIdx(s, idx) {
+  const pts = s && s.pts;
+  if (!pts || !pts.length) return null;
+  const first = pts[0], last = pts[pts.length - 1];
+  if (idx <= first.idx) return { lb: first.lb, clamped: idx < first.idx };
+  if (idx >= last.idx) return { lb: last.lb, clamped: idx > last.idx };
+  for (let i = 1; i < pts.length; i++) {
+    const b = pts[i];
+    if (b.idx === idx) return { lb: b.lb, clamped: false };
+    if (b.idx > idx) {
+      const a = pts[i - 1];
+      if (a.idx === idx) return { lb: a.lb, clamped: false };
+      const t = (idx - a.idx) / (b.idx - a.idx);
+      return { lb: a.lb + (b.lb - a.lb) * t, clamped: false };
+    }
+  }
+  return { lb: last.lb, clamped: false };
+}
+
+function wchartFmtLb(v) {
+  const r = Math.round(v * 10) / 10;
+  return Math.abs(r - Math.round(r)) < 0.05 ? String(Math.round(r)) : r.toFixed(1);
+}
+
+// build the overlay once: a vertical scrub line, a readout chip, and a zoom-reset
+// button, all inside an absolutely-positioned layer over the SVG host. pointer-events
+// stay off the layer (so the chart underneath still gets the gestures); only the reset
+// button opts back in.
+function ensureScrubOverlay() {
+  if (_wscrubOverlay) return _wscrubOverlay;
+  if (!elWchartSvg) return null;
+  const body = elWchartSvg.parentElement; // .wchart-body
+  if (!body) return null;
+  if (getComputedStyle(body).position === 'static') body.style.position = 'relative';
+  const ov = document.createElement('div');
+  ov.className = 'wchart-scrub-overlay';
+  ov.style.cssText = 'position:absolute; inset:0; pointer-events:none; z-index:5; overflow:hidden;';
+  const line = document.createElement('div');
+  line.style.cssText = 'position:absolute; width:1px; background:var(--txt2); opacity:.65; display:none; pointer-events:none;';
+  ov.appendChild(line);
+  const box = document.createElement('div');
+  box.style.cssText =
+    'position:absolute; display:none; pointer-events:none; background:var(--g2); ' +
+    'border:1px solid var(--hairline); border-radius:8px; padding:5px 8px; ' +
+    'font-size:10px; line-height:1.4; color:var(--txt); white-space:nowrap; ' +
+    'box-shadow:0 6px 18px rgba(0,0,0,.45);';
+  ov.appendChild(box);
+  const rb = document.createElement('button');
+  rb.type = 'button';
+  rb.textContent = 'reset zoom';
+  rb.style.cssText =
+    'position:absolute; top:5px; right:5px; display:none; pointer-events:auto; ' +
+    'font:inherit; font-size:9px; letter-spacing:.04em; padding:3px 8px; border-radius:8px; ' +
+    'background:var(--g3); border:1px solid var(--hairline); color:var(--txt2); cursor:pointer;';
+  rb.addEventListener('click', (e) => { e.stopPropagation(); resetWchartZoom(); });
+  ov.appendChild(rb);
+  body.appendChild(ov);
+  _wscrubOverlay = ov; _wscrubLine = line; _wscrubBox = box; _wscrubResetBtn = rb; _wscrubDots = [];
+  return ov;
+}
+
+function wchartDot(i) {
+  if (_wscrubDots[i]) return _wscrubDots[i];
+  const d = document.createElement('div');
+  d.style.cssText =
+    'position:absolute; width:8px; height:8px; border-radius:50%; border:1.5px solid; ' +
+    'box-sizing:border-box; display:none; pointer-events:none;';
+  _wscrubOverlay.appendChild(d);
+  _wscrubDots[i] = d;
+  return d;
+}
+
+function hideScrub() {
+  _wscrubIdx = null;
+  if (_wscrubLine) _wscrubLine.style.display = 'none';
+  if (_wscrubBox) _wscrubBox.style.display = 'none';
+  for (const d of _wscrubDots) d.style.display = 'none';
+}
+
+function syncWchartResetBtn() {
+  if (!_wscrubResetBtn) ensureScrubOverlay();
+  if (_wscrubResetBtn) _wscrubResetBtn.style.display = _wzoom ? 'block' : 'none';
+}
+
+function setScrubFromViewBoxX(vx) {
+  const g = _wchartGeom;
+  if (!g) return;
+  const maxIdx = g.rangeDays - 1;
+  let idx = Math.round(g.idxAtX(vx));
+  idx = Math.max(0, Math.min(maxIdx, idx));
+  _wscrubIdx = idx;
+  renderScrub();
+}
+
+// position the scrub line, the per-series dots (on the line, at each weight), and the
+// readout chip for the current _wscrubIdx. Cheap DOM writes only — no SVG rebuild.
+function renderScrub() {
+  const g = _wchartGeom;
+  const ov = ensureScrubOverlay();
+  if (!ov) return;
+  if (_wscrubIdx === null || !g || !g.series || !g.series.length) {
+    _wscrubLine.style.display = 'none';
+    _wscrubBox.style.display = 'none';
+    for (const d of _wscrubDots) d.style.display = 'none';
+    return;
+  }
+  const rect = elWchartSvg.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const scale = Math.min(rect.width / g.vbW, rect.height / g.vbH);
+  if (!(scale > 0)) return;
+  const offX = rect.left + (rect.width - g.vbW * scale) / 2;
+  const offY = rect.top + (rect.height - g.vbH * scale) / 2;
+  const ovRect = ov.getBoundingClientRect();
+  const toX = (vx) => offX + vx * scale - ovRect.left;
+  const toY = (vy) => offY + vy * scale - ovRect.top;
+
+  const idx = Math.max(0, Math.min(g.rangeDays - 1, _wscrubIdx));
+  const lineVx = g.xOf(idx);
+  const lineX = toX(lineVx);
+  const topY = toY(g.PAD_T);
+  const botY = toY(g.vbH - g.PAD_B);
+
+  _wscrubLine.style.display = 'block';
+  _wscrubLine.style.left = lineX + 'px';
+  _wscrubLine.style.top = topY + 'px';
+  _wscrubLine.style.height = Math.max(0, botY - topY) + 'px';
+
+  // readout: ME first (red, bold), then others; each row a colored swatch + 3-letter tag + lb.
+  const ordered = g.series.slice().sort((a, b) => (a.isMe ? 0 : 1) - (b.isMe ? 0 : 1));
+  const dk = g.keysOldestFirst[idx];
+  _wscrubBox.textContent = '';
+  const head = document.createElement('div');
+  head.style.cssText = 'font-size:9px; letter-spacing:.04em; color:var(--txt3); margin-bottom:3px;';
+  head.textContent = dk ? fmtDateShort(dk) : '';
+  _wscrubBox.appendChild(head);
+
+  let di = 0;
+  for (const s of ordered) {
+    const w = wchartWeightAtIdx(s, idx);
+    if (!w) continue;
+    // dot on the scrub line at this person's weight
+    const dot = wchartDot(di);
+    const dx = toX(lineVx);
+    const dy = toY(g.yOf(w.lb));
+    dot.style.display = 'block';
+    dot.style.left = (dx - 4) + 'px';
+    dot.style.top = (dy - 4) + 'px';
+    dot.style.borderColor = s.color;
+    dot.style.background = w.clamped ? 'transparent' : s.color;
+    di++;
+    // readout row
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:5px;' + (s.isMe ? ' font-weight:700;' : '');
+    const sw = document.createElement('span');
+    sw.style.cssText = 'width:7px; height:7px; border-radius:50%; flex:0 0 auto; background:' + s.color + ';';
+    const tag = document.createElement('span');
+    tag.style.cssText = 'color:' + (s.isMe ? 'var(--red)' : 'var(--txt2)') + '; min-width:26px;';
+    tag.textContent = (displayNameOf(s.member).trim().slice(0, 3) || '?').toUpperCase();
+    const val = document.createElement('span');
+    val.style.cssText = 'color:var(--txt); margin-left:auto;';
+    val.textContent = wchartFmtLb(w.lb) + (w.clamped ? '*' : '');
+    row.appendChild(sw); row.appendChild(tag); row.appendChild(val);
+    _wscrubBox.appendChild(row);
+  }
+  for (let j = di; j < _wscrubDots.length; j++) _wscrubDots[j].style.display = 'none';
+
+  // place the chip beside the line, flipping to the other side / clamping to stay on-chart.
+  _wscrubBox.style.display = 'block';
+  const bw = _wscrubBox.offsetWidth || 60;
+  let bx = lineX + 10;
+  if (bx + bw > ovRect.width - 4) bx = lineX - bw - 10;
+  if (bx < 4) bx = 4;
+  _wscrubBox.style.left = bx + 'px';
+  _wscrubBox.style.top = (topY + 2) + 'px';
+}
+
+function forceWchartRebuild() {
+  _wchartSig = null;
+  renderWeightChart(anchoredNow());
+}
+
+function resetWchartZoom() {
+  if (_wzoom === null) { syncWchartResetBtn(); return; }
+  _wzoom = null;
+  forceWchartRebuild();
+  syncWchartResetBtn();
+  if (_wscrubIdx !== null) renderScrub();
+}
+
+// zoom both axes about the (vx,vy) viewBox anchor by per-axis factors (f<1 = zoom in).
+function wchartZoomAbout(vx, vy, fx, fy) {
+  const g = _wchartGeom;
+  if (!g) return;
+  const maxIdx = g.rangeDays - 1;
+  if (maxIdx <= 0) return;
+  const i0 = g.vx0, i1 = g.vx1, lo = g.lo, hi = g.hi;
+  const spanX0 = (i1 - i0) || 1;
+  const spanY0 = (hi - lo) || 1;
+  const anchorIdx = Math.max(0, Math.min(maxIdx, g.idxAtX(vx)));
+  const anchorLb = wchartLbAtY(vy, g);
+  // X window
+  let sx = Math.max(2, Math.min(maxIdx, spanX0 * fx));
+  let n0 = anchorIdx - (anchorIdx - i0) * (sx / spanX0);
+  let n1 = n0 + sx;
+  if (n0 < 0) { n1 -= n0; n0 = 0; }
+  if (n1 > maxIdx) { n0 -= (n1 - maxIdx); n1 = maxIdx; if (n0 < 0) n0 = 0; }
+  // Y window
+  let sy = Math.max(2, spanY0 * fy);
+  let m0 = anchorLb - (anchorLb - lo) * (sy / spanY0);
+  let m1 = m0 + sy;
+  // a full zoom-out on both axes snaps back to the clean auto-fit view.
+  if (n0 <= 0 && n1 >= maxIdx && m0 <= g.autoLo && m1 >= g.autoHi) { resetWchartZoom(); return; }
+  _wzoom = { i0: n0, i1: n1, lo: m0, hi: m1 };
+  forceWchartRebuild();
+  syncWchartResetBtn();
+  if (_wscrubIdx !== null) renderScrub();
+}
+
+// drag-pan the zoomed window by a viewBox delta (content follows the pointer).
+function wchartPan(dvx, dvy) {
+  const g = _wchartGeom;
+  if (!g || !_wzoom) return;
+  const maxIdx = g.rangeDays - 1;
+  const i0 = g.vx0, i1 = g.vx1, lo = g.lo, hi = g.hi;
+  const di = -(dvx / g.innerW) * (i1 - i0);
+  let n0 = i0 + di, n1 = i1 + di;
+  if (n0 < 0) { n1 -= n0; n0 = 0; }
+  if (n1 > maxIdx) { n0 -= (n1 - maxIdx); n1 = maxIdx; if (n0 < 0) n0 = 0; }
+  const dLb = (dvy / g.innerH) * (hi - lo);
+  _wzoom = { i0: n0, i1: n1, lo: lo + dLb, hi: hi + dLb };
+  forceWchartRebuild();
+  if (_wscrubIdx !== null) renderScrub();
+}
+
+// two-finger pinch: per-axis zoom about the centroid + a centroid-follow pan, in one step.
+// UNTESTED on real touch in this harness (no touch automation) — desktop wheel/drag cover the
+// same math and are verified; verify pinch on a phone.
+function wchartPinch(prev, a, b) {
+  const g = _wchartGeom;
+  if (!g) return null;
+  const maxIdx = g.rangeDays - 1;
+  if (maxIdx <= 0) return prev;
+  const spanX = Math.abs(a.x - b.x), spanY = Math.abs(a.y - b.y);
+  const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+  const i0 = _wzoom ? _wzoom.i0 : g.vx0;
+  const i1 = _wzoom ? _wzoom.i1 : g.vx1;
+  const lo = _wzoom ? _wzoom.lo : g.lo;
+  const hi = _wzoom ? _wzoom.hi : g.hi;
+  const fx = (spanX > 4 && prev.spanX > 4) ? prev.spanX / spanX : 1;
+  const fy = (spanY > 4 && prev.spanY > 4) ? prev.spanY / spanY : 1;
+  const spanX0 = (i1 - i0) || 1, spanY0 = (hi - lo) || 1;
+  const anchorIdx = Math.max(0, Math.min(maxIdx, g.idxAtX(cx)));
+  const anchorLb = wchartLbAtY(cy, g);
+  let sx = Math.max(2, Math.min(maxIdx, spanX0 * fx));
+  let sy = Math.max(2, spanY0 * fy);
+  let n0 = anchorIdx - (anchorIdx - i0) * (sx / spanX0);
+  let n1 = n0 + sx;
+  let m0 = anchorLb - (anchorLb - lo) * (sy / spanY0);
+  let m1 = m0 + sy;
+  // centroid-follow pan
+  const dcx = cx - prev.cx, dcy = cy - prev.cy;
+  n0 += -(dcx / g.innerW) * sx; n1 += -(dcx / g.innerW) * sx;
+  const dLb = (dcy / g.innerH) * sy; m0 += dLb; m1 += dLb;
+  if (n0 < 0) { n1 -= n0; n0 = 0; }
+  if (n1 > maxIdx) { n0 -= (n1 - maxIdx); n1 = maxIdx; if (n0 < 0) n0 = 0; }
+  _wzoom = { i0: n0, i1: n1, lo: m0, hi: m1 };
+  forceWchartRebuild();
+  syncWchartResetBtn();
+  if (_wscrubIdx !== null) renderScrub();
+  return { spanX, spanY, cx, cy };
+}
+
+// wire all weight-chart pointer interactions ONCE. Pointer events unify mouse + touch + pen;
+// a wheel handler adds desktop zoom, dblclick + a document-level off-tap manage reset/hide.
+function wireWchartScrub() {
+  if (_wscrubWired) return;
+  const host = elWchartSvg;
+  if (!host) return;
+  _wscrubWired = true;
+  ensureScrubOverlay();
+  host.style.touchAction = 'none'; // let us own pinch/drag instead of the browser scrolling/zooming
+
+  const pointers = new Map(); // pointerId -> last viewBox {x,y}
+  let mode = null; // 'scrub' | 'pan' | 'pinch'
+  let panPrev = null; // viewBox {x,y}
+  let pinchPrev = null; // {spanX, spanY, cx, cy}
+  let lastTapT = 0, lastTapX = 0;
+
+  host.addEventListener('pointerdown', (e) => {
+    const g = _wchartGeom;
+    if (!g) return;
+    const vb = wchartViewBox(e.clientX, e.clientY);
+    if (!vb) return;
+    try { host.setPointerCapture(e.pointerId); } catch (_) {}
+    pointers.set(e.pointerId, vb);
+    if (pointers.size >= 2) {
+      mode = 'pinch';
+      hideScrub();
+      const it = [...pointers.values()];
+      pinchPrev = { spanX: Math.abs(it[0].x - it[1].x), spanY: Math.abs(it[0].y - it[1].y), cx: (it[0].x + it[1].x) / 2, cy: (it[0].y + it[1].y) / 2 };
+      e.preventDefault();
+      return;
+    }
+    if (e.shiftKey && _wzoom) { mode = 'pan'; panPrev = { x: vb.x, y: vb.y }; e.preventDefault(); return; }
+    mode = 'scrub';
+    setScrubFromViewBoxX(vb.x);
+    e.preventDefault();
+  });
+
+  host.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const vb = wchartViewBox(e.clientX, e.clientY);
+    if (!vb) return;
+    pointers.set(e.pointerId, vb);
+    if (mode === 'pinch' && pointers.size >= 2) {
+      const it = [...pointers.values()];
+      pinchPrev = wchartPinch(pinchPrev, it[0], it[1]) || pinchPrev;
+      e.preventDefault();
+      return;
+    }
+    if (mode === 'pan' && panPrev) {
+      wchartPan(vb.x - panPrev.x, vb.y - panPrev.y);
+      panPrev = { x: vb.x, y: vb.y };
+      e.preventDefault();
+      return;
+    }
+    if (mode === 'scrub') {
+      setScrubFromViewBoxX(vb.x);
+      e.preventDefault();
+    }
+  });
+
+  const onEnd = (e) => {
+    const wasScrub = mode === 'scrub';
+    pointers.delete(e.pointerId);
+    try { host.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (pointers.size < 2) pinchPrev = null;
+    if (pointers.size === 0) {
+      // double-tap (touch) = reset zoom
+      if (wasScrub && e.pointerType !== 'mouse') {
+        const t = Date.now();
+        if (t - lastTapT < 320 && Math.abs(e.clientX - lastTapX) < 24) { resetWchartZoom(); }
+        lastTapT = t; lastTapX = e.clientX;
+      }
+      mode = null; panPrev = null;
+    } else if (mode === 'pinch' && pointers.size === 1) {
+      // a finger lifted mid-pinch: fall back to scrub with the remaining finger
+      mode = null;
+    }
+  };
+  host.addEventListener('pointerup', onEnd);
+  host.addEventListener('pointercancel', onEnd);
+
+  // desktop wheel zoom (anchored on the cursor); needs passive:false to preventDefault the page scroll.
+  host.addEventListener('wheel', (e) => {
+    const g = _wchartGeom;
+    if (!g) return;
+    const vb = wchartViewBox(e.clientX, e.clientY);
+    if (!vb) return;
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 0.82 : 1 / 0.82;
+    wchartZoomAbout(vb.x, vb.y, f, f);
+  }, { passive: false });
+
+  // desktop double-click resets zoom.
+  host.addEventListener('dblclick', (e) => { e.preventDefault(); resetWchartZoom(); });
+
+  // tap/click anywhere OFF the chart (and off the overlay/reset button) hides the scrub readout.
+  document.addEventListener('pointerdown', (e) => {
+    if (_wscrubIdx === null) return;
+    if (host.contains(e.target)) return;
+    if (_wscrubOverlay && _wscrubOverlay.contains(e.target)) return;
+    hideScrub();
+  });
+}
+
 // v4.5: collapsible weight chart. Tapping the title bar collapses the body to just the
 // header; the state is persisted. Re-fitting (the dynamic viewBox needs the real height)
 // is forced on EXPAND because the chart wasn't laid out while collapsed.
@@ -3685,8 +4147,14 @@ function wireWeightChart() {
     if (r !== 30 && r !== 90) return;
     if (r === wchartRange) return;
     wchartRange = r;
+    // v7.2: the index space changes with the range, so a carried-over zoom window or scrub index
+    // would be meaningless — drop both before the rebuild.
+    _wzoom = null;
+    _wscrubIdx = null;
     _wchartSig = null; // v4 (#1c): force a rebuild — the range changed, the dirty-check must not skip it
     renderWeightChart(anchoredNow());
+    if (typeof syncWchartResetBtn === 'function') syncWchartResetBtn();
+    if (typeof renderScrub === 'function') renderScrub();
   });
 }
 
@@ -4018,6 +4486,7 @@ async function boot() {
   wireMonth(); // v5 (#4): MONTH tab — chip selector + month nav + day taps
   wirePlaylist(); // v5 (#5): PLAYLIST tab — add-bar, delegated remove, footer open-buttons
   wireWeightChart();
+  wireWchartScrub(); // v7.2: tap/drag scrubber + pinch/wheel zoom on the weight chart
   wireChartCollapse();
   wireReclaim();
   wireError();
