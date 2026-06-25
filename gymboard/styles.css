@@ -1152,7 +1152,7 @@ button:disabled { cursor:default; }
   #stage {
     display:grid;
     grid-template-columns:clamp(360px, 30%, 480px) 1fr 1fr;
-    grid-template-rows:minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-rows:minmax(0, 320px) minmax(0, 1fr);
     grid-template-areas:
       "me social month"
       "me social playlist";
@@ -1184,4 +1184,20 @@ button:disabled { cursor:default; }
   #grid       { margin-inline:auto; }
   .month-grid { max-width:none; }
   .pl-list    { max-width:none; }
+
+  /* MONTH sits in the right column's top now. Its cells are aspect-ratio:1/1 (square), which
+     in a wide column makes a 5-week month far too tall to fit (it was clipping). Compact it
+     for desktop: short cells + tighter chrome so the whole month is visible without scrolling.
+     The 320px row cap (above) then leaves the rest of the column to the playlist. (Soren 6/25
+     — "make both parts smaller so you can actually see the calendar".) */
+  #screen-month .gcell.month-cell,
+  #screen-month .month-cell.pad { aspect-ratio:auto; height:28px; }
+  #screen-month .month-grid  { gap:4px; padding:8px 10px 10px; }
+  #screen-month .month-head  { padding:6px 12px; }
+  #screen-month .month-label { font-size:11.5px; min-width:104px; }
+  #screen-month .month-chips { padding:5px 10px; gap:6px; }
+  #screen-month .month-chip  { width:28px; height:28px; }
+  #screen-month .month-chip-emoji { font-size:14px; }
+  #screen-month .month-num   { font-size:10px; }
+  #screen-month .month-dow   { font-size:8px; padding:1px 0 2px; }
 }
