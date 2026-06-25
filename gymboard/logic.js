@@ -1169,3 +1169,96 @@ export function formatResetCountdown(ms) {
   if (days >= 1) return `${days}D`;
   return `${Math.max(1, Math.floor(ms / HR))}H`;
 }
+
+// ---- v7: dual-display merge + MXT naming + history + theme-submission period ----
+
+/**
+ * mxtPlaylistName(n, theme) -> the SHORT auto-playlist name "MXT #<n>: <theme>".
+ * n is the global MXT counter (>=1, floored); a blank theme renders "untitled". The Worker's
+ * /create endpoint validates the name matches /^MXT #\d+:/ so a public secret can't mint
+ * arbitrary names — this builder must stay in that shape.
+ */
+export function mxtPlaylistName(n, theme) {
+  const num = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+  const t = typeof theme === 'string' ? theme.trim() : '';
+  return `MXT #${num}: ${t || 'untitled'}`;
+}
+
+/**
+ * nextPeriodKey(dateKey) -> the slotKey of the NEXT themed half-week (where theme submissions
+ * go). Composes the existing primitives: the next-reset day, mapped to its slot. From a Mon–Wed
+ * day -> that week's Thu–Sun slot; from a Thu–Sun day -> next week's Mon–Wed slot. Crosses the
+ * Wed->Thu and Sun->Mon boundaries correctly because playlistNextResetDayKey already does.
+ */
+export function nextPeriodKey(dateKey) {
+  return playlistSlotKey(playlistNextResetDayKey(dateKey));
+}
+
+/**
+ * historySlots(plSlotsMap, currentKey) -> archived slots (those that have a real playlist URL),
+ * excluding the current one, newest first. Tolerates legacy pre-MXT slots (mxtNumber null) so the
+ * history list doesn't break on old data. Slot keys sort lexically = chronologically (newer week,
+ * then _b before _a), so a string desc sort is newest-first.
+ */
+export function historySlots(plSlotsMap, currentKey) {
+  if (!plSlotsMap || typeof plSlotsMap !== 'object') return [];
+  return Object.keys(plSlotsMap)
+    .filter((k) => k !== currentKey)
+    .filter((k) => {
+      const s = plSlotsMap[k] || {};
+      return (typeof s.spotifyUrl === 'string' && s.spotifyUrl) ||
+        (typeof s.youtubeUrl === 'string' && s.youtubeUrl);
+    })
+    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+    .map((k) => {
+      const s = plSlotsMap[k] || {};
+      return {
+        key: k,
+        mxtNumber: Number.isFinite(s.mxtNumber) ? s.mxtNumber : null,
+        theme: typeof s.theme === 'string' ? s.theme : '',
+        spotifyUrl: typeof s.spotifyUrl === 'string' ? s.spotifyUrl : '',
+        youtubeUrl: typeof s.youtubeUrl === 'string' ? s.youtubeUrl : '',
+      };
+    });
+}
+
+/**
+ * mergeRows(realTracks, attribMap) -> the displayed song rows, deduped by Spotify track id, with
+ * gym-user attribution attached where known. realTracks come from the real playlist (Worker /list);
+ * attribMap (Map or plain object) maps a Spotify track id -> the gym userId that added it via the
+ * app. A track with no attrib match is a NATIVE add (addedByUserId null -> anonymous chip). Pure.
+ */
+export function mergeRows(realTracks, attribMap) {
+  if (!Array.isArray(realTracks)) return [];
+  const lookup = (id) => {
+    if (!id) return null;
+    if (attribMap instanceof Map) return attribMap.get(id) || null;
+    if (attribMap && typeof attribMap === 'object') return attribMap[id] || null;
+    return null;
+  };
+  const seen = new Set();
+  const rows = [];
+  for (const t of realTracks) {
+    if (!t || !t.id || seen.has(t.id)) continue; // dedupe on the 22-char track id (exact)
+    seen.add(t.id);
+    rows.push({ ...t, addedByUserId: lookup(t.id) });
+  }
+  return rows;
+}
+
+/**
+ * normalizeTrackTitle(s) -> a loose key for matching the SAME song across services (Spotify id !=
+ * YouTube id, so a future cross-service dedupe needs title+artist). Lowercases, drops parentheticals
+ * /brackets, trailing "feat ...", common version words, and punctuation. Pure. (YouTube is dormant;
+ * this is staged for the cross-service merge.)
+ */
+export function normalizeTrackTitle(s) {
+  if (typeof s !== 'string') return '';
+  let out = s.toLowerCase();
+  out = out.replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ');
+  out = out.replace(/\b(feat\.?|ft\.?|featuring)\b.*$/, ' ');
+  out = out.replace(/\b(remaster(ed)?|radio edit|live|explicit)\b/g, ' ');
+  out = out.replace(/[^a-z0-9\s]/g, ' ');
+  out = out.replace(/\s+/g, ' ').trim();
+  return out;
+}

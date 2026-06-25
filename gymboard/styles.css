@@ -614,6 +614,17 @@ button:disabled { cursor:default; }
   flex:1 1 auto; min-width:0; max-width:300px; font-size:14px; font-weight:600; color:var(--txt);
   background:var(--g2); border:1px solid var(--red); border-radius:6px; padding:3px 8px; outline:none;
 }
+/* v7: REFRESH button + HISTORY dropdown in the playlist header (replaced the A/B toggle), plus the
+   "N ideas for next" count on the theme line. .pl-refresh reuses .pl-foot-btn, just a touch shorter. */
+.pl-refresh { height:30px; padding:0 12px; flex:0 0 auto; }
+.pl-history {
+  flex:0 0 auto; max-width:180px; height:30px; padding:0 8px;
+  background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm);
+  color:var(--txt2); font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; cursor:pointer;
+}
+.pl-history:disabled { opacity:.45; cursor:default; }
+.pl-theme-ideas { margin-left:auto; flex:0 0 auto; font-size:10px; color:var(--txt3); letter-spacing:.04em; white-space:nowrap; }
 
 /* fixed add-bar: one wide input + ADD (reuses .me-input + .me-meal-btn), then a hint line that
    doubles as the "already added" pulse target. */

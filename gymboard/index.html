@@ -297,21 +297,22 @@
          or open an Admin-stored collaborative-playlist link. Same `hidden`-until-first-setTab
          handling as MONTH. ---- -->
     <section id="screen-playlist" class="screen" aria-label="Playlist" aria-hidden="true" hidden>
-      <!-- header: title + a live "· N SONGS" count, the Mon–Wed / Thu–Sun half toggle, and the
-           editable theme line for the half on screen (v5.2: two themed playlists per week). -->
+      <!-- header: title + a live "· N SONGS" count, a REFRESH (re-sync from Spotify) + HISTORY
+           (past playlists) row, and the theme line (v7: name THIS period, or once named suggest the
+           NEXT period's theme). The Mon–Wed / Thu–Sun half-week boundary stays; the on-screen A/B
+           toggle is gone (#3). -->
       <div id="pl-head" class="pl-head">
         <div class="pl-title">PLAYLIST<span id="pl-count" class="pl-count mono" aria-live="polite"></span></div>
         <div class="pl-halfrow">
-          <div id="pl-halves" class="pl-halves" role="tablist" aria-label="Which half of the week">
-            <button id="pl-half-a" class="pl-half" type="button" role="tab" data-half="a">MON–WED</button>
-            <button id="pl-half-b" class="pl-half" type="button" role="tab" data-half="b">THU–SUN</button>
-          </div>
+          <button id="pl-refresh" class="pl-foot-btn pl-refresh" type="button" aria-label="Refresh the playlist from Spotify">↻ REFRESH</button>
+          <select id="pl-history" class="pl-history" aria-label="Open a past playlist"><option value="" selected>HISTORY ▾</option></select>
           <span id="pl-reset" class="pl-reset mono" aria-live="polite"></span>
         </div>
         <div id="pl-theme" class="pl-theme">
-          <span id="pl-theme-name" class="pl-theme-name" role="button" tabindex="0" title="Tap to name this playlist’s theme">…</span>
-          <button id="pl-theme-edit" class="pl-theme-edit" type="button" aria-label="Rename this playlist’s theme">✎</button>
-          <input id="pl-theme-input" class="pl-theme-input hidden" type="text" maxlength="60" autocomplete="off" autocapitalize="words" placeholder="name this week’s vibe">
+          <span id="pl-theme-name" class="pl-theme-name" role="button" tabindex="0" title="Tap to name this period’s theme, or suggest next period’s">…</span>
+          <button id="pl-theme-edit" class="pl-theme-edit" type="button" aria-label="Name this theme, or suggest next period’s">✎</button>
+          <input id="pl-theme-input" class="pl-theme-input hidden" type="text" maxlength="60" autocomplete="off" autocapitalize="words" placeholder="name this period’s vibe">
+          <span id="pl-theme-ideas" class="pl-theme-ideas mono" aria-live="polite"></span>
         </div>
       </div>
       <!-- fixed add-bar: paste a link OR type "Song - Artist". One input + ADD. The hint line

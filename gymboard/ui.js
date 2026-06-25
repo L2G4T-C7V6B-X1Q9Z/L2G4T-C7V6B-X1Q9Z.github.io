@@ -59,6 +59,12 @@ import {
   playlistSlotLabel,
   playlistNextResetDayKey,
   formatResetCountdown,
+  // v7: sync-merge display + MXT naming + history + theme submission.
+  mergeRows,
+  historySlots,
+  mxtPlaylistName,
+  nextPeriodKey,
+  normalizeTrackTitle,
 } from './logic.js';
 
 import * as data from './data.js';
@@ -149,13 +155,15 @@ const elPlAddHint = $('pl-add-hint');
 const elPlList = $('pl-list');
 const elPlOpenSpotify = $('pl-open-spotify');
 const elPlCollab = $('pl-collab');
-// v5.2: the two-themed-playlists chrome (half toggle + editable theme line).
-const elPlHalfA = $('pl-half-a');
-const elPlHalfB = $('pl-half-b');
+// v7: REFRESH (re-sync from Spotify) + HISTORY (past playlists) + the theme line (repurposed: submit
+// an idea for the NEXT period, with live-naming the CURRENT period as the zero-submission fallback).
+const elPlRefresh = $('pl-refresh');
+const elPlHistory = $('pl-history');
 const elPlThemeName = $('pl-theme-name');
 const elPlThemeEdit = $('pl-theme-edit');
 const elPlThemeInput = $('pl-theme-input');
-const elPlReset = $('pl-reset'); // v5.2: countdown to the next half-week reset
+const elPlThemeIdeas = $('pl-theme-ideas'); // live count of ideas submitted for the next period
+const elPlReset = $('pl-reset'); // countdown to the next half-week reset
 const elGridLegend = $('grid-legend');
 // v4 (#3): weight-over-time chart handles (the inline-SVG line chart on the SOCIAL board).
 const elSocialChart = $('social-chart');
@@ -256,24 +264,35 @@ let monthSubjectUid = null; // set to myUserId on boot (myUserId isn't known at 
 let monthOffset = 0;
 let _monthFetchSig = null;
 
-// v5 (#5): PLAYLIST tab state. `songs` is the latest /playlist snapshot (newest first), as
-// data.subscribePlaylist hands it over. `plCollabUrl` is the Admin-seeded optional shared-
-// playlist link (null = hide that footer button), fetched once on boot. The optimistic
-// overlays make add/remove feel instant before the snapshot lands: `plOptimisticAdds` is a
-// list of locally-added rows (keyed by the id addSong() returned) we render UNTIL the same id
-// shows up in the snapshot, and `plOptimisticRemoves` is a set of ids we hide UNTIL the
-// snapshot drops them. Reconciled in onSongs.
+// v5/v7 PLAYLIST tab state. `songs` is the latest /playlist snapshot — under v7 this is the
+// ATTRIBUTION source (spotifyTrackId -> addedBy), not the display source. `plCollabUrl` is the
+// Admin-seeded optional shared-playlist link (null = hide that footer button), fetched once on boot.
+// `plOptimisticAdds` makes an add feel instant before it lands in the real playlist (reconciled by
+// track id / title in pendingMatchesReal). No optimistic-REMOVE overlay anymore (#6 dropped remove).
 let songs = [];
 let plCollabUrl = null;
-let plOptimisticAdds = []; // [{ id, title, artist, url, source, slot, addedByUserId }]
-const plOptimisticRemoves = new Set(); // song ids hidden pending the snapshot
-// v5.2: two themed playlists per week. `plSlots` is the /playlistSlots snapshot
-// (slotKey -> { theme?, spotifyPlaylistId?, spotifyUrl? }). `plViewHalf` is which
-// half of THIS week is on screen ('a'|'b'); null means "default to the current
-// half by today's date" (reset whenever the tab is opened).
+// v7: optimistic adds — rows we render immediately on add and keep UNTIL the same track appears in
+// the real playlist (plRealTracks). Each: { id, title, artist, url, source, slot, addedByUserId,
+// trackId, addedAt }. trackId is parsed from a pasted Spotify link right away, or stamped later from
+// the Worker /add response for a typed song (P0 #2). Reconciled by track id (links) / normalized
+// title (typed). No optimistic REMOVE set anymore (#6 dropped the remove path).
+let plOptimisticAdds = [];
+// v5.2: /playlistSlots snapshot (slotKey -> { theme?, mxtNumber?, spotifyPlaylistId?, spotifyUrl? }).
 let plSlots = {};
-let plViewHalf = null;
 let plThemeEditing = false; // true while the theme input is open (so render won't stomp it)
+// v7 #1 SYNC-MERGE: the REAL Spotify playlist's tracks (Worker /list) are the DISPLAY source; the
+// Firestore /playlist snapshot is demoted to attribution-only. plRealForSlot tags which slot the
+// tracks belong to; plRealFetchedAt drives the 20s client cache guard (Spotify's rolling-30s window).
+let plRealTracks = [];
+let plRealFetchedAt = 0;
+let plRealForSlot = '';
+let _plRealSyncing = false; // re-entrancy guard so overlapping focus/visibility events don't double-fetch
+// v7 #4 THEME SUBMISSION: live count of ideas submitted for the NEXT period, + the subscription.
+let plNextIdeasCount = 0;
+let _plNextIdeasPeriod = '';
+let plNextIdeasUnsub = null;
+// periods we've already lazily resolved the theme for (resolveThemeForPeriod runs once per period).
+const _plResolvedPeriods = new Set();
 
 // Optimistic overlay: while a WORKOUT write for (userId+businessDate) is in flight (or
 // failed pre-rollback), we paint from THIS map, not the snapshot, and we never repaint
@@ -1109,6 +1128,8 @@ function onVisibility() {
     // phones suspend timers; re-eval immediately and re-arm the boundary on return.
     repaint();
     scheduleNextRollover();
+    // v7 #1: re-sync the real playlist on focus/visibility return (cache-guarded; no-op off-playlist).
+    if (isDesktop() || activeTab === 'playlist') syncRealPlaylist(false);
   }
 }
 
@@ -1247,7 +1268,6 @@ function setTab(tab) {
   // re-entering — either way the tab opens fresh as "my current month".)
   monthSubjectUid = myUserId;
   monthOffset = 0;
-  plViewHalf = null; // v5.2: PLAYLIST always opens on the current half (by today's date)
   activeTab = tab;
   for (const btn of elTabs.querySelectorAll('.tab')) {
     const on = btn.dataset.tab === tab;
@@ -1273,6 +1293,7 @@ function setTab(tab) {
   }
   applyScreenTransforms(idx);
   repaint();
+  if (tab === 'playlist') syncRealPlaylist(false); // v7 #1: re-sync the real playlist on tab-open
 }
 function wireTabs() {
   elTabs.addEventListener('click', (e) => {
@@ -1704,15 +1725,13 @@ function wireMonth() {
 }
 
 // =============================================================================
-// RENDER: PLAYLIST (v5 #5) — the shared in-app song WALL. One live onSnapshot list (newest
-//   first) the group builds together: paste a Spotify / YT-Music link OR type "Song - Artist"
-//   and tap ADD. Each row deep-LINKS out — it never fetches metadata — with a small Spotify +
-//   YT-Music button apiece (OPEN the pasted link if it's that service, else SEARCH the
-//   title+artist) and a ✕ on EVERY row since anyone can remove (shared-jukebox). Add/remove are
-//   optimistic (plOptimisticAdds / plOptimisticRemoves) and reconciled against the snapshot.
-//   The footer searches the whole list on each service + opens the optional Admin-stored
-//   collaborative-playlist link; a live "· N SONGS" count sits in the header. All user text is
-//   escaped; every outbound link is rel="noopener".
+// RENDER: PLAYLIST (v5 #5 -> v7 #1) — the shared song wall now MIRRORS the real Spotify playlist.
+//   The display source is the live Worker /list read (songs added natively in Spotify show up; native
+//   removals disappear). The Firestore /playlist snapshot is demoted to attribution-only. Add by
+//   pasting a Spotify link or typing "Song - Artist"; an optimistic row shows until the track lands in
+//   the real playlist. A native (non-app) add shows a neutral '•' chip. The footer opens the real
+//   playlist (or a whole-list search); a live "· N SONGS" count sits in the header. All user text is
+//   escaped; every outbound link is rel="noopener". (#6: no remove — removal happens in Spotify.)
 // =============================================================================
 
 // the per-source row tag + a11y word. 'text' = a typed "Song - Artist" (no link); 'url' = a
@@ -1818,12 +1837,11 @@ function currentPlaylistSlot() {
   const today = viewerBusinessDate(new Date());
   return { week: businessWeekKey(today), half: playlistHalf(today) };
 }
-// The slot being VIEWED: this week, the selected half (defaults to the current-by-day half until
-// the user taps the other one). `nowHalf` = which half is the live one by today's date.
+// v7 #3: NO A/B toggle — the PLAYLIST always shows the CURRENT live slot (the half-week boundary
+// stays; only the on-screen toggle is gone). Past slots are reachable via the HISTORY dropdown.
 function viewedPlaylistSlot() {
   const { week, half } = currentPlaylistSlot();
-  const h = plViewHalf || half;
-  return { week, half: h, key: playlistSlotId(week, h), nowHalf: half };
+  return { week, half, key: playlistSlotId(week, half) };
 }
 
 // v5.2: the name the Worker gives the auto-created Spotify playlist for a slot — the half + its
@@ -1854,62 +1872,214 @@ function updateResetBadge() {
   elPlReset.textContent = `resets in ${formatResetCountdown(boundary - Date.now())}`;
 }
 
-// The render list for the VIEWED slot = its snapshot songs MINUS optimistic removes, PLUS its
-// optimistic adds not yet in the snapshot. Both filtered to the viewed slot key (songs arrive
-// newest-first from orderBy('createdAt','desc'), so order is preserved). Optimistic adds render
-// at the TOP (newest).
-function playlistRenderList() {
+// v7 #1 SYNC-MERGE display model:
+//   • DISPLAY source = the REAL Spotify playlist (plRealTracks, read live via the Worker /list).
+//     Rows = mergeRows(plRealTracks, attribMap): deduped by 22-char track id, each tagged with the
+//     gym user who app-added it (or null = a NATIVE Spotify add -> a neutral anonymous chip).
+//   • The Firestore /playlist snapshot is DEMOTED to attribution-only (spotifyTrackId -> addedBy).
+//   • FALLBACK: if there's no real read for the slot (Worker down/403, or no playlist yet) we render
+//     the Firestore wall, so the tab never blanks on a transient failure.
+//   • Optimistic adds overlay on top until the same track lands in plRealTracks (P0 #2 reconcile).
+
+// attribution map for a slot: { [spotifyTrackId]: addedByUserId } from the Firestore songs.
+function buildAttribMap(key) {
+  const m = {};
+  for (const s of songs) {
+    if (s.slot !== key) continue;
+    if (typeof s.spotifyTrackId === 'string' && s.spotifyTrackId) m[s.spotifyTrackId] = s.addedByUserId || null;
+  }
+  return m;
+}
+
+// has this optimistic add landed in the real playlist yet? Links match by 22-char track id; typed
+// songs (whose stored title IS the real song name) fall back to a normalized title+artist match.
+function pendingMatchesReal(s) {
+  if (s.trackId && plRealTracks.some((t) => t.id === s.trackId)) return true;
+  const norm = normalizeTrackTitle(`${s.title || ''} ${s.artist || ''}`);
+  if (norm && plRealTracks.some((t) => normalizeTrackTitle(`${t.name || ''} ${t.artist || ''}`) === norm)) return true;
+  return false;
+}
+
+// drop optimistic adds that reconciled (now in the real playlist) or aged out (5-min safety cap so a
+// Worker-add that never lands can't pin a stale row forever — well past add+sync latency).
+function prunePendingAdds() {
+  const cutoff = Date.now() - 5 * 60 * 1000;
+  plOptimisticAdds = plOptimisticAdds.filter((s) => !pendingMatchesReal(s) && (s.addedAt || 0) > cutoff);
+}
+
+// the optimistic rows still worth showing for a slot (in slot, not yet in the real playlist).
+function visiblePendingAdds(key) {
+  return plOptimisticAdds.filter((s) => s.slot === key && !pendingMatchesReal(s));
+}
+
+// run resolveThemeForPeriod ONCE per period (first open in it), fire-and-forget. The data call is
+// itself guarded (no-op if the slot is already themed or has no submissions).
+function maybeResolveTheme(key) {
+  if (!key || _plResolvedPeriods.has(key)) return;
+  _plResolvedPeriods.add(key);
+  Promise.resolve(data.resolveThemeForPeriod(key)).catch(() => {});
+}
+
+// keep a live subscription to the NEXT period's idea submissions (for the "N ideas for next" hint).
+// Re-points when the next-period key rolls over.
+function ensureNextIdeasSub() {
+  const next = nextPeriodKey(viewerBusinessDate(new Date()));
+  if (next === _plNextIdeasPeriod) return;
+  _plNextIdeasPeriod = next;
+  if (plNextIdeasUnsub) { try { plNextIdeasUnsub(); } catch (_) {} plNextIdeasUnsub = null; }
+  plNextIdeasCount = 0;
+  if (!next) return;
+  try {
+    plNextIdeasUnsub = data.subscribeThemeSubmissions(next, (ideas) => {
+      plNextIdeasCount = Array.isArray(ideas) ? ideas.length : 0;
+      if (isDesktop() || activeTab === 'playlist') renderPlaylist();
+    });
+  } catch (_) { /* non-fatal: the count just stays 0 */ }
+}
+
+// "Jun 22 MON–WED" for a legacy (pre-MXT) slot key in the HISTORY list.
+function slotDateLabel(slotKey) {
+  const us = slotKey.indexOf('_');
+  if (us < 0) return slotKey;
+  const weekKey = slotKey.slice(0, us);
+  const label = playlistSlotLabel(slotKey.slice(us + 1));
+  const p = weekKey.split('-');
+  const wk = p.length === 3 ? `${_PL_MON[+p[1] - 1] || ''} ${+p[2]}` : weekKey;
+  return `${wk} ${label}`;
+}
+
+// v7 #3: fill the HISTORY <select> with archived slots (newest first); selecting one opens its URL.
+function renderHistory(currentKey) {
+  if (!elPlHistory) return;
+  const hist = historySlots(plSlots, currentKey);
+  const opts = ['<option value="" selected>HISTORY ▾</option>'];
+  for (const h of hist) {
+    const base = h.mxtNumber != null ? `MXT #${h.mxtNumber}` : slotDateLabel(h.key);
+    const label = h.theme ? `${base}: ${h.theme}` : base;
+    opts.push(`<option value="${escapeHtml(h.spotifyUrl || '')}">${escapeHtml(label)}</option>`);
+  }
+  elPlHistory.innerHTML = opts.join('');
+  elPlHistory.disabled = hist.length === 0;
+}
+
+// one row for a REAL playlist track (the sync-merge display). Always a Spotify track, so it renders
+// the inline player; the chip shows the gym user who app-added it, or a neutral '•' for a NATIVE
+// Spotify add — NEVER the fake 'Someone'+hashed-emoji, which would mis-attribute it to a non-person.
+function realRowHtml(track) {
+  const uid = track.addedByUserId || '';
+  const member = uid ? memberById(uid) : null;
+  let chip;
+  if (member) {
+    const emoji = emojiOf({ emoji: member.emoji, id: uid });
+    const who = displayNameOf(member);
+    chip = `<span class="pl-row-emoji" title="${escapeHtml(who)}" aria-label="added by ${escapeHtml(who)}">${escapeHtml(emoji)}</span>`;
+  } else {
+    chip = '<span class="pl-row-emoji" title="added in Spotify" aria-label="added directly in Spotify">•</span>';
+  }
+  const spe = spotifyEmbed(track.url || track.uri || '');
+  if (spe) {
+    return (
+      `<div class="pl-row pl-row-embed" role="listitem" data-id="${escapeHtml(track.id || '')}">` +
+        chip +
+        `<div class="pl-embed">` +
+          `<iframe src="${escapeHtml(spe.src)}" frameborder="0" ` +
+            `allow="encrypted-media; clipboard-write; picture-in-picture" ` +
+            `title="Spotify player for ${escapeHtml(track.name || 'a song')}"></iframe>` +
+        `</div>` +
+      `</div>`
+    );
+  }
+  const title = escapeHtml(track.name || 'Unknown track');
+  const artist = track.artist ? escapeHtml(track.artist) : '';
+  return (
+    `<div class="pl-row" role="listitem" data-id="${escapeHtml(track.id || '')}">` +
+      chip +
+      `<div class="pl-row-main">` +
+        `<div class="pl-row-title">${title}</div>` +
+        (artist ? `<div class="pl-row-meta"><span class="pl-row-artist">${artist}</span></div>` : '') +
+      `</div>` +
+    `</div>`
+  );
+}
+
+// v7 #1: re-read the real Spotify playlist for the current slot (the DISPLAY source). Cache-guarded
+// (skip if <20s since the last fetch, unless `force`) to respect Spotify's rolling-30s window. Fired
+// on app-open + tab-focus/visibility + the REFRESH button + ~after an add. No-op without a playlist id.
+async function syncRealPlaylist(force) {
   const { key } = viewedPlaylistSlot();
-  const inSlot = (s) => s.slot === key;
-  const snapIds = new Set(songs.map((s) => s.id));
-  const visibleSnap = songs.filter((s) => inSlot(s) && !plOptimisticRemoves.has(s.id));
-  const pendingAdds = plOptimisticAdds.filter((s) => inSlot(s) && !snapIds.has(s.id));
-  return { pendingAdds, visibleSnap };
+  const playlistId = (plSlots[key] && plSlots[key].spotifyPlaylistId) || '';
+  if (!playlistId) {
+    // no real playlist yet for this slot -> nothing to read; clear any tracks left from another slot.
+    if (plRealForSlot !== key) { plRealTracks = []; plRealForSlot = key; plRealFetchedAt = 0; }
+    return;
+  }
+  const now = Date.now();
+  if (!force && plRealForSlot === key && (now - plRealFetchedAt) < 20000) return; // cache guard
+  if (_plRealSyncing) return;
+  _plRealSyncing = true;
+  try {
+    const tracks = await data.fetchRealPlaylist(playlistId);
+    plRealTracks = Array.isArray(tracks) ? tracks : [];
+    plRealForSlot = key;
+    plRealFetchedAt = Date.now();
+    prunePendingAdds();
+  } catch (_) {
+    /* best-effort: keep whatever we had */
+  } finally {
+    _plRealSyncing = false;
+  }
+  if (isDesktop() || activeTab === 'playlist') renderPlaylist();
 }
 
 function renderPlaylist() {
   if (!elPlList) return;
-  const { pendingAdds, visibleSnap } = playlistRenderList();
-  const total = pendingAdds.length + visibleSnap.length;
+  const { key } = viewedPlaylistSlot();
 
-  // v5.2: half toggle (mark the viewed half active + tag which half is "now" by date) + the
-  // editable theme line for the viewed slot.
-  const { half, key, nowHalf } = viewedPlaylistSlot();
-  if (elPlHalfA && elPlHalfB) {
-    elPlHalfA.classList.toggle('active', half === 'a');
-    elPlHalfB.classList.toggle('active', half === 'b');
-    elPlHalfA.classList.toggle('now', nowHalf === 'a');
-    elPlHalfB.classList.toggle('now', nowHalf === 'b');
-    elPlHalfA.setAttribute('aria-selected', half === 'a' ? 'true' : 'false');
-    elPlHalfB.setAttribute('aria-selected', half === 'b' ? 'true' : 'false');
-  }
+  // v7 #4: lazily resolve this period's theme from submissions the first time it's opened in-period,
+  // and keep the "ideas for next period" subscription pointed at the right key.
+  maybeResolveTheme(key);
+  ensureNextIdeasSub();
+
+  const attrib = buildAttribMap(key);
+  const merged = mergeRows(plRealForSlot === key ? plRealTracks : [], attrib);
+  merged.reverse(); // /list returns playlist/append order (oldest first) -> newest on top
+  const pendingAdds = visiblePendingAdds(key);
+
+  // theme line: the CURRENT period's theme (or the unset placeholder) + the next-period idea count.
   if (elPlThemeName && !plThemeEditing) {
     const theme = plSlots[key] && typeof plSlots[key].theme === 'string' ? plSlots[key].theme.trim() : '';
     elPlThemeName.textContent = theme || 'name this week’s vibe';
     elPlThemeName.classList.toggle('unset', !theme);
   }
+  if (elPlThemeIdeas) {
+    elPlThemeIdeas.textContent = plNextIdeasCount > 0 ? `${plNextIdeasCount} idea${plNextIdeasCount === 1 ? '' : 's'} for next` : '';
+  }
   updateResetBadge();
+  renderHistory(key);
 
-  // live "· N SONGS" count in the header (now scoped to the viewed themed slot).
+  // FALLBACK rows: when there's no real read for this slot, show the Firestore wall so the tab isn't
+  // blank (slot has no playlist yet, or the Worker read failed transiently).
+  const useReal = merged.length > 0;
+  const fallbackSnap = useReal ? [] : songs.filter((s) => s.slot === key);
+  const total = pendingAdds.length + (useReal ? merged.length : fallbackSnap.length);
+
   if (elPlCount) elPlCount.textContent = total ? ` · ${total} SONG${total === 1 ? '' : 'S'}` : '';
 
   if (!total) {
     elPlList.innerHTML = '<div class="empty-note">No songs in this playlist yet. Paste a Spotify link or type a song to start it.</div>';
   } else {
     const rows = [];
-    for (const s of pendingAdds) rows.push(songRowHtml(s, true));
-    for (const s of visibleSnap) rows.push(songRowHtml(s, false));
+    for (const s of pendingAdds) rows.push(songRowHtml(s, true)); // optimistic (dimmed) on top
+    if (useReal) for (const t of merged) rows.push(realRowHtml(t));
+    else for (const s of fallbackSnap) rows.push(songRowHtml(s, false));
     elPlList.innerHTML = rows.join('');
   }
 
-  // footer "OPEN ON SPOTIFY": open the slot's REAL auto-created playlist when it exists (the
-  // Worker made it and the app stored spotifyUrl). v5.4 FIX: it used to ALWAYS build a SEARCH
-  // from TYPED songs only, so a slot full of pasted Spotify links produced an empty query and
-  // the button just opened Spotify's home/search screen. Fall back to a whole-list search only
-  // when the slot has no playlist yet. (The Admin-seeded collab link is separate.)
-  const wholeListQuery = visibleSnap
-    .concat(pendingAdds)
-    .map((s) => (s.source === 'text' ? [s.title, s.artist].filter(Boolean).join(' ') : ''))
+  // footer "OPEN ON SPOTIFY": open the slot's real playlist when it exists, else a whole-list search.
+  const wholeListQuery = (useReal
+    ? merged.map((t) => `${t.name || ''} ${t.artist || ''}`)
+    : fallbackSnap.map((s) => (s.source === 'text' ? [s.title, s.artist].filter(Boolean).join(' ') : '')))
+    .concat(pendingAdds.map((s) => (s.source === 'text' ? [s.title, s.artist].filter(Boolean).join(' ') : '')))
     .filter(Boolean)
     .slice(0, 12)
     .join(' ');
@@ -1928,32 +2098,36 @@ function renderPlaylist() {
   }
 }
 
-// snapshot handler: store + reconcile the optimistic overlays, then repaint if the tab is live.
+// /playlist snapshot handler: store the songs (now the ATTRIBUTION source, not the display source),
+// prune any reconciled/aged optimistic adds, repaint if the playlist is visible. A new song's
+// spotifyTrackId arriving here just updates the attribution chip on its real row.
 function onSongs(songsArray) {
   songs = Array.isArray(songsArray) ? songsArray.slice() : [];
-  const snapIds = new Set(songs.map((s) => s.id));
-  // an optimistic ADD that now exists in the snapshot is no longer pending — drop it.
-  plOptimisticAdds = plOptimisticAdds.filter((s) => !snapIds.has(s.id));
-  // an optimistic REMOVE the server has honored (id gone from the snapshot) can be forgotten.
-  for (const id of [...plOptimisticRemoves]) {
-    if (!snapIds.has(id)) plOptimisticRemoves.delete(id);
-  }
-  if (activeTab === 'playlist') renderPlaylist();
+  prunePendingAdds();
+  if (isDesktop() || activeTab === 'playlist') renderPlaylist();
 }
 
-// v5.2: /playlistSlots snapshot handler — store the theme/spotify map, repaint if live.
+// /playlistSlots snapshot handler — store the theme/mxt/spotify map, then re-sync the real playlist
+// (a newly-recorded spotifyPlaylistId for the current slot is what kicks off the first real read).
 function onSlots(slotsMap) {
   plSlots = slotsMap && typeof slotsMap === 'object' ? slotsMap : {};
-  if (activeTab === 'playlist') renderPlaylist();
+  if (isDesktop() || activeTab === 'playlist') {
+    renderPlaylist();
+    syncRealPlaylist(false);
+  }
 }
 
-// v5.2: theme editing — tap the name (or ✎) to swap in an inline input; Enter/blur saves,
-// Esc cancels. The write is optimistic (reflect immediately, then persist via setPlaylistTheme).
+// v7 #4: the theme line is repurposed. If the CURRENT period is UNNAMED, committing LIVE-NAMES it
+// (the zero-submission fallback). Once it's named, committing SUBMITS an idea for the NEXT period
+// (submitTheme -> /themeSubmissions; the rollover picks one — single auto, many random). Tap the name
+// (or ✎) to open the input; Enter/blur commits, Esc cancels.
 function startThemeEdit() {
   if (!elPlThemeInput || !elPlThemeName) return;
   const { key } = viewedPlaylistSlot();
+  const curTheme = (plSlots[key] && typeof plSlots[key].theme === 'string' ? plSlots[key].theme : '').trim();
   plThemeEditing = true;
-  elPlThemeInput.value = (plSlots[key] && plSlots[key].theme) || '';
+  elPlThemeInput.value = '';
+  elPlThemeInput.placeholder = curTheme ? 'suggest next period’s theme' : 'name this period’s vibe';
   elPlThemeInput.classList.remove('hidden');
   elPlThemeName.classList.add('hidden');
   if (elPlThemeEdit) elPlThemeEdit.classList.add('hidden');
@@ -1971,14 +2145,30 @@ async function commitThemeEdit() {
   const { key } = viewedPlaylistSlot();
   const val = (elPlThemeInput.value || '').trim().slice(0, 60);
   endThemeEdit();
-  plSlots[key] = { ...(plSlots[key] || {}), theme: val }; // optimistic
-  renderPlaylist();
+  if (!val) { renderPlaylist(); return; }
+  const curTheme = (plSlots[key] && typeof plSlots[key].theme === 'string' ? plSlots[key].theme : '').trim();
+  if (!curTheme) {
+    // zero-submission fallback: name the CURRENT (unnamed) period live.
+    plSlots[key] = { ...(plSlots[key] || {}), theme: val }; // optimistic
+    renderPlaylist();
+    try {
+      await data.setPlaylistTheme(key, val);
+    } catch (err) {
+      const code = String((err && (err.code || err.message)) || err);
+      if (/reclaim/i.test(code)) plHint('Signed out elsewhere — tap to reclaim.', 'err');
+      else plHint('Could not save the theme.', 'err');
+    }
+    return;
+  }
+  // current period already themed -> submit an idea for the NEXT period.
+  const next = nextPeriodKey(viewerBusinessDate(new Date()));
   try {
-    await data.setPlaylistTheme(key, val);
+    await data.submitTheme(next, val);
+    plHint('Idea submitted for next period!', 'dupe'); // 'dupe' = the neutral (non-error) pulse style
   } catch (err) {
     const code = String((err && (err.code || err.message)) || err);
     if (/reclaim/i.test(code)) plHint('Signed out elsewhere — tap to reclaim.', 'err');
-    else plHint('Could not save the theme.', 'err');
+    else plHint('Could not submit that idea.', 'err');
   }
 }
 
@@ -1998,19 +2188,16 @@ function plHint(msg, kind) {
   }
 }
 
-// Add the current input. parseSongInput → a {title,artist,url,source} payload; client-side
-// dedupe via playlistDedupeKey against the CURRENT render list; optimistic insert + a real
-// addSong() write reconciled by onSongs.
+// Add the current input. parseSongInput → a {title,artist,url,source} payload; best-effort dedupe;
+// ensure the slot's MXT playlist exists; addSong() write + Worker mirror; optimistic row reconciled
+// by track id (links) / title (typed) against the real playlist (P0 #2).
 async function submitSong() {
   if (!elPlInput) return;
   const raw = elPlInput.value || '';
   const parsed = parseSongInput(raw);
   if (parsed.kind === 'empty') { plHint('Type a song or paste a link first.', 'err'); return; }
 
-  // map parser kind -> stored source enum (the parser uses 'spotify'|'ytmusic'|'url'|'text').
   const source = ['spotify', 'ytmusic', 'url', 'text'].includes(parsed.kind) ? parsed.kind : 'text';
-  // v5.2: the song lands in whichever themed half is on screen (both halves of THIS week are
-  // addable — you can pre-load the upcoming one).
   const slot = viewedPlaylistSlot().key;
   const payload = {
     title: (parsed.title || '').trim(),
@@ -2021,28 +2208,32 @@ async function submitSong() {
   };
   if (!payload.title) { plHint('Type a song or paste a link first.', 'err'); return; }
 
-  // client-side dedupe (best-effort): same canonical key as an existing/visible row => pulse,
-  // don't add. A same-second race can still slip a dup past this; harmless, anyone ✕'s one.
-  const key = playlistDedupeKey(payload);
-  if (key) {
-    const { pendingAdds, visibleSnap } = playlistRenderList();
-    const dup = pendingAdds.concat(visibleSnap).some((s) => playlistDedupeKey(s) === key);
-    if (dup) {
+  // client-side dedupe (best-effort) against this slot's optimistic + Firestore rows.
+  const dkey = playlistDedupeKey(payload);
+  if (dkey) {
+    const existing = visiblePendingAdds(slot).concat(songs.filter((s) => s.slot === slot));
+    if (existing.some((s) => playlistDedupeKey(s) === dkey)) {
       plHint('Already added.', 'dupe');
       elPlInput.select();
       return;
     }
   }
 
-  // addSong generates the doc id and returns it, so the optimistic row and the server row share
-  // ONE id — onSongs reconciles by id (no temp-id swap, no flash, no duplicate) the moment the
-  // server row lands in the snapshot. We write FIRST (Firestore's offline cache acks the local
-  // write fast, even offline) so a hard reject surfaces before we paint a row that can't exist.
-  // v5.2: the Worker context — the slot's existing real playlist id (if any) so the Worker adds
-  // to it, plus the name to use if it has to create one. No-op unless the Worker is configured.
+  // v7 #2: ensure the slot's MXT-named real playlist exists BEFORE the add, so /add targets it (and
+  // we don't race the Worker's gated-create into a second, un-MXT-named playlist). Idempotent.
+  let playlistId = (plSlots[slot] && plSlots[slot].spotifyPlaylistId) || '';
+  if (!playlistId) {
+    const theme = (plSlots[slot] && plSlots[slot].theme) || '';
+    try {
+      const res = await data.ensurePlaylistForPeriod(slot, theme);
+      if (res && res.playlistId) playlistId = res.playlistId;
+    } catch (_) { /* fall back to the Worker /add gated-create */ }
+  }
+
   const workerCtx = {
-    playlistId: (plSlots[slot] && plSlots[slot].spotifyPlaylistId) || '',
+    playlistId,
     playlistName: slotPlaylistName(slot),
+    onTrackResolved: onOptimisticTrackResolved, // P0 #2: stamp the resolved track id on the row
   };
   let songId;
   try {
@@ -2053,25 +2244,38 @@ async function submitSong() {
     plHint('Could not add that song.', 'err');
     return;
   }
-  // success: clear the box + show the row optimistically until the snapshot confirms it. Guard
-  // the unshift on the id NOT already being in the snapshot — with offline persistence the
-  // onSnapshot echo can beat this await, in which case the row is already live and a stale
-  // pendingAdd would just leak (it's filtered out of rendering, but never garbage-collected
-  // since its own onSongs already passed). The guard keeps plOptimisticAdds tidy.
   elPlInput.value = '';
   plHint('');
-  if (!songs.some((s) => s.id === songId)) {
-    plOptimisticAdds.unshift({
-      id: songId,
-      title: payload.title,
-      artist: payload.artist,
-      url: payload.url,
-      source: payload.source,
-      slot: payload.slot,
-      addedByUserId: myUserId,
-    });
+  // optimistic row: a pasted Spotify track link already knows its 22-char id; a typed song gets it
+  // stamped later by onOptimisticTrackResolved (P0 #2). Render it dimmed until it lands in /list.
+  let trackId = '';
+  if (source === 'spotify') {
+    const e = spotifyEmbed(payload.url);
+    if (e && e.type === 'track') trackId = e.id;
   }
+  plOptimisticAdds.unshift({
+    id: songId,
+    title: payload.title,
+    artist: payload.artist,
+    url: payload.url,
+    source: payload.source,
+    slot: payload.slot,
+    addedByUserId: myUserId,
+    trackId,
+    addedAt: Date.now(),
+  });
   renderPlaylist();
+  // pull the just-added track into the real playlist so the optimistic row reconciles (the Worker
+  // resolves+adds async; ~2.5s headroom, force past the cache guard). No-op if the slot has no id.
+  setTimeout(() => { syncRealPlaylist(true); }, 2500);
+}
+
+// P0 #2: the Worker resolved a typed song to a real track id — stamp it on the optimistic row so the
+// reconcile can drop the row once that id appears in the real playlist.
+function onOptimisticTrackResolved(songId, trackId) {
+  const row = plOptimisticAdds.find((s) => s.id === songId);
+  if (row && trackId) row.trackId = trackId;
+  if (isDesktop() || activeTab === 'playlist') renderPlaylist();
 }
 
 function wirePlaylist() {
@@ -2093,10 +2297,18 @@ function wirePlaylist() {
   if (elPlOpenSpotify) elPlOpenSpotify.addEventListener('click', () => openStashed(elPlOpenSpotify));
   // elPlCollab is a real <a href> (set in render) — no JS click needed.
 
-  // v5.2: half toggle (Mon–Wed / Thu–Sun) — switch which themed playlist is on screen.
-  if (elPlHalfA) elPlHalfA.addEventListener('click', () => { plViewHalf = 'a'; renderPlaylist(); });
-  if (elPlHalfB) elPlHalfB.addEventListener('click', () => { plViewHalf = 'b'; renderPlaylist(); });
-  // v5.2: inline theme edit (tap the name or ✎; Enter/blur saves, Esc cancels).
+  // v7 #1: REFRESH — force a re-read of the real Spotify playlist (bypassing the cache guard).
+  if (elPlRefresh) elPlRefresh.addEventListener('click', () => { plHint('Refreshing…', 'dupe'); syncRealPlaylist(true); });
+  // v7 #3: HISTORY — selecting an archived slot opens its Spotify playlist; reset back to the label.
+  if (elPlHistory) {
+    elPlHistory.addEventListener('change', () => {
+      const url = elPlHistory.value;
+      elPlHistory.selectedIndex = 0;
+      if (url) window.open(url, '_blank', 'noopener');
+    });
+  }
+  // v7 #4: theme line (tap the name or ✎; Enter/blur commits, Esc cancels). commitThemeEdit decides
+  // live-name-current vs submit-idea-for-next based on whether the current period is already themed.
   if (elPlThemeName) elPlThemeName.addEventListener('click', startThemeEdit);
   if (elPlThemeEdit) elPlThemeEdit.addEventListener('click', startThemeEdit);
   if (elPlThemeInput) {
@@ -2106,9 +2318,8 @@ function wirePlaylist() {
     });
     elPlThemeInput.addEventListener('blur', () => { commitThemeEdit(); });
   }
-  // v5.2: keep the reset countdown fresh while the playlist tab is open (text-only tick, so it
-  // never re-renders the list / reloads the embeds).
-  setInterval(() => { if (activeTab === 'playlist') updateResetBadge(); }, 60000);
+  // keep the reset countdown fresh while the playlist is visible (text-only tick, never reloads embeds).
+  setInterval(() => { if (isDesktop() || activeTab === 'playlist') updateResetBadge(); }, 60000);
 }
 
 // =============================================================================

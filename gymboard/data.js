@@ -46,9 +46,9 @@ import {
   getDocs,
   setDoc,
   updateDoc,
-  deleteDoc,
   arrayUnion,
   writeBatch,
+  runTransaction,
   serverTimestamp,
   Timestamp,
   documentId,
@@ -61,6 +61,7 @@ import {
   currentBusinessDate,
   isDayKey,
   randomEmoji,
+  mxtPlaylistName,
 } from './logic.js';
 
 // =============================================================================
@@ -1887,7 +1888,7 @@ const VALID_SONG_SOURCES = ['spotify', 'ytmusic', 'url', 'text']; // matches the
  * outage / CORS / rate-limit must not affect the add. The Authorization secret
  * is a public-app bot-gate by design (documented in worker/worker.js).
  */
-function pushSongToWorker(payload, workerCtx = {}) {
+function pushSongToWorker(payload, workerCtx = {}, songId = '') {
   if (!_spotifyWorker) return;
   let body = null;
   if (payload.source === 'spotify' && payload.url) {
@@ -1919,10 +1920,23 @@ function pushSongToWorker(payload, workerCtx = {}) {
       .then(async (resp) => {
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
+        if (!data) return;
         // first song of a slot -> the Worker just created the real playlist; persist
         // its id so every later add targets it (instead of creating another).
-        if (data && data.created && data.playlistId && payload.slot) {
+        if (data.created && data.playlistId && payload.slot) {
           recordSlotPlaylist(payload.slot, data.playlistId, data.playlistUrl || '');
+        }
+        // v7 P0 #1 + #2: the Worker resolved the typed/pasted song to a real Spotify TRACK and
+        // returned its uri (spotify:track:<22>). Persist that 22-char track id back onto the
+        // /playlist doc so the sync-merge can ATTRIBUTE this app-add (else it shows as an
+        // anonymous native add), and hand it to the caller so the optimistic row can reconcile by
+        // track id against the real-playlist read.
+        const trackId = trackIdFromUri(data.uri);
+        if (trackId && songId) {
+          recordSongTrackId(songId, trackId);
+          if (typeof workerCtx.onTrackResolved === 'function') {
+            try { workerCtx.onTrackResolved(songId, trackId); } catch (_) { /* caller's render errors */ }
+          }
         }
       })
       .catch(() => {}); // swallow network/CORS errors — mirror is best-effort
@@ -1951,6 +1965,31 @@ function recordSlotPlaylist(slot, playlistId, playlistUrl) {
     },
     { merge: true }
   ).catch(() => {});
+}
+
+/**
+ * trackIdFromUri(uri) -> the 22-char Spotify track id, or '' for anything else.   [v7, internal]
+ * The Worker /add (and a pasted track link) carries a `spotify:track:<22>` uri / open.spotify.com
+ * /track/<22> url. Extract the bare 22-char base62 id used everywhere as the merge/attribution key.
+ */
+function trackIdFromUri(uri) {
+  if (typeof uri !== 'string') return '';
+  const m = uri.match(/(?:spotify:track:|open\.spotify\.com\/(?:[a-z-]+\/)?track\/)([A-Za-z0-9]{22})(?![A-Za-z0-9])/i);
+  return m ? m[1] : '';
+}
+
+/**
+ * recordSongTrackId(songId, trackId) -> void   [v7 P0 #1, internal]
+ *
+ * Persist the Worker-resolved Spotify track id onto /playlist/{songId} (merge — touches ONLY the
+ * new spotifyTrackId field, which is exactly what the loosened update rule permits). This is what
+ * lets the sync-merge attribute an app-added typed/pasted song to its adder instead of rendering it
+ * as an anonymous native add. Best-effort: a failed write just means that one row reads anonymous.
+ */
+function recordSongTrackId(songId, trackId) {
+  if (!_userId || typeof songId !== 'string' || !songId) return;
+  if (typeof trackId !== 'string' || !/^[A-Za-z0-9]{22}$/.test(trackId)) return;
+  setDoc(doc(_db, 'playlist', songId), { spotifyTrackId: trackId }, { merge: true }).catch(() => {});
 }
 
 /**
@@ -2041,6 +2080,11 @@ export async function addSong(song = {}, workerCtx = {}) {
   if (typeof song.slot === 'string' && /^\d{4}-\d{2}-\d{2}_[ab]$/.test(song.slot)) {
     payload.slot = song.slot;
   }
+  // v7 P0 #1: spotifyTrackId is NOT written at create — it's written BACK by pushSongToWorker once
+  // the Worker resolves the track (recordSongTrackId, a scoped merge-update). This keeps the create
+  // payload byte-identical to the pre-v7 shape, so the live add NEVER breaks during the client-first
+  // deploy window (the create-time field would be rejected by the old rules; the write-back is
+  // best-effort and self-heals once the rules ship). Attribution lands a beat after the add, fine.
 
   const songId = newSongId();
   try {
@@ -2053,8 +2097,9 @@ export async function addSong(song = {}, workerCtx = {}) {
     throw err;
   }
   // Best-effort mirror into the owner's real Spotify playlist (no-op unless the
-  // Worker is configured). Fire-and-forget: the wall write already succeeded.
-  pushSongToWorker(payload, workerCtx);
+  // Worker is configured). Fire-and-forget: the wall write already succeeded. songId is passed so
+  // the Worker-resolved track id can be written back onto THIS doc (v7 P0 #1).
+  pushSongToWorker(payload, workerCtx, songId);
   return songId;
 }
 
@@ -2112,30 +2157,204 @@ export async function setPlaylistTheme(slotKey, theme) {
   }
 }
 
+// =============================================================================
+// v7: MXT counter + real-playlist read + theme submissions
+// =============================================================================
+
 /**
- * removeSong(songId) -> Promise<void>
+ * ensurePlaylistForPeriod(period, theme) -> Promise<number>  (the slot's MXT number)
  *
- * Delete /playlist/{songId}. ANYONE-can-remove (the rule's delete:activeReader()),
- * per the approved shared-jukebox decision - so this works on any song, not just
- * one you added. A binding-mismatch denial routes to reclaim + re-throws
- * 'gymboard/reclaim-needed'; any other error propagates.
+ * Assign this period its global MXT number exactly once (race-safe + idempotent), and, if THIS
+ * call is the one that assigned it, create the real Spotify playlist "MXT #N: <theme>" via the
+ * Worker /create and persist its id. The Worker has no Firestore, so the APP owns the counter +
+ * theme and just hands the Worker a name (bounded server-side to /^MXT #N:/). Re-entrant: a retry
+ * (or a second phone) sees the slot already has mxtNumber and reuses it, and won't re-create if a
+ * playlist id is already recorded. Resolve the theme BEFORE calling this so the name is right.
  */
-export async function removeSong(songId) {
+export async function ensurePlaylistForPeriod(period, theme) {
   assertInit();
-  if (!_userId) throw taggedError('gymboard/not-bound', 'removeSong: no bound userId.');
-  if (typeof songId !== 'string' || !songId) {
-    throw taggedError('gymboard/bad-value', `removeSong: bad songId ${songId}.`);
+  if (!_userId) throw taggedError('gymboard/not-bound', 'ensurePlaylistForPeriod: no bound userId.');
+  if (typeof period !== 'string' || !/^\d{4}-\d{2}-\d{2}_[ab]$/.test(period)) {
+    throw taggedError('gymboard/bad-value', `ensurePlaylistForPeriod: bad period ${period}.`);
   }
+  const slotRef = doc(_db, 'playlistSlots', period);
+  const counterRef = doc(_db, 'playlistMeta', 'counter');
+
+  // 1) Assign N exactly once per period. Firestore reruns the tx on contention, so under a race
+  //    only ONE caller assigns; the other reads the now-stamped slot.mxtNumber and returns assigned=false.
+  let n;
+  let assigned = false;
   try {
-    await deleteDoc(doc(_db, 'playlist', songId));
+    const res = await runTransaction(_db, async (tx) => {
+      const slotSnap = await tx.get(slotRef);
+      const slot = slotSnap.exists() ? slotSnap.data() : {};
+      if (Number.isFinite(slot.mxtNumber)) return { n: slot.mxtNumber, assigned: false };
+      const counterSnap = await tx.get(counterRef);
+      let next;
+      if (!counterSnap.exists()) {
+        next = 1;
+        // The /playlistMeta create rule requires EXACTLY { mxtNumber: 1 } — no sibling fields.
+        tx.set(counterRef, { mxtNumber: 1 });
+      } else {
+        next = (Number(counterSnap.data().mxtNumber) || 0) + 1;
+        // The update rule requires hasOnly(['mxtNumber']) && == old+1, so write ONLY mxtNumber.
+        tx.set(counterRef, { mxtNumber: next });
+      }
+      tx.set(slotRef, { mxtNumber: next, updatedByUserId: _userId, updatedAt: serverTimestamp() }, { merge: true });
+      return { n: next, assigned: true };
+    });
+    n = res.n;
+    assigned = res.assigned;
   } catch (err) {
     if (isPermissionDenied(err)) {
       maybeFireReclaim(err);
-      throw taggedError('gymboard/reclaim-needed', 'Write rejected - this device was signed out elsewhere.');
+      throw taggedError('gymboard/reclaim-needed', 'MXT assign rejected - this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+
+  // 2) Only the assigning call creates the playlist; a no-op for everyone else (they reuse the id
+  //    the assigner records). No-op too if the Worker isn't configured (the /add gated-create is the
+  //    fallback). Returns { n, playlistId } so the caller can target the just-created playlist on the
+  //    first /add (avoiding a duplicate-playlist race with the gated-create fallback).
+  let playlistId = '';
+  if (!assigned || !_spotifyWorker) {
+    try {
+      const cur = await getDoc(slotRef);
+      if (cur.exists() && cur.data().spotifyPlaylistId) playlistId = cur.data().spotifyPlaylistId;
+    } catch (_) { /* best-effort */ }
+    return { n, playlistId };
+  }
+  try {
+    const after = await getDoc(slotRef);
+    if (after.exists() && after.data().spotifyPlaylistId) {
+      return { n, playlistId: after.data().spotifyPlaylistId }; // already created (re-entrancy guard)
+    }
+  } catch (_) { /* best-effort */ }
+
+  const name = mxtPlaylistName(n, theme);
+  try {
+    const resp = await fetch(`${_spotifyWorker.url}/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_spotifyWorker.secret}` },
+      body: JSON.stringify({ name }),
+    });
+    if (resp.ok) {
+      const data = await resp.json().catch(() => null);
+      if (data && data.ok && data.playlistId) {
+        playlistId = data.playlistId;
+        recordSlotPlaylist(period, data.playlistId, data.playlistUrl || '');
+      }
+    }
+  } catch (_) {
+    /* best-effort: a failed create just means the next add's gated-create makes the playlist */
+  }
+  return { n, playlistId };
+}
+
+/**
+ * fetchRealPlaylist(playlistId) -> Promise<track[]>   (the sync-merge display source)
+ *
+ * Read the real Spotify playlist's current tracks via the Worker /list (so songs added NATIVELY
+ * in Spotify show up, and native removals disappear). Best-effort: returns [] on any failure
+ * (Worker down, 403 if the token wasn't re-minted with the read scope, bad id) so the caller can
+ * fall back to the Firestore wall. Never throws.
+ */
+export async function fetchRealPlaylist(playlistId) {
+  if (!_spotifyWorker) return [];
+  if (typeof playlistId !== 'string' || !/^[A-Za-z0-9]{22}$/.test(playlistId)) return [];
+  try {
+    const resp = await fetch(`${_spotifyWorker.url}/list?playlistId=${encodeURIComponent(playlistId)}`, {
+      headers: { Authorization: `Bearer ${_spotifyWorker.secret}` },
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json().catch(() => null);
+    return data && data.ok && Array.isArray(data.tracks) ? data.tracks : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * submitTheme(period, theme) -> Promise<void>
+ * Submit ONE idea for the UPCOMING period (deterministic id period__uid, re-submit overwrites, so
+ * each person carries one vote-weight in the random pick). period = the NEXT half-week's slotKey.
+ */
+export async function submitTheme(period, theme) {
+  assertInit();
+  if (!_userId || !_uid) throw taggedError('gymboard/not-bound', 'submitTheme: not bound.');
+  if (typeof period !== 'string' || !/^\d{4}-\d{2}-\d{2}_[ab]$/.test(period)) {
+    throw taggedError('gymboard/bad-value', `submitTheme: bad period ${period}.`);
+  }
+  const clean = typeof theme === 'string' ? theme.trim().slice(0, 60) : '';
+  if (!clean) throw taggedError('gymboard/bad-value', 'submitTheme: empty theme.');
+  try {
+    await setDoc(doc(_db, 'themeSubmissions', period, 'ideas', `${period}__${_uid}`), {
+      theme: clean,
+      addedByUserId: _userId,
+      addedByUid: _uid,
+      createdAt: serverTimestamp(),
+    });
+  } catch (err) {
+    if (isPermissionDenied(err)) {
+      maybeFireReclaim(err);
+      throw taggedError('gymboard/reclaim-needed', 'Theme submit rejected - this device was signed out elsewhere.');
     }
     throw err;
   }
 }
+
+/**
+ * subscribeThemeSubmissions(period, cb) -> unsubscribeFn   (live ideas for the upcoming period)
+ */
+export function subscribeThemeSubmissions(period, cb) {
+  assertInit();
+  if (typeof period !== 'string') return () => {};
+  const onNext = (qs) => {
+    const ideas = [];
+    qs.forEach((d) => ideas.push({ id: d.id, ...(d.data() || {}) }));
+    try { cb(ideas); } catch (_) { /* render errors are the caller's problem */ }
+  };
+  const onErr = (err) => { if (isPermissionDenied(err)) maybeFireReclaim(err); };
+  const unsub = onSnapshot(collection(_db, 'themeSubmissions', period, 'ideas'), onNext, onErr);
+  _unsubs.add(unsub);
+  return () => { _unsubs.delete(unsub); try { unsub(); } catch (_) {} };
+}
+
+/**
+ * resolveThemeForPeriod(period) -> Promise<void>
+ * Lazily pick the theme for a period the first time someone opens the playlist in it: if the slot
+ * is already themed, no-op; else read the submissions — one -> it; many -> uniform random; none ->
+ * leave unnamed (the live-naming inline fallback stays). Best-effort, first-writer-wins-ish
+ * (a same-instant double-open could both write; harmless for a 5-person group).
+ */
+export async function resolveThemeForPeriod(period) {
+  assertInit();
+  if (!_userId) return;
+  if (typeof period !== 'string' || !/^\d{4}-\d{2}-\d{2}_[ab]$/.test(period)) return;
+  const slotRef = doc(_db, 'playlistSlots', period);
+  try {
+    const slotSnap = await getDoc(slotRef);
+    const cur = slotSnap.exists() ? slotSnap.data().theme : '';
+    if (typeof cur === 'string' && cur.trim()) return; // already themed
+    const ideasSnap = await getDocs(collection(_db, 'themeSubmissions', period, 'ideas'));
+    const ideas = [];
+    ideasSnap.forEach((d) => {
+      const t = (d.data() || {}).theme;
+      if (typeof t === 'string' && t.trim()) ideas.push(t.trim().slice(0, 60));
+    });
+    if (!ideas.length) return; // no submissions -> leave unnamed
+    const pick = ideas.length === 1 ? ideas[0] : ideas[Math.floor(Math.random() * ideas.length)];
+    await setDoc(slotRef, { theme: pick, updatedByUserId: _userId, updatedAt: serverTimestamp() }, { merge: true });
+  } catch (_) {
+    /* best-effort: another client may resolve first, or the read/write races harmlessly */
+  }
+}
+
+// v7 #6 NO REMOVE: removeSong was deleted. The wall now MIRRORS the real Spotify playlist (the #1
+// sync-merge), so a removal happens NATIVELY in Spotify and simply isn't in the next /list read; an
+// in-app delete could never reach Spotify (the Worker is add-only) and would drift the two apart.
+// The /playlist delete rule is tightened to false to match.
 
 /**
  * fetchPlaylistMeta() -> Promise<{ collabUrl: string|null }>
