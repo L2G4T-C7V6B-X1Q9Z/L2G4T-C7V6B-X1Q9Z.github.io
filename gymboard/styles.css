@@ -1126,3 +1126,62 @@ button:disabled { cursor:default; }
   font-size:11px; color:var(--txt3); letter-spacing:.03em;
 }
 .wchart-empty.hidden { display:none; }
+
+/* ============================================================================
+   DESKTOP ONE-SCREEN MODE (v7 #B)
+   -----------------------------------------------------------------------------
+   Gated on BOTH (min-width:1024px) AND (pointer:fine). The pointer:fine clause is
+   load-bearing: a phone / tablet / any touch-first device reports pointer:coarse,
+   so it NEVER matches this block even in wide landscape. Only a real wide,
+   mouse-driven screen gets the desktop grid. Below the breakpoint (or on any
+   coarse pointer) every rule here is inert and the mobile tabbed layout above is
+   byte-for-byte unchanged. Dark + red single accent carry over from the tokens. */
+@media (min-width:1024px) and (pointer:fine) {
+  /* reset the mobile 430px centered-column clamp (set at @media min-width:500px). */
+  #app {
+    left:0; right:0; transform:none; width:100%;
+    border-left:none; border-right:none;
+  }
+
+  /* the tab strip is meaningless when all panes show at once. */
+  #tabs { display:none; }
+
+  /* #stage becomes a one-screen grid: ME on the left (a clamped third), SOCIAL + MONTH +
+     PLAYLIST on the right. Still a bounded flex child of #app, so the page never scrolls —
+     only each pane's .scrolly does. */
+  #stage {
+    display:grid;
+    grid-template-columns:clamp(380px, 32%, 520px) 1fr 1fr;
+    grid-template-rows:1fr 1fr;
+    grid-template-areas:
+      "me social playlist"
+      "me month  playlist";
+    gap:1px;
+    background:var(--hairline); /* the 1px gaps read as hairline dividers */
+    overflow:hidden;
+  }
+
+  /* the 4 existing .screen sections become in-flow grid items (they're absolutely
+     positioned + transform-slid on mobile). transform:none!important defeats any stale
+     inline translateX from applyScreenTransforms before the responsive switch. */
+  .screen {
+    position:relative; inset:auto;
+    transform:none !important;
+    transition:none;
+    min-height:0; min-width:0;
+    border:none;
+    background:var(--g0);
+  }
+  #screen-me       { grid-area:me; border-right:1px solid var(--hairline); }
+  #screen-grid     { grid-area:social; }
+  #screen-month    { grid-area:month; border-top:1px solid var(--hairline); }
+  #screen-playlist { grid-area:playlist; border-left:1px solid var(--hairline); }
+
+  /* each pane keeps its own scroll region; nothing scrolls the page. */
+  .screen > .scrolly { flex:1 1 auto; min-height:0; }
+
+  /* inner content was max-width-capped + centered for a phone column; let it breathe. */
+  #grid       { margin-inline:auto; }
+  .month-grid { max-width:none; }
+  .pl-list    { max-width:none; }
+}

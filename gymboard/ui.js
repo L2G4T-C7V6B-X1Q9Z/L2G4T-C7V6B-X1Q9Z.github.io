@@ -112,6 +112,15 @@ const elTabs = $('tabs');
 // its index vs the active index (idx-activeIdx)*100% — robust for 3+ panes where the old
 // declarative ±100% rules break (non-adjacent panes would slide from the wrong side).
 const SCREENS = ['me', 'grid', 'month', 'playlist'];
+// v7 (#B): the ONE desktop-vs-mobile decision. matchMedia('(min-width:1024px) and
+// (pointer:fine)') is true ONLY on a wide screen whose PRIMARY pointer is fine (a mouse /
+// trackpad). A phone/tablet reports pointer:coarse, so it returns false even at 1300px
+// landscape -> a touch device ALWAYS gets the mobile tabbed layout. Every desktop branch in
+// the code below is gated on this, and every guard fails SAFE toward mobile (if the query
+// can't be evaluated for any reason, .matches is false => mobile). One shared MQL object is
+// reused so the change-listener and the live checks read the same source.
+const DESKTOP_MQ = window.matchMedia('(min-width:1024px) and (pointer:fine)');
+function isDesktop() { return DESKTOP_MQ.matches; }
 const elScreens = {
   me: $('screen-me'),
   grid: $('screen-grid'),
@@ -1010,6 +1019,17 @@ function buildWeightChart(now) {
 // =============================================================================
 function repaint() {
   const now = anchoredNow();
+  // v7 (#B): desktop one-screen mode shows ALL FOUR panes at once, so a repaint must render
+  // every pane (the mobile path renders only the active one, correct there because the others
+  // are slid off-screen).
+  if (isDesktop()) {
+    renderMe(now);
+    renderGrid(now);
+    renderMonth(now);
+    renderPlaylist();
+    updateSyncPip();
+    return;
+  }
   if (activeTab === 'me') {
     renderMe(now);
   } else if (activeTab === 'grid') {
@@ -1192,6 +1212,10 @@ function wireError() {
 // 4-pane strip also needs ±200%/±300%, and a jump from pane 0 to pane 2 must enter from the
 // correct side. #stage (overflow:hidden) clips everything that isn't sitting at 0.
 function applyScreenTransforms(activeIdx) {
+  // v7 (#B): on desktop the panes live in a CSS grid (no slide); an inline transform here would
+  // push them out of their grid cells. The desktop @media also force-clears transform with
+  // !important, but we skip writing it at all to keep state clean.
+  if (isDesktop()) return;
   for (let i = 0; i < SCREENS.length; i++) {
     const el = elScreens[SCREENS[i]];
     if (el) el.style.transform = `translateX(${(i - activeIdx) * 100}%)`;
@@ -1281,10 +1305,12 @@ function wireSwipe() {
   if (!stage) return;
   let x0 = null, y0 = null, t0 = 0;
   stage.addEventListener('touchstart', (e) => {
+    if (isDesktop()) { x0 = null; return; } // v7 (#B): no pane-slide swipe in desktop grid mode
     if (e.touches.length !== 1) { x0 = null; return; }
     x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now();
   }, { passive: true });
   stage.addEventListener('touchend', (e) => {
+    if (isDesktop()) { x0 = null; return; } // v7 (#B): swipe is a no-op on desktop
     if (x0 == null) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - x0, dy = t.clientY - y0, dt = Date.now() - t0;
@@ -1298,6 +1324,42 @@ function wireSwipe() {
     if (next < 0 || next >= SCREENS.length) return; // clamp at the ends (no wrap)
     setTab(SCREENS[next]);
   }, { passive: true });
+}
+
+// =============================================================================
+// RESPONSIVE MODE (v7 #B) — desktop one-screen vs mobile tabbed.
+//   isDesktop() (matchMedia '(min-width:1024px) and (pointer:fine)') is the SINGLE source of
+//   truth. enterDesktop unhides every pane + clears stale inline transforms + repaints all 4.
+//   enterMobile restores the tabbed single-pane view by re-running setTab(activeTab). Bound to
+//   the MQL change event so a resize across 1024px OR a pointer-type change (docking a tablet to
+//   a mouse) flips modes live. FAIL-SAFE: if the query is ever unreadable, isDesktop()===false
+//   and we stay mobile.
+// =============================================================================
+function enterDesktopMode() {
+  for (let i = 0; i < SCREENS.length; i++) {
+    const el = elScreens[SCREENS[i]];
+    if (!el) continue;
+    el.hidden = false; // MONTH + PLAYLIST ship with the boolean `hidden` attr; the grid shows all four
+    el.setAttribute('aria-hidden', 'false');
+    el.style.transform = ''; // drop any stale inline translateX from mobile
+  }
+  closeDayPopover(); // a popover anchored to a mobile-positioned cell would be misplaced
+  repaint();         // renders ALL FOUR panes (isDesktop() branch)
+}
+function enterMobileMode() {
+  setTab(activeTab); // re-applies the slide transforms, is-active, aria-hidden, repaints the active pane
+}
+function applyResponsiveMode() {
+  if (isDesktop()) enterDesktopMode();
+  else enterMobileMode();
+}
+function setupResponsiveMode() {
+  applyResponsiveMode(); // initial evaluation at boot (fail-safe to mobile on a coarse pointer)
+  if (typeof DESKTOP_MQ.addEventListener === 'function') {
+    DESKTOP_MQ.addEventListener('change', applyResponsiveMode);
+  } else if (typeof DESKTOP_MQ.addListener === 'function') {
+    DESKTOP_MQ.addListener(applyResponsiveMode); // deprecated, for old WebKit
+  }
 }
 
 // =============================================================================
@@ -3677,6 +3739,7 @@ async function boot() {
   wireTabs();
   wireTheme();
   wireSwipe();
+  setupResponsiveMode(); // v7 (#B): pick desktop one-screen vs mobile tabbed + watch the MQL
   wireMe();
   wireGridTaps();
   wireWeekNav();
