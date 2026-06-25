@@ -960,7 +960,7 @@ function buildWeightChart(now) {
     );
     parts.push(
       `<text x="${(PAD_L - 5).toFixed(2)}" y="${(yOf(gv) + 3).toFixed(2)}" ` +
-        `font-size="9" fill="var(--txt3)" text-anchor="end">${Math.round(gv)}</text>`
+        `font-size="7" fill="var(--txt3)" text-anchor="end">${Math.round(gv)}</text>`
     );
   }
 
@@ -993,14 +993,14 @@ function buildWeightChart(now) {
           `stroke-linecap="round" stroke-linejoin="round" opacity="${s.opacity}" />`
       );
     }
-    // v7.1: a clean uppercase INITIAL instead of the person emoji — emoji end-labels on the
-    // weight chart read as cringe (Soren 6/25). The emoji identity stays everywhere else.
-    const initial = (displayNameOf(s.member).trim().charAt(0) || '?').toUpperCase();
+    // v7.1: a clean uppercase 3-letter tag instead of the person emoji (emoji end-labels read
+    // as cringe — Soren 6/25). Soren->SOR, Hunter->HUN, Jacob->JAC. Emoji stays everywhere else.
+    const tag = (displayNameOf(s.member).trim().slice(0, 3) || '?').toUpperCase();
     labels.push({
       pointX: last.x, anchor: 'start',
       idealY: last.y,
       fill: s.isMe ? 'var(--red)' : s.color,
-      text: initial,
+      text: tag,
     });
   }
   // dodge only WITHIN an x-cluster — a far-left lapsed emoji must not be shoved
@@ -2188,7 +2188,7 @@ function renderMe(now) {
     const manualAte = !!(day && (day.ate === true || day.macros === true));
     const isHit = ns === 'hit';
     elMeNutDone.classList.toggle('on', isHit);
-    elMeNutDone.textContent = isHit ? 'done ✓' : 'mark done';
+    elMeNutDone.textContent = isHit ? 'done ✓' : 'mark done manually';
     // remember just the manual flag so a tap toggles the override (not the auto-hit).
     elMeNutDone.dataset.ate = manualAte ? '1' : '';
   }
@@ -3186,7 +3186,7 @@ function buildDayPopBody(member, dateKey) {
         `<div class="dd-edit-types">${typeBtns}</div>` +
         `<button class="dd-edit-act" type="button" data-edit-workout="clear">Clear workout</button>` +
         `<div class="dd-edit-h">Edit · nutrition</div>` +
-        `<button class="dd-edit-act${nutHit ? ' on' : ''}" type="button" data-edit-nut="${nutHit ? 'clear' : 'hit'}">${nutHit ? 'Clear nutrition hit' : 'Mark nutrition hit'}</button>` +
+        `<button class="dd-edit-act${nutHit ? ' on' : ''}" type="button" data-edit-nut="${nutHit ? 'clear' : 'hit'}">${nutHit ? 'Clear hit' : 'Mark hit'}</button>` +
       `</div>`
     );
   }

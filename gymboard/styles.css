@@ -482,7 +482,7 @@ button:disabled { cursor:default; }
 .gcell.n-none    { --n:var(--st-none); }
 .gcell.n-pending { --n:var(--st-pending); }
 /* REST + OFF (v4 #1): both say "rest" in small letters, no diagonal/mark. */
-.gcell.w-rest .seg-w::after, .gcell.w-off .seg-w::after { content:'rest'; position:absolute; top:3px; left:3px; font-size:7px; font-weight:700; letter-spacing:.02em; color:var(--txt3); text-transform:lowercase; line-height:1; }
+.gcell.w-rest .seg-w::after, .gcell.w-off .seg-w::after { content:'rest'; position:absolute; top:3px; left:3px; font-size:8px; font-weight:700; letter-spacing:.02em; color:var(--txt2); text-transform:lowercase; line-height:1; text-shadow:0 0 2px var(--g0), 0 0 2px var(--g0); }
 /* tiny dim corner tag for a typed workout — decoration only, never colored red. */
 .gcell-wtag {
   position:absolute; top:2.5px; left:3px; z-index:3;
@@ -503,6 +503,9 @@ button:disabled { cursor:default; }
 .ghead-inactive { display:block; margin-bottom:3px; font-size:7px; font-weight:700;
   letter-spacing:.05em; color:var(--txt3); text-transform:uppercase; line-height:1; }
 .gcell.inactive { filter:grayscale(1) opacity(.5); }
+
+/* Soren 6/25: drop the nutrition hint line (cringe). */
+#me-nut-hint { display:none; }
 
 /* =================================================================================
    MONTH TAB (v5 #4) — a per-person calendar. The day cells REUSE .gcell (above) so the
@@ -1073,7 +1076,7 @@ button:disabled { cursor:default; }
 .daypop-body .dd-edit { margin-top:8px; padding-top:8px; border-top:1px solid var(--hairline); }
 .daypop-body .dd-edit-h { font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--txt3); margin:7px 0 4px; }
 .daypop-body .dd-edit-types { display:flex; flex-wrap:wrap; gap:4px; }
-.daypop-body .dd-edit-act { width:100%; margin-top:4px; height:28px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:10.5px; font-weight:700; letter-spacing:.02em; }
+.daypop-body .dd-edit-act { width:100%; margin-top:4px; min-height:28px; padding:5px 8px; line-height:1.3; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:10.5px; font-weight:700; letter-spacing:.02em; }
 .daypop-body .dd-edit-act.on { background:var(--g4); border-color:var(--etch); color:var(--txt); }
 .daypop-body .dd-k { color:var(--txt3); }
 .daypop-body .dd-v { color:var(--txt); text-align:right; }
