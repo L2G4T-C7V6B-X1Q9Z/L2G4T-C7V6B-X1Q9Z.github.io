@@ -110,6 +110,10 @@ let _wchartGeom = null; // last-built chart geometry, for the tap/drag scrubber
 // auto-fit full view, in which case buildWeightChart's output is byte-identical to before.
 let _wzoom = null;
 let _wscrubIdx = null;   // currently-scrubbed integer date index into keysOldestFirst; null = hidden
+// v7.3: the last pointer CLIENT position driving the scrub. Stored (not just the viewBox y) so
+// renderScrub can re-map it to the CURRENT geometry after a zoom/pan/range rebuild and re-pick the
+// nearest line. null = no pointer yet.
+let _wscrubClientX = null, _wscrubClientY = null;
 let _wscrubWired = false;
 let _wscrubOverlay = null, _wscrubLine = null, _wscrubBox = null, _wscrubResetBtn = null;
 let _wscrubDots = [];
@@ -301,6 +305,10 @@ let _plNextIdeasPeriod = '';
 let plNextIdeasUnsub = null;
 // periods we've already lazily resolved the theme for (resolveThemeForPeriod runs once per period).
 const _plResolvedPeriods = new Set();
+// v7.3: signature of the LAST playlist render. renderPlaylist no-ops when nothing it draws has
+// changed, so the heartbeat / no-op /users snapshots (which fire ~every few seconds via repaint())
+// stop needlessly rebuilding the pane. null = force the first render.
+let _plRenderSig = null;
 
 // Optimistic overlay: while a WORKOUT write for (userId+businessDate) is in flight (or
 // failed pre-rollback), we paint from THIS map, not the snapshot, and we never repaint
@@ -670,7 +678,12 @@ function renderGrid(now) {
     return;
   }
   const { keys, anchor, today } = gridDateKeys(now);
-  const cols = orderedMembers();
+  // v7.3 (Soren 6/25): inactive members (no activity >=3d) sink to the FAR RIGHT of the board,
+  // while ME stays leftmost and everyone else keeps their existing relative order. filter() is a
+  // stable partition (preserves order within each group), so concatenating active+inactive is a
+  // clean stable sort by inactivity. Only reorders the grid columns — chart order is untouched.
+  const baseCols = orderedMembers();
+  const cols = baseCols.filter((m) => !memberInactive(m)).concat(baseCols.filter((m) => memberInactive(m)));
 
   // CSS grid template: a fixed date gutter + one CAPPED column per member. v4 (#15): the
   // cap (max 56px) stops 3 people from stretching full-width; #grid (width:max-content,
@@ -1050,16 +1063,9 @@ function buildWeightChart(now) {
           `stroke-linecap="round" stroke-linejoin="round" opacity="${s.opacity}"${clipAttr} />`
       );
     }
-    // v7.1: per-point hover targets — hover any datapoint to see that person's weight + date
-    // (native SVG <title>). Transparent r=5 circles keep the chart clean but make every point hoverable.
-    for (const p of s.pts) {
-      const dk = keysOldestFirst[p.idx];
-      parts.push(
-        `<circle cx="${xOf(p.idx).toFixed(2)}" cy="${yOf(p.lb).toFixed(2)}" r="5" fill="transparent"${clipAttr}>` +
-          `<title>${escapeHtml(displayNameOf(s.member))} — ${p.lb} lb${dk ? ' · ' + escapeHtml(fmtDateShort(dk)) : ''}</title>` +
-        `</circle>`
-      );
-    }
+    // v7.3: the per-point transparent <title> hover-circles were removed — the whole-chart
+    // hover-scrub (wireWchartScrub) now shows the nearest line's weight on plain mouse-hover, so the
+    // native per-point tooltips were redundant and double-rendered a second tooltip on desktop.
     // v7.1: a clean uppercase 3-letter tag instead of the person emoji (emoji end-labels read
     // as cringe — Soren 6/25). Soren->SOR, Hunter->HUN, Jacob->JAC. Emoji stays everywhere else.
     const tag = (displayNameOf(s.member).trim().slice(0, 3) || '?').toUpperCase();
@@ -2096,10 +2102,37 @@ function renderPlaylist() {
   maybeResolveTheme(key);
   ensureNextIdeasSub();
 
+  // time-based countdown — refresh on every call (cheap text, never reloads anything), even when the
+  // signature guard below short-circuits the rest of the render.
+  updateResetBadge();
+
   const attrib = buildAttribMap(key);
   const merged = mergeRows(plRealForSlot === key ? plRealTracks : [], attrib);
   merged.reverse(); // /list returns playlist/append order (oldest first) -> newest on top
   const pendingAdds = visiblePendingAdds(key);
+
+  // FALLBACK source: when there's no real read for this slot, fall back to the Firestore wall so the
+  // pane isn't blank (slot has no playlist yet, or the Worker read failed transiently).
+  const useReal = merged.length > 0;
+  const fallbackSnap = useReal ? [] : songs.filter((s) => s.slot === key);
+  const total = pendingAdds.length + (useReal ? merged.length : fallbackSnap.length);
+
+  // v7.3 (#F): a compact signature of everything this render draws. When it's unchanged, skip the
+  // entire render — so the heartbeat + no-op /users snapshots (a teammate's lastActiveAt bump fires
+  // repaint() ~every few seconds) stop rebuilding the pane (which used to reload every Spotify embed).
+  const slotSig = Object.keys(plSlots).sort().map((k) => {
+    const s = plSlots[k] || {};
+    return `${k}:${s.theme || ''}:${s.mxtNumber == null ? '' : s.mxtNumber}:${s.spotifyUrl || ''}:${s.spotifyPlaylistId || ''}`;
+  }).join('|');
+  const sig = [
+    key, total, useReal ? 1 : 0, plNextIdeasCount, plThemeEditing ? 1 : 0,
+    merged.map((t) => t.id || t.name || '').join(','),
+    pendingAdds.map((s) => `${s.id || ''}:${s.trackId || ''}:${s.title || ''}`).join(','),
+    fallbackSnap.map((s) => s.id || '').join(','),
+    plCollabUrl || '', slotSig,
+  ].join('');
+  if (sig === _plRenderSig) return;
+  _plRenderSig = sig;
 
   // theme line: the CURRENT period's theme (or the unset placeholder) + the next-period idea count.
   if (elPlThemeName && !plThemeEditing) {
@@ -2110,25 +2143,32 @@ function renderPlaylist() {
   if (elPlThemeIdeas) {
     elPlThemeIdeas.textContent = plNextIdeasCount > 0 ? `${plNextIdeasCount} idea${plNextIdeasCount === 1 ? '' : 's'} for next` : '';
   }
-  updateResetBadge();
   renderHistory(key);
-
-  // FALLBACK rows: when there's no real read for this slot, show the Firestore wall so the tab isn't
-  // blank (slot has no playlist yet, or the Worker read failed transiently).
-  const useReal = merged.length > 0;
-  const fallbackSnap = useReal ? [] : songs.filter((s) => s.slot === key);
-  const total = pendingAdds.length + (useReal ? merged.length : fallbackSnap.length);
 
   if (elPlCount) elPlCount.textContent = total ? ` · ${total} SONG${total === 1 ? '' : 'S'}` : '';
 
+  // v7.3 (#D): COMPACT view — a song count + a short teaser, NOT the full scrollable wall (Soren 6/25:
+  // "pointless showing all these songs ... it's more to show 'yo we have Songs!'"). The per-track rows
+  // + inline Spotify embeds are gone (that wall was also the flicker source); OPEN ON SPOTIFY is the action.
   if (!total) {
     elPlList.innerHTML = '<div class="empty-note">No songs in this playlist yet. Paste a Spotify link or type a song to start it.</div>';
   } else {
-    const rows = [];
-    for (const s of pendingAdds) rows.push(songRowHtml(s, true)); // optimistic (dimmed) on top
-    if (useReal) for (const t of merged) rows.push(realRowHtml(t));
-    else for (const s of fallbackSnap) rows.push(songRowHtml(s, false));
-    elPlList.innerHTML = rows.join('');
+    const names = [];
+    for (const s of pendingAdds) { if (s.title) names.push(s.title); }
+    if (useReal) { for (const t of merged) { if (t.name) names.push(t.name); } }
+    else { for (const s of fallbackSnap) { if (s.title) names.push(s.title); } }
+    const shown = names.slice(0, 3).map((t) => escapeHtml(t));
+    const moreN = total - shown.length;
+    const teaser = shown.length
+      ? `<div class="pl-summary-teaser">${shown.join(' · ')}` +
+        (moreN > 0 ? ` <span class="pl-summary-more">+${moreN} more</span>` : '') + '</div>'
+      : '';
+    elPlList.innerHTML =
+      '<div class="pl-summary">' +
+        `<div class="pl-summary-count"><span class="pl-summary-n">${total}</span> song${total === 1 ? '' : 's'} this week</div>` +
+        teaser +
+        '<div class="pl-summary-hint">tap OPEN ON SPOTIFY for the full list</div>' +
+      '</div>';
   }
 
   // footer "OPEN ON SPOTIFY": open the slot's real playlist when it exists, else a whole-list search.
@@ -3806,11 +3846,19 @@ function syncWchartResetBtn() {
   if (_wscrubResetBtn) _wscrubResetBtn.style.display = _wzoom ? 'block' : 'none';
 }
 
-function setScrubFromViewBoxX(vx) {
+// v7.3: drive the scrub from a pointer's CLIENT position. Stashes the client coords (so a later
+// geometry rebuild — zoom/pan/range — can re-derive the cursor's viewBox y under the NEW geometry
+// and re-pick the nearest line), snaps to the nearest date index for the vertical scrub line, then
+// re-renders. renderScrub() shows ONLY the single series whose line is nearest the cursor's y.
+function updateScrub(clientX, clientY) {
   const g = _wchartGeom;
   if (!g) return;
+  const vb = wchartViewBox(clientX, clientY);
+  if (!vb) return;
+  _wscrubClientX = clientX;
+  _wscrubClientY = clientY;
   const maxIdx = g.rangeDays - 1;
-  let idx = Math.round(g.idxAtX(vx));
+  let idx = Math.round(g.idxAtX(vb.x));
   idx = Math.max(0, Math.min(maxIdx, idx));
   _wscrubIdx = idx;
   renderScrub();
@@ -3849,53 +3897,70 @@ function renderScrub() {
   _wscrubLine.style.top = topY + 'px';
   _wscrubLine.style.height = Math.max(0, botY - topY) + 'px';
 
-  // readout: ME first (red, bold), then others; each row a colored swatch + 3-letter tag + lb.
-  const ordered = g.series.slice().sort((a, b) => (a.isMe ? 0 : 1) - (b.isMe ? 0 : 1));
+  // v7.3: pick the SINGLE series whose line is nearest the cursor's y (mapped from the stashed
+  // client coords through the CURRENT geometry, so it stays correct after a zoom/pan/range rebuild),
+  // and show only that one person's weight. Falls back to ME / the first series if the cursor isn't
+  // measurable (e.g. a rebuild with no prior pointer move).
+  let cursorVy = null;
+  if (_wscrubClientX !== null && _wscrubClientY !== null) {
+    const cvb = wchartViewBox(_wscrubClientX, _wscrubClientY);
+    if (cvb) cursorVy = cvb.y;
+  }
+  let nearest = null, nearestW = null, best = Infinity;
+  for (const s of g.series) {
+    const w = wchartWeightAtIdx(s, idx);
+    if (!w) continue;
+    const d = cursorVy === null ? (s.isMe ? 0 : 1) : Math.abs(g.yOf(w.lb) - cursorVy);
+    if (d < best) { best = d; nearest = s; nearestW = w; }
+  }
+  if (!nearest) {
+    _wscrubBox.style.display = 'none';
+    for (const dd of _wscrubDots) dd.style.display = 'none';
+    return;
+  }
+
+  // a single dot, sitting on the nearest line at the scrubbed date.
+  const dy = toY(g.yOf(nearestW.lb));
+  const dot = wchartDot(0);
+  dot.style.display = 'block';
+  dot.style.left = (lineX - 4) + 'px';
+  dot.style.top = (dy - 4) + 'px';
+  dot.style.borderColor = nearest.color;
+  dot.style.background = nearestW.clamped ? 'transparent' : nearest.color;
+  for (let j = 1; j < _wscrubDots.length; j++) _wscrubDots[j].style.display = 'none';
+
+  // readout: date + the single nearest person (colored swatch + 3-letter tag + lb); red if ME.
   const dk = g.keysOldestFirst[idx];
   _wscrubBox.textContent = '';
   const head = document.createElement('div');
   head.style.cssText = 'font-size:9px; letter-spacing:.04em; color:var(--txt3); margin-bottom:3px;';
   head.textContent = dk ? fmtDateShort(dk) : '';
   _wscrubBox.appendChild(head);
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex; align-items:center; gap:6px;' + (nearest.isMe ? ' font-weight:700;' : '');
+  const sw = document.createElement('span');
+  sw.style.cssText = 'width:7px; height:7px; border-radius:50%; flex:0 0 auto; background:' + nearest.color + ';';
+  const tag = document.createElement('span');
+  tag.style.cssText = 'color:' + (nearest.isMe ? 'var(--red)' : 'var(--txt2)') + '; min-width:26px;';
+  tag.textContent = (displayNameOf(nearest.member).trim().slice(0, 3) || '?').toUpperCase();
+  const val = document.createElement('span');
+  val.style.cssText = 'color:var(--txt); margin-left:auto; padding-left:10px;';
+  val.textContent = wchartFmtLb(nearestW.lb) + (nearestW.clamped ? '*' : '');
+  row.appendChild(sw); row.appendChild(tag); row.appendChild(val);
+  _wscrubBox.appendChild(row);
 
-  let di = 0;
-  for (const s of ordered) {
-    const w = wchartWeightAtIdx(s, idx);
-    if (!w) continue;
-    // dot on the scrub line at this person's weight
-    const dot = wchartDot(di);
-    const dx = toX(lineVx);
-    const dy = toY(g.yOf(w.lb));
-    dot.style.display = 'block';
-    dot.style.left = (dx - 4) + 'px';
-    dot.style.top = (dy - 4) + 'px';
-    dot.style.borderColor = s.color;
-    dot.style.background = w.clamped ? 'transparent' : s.color;
-    di++;
-    // readout row
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex; align-items:center; gap:5px;' + (s.isMe ? ' font-weight:700;' : '');
-    const sw = document.createElement('span');
-    sw.style.cssText = 'width:7px; height:7px; border-radius:50%; flex:0 0 auto; background:' + s.color + ';';
-    const tag = document.createElement('span');
-    tag.style.cssText = 'color:' + (s.isMe ? 'var(--red)' : 'var(--txt2)') + '; min-width:26px;';
-    tag.textContent = (displayNameOf(s.member).trim().slice(0, 3) || '?').toUpperCase();
-    const val = document.createElement('span');
-    val.style.cssText = 'color:var(--txt); margin-left:auto;';
-    val.textContent = wchartFmtLb(w.lb) + (w.clamped ? '*' : '');
-    row.appendChild(sw); row.appendChild(tag); row.appendChild(val);
-    _wscrubBox.appendChild(row);
-  }
-  for (let j = di; j < _wscrubDots.length; j++) _wscrubDots[j].style.display = 'none';
-
-  // place the chip beside the line, flipping to the other side / clamping to stay on-chart.
+  // place the chip beside the line, floating near the hovered line's y; flip/clamp to stay on-chart.
   _wscrubBox.style.display = 'block';
   const bw = _wscrubBox.offsetWidth || 60;
   let bx = lineX + 10;
   if (bx + bw > ovRect.width - 4) bx = lineX - bw - 10;
   if (bx < 4) bx = 4;
   _wscrubBox.style.left = bx + 'px';
-  _wscrubBox.style.top = (topY + 2) + 'px';
+  const bh = _wscrubBox.offsetHeight || 40;
+  let by = dy - bh - 8; // float just above the dot
+  if (by < topY) by = dy + 8; // not enough room above -> drop below the dot
+  if (by + bh > botY) by = Math.max(topY, botY - bh);
+  _wscrubBox.style.top = by + 'px';
 }
 
 function forceWchartRebuild() {
@@ -4027,11 +4092,19 @@ function wireWchartScrub() {
     }
     if (e.shiftKey && _wzoom) { mode = 'pan'; panPrev = { x: vb.x, y: vb.y }; e.preventDefault(); return; }
     mode = 'scrub';
-    setScrubFromViewBoxX(vb.x);
+    updateScrub(e.clientX, e.clientY);
     e.preventDefault();
   });
 
   host.addEventListener('pointermove', (e) => {
+    // DESKTOP HOVER (v7.3): a mouse moving with NO button held drives the scrub — no click needed.
+    // Touch never hovers (no events without a finger down), and a held button (drag/pan) has
+    // e.buttons != 0, so this branch is purely the mouse-hover path. Leaving the chart hides it
+    // (pointerleave below). Wheel-zoom / shift-drag-pan still own their gestures unchanged.
+    if (e.pointerType === 'mouse' && e.buttons === 0) {
+      if (_wchartGeom) updateScrub(e.clientX, e.clientY);
+      return;
+    }
     if (!pointers.has(e.pointerId)) return;
     const vb = wchartViewBox(e.clientX, e.clientY);
     if (!vb) return;
@@ -4049,9 +4122,17 @@ function wireWchartScrub() {
       return;
     }
     if (mode === 'scrub') {
-      setScrubFromViewBoxX(vb.x);
+      updateScrub(e.clientX, e.clientY);
       e.preventDefault();
     }
+  });
+
+  // DESKTOP (v7.3): leaving the chart with the mouse hides the hover scrub. (No-op for touch; and a
+  // captured shift-drag pan won't fire leave anyway, but guard mid-gesture to be safe.)
+  host.addEventListener('pointerleave', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    if (mode === 'pan' || mode === 'pinch') return;
+    hideScrub();
   });
 
   const onEnd = (e) => {
