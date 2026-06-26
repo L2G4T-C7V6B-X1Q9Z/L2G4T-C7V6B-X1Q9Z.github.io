@@ -41,6 +41,7 @@ import {
   weightTrend,
   relativeTime,
   layoutChartEndLabels,
+  abbrevName,
   nutritionStatus,
   emojiOf,
   EMOJI_SET,
@@ -115,7 +116,7 @@ let _wscrubIdx = null;   // currently-scrubbed integer date index into keysOldes
 // nearest line. null = no pointer yet.
 let _wscrubClientX = null, _wscrubClientY = null;
 let _wscrubWired = false;
-let _wscrubOverlay = null, _wscrubLine = null, _wscrubBox = null, _wscrubResetBtn = null;
+let _wscrubOverlay = null, _wscrubBox = null, _wscrubResetBtn = null;
 let _wscrubDots = [];
 
 // =============================================================================
@@ -1067,8 +1068,9 @@ function buildWeightChart(now) {
     // hover-scrub (wireWchartScrub) now shows the nearest line's weight on plain mouse-hover, so the
     // native per-point tooltips were redundant and double-rendered a second tooltip on desktop.
     // v7.1: a clean uppercase 3-letter tag instead of the person emoji (emoji end-labels read
-    // as cringe — Soren 6/25). Soren->SOR, Hunter->HUN, Jacob->JAC. Emoji stays everywhere else.
-    const tag = (displayNameOf(s.member).trim().slice(0, 3) || '?').toUpperCase();
+    // as cringe — Soren 6/25). v7.4: abbrevName (logic.js) replaces the old slice(0,3) so the tag
+    // is consonant-skeleton, not a blunt prefix: Soren->SRN, Hunter->HNT, Jacob->JCB, Olivia->OLV.
+    const tag = abbrevName(displayNameOf(s.member)) || '?';
     labels.push({
       pointX: last.x, anchor: 'start',
       idealY: last.y,
@@ -2150,28 +2152,42 @@ function renderPlaylist() {
 
   if (elPlCount) elPlCount.textContent = total ? ` · ${total} SONG${total === 1 ? '' : 'S'}` : '';
 
-  // v7.3 (#D): COMPACT view — a song count + a short teaser, NOT the full scrollable wall (Soren 6/25:
-  // "pointless showing all these songs ... it's more to show 'yo we have Songs!'"). The per-track rows
-  // + inline Spotify embeds are gone (that wall was also the flicker source); OPEN ON SPOTIFY is the action.
+  // v7.4 (#6): LIST the songs again (the v7.3 compact "N songs" summary is reverted). Each row is
+  // album COVER ART + title + artist — plain <img> thumbnails, NOT Spotify iframe embeds (those
+  // reload-flickered on every render). Art comes from the Worker /list track (`t.art`, the smallest
+  // album image). Rows with no art (optimistic adds not yet reconciled, or the Firestore fallback
+  // when there's no real read) get a neutral ♪ placeholder, so the no-art case is a clean text list.
+  // The scroller is #pl-scroll (.scrolly: scrollbar hidden via scrollbar-width:none + ::-webkit).
   if (!total) {
     elPlList.innerHTML = '<div class="empty-note">No songs in this playlist yet. Paste a Spotify link or type a song to start it.</div>';
   } else {
-    const names = [];
-    for (const s of pendingAdds) { if (s.title) names.push(s.title); }
-    if (useReal) { for (const t of merged) { if (t.name) names.push(t.name); } }
-    else { for (const s of fallbackSnap) { if (s.title) names.push(s.title); } }
-    const shown = names.slice(0, 3).map((t) => escapeHtml(t));
-    const moreN = total - shown.length;
-    const teaser = shown.length
-      ? `<div class="pl-summary-teaser">${shown.join(' · ')}` +
-        (moreN > 0 ? ` <span class="pl-summary-more">+${moreN} more</span>` : '') + '</div>'
-      : '';
-    elPlList.innerHTML =
-      '<div class="pl-summary">' +
-        `<div class="pl-summary-count"><span class="pl-summary-n">${total}</span> song${total === 1 ? '' : 's'} this week</div>` +
-        teaser +
-        '<div class="pl-summary-hint">tap OPEN ON SPOTIFY for the full list</div>' +
-      '</div>';
+    const rowHtml = (o) => {
+      const title = escapeHtml(o.title || 'Unknown track');
+      const artist = o.artist ? escapeHtml(o.artist) : '';
+      const art = (typeof o.art === 'string' && o.art) ? o.art : '';
+      const artHtml = art
+        ? `<img class="pl-row-art" src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+        : '<div class="pl-row-art pl-row-art-empty" aria-hidden="true">♪</div>';
+      return (
+        `<div class="pl-row${o.pending ? ' pending' : ''}" role="listitem" data-id="${escapeHtml(o.id || '')}">` +
+          artHtml +
+          '<div class="pl-row-main">' +
+            `<div class="pl-row-title">${title}</div>` +
+            (artist ? `<div class="pl-row-meta"><span class="pl-row-artist">${artist}</span></div>` : '') +
+          '</div>' +
+        '</div>'
+      );
+    };
+    const rows = [];
+    // optimistic adds first (newest, not yet in the real read). A pasted-link add has no name/art
+    // until the Worker /list reconciles it, so show "Adding…" rather than the raw URL it stored.
+    for (const s of pendingAdds) {
+      const t = (s.source === 'text' && s.title) ? s.title : 'Adding…';
+      rows.push(rowHtml({ id: s.id, title: t, artist: s.artist, art: '', pending: true }));
+    }
+    if (useReal) { for (const t of merged) rows.push(rowHtml({ id: t.id, title: t.name, artist: t.artist, art: t.art })); }
+    else { for (const s of fallbackSnap) rows.push(rowHtml({ id: s.id, title: s.title, artist: s.artist, art: '' })); }
+    elPlList.innerHTML = rows.join('');
   }
 
   // footer "OPEN ON SPOTIFY": open the slot's real playlist when it exists, else a whole-list search.
@@ -3726,15 +3742,17 @@ function wireGridTaps() {
 }
 
 // =============================================================================
-// WEIGHT-CHART SCRUBBER + ZOOM/PAN (v7.2)
+// WEIGHT-CHART SCRUBBER + ZOOM/PAN (v7.2, gestures revised v7.4)
 // -----------------------------------------------------------------------------
-// TASK #1 — tap/click + drag a vertical scrubber across the chart to read every
-// person's weight at that date (works on touch, where there is no hover). TASK #2
-// — pinch (touch) / wheel + shift-drag (desktop) to zoom a time + weight window,
-// double-tap / dblclick / the reset chip to restore. All rendering is SYNCHRONOUS
-// (no requestAnimationFrame — a prior rAF on this chart silently never fired and
-// left it blank; that bug must not recur). The scrub is an HTML overlay layered
-// over the SVG, so it survives the innerHTML rebuilds buildWeightChart does.
+// READ — DESKTOP: hovering the chart (mouse, no button) shows the NEAREST line's weight
+// as a floating chip + a dot ON that line (no vertical line; v7.4 #3). TOUCH: tap/drag
+// scrubs (there's no hover on touch). A member with no logged point at/spanning the
+// hovered date shows nothing (v7.4 #2 — no clamp, no '*'). ZOOM/PAN: wheel (desktop) /
+// pinch (touch) zooms a time+weight window; PLAIN left-mouse drag pans (v7.4 #1, was
+// shift+drag); double-tap / dblclick / the reset chip restores. All rendering is
+// SYNCHRONOUS (no requestAnimationFrame — a prior rAF on this chart silently never fired
+// and left it blank; that bug must not recur). The scrub is an HTML overlay layered over
+// the SVG, so it survives the innerHTML rebuilds buildWeightChart does.
 // =============================================================================
 
 // map a pointer's client x/y -> the inner-svg viewBox coords, honoring the svg's
@@ -3763,25 +3781,31 @@ function wchartLbAtY(vy, g) {
 }
 
 // the weight to read for a series at a (snapped) date index: the exact point if one
-// exists there, else a linear interpolation along the drawn line; clamped to the
-// series' own first/last point when the scrub sits outside their logged range.
+// exists there, else a linear interpolation along the drawn line. v7.4 (#2): returns
+// null when idx falls OUTSIDE the series' own logged range — i.e. before their first
+// point OR after their last. The old code clamped to the nearest endpoint and flagged
+// it with a '*', which surfaced a weight for a person on a date they hadn't logged
+// (most jarring BEFORE their first weigh-in). Now a member is only "present" at x when
+// they actually have a point at/spanning it, so they get no dot + no readout otherwise
+// and they're skipped when picking the nearest line.
 function wchartWeightAtIdx(s, idx) {
   const pts = s && s.pts;
   if (!pts || !pts.length) return null;
   const first = pts[0], last = pts[pts.length - 1];
-  if (idx <= first.idx) return { lb: first.lb, clamped: idx < first.idx };
-  if (idx >= last.idx) return { lb: last.lb, clamped: idx > last.idx };
+  if (idx < first.idx || idx > last.idx) return null; // no data at/spanning x -> nothing
+  if (idx === first.idx) return { lb: first.lb };
+  if (idx === last.idx) return { lb: last.lb };
   for (let i = 1; i < pts.length; i++) {
     const b = pts[i];
-    if (b.idx === idx) return { lb: b.lb, clamped: false };
+    if (b.idx === idx) return { lb: b.lb };
     if (b.idx > idx) {
       const a = pts[i - 1];
-      if (a.idx === idx) return { lb: a.lb, clamped: false };
+      if (a.idx === idx) return { lb: a.lb };
       const t = (idx - a.idx) / (b.idx - a.idx);
-      return { lb: a.lb + (b.lb - a.lb) * t, clamped: false };
+      return { lb: a.lb + (b.lb - a.lb) * t };
     }
   }
-  return { lb: last.lb, clamped: false };
+  return { lb: last.lb };
 }
 
 function wchartFmtLb(v) {
@@ -3789,10 +3813,10 @@ function wchartFmtLb(v) {
   return Math.abs(r - Math.round(r)) < 0.05 ? String(Math.round(r)) : r.toFixed(1);
 }
 
-// build the overlay once: a vertical scrub line, a readout chip, and a zoom-reset
-// button, all inside an absolutely-positioned layer over the SVG host. pointer-events
-// stay off the layer (so the chart underneath still gets the gestures); only the reset
-// button opts back in.
+// build the overlay once: a readout chip + a zoom-reset button, inside an absolutely-
+// positioned layer over the SVG host. v7.4 (#3): the vertical scrub line is GONE — hover
+// shows only the value chip + a dot on the nearest line. pointer-events stay off the layer
+// (so the chart underneath still gets the gestures); only the reset button opts back in.
 function ensureScrubOverlay() {
   if (_wscrubOverlay) return _wscrubOverlay;
   if (!elWchartSvg) return null;
@@ -3802,9 +3826,6 @@ function ensureScrubOverlay() {
   const ov = document.createElement('div');
   ov.className = 'wchart-scrub-overlay';
   ov.style.cssText = 'position:absolute; inset:0; pointer-events:none; z-index:5; overflow:hidden;';
-  const line = document.createElement('div');
-  line.style.cssText = 'position:absolute; width:1px; background:var(--txt2); opacity:.65; display:none; pointer-events:none;';
-  ov.appendChild(line);
   const box = document.createElement('div');
   box.style.cssText =
     'position:absolute; display:none; pointer-events:none; background:var(--g2); ' +
@@ -3822,7 +3843,7 @@ function ensureScrubOverlay() {
   rb.addEventListener('click', (e) => { e.stopPropagation(); resetWchartZoom(); });
   ov.appendChild(rb);
   body.appendChild(ov);
-  _wscrubOverlay = ov; _wscrubLine = line; _wscrubBox = box; _wscrubResetBtn = rb; _wscrubDots = [];
+  _wscrubOverlay = ov; _wscrubBox = box; _wscrubResetBtn = rb; _wscrubDots = [];
   return ov;
 }
 
@@ -3839,7 +3860,6 @@ function wchartDot(i) {
 
 function hideScrub() {
   _wscrubIdx = null;
-  if (_wscrubLine) _wscrubLine.style.display = 'none';
   if (_wscrubBox) _wscrubBox.style.display = 'none';
   for (const d of _wscrubDots) d.style.display = 'none';
 }
@@ -3867,14 +3887,13 @@ function updateScrub(clientX, clientY) {
   renderScrub();
 }
 
-// position the scrub line, the per-series dots (on the line, at each weight), and the
-// readout chip for the current _wscrubIdx. Cheap DOM writes only — no SVG rebuild.
+// position the dot (on the nearest line, at its weight) + the readout chip for the current
+// _wscrubIdx. v7.4 (#3): no vertical line anymore. Cheap DOM writes only — no SVG rebuild.
 function renderScrub() {
   const g = _wchartGeom;
   const ov = ensureScrubOverlay();
   if (!ov) return;
   if (_wscrubIdx === null || !g || !g.series || !g.series.length) {
-    _wscrubLine.style.display = 'none';
     _wscrubBox.style.display = 'none';
     for (const d of _wscrubDots) d.style.display = 'none';
     return;
@@ -3890,15 +3909,11 @@ function renderScrub() {
   const toY = (vy) => offY + vy * scale - ovRect.top;
 
   const idx = Math.max(0, Math.min(g.rangeDays - 1, _wscrubIdx));
-  const lineVx = g.xOf(idx);
-  const lineX = toX(lineVx);
+  // the scrubbed-date x (no line is drawn anymore, but the dot + chip still anchor to it) and the
+  // plot's top/bottom y (for clamping the chip on-chart).
+  const lineX = toX(g.xOf(idx));
   const topY = toY(g.PAD_T);
   const botY = toY(g.vbH - g.PAD_B);
-
-  _wscrubLine.style.display = 'block';
-  _wscrubLine.style.left = lineX + 'px';
-  _wscrubLine.style.top = topY + 'px';
-  _wscrubLine.style.height = Math.max(0, botY - topY) + 'px';
 
   // v7.3: pick the SINGLE series whose line is nearest the cursor's y (mapped from the stashed
   // client coords through the CURRENT geometry, so it stays correct after a zoom/pan/range rebuild),
@@ -3929,7 +3944,7 @@ function renderScrub() {
   dot.style.left = (lineX - 4) + 'px';
   dot.style.top = (dy - 4) + 'px';
   dot.style.borderColor = nearest.color;
-  dot.style.background = nearestW.clamped ? 'transparent' : nearest.color;
+  dot.style.background = nearest.color;
   for (let j = 1; j < _wscrubDots.length; j++) _wscrubDots[j].style.display = 'none';
 
   // readout: date + the single nearest person (colored swatch + 3-letter tag + lb); red if ME.
@@ -3945,14 +3960,14 @@ function renderScrub() {
   sw.style.cssText = 'width:7px; height:7px; border-radius:50%; flex:0 0 auto; background:' + nearest.color + ';';
   const tag = document.createElement('span');
   tag.style.cssText = 'color:' + (nearest.isMe ? 'var(--red)' : 'var(--txt2)') + '; min-width:26px;';
-  tag.textContent = (displayNameOf(nearest.member).trim().slice(0, 3) || '?').toUpperCase();
+  tag.textContent = abbrevName(displayNameOf(nearest.member)) || '?';
   const val = document.createElement('span');
   val.style.cssText = 'color:var(--txt); margin-left:auto; padding-left:10px;';
-  val.textContent = wchartFmtLb(nearestW.lb) + (nearestW.clamped ? '*' : '');
+  val.textContent = wchartFmtLb(nearestW.lb);
   row.appendChild(sw); row.appendChild(tag); row.appendChild(val);
   _wscrubBox.appendChild(row);
 
-  // place the chip beside the line, floating near the hovered line's y; flip/clamp to stay on-chart.
+  // place the chip beside the scrubbed-date x, floating near the dot's y; flip/clamp to stay on-chart.
   _wscrubBox.style.display = 'block';
   const bw = _wscrubBox.offsetWidth || 60;
   let bx = lineX + 10;
@@ -4093,7 +4108,17 @@ function wireWchartScrub() {
       e.preventDefault();
       return;
     }
-    if (e.shiftKey && _wzoom) { mode = 'pan'; panPrev = { x: vb.x, y: vb.y }; e.preventDefault(); return; }
+    // v7.4 (#1): PLAIN left-mouse (or pen) drag = PAN — replacing the old shift+drag. A mouse already
+    // scrubs on HOVER (the no-button pointermove path), so a press never needs to scrub; starting a pan
+    // on press means the drag can't be mis-read as a scrub mid-gesture. Pan is a no-op until zoomed
+    // (wchartPan guards on _wzoom) — wheel to zoom, then drag to pan. TOUCH has no hover, so a one-finger
+    // tap/drag still SCRUBS there (the only way to read a value without a pointer hover).
+    if (e.pointerType !== 'touch') {
+      mode = 'pan';
+      panPrev = { x: vb.x, y: vb.y };
+      e.preventDefault();
+      return;
+    }
     mode = 'scrub';
     updateScrub(e.clientX, e.clientY);
     e.preventDefault();
@@ -4103,7 +4128,8 @@ function wireWchartScrub() {
     // DESKTOP HOVER (v7.3): a mouse moving with NO button held drives the scrub — no click needed.
     // Touch never hovers (no events without a finger down), and a held button (drag/pan) has
     // e.buttons != 0, so this branch is purely the mouse-hover path. Leaving the chart hides it
-    // (pointerleave below). Wheel-zoom / shift-drag-pan still own their gestures unchanged.
+    // (pointerleave below). A held-button drag falls through to the pan branch (v7.4 #1); wheel-zoom
+    // owns its own gesture.
     if (e.pointerType === 'mouse' && e.buttons === 0) {
       if (_wchartGeom) updateScrub(e.clientX, e.clientY);
       return;
@@ -4131,7 +4157,7 @@ function wireWchartScrub() {
   });
 
   // DESKTOP (v7.3): leaving the chart with the mouse hides the hover scrub. (No-op for touch; and a
-  // captured shift-drag pan won't fire leave anyway, but guard mid-gesture to be safe.)
+  // captured drag-pan won't fire leave anyway, but guard mid-gesture to be safe.)
   host.addEventListener('pointerleave', (e) => {
     if (e.pointerType !== 'mouse') return;
     if (mode === 'pan' || mode === 'pinch') return;

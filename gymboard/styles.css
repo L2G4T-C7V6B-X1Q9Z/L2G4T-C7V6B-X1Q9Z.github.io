@@ -647,25 +647,16 @@ button:disabled { cursor:default; }
 /* the live song list — a vertical stack of rows (newest first). */
 .pl-list { display:flex; flex-direction:column; gap:6px; padding:12px 14px; max-width:560px; margin-inline:auto; width:100%; }
 
-/* v7.3 (#D): COMPACT playlist body — a song COUNT + a short teaser instead of the full song wall.
-   Monochrome + the single --red accent on the count; JetBrains Mono for the number + the hint. */
-.pl-summary {
-  display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;
-  padding:26px 18px; max-width:560px; margin-inline:auto; width:100%;
+/* v7.4 (#6): per-row album COVER ART thumbnail (plain <img>, NOT a Spotify iframe — those
+   reload-flickered). A row with no art (an optimistic add not yet reconciled, or the Firestore
+   fallback) shows a neutral ♪ placeholder so the column stays aligned and the no-art case reads
+   as a clean text list. (The v7.3 .pl-summary compact view is reverted/removed.) */
+.pl-row-art {
+  flex:0 0 auto; width:38px; height:38px; border-radius:6px; object-fit:cover; display:block;
+  background:var(--g3); border:1px solid var(--hairline);
 }
-.pl-summary-count { font-size:14px; color:var(--txt2); letter-spacing:.02em; }
-.pl-summary-n {
-  font-family:var(--font-mono); font-size:30px; font-weight:700; color:var(--red);
-  letter-spacing:.02em; margin-right:5px; vertical-align:-2px;
-}
-.pl-summary-teaser {
-  font-size:11.5px; color:var(--txt3); line-height:1.5; max-width:340px;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
-}
-.pl-summary-more { color:var(--txt3); opacity:.8; white-space:nowrap; }
-.pl-summary-hint {
-  margin-top:2px; font-family:var(--font-mono); font-size:9.5px; font-weight:700;
-  letter-spacing:.08em; text-transform:uppercase; color:var(--txt3);
+.pl-row-art-empty {
+  display:flex; align-items:center; justify-content:center; color:var(--txt3); font-size:16px; line-height:1;
 }
 .pl-row {
   display:flex; align-items:center; gap:10px; min-height:42px; padding:6px 6px 6px 10px;
@@ -1234,6 +1225,15 @@ button:disabled { cursor:default; }
   #grid       { margin-inline:auto; }
   .month-grid { max-width:none; }
   .pl-list    { max-width:none; }
+
+  /* v7.4 (#5): the SOCIAL pane's week board is short, but its scroll region (#grid-scroll, flex:1)
+     fills the tall gap between the legend and the weight-chart section — leaving the board pinned to
+     the top with a big empty band below it. Make #grid-scroll a flex column and center the board with
+     margin-block:auto (scroll-safe: if the board ever overflows, the auto margins collapse to 0 and it
+     scrolls from the top, unlike justify-content:center which would clip). Desktop only — the @media
+     scope leaves mobile's top-aligned board byte-identical. */
+  #grid-scroll { display:flex; flex-direction:column; }
+  #grid        { margin-block:auto; }
 
   /* MONTH sits in the right column's top now. Its cells are aspect-ratio:1/1 (square), which
      in a wide column makes a 5-week month far too tall to fit (it was clipping). Compact it

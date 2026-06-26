@@ -886,6 +886,43 @@ export function layoutChartEndLabels(labels, opts) {
   return list;
 }
 
+/**
+ * abbrevName(name) -> a 3-letter UPPERCASE tag for the weight-chart end-labels (and the
+ * hover readout). Replaces the old slice(0,3), which read poorly (Olivia->OLI, Soren->SOR).
+ *
+ * Rule:
+ *   - trimmed length <= 3  -> the whole name, uppercased            (Dan -> DAN)
+ *   - else                 -> keep the FIRST letter, then append the
+ *     subsequent CONSONANTS (skip a/e/i/o/u after the first letter) until 3 chars; if there
+ *     aren't enough consonants, fill from the skipped letters (the vowels) in order; uppercase.
+ *
+ * Worked examples (asserted in logic.test.mjs):
+ *   Soren->SRN  Jacob->JCB  Hunter->HNT  Dan->DAN  Olivia->OLV  Lars->LRS
+ *
+ * Non-letters in the tail are ignored (treated as neither consonant nor vowel) so a stray
+ * space / apostrophe never lands in the tag. Pure + deterministic. '' for empty/non-string.
+ */
+export function abbrevName(name) {
+  const s = (typeof name === 'string' ? name : '').trim();
+  if (!s) return '';
+  if (s.length <= 3) return s.toUpperCase();
+  const chars = Array.from(s);
+  const out = [chars[0]];
+  const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
+  const skippedVowels = [];
+  // pass 1: first letter + subsequent consonants.
+  for (let i = 1; i < chars.length && out.length < 3; i++) {
+    const c = chars[i];
+    const lc = c.toLowerCase();
+    if (!/[a-z]/.test(lc)) continue;          // non-letter -> ignore entirely
+    if (VOWELS.has(lc)) { skippedVowels.push(c); continue; } // vowel -> defer
+    out.push(c);
+  }
+  // pass 2: still short -> backfill from the skipped vowels, in order.
+  for (let i = 0; i < skippedVowels.length && out.length < 3; i++) out.push(skippedVowels[i]);
+  return out.join('').toUpperCase().slice(0, 3);
+}
+
 // ---- playlist: song-input parsing + cross-service deep-link builders ----------
 // The shared song wall (v5) stores exactly what's typed/pasted and deep-links out
 // to Spotify + YT Music — it NEVER fetches metadata (no Cloud Function, the SPA
