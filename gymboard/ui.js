@@ -1563,8 +1563,10 @@ function wireWeekNav() {
 // =============================================================================
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
-// Monday-start weekday header (matches GRID_DAYS' Mon..Sun framing + businessWeekKey math).
-const MONTH_DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+// Sunday-start weekday header (calendar DISPLAY only — Soren 6/25). NOTE: this is the calendar's
+// first-day-of-week, intentionally DECOUPLED from businessWeekKey's Mon..Sun week math + the
+// playlist Mon–Wed/Thu–Sun slot boundary, which both stay Monday-anchored in logic.js.
+const MONTH_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // The visible month's {y, m} (m is 1-based): the viewer's current-business-date month walked
 // back `monthOffset` calendar months (monthOffset <= 0). Pure y/m arithmetic, no instant.
@@ -1687,9 +1689,10 @@ function renderMonth(now) {
   const firstKey = `${pad4(y)}-${pad2u(m)}-01`;
   const monthPrefix = `${pad4(y)}-${pad2u(m)}`;
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate(); // day 0 of next month = last day
-  // leading Monday-start offset for the 1st (Mon->0 .. Sun->6), same math as businessWeekKey.
+  // leading Sunday-start offset for the 1st (Sun->0 .. Sat->6) — matches the Sun-first MONTH_DOW
+  // header. DISPLAY only; logic.js's businessWeekKey + playlist slot math stay Monday-anchored.
   const firstDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); // 0=Sun..6=Sat
-  const lead = (firstDow + 6) % 7;
+  const lead = firstDow;
   // total visible cells = leading pad + the month, rounded UP to whole Mon..Sun weeks so the
   // grid is a clean 7-col rectangle (5 or 6 rows). Walk back `lead` days to the first cell,
   // then step forward one civil day per cell (nextDayKey) — pad cells fall outside monthPrefix.
@@ -1698,7 +1701,7 @@ function renderMonth(now) {
   for (let i = 0; i < lead; i++) k = prevBusinessDate(k);
 
   const cells = [];
-  // weekday header row (Mon..Sun).
+  // weekday header row (Sun..Sat).
   for (const d of MONTH_DOW) cells.push(`<div class="month-dow" aria-hidden="true">${d}</div>`);
 
   for (let i = 0; i < total; i++) {

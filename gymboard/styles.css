@@ -1250,4 +1250,19 @@ button:disabled { cursor:default; }
   #screen-month .month-chip-emoji { font-size:14px; }
   #screen-month .month-num   { font-size:10px; }
   #screen-month .month-dow   { font-size:8px; padding:1px 0 2px; }
+
+  /* ---- v7.4 (Soren 6/25): ALIGN the SOCIAL + MONTH header dividers across the two columns.
+     #screen-grid and #screen-month both start at the same y (top:52, under the 52px app header),
+     so equalizing each header BAND's border-box height lands their bottom dividers at the same y.
+     Band 1 = the title row (#grid-head "THIS WEEK …" vs .month-head "JUNE 2026") -> both 48px.
+     Band 2 = the legend / chip row (.grid-legend vs .month-chips) -> both 38px. Vertical padding
+     is zeroed so the 28px arrows/chips center cleanly (align-items:center already set); horizontal
+     padding is left untouched. month-chips is pinned to a single row (nowrap + its existing
+     overflow-x:auto) so the fixed height always holds. Measured in-browser: the two divider
+     offsets went 12px / 5.9px -> 0 / 0. */
+  #grid-head,
+  #screen-month .month-head  { height:48px; padding-top:0; padding-bottom:0; }
+  #grid-legend,
+  #screen-month .month-chips { height:38px; padding-top:0; padding-bottom:0; }
+  #screen-month .month-chips { flex-wrap:nowrap; }
 }
