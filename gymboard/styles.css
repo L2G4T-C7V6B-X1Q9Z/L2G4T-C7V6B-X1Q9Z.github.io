@@ -141,6 +141,18 @@ button:disabled { cursor:default; }
 #hdr-left {
   font-weight:700; font-size:14px; letter-spacing:.18em;
   color:var(--txt2); white-space:nowrap;
+  position:relative; /* anchor for the hover easter-egg ::after */
+}
+/* cursed easter egg (Soren-requested): hovering the GYMBOARD wordmark fades in a 🖕 just to its right.
+   Absolutely positioned so it never nudges the header layout; desktop-hover only (hover:hover) so a
+   phone tap can't leave it stuck on. */
+@media (hover:hover) {
+  #hdr-left::after {
+    content:"🖕"; position:absolute; left:100%; top:50%; transform:translateY(-50%);
+    margin-left:8px; font-size:15px; line-height:1; letter-spacing:0;
+    opacity:0; pointer-events:none; transition:opacity .14s ease;
+  }
+  #hdr-left:hover::after { opacity:1; }
 }
 #hdr-right { display:flex; align-items:center; gap:8px; }
 #hdr-reg {
@@ -630,6 +642,9 @@ button:disabled { cursor:default; }
 }
 .pl-history:disabled { opacity:.45; cursor:default; }
 .pl-theme-ideas { margin-left:auto; flex:0 0 auto; font-size:10px; color:var(--txt3); letter-spacing:.04em; white-space:nowrap; }
+/* v7.5 #A: "submitted by X" attribution for the resolved theme — muted, sits after the ✎, ellipsizes
+   if cramped (the right-aligned ideas count stays pinned right via its margin-left:auto). */
+.pl-theme-by { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; color:var(--txt3); letter-spacing:.04em; }
 
 /* fixed add-bar: one wide input + ADD (reuses .me-input + .me-meal-btn), then a hint line that
    doubles as the "already added" pulse target. */

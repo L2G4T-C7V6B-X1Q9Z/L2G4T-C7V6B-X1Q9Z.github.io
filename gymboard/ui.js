@@ -176,6 +176,7 @@ const elPlThemeName = $('pl-theme-name');
 const elPlThemeEdit = $('pl-theme-edit');
 const elPlThemeInput = $('pl-theme-input');
 const elPlThemeIdeas = $('pl-theme-ideas'); // live count of ideas submitted for the next period
+const elPlThemeBy = $('pl-theme-by'); // v7.5 #A: "submitted by X" attribution for the resolved theme
 const elPlReset = $('pl-reset'); // countdown to the next half-week reset
 const elGridLegend = $('grid-legend');
 // v4 (#3): weight-over-time chart handles (the inline-SVG line chart on the SOCIAL board).
@@ -304,6 +305,12 @@ let _plRealSyncing = false; // re-entrancy guard so overlapping focus/visibility
 let plNextIdeasCount = 0;
 let _plNextIdeasPeriod = '';
 let plNextIdeasUnsub = null;
+// v7.5 #A: live submissions for the VIEWED period — used to attribute the resolved theme ("submitted
+// by X"). resolveThemeForPeriod doesn't record WHICH submission it picked, so we match the live theme
+// text back to its submission here.
+let plViewedSubs = [];
+let _plViewedSubsPeriod = '';
+let plViewedSubsUnsub = null;
 // periods we've already lazily resolved the theme for (resolveThemeForPeriod runs once per period).
 const _plResolvedPeriods = new Set();
 // v7.3: signature of the LAST playlist render. renderPlaylist no-ops when nothing it draws has
@@ -2004,6 +2011,48 @@ function ensureNextIdeasSub() {
   } catch (_) { /* non-fatal: the count just stays 0 */ }
 }
 
+// v7.5 #A: keep a live subscription to the VIEWED period's idea submissions, so the resolved theme can
+// be attributed to whoever submitted it ("submitted by X"). Re-points when the viewed slot rolls over.
+function ensureViewedSubsSub(key) {
+  if (key === _plViewedSubsPeriod) return;
+  _plViewedSubsPeriod = key;
+  if (plViewedSubsUnsub) { try { plViewedSubsUnsub(); } catch (_) {} plViewedSubsUnsub = null; }
+  plViewedSubs = [];
+  if (!key) return;
+  try {
+    plViewedSubsUnsub = data.subscribeThemeSubmissions(key, (ideas) => {
+      plViewedSubs = Array.isArray(ideas) ? ideas : [];
+      if (isDesktop() || activeTab === 'playlist') renderPlaylist();
+    });
+  } catch (_) { /* non-fatal: no attribution is shown */ }
+}
+
+// v7.5 #A: the displayName to attribute the current theme to ("submitted by X"), or '' when no setter
+// is recorded — graceful: show nothing. Two sources, in priority order:
+//   1) a /themeSubmissions idea whose text matches the live theme -> the true SUBMITTER. resolveTheme-
+//      ForPeriod copies only the picked text onto the slot (slot.updatedByUserId is then the RESOLVER,
+//      not the submitter), so the submission is the reliable source when the theme came that way.
+//   2) else slot.updatedByUserId — an inline live-named theme stamps its namer there (no submission
+//      doc exists for that path). This is how the current live themes are attributed (the submission
+//      flow is new + unused so far), e.g. Jacob, who named the current vibe.
+function themeSubmitterName(key) {
+  const slot = plSlots[key] || {};
+  const theme = (typeof slot.theme === 'string') ? slot.theme.trim() : '';
+  if (!theme) return '';
+  const want = theme.toLowerCase();
+  const sub = plViewedSubs.find((s) => s && s.addedByUserId
+    && typeof s.theme === 'string' && s.theme.trim().toLowerCase() === want);
+  if (sub) {
+    const m = memberById(sub.addedByUserId);
+    if (m) return displayNameOf(m);
+  }
+  if (typeof slot.updatedByUserId === 'string' && slot.updatedByUserId) {
+    const m = memberById(slot.updatedByUserId);
+    if (m) return displayNameOf(m);
+  }
+  return '';
+}
+
 // "Jun 22 MON–WED" for a legacy (pre-MXT) slot key in the HISTORY list.
 function slotDateLabel(slotKey) {
   const us = slotKey.indexOf('_');
@@ -2106,6 +2155,7 @@ function renderPlaylist() {
   // and keep the "ideas for next period" subscription pointed at the right key.
   maybeResolveTheme(key);
   ensureNextIdeasSub();
+  ensureViewedSubsSub(key); // v7.5 #A: live submissions for this period (to attribute the theme)
 
   // time-based countdown — refresh on every call (cheap text, never reloads anything), even when the
   // signature guard below short-circuits the rest of the render.
@@ -2122,6 +2172,9 @@ function renderPlaylist() {
   const fallbackSnap = useReal ? [] : songs.filter((s) => s.slot === key);
   const total = pendingAdds.length + (useReal ? merged.length : fallbackSnap.length);
 
+  // v7.5 #A: who submitted the current theme ('' when inline live-named / no matching submission).
+  const themeBy = themeSubmitterName(key);
+
   // v7.3 (#F): a compact signature of everything this render draws. When it's unchanged, skip the
   // entire render — so the heartbeat + no-op /users snapshots (a teammate's lastActiveAt bump fires
   // repaint() ~every few seconds) stop rebuilding the pane (which used to reload every Spotify embed).
@@ -2134,7 +2187,7 @@ function renderPlaylist() {
     merged.map((t) => t.id || t.name || '').join(','),
     pendingAdds.map((s) => `${s.id || ''}:${s.trackId || ''}:${s.title || ''}`).join(','),
     fallbackSnap.map((s) => s.id || '').join(','),
-    plCollabUrl || '', slotSig,
+    plCollabUrl || '', slotSig, 'by:' + themeBy,
   ].join('');
   if (sig === _plRenderSig) return;
   _plRenderSig = sig;
@@ -2142,8 +2195,13 @@ function renderPlaylist() {
   // theme line: the CURRENT period's theme (or the unset placeholder) + the next-period idea count.
   if (elPlThemeName && !plThemeEditing) {
     const theme = plSlots[key] && typeof plSlots[key].theme === 'string' ? plSlots[key].theme.trim() : '';
-    elPlThemeName.textContent = theme || 'name this week’s vibe';
+    elPlThemeName.textContent = theme || 'name this playlist’s vibe';
     elPlThemeName.classList.toggle('unset', !theme);
+  }
+  // v7.5 #A: attribute the resolved theme to its submitter; hidden when there's no matching submission.
+  if (elPlThemeBy) {
+    elPlThemeBy.textContent = themeBy ? `submitted by ${themeBy}` : '';
+    elPlThemeBy.classList.toggle('hidden', !themeBy);
   }
   if (elPlThemeIdeas) {
     elPlThemeIdeas.textContent = plNextIdeasCount > 0 ? `${plNextIdeasCount} idea${plNextIdeasCount === 1 ? '' : 's'} for next` : '';
