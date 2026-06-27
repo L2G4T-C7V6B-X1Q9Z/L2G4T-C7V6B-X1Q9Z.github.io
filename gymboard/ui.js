@@ -3719,7 +3719,13 @@ function onGridCellActivate(target) {
   const uid = cell.dataset.uid;
   const dateKey = cell.dataset.date;
   if (!uid || !isDayKey(dateKey)) return;
-  if (uid !== myUserId) return; // v7.1: CLICK acts on your OWN cells only (others are hover-preview only)
+  // v7.1: on a HOVER-capable device (desktop) a CLICK acts on your OWN cells only — others'
+  // cells preview on mouseover. But touch devices have NO hover, so without this guard a TAP on
+  // someone else's square did NOTHING on mobile (Soren 6/26). On no-hover devices let a tap open
+  // ANY cell: own cells stay editable, others open the read-only popover (openDayPopover already
+  // gates editing to your own cells, so a foreign cell opens read-only with the 5s auto-dismiss).
+  const canHover = !!(window.matchMedia && window.matchMedia('(hover: hover)').matches);
+  if (uid !== myUserId && canHover) return;
   const member = memberById(uid);
   if (member) openDayPopover(member, dateKey, cell);
 }

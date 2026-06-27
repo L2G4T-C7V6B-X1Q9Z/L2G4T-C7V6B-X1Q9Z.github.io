@@ -1,12 +1,20 @@
 // =============================================================================
-// gymboard — service worker (NETWORK-FIRST app shell)
+// gymboard — service worker (STALE-WHILE-REVALIDATE app shell)
 // -----------------------------------------------------------------------------
-// Why this exists: the app is a no-build static PWA (GitHub Pages). Without a
-// service worker, iOS/Safari cache the ES modules HARD, so people get stuck on an
-// old version every time we deploy (Jacob's "tap the type, nothing happens" bug
-// was exactly this — stale code). This SW makes every ONLINE load fetch the latest
-// code from the network, and only falls back to the cache when truly offline. So
-// once a client has this SW, every future deploy reaches them automatically.
+// Why this exists: the app is a no-build static PWA (GitHub Pages). Two failure
+// modes have to be balanced:
+//   1) iOS/Safari cache ES modules HARD, so people get stuck on OLD code after a
+//      deploy (Jacob's "tap the type, nothing happens" bug was exactly this).
+//   2) The previous fix (network-FIRST + cache:'no-store') re-downloaded the WHOLE
+//      app (ui.js ~180KB + data.js ~90KB + css + html) over the network on EVERY
+//      load, so the loading spinner sat for ~8s on gym/mobile wifi.
+//
+// STALE-WHILE-REVALIDATE fixes both: serve the cached copy INSTANTLY (the spinner
+// drops in milliseconds), and in the BACKGROUND fetch a fresh copy (cache:'no-store'
+// so it's a real network hit, never the browser HTTP cache) to overwrite the cache
+// for the NEXT load. Net result: near-instant loads after the first visit, AND a new
+// deploy still reaches everyone within ONE reload (no stale-cache lock-in — the
+// property the old network-first SW was protecting is preserved).
 //
 // SAFETY: it ONLY touches same-origin GETs (our HTML/JS/CSS). All cross-origin
 // traffic — Firebase Auth/Firestore, the gstatic SDK, Spotify embeds, the
@@ -14,12 +22,14 @@
 // so auth and data are completely unaffected.
 // =============================================================================
 
-const CACHE = 'gymboard-shell-v1';
+// Bumped v1 -> v2 so the old network-first cache bucket is dropped on activate.
+const CACHE = 'gymboard-shell-v2';
 
 // Take over as soon as installed (don't wait for every tab to close).
 self.addEventListener('install', () => self.skipWaiting());
 
-// On activate, drop any older cache buckets and claim open clients immediately.
+// On activate, drop any older cache buckets (incl. the v1 network-first bucket) and
+// claim open clients immediately so the new strategy is live without a manual close.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
@@ -38,19 +48,22 @@ self.addEventListener('fetch', (event) => {
   // gstatic, open.spotify.com, the Worker) go to the network untouched.
   if (url.origin !== self.location.origin) return;
 
-  // Network-first: always try the live copy; cache it for offline; on a network
-  // failure (offline) serve the last-known cached copy. `cache:'no-store'` is
-  // CRUCIAL — a plain fetch(req) would still hit the browser HTTP cache and could
-  // serve stale code, defeating the whole point; no-store forces a real network hit.
+  // Stale-while-revalidate: return the cached copy IMMEDIATELY when present, and kick
+  // off a background refresh that overwrites the cache for next time. On a cache MISS
+  // (first-ever visit) we await the network. cache:'no-store' on the refresh guarantees
+  // a genuine network hit (not a browser-HTTP-cached stale copy), so deploys still
+  // propagate. The refresh runs fire-and-forget on a cache hit; its cache.put is fast.
   event.respondWith(
-    fetch(req, { cache: 'no-store' })
-      .then((resp) => {
-        if (resp && resp.ok) {
-          const copy = resp.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return resp;
+    caches.open(CACHE).then((cache) =>
+      cache.match(req).then((cached) => {
+        const fresh = fetch(req, { cache: 'no-store' })
+          .then((resp) => {
+            if (resp && resp.ok) cache.put(req, resp.clone());
+            return resp;
+          })
+          .catch(() => cached || Response.error());
+        return cached || fresh;
       })
-      .catch(() => caches.match(req).then((hit) => hit || Response.error()))
+    )
   );
 });
