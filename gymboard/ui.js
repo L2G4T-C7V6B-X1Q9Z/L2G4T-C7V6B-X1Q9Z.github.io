@@ -46,6 +46,7 @@ import {
   emojiOf,
   EMOJI_SET,
   isDayKey,
+  memberInactiveByKeys,
   // v5 (#5): PLAYLIST — the pure song-input parser + cross-service deep-link builders.
   parseSongInput,
   playlistDedupeKey,
@@ -665,15 +666,25 @@ function headStackHtml(member, now, viewerBiz) {
   return `<div class="gh-stack">${parts.join('')}</div>`;
 }
 
-// v7.1 (Soren 6/25): a member is INACTIVE when their last activity was >=3 days ago — gray out
-// their whole board column + show an "(inactive)" tag in the header. A never-active member (no
-// lastActiveAt) is NOT flagged, so a just-joined person isn't grayed before their first log.
-function memberInactive(m) {
-  const la = m && m.lastActiveAt;
-  if (!la || typeof la.toMillis !== 'function') return false;
-  let ms;
-  try { ms = la.toMillis(); } catch (e) { return false; }
-  return (Date.now() - ms) >= 3 * 86400000;
+// v7.6 (Soren 6/28): a member is INACTIVE when their last activity OR, if they never logged,
+// their join is >=3 civil days before `today` — gray out their whole board column + show an
+// "(inactive)" tag. Joined-long-ago-never-logged members (Lars/Olivia) now show inactive too;
+// a genuinely-new joiner (<3d, no logs) is still spared by the grace window. DST-safe: the
+// pure tested memberInactiveByKeys (logic.js) does the day diff on civil dateKeys — no raw ms.
+function memberInactive(m, today) {
+  if (!m) return false;
+  let laKey = null;
+  const la = m.lastActiveAt;
+  if (la && typeof la.toMillis === 'function') {
+    let ms = null;
+    try { ms = la.toMillis(); } catch (e) { ms = null; }
+    if (ms != null) {
+      const vs = subjectOf(memberById(myUserId)) || { ianaTz: DEFAULT_TZ, rolloverHour: DEFAULT_ROLLOVER_H, rolloverMinute: DEFAULT_ROLLOVER_M };
+      laKey = businessDate(ms, vs.ianaTz, vs.rolloverHour, vs.rolloverMinute);
+    }
+  }
+  const joinKey = m.profile && m.profile.joinDate;
+  return memberInactiveByKeys(laKey, joinKey, today);
 }
 
 function renderGrid(now) {
@@ -691,7 +702,7 @@ function renderGrid(now) {
   // stable partition (preserves order within each group), so concatenating active+inactive is a
   // clean stable sort by inactivity. Only reorders the grid columns — chart order is untouched.
   const baseCols = orderedMembers();
-  const cols = baseCols.filter((m) => !memberInactive(m)).concat(baseCols.filter((m) => memberInactive(m)));
+  const cols = baseCols.filter((m) => !memberInactive(m, today)).concat(baseCols.filter((m) => memberInactive(m, today)));
 
   // CSS grid template: a fixed date gutter + one CAPPED column per member. v4 (#15): the
   // cap (max 56px) stops 3 people from stretching full-width; #grid (width:max-content,
@@ -709,7 +720,7 @@ function renderGrid(now) {
     // v4 (#14): the per-person emoji sits ABOVE the name (between the stat stack and the
     // name span). emojiOf falls back to a deterministic id-hash for demo users with none.
     const emoji = emojiOf({ emoji: m.emoji, id: idOf(m) });
-    const inactive = memberInactive(m);
+    const inactive = memberInactive(m, today);
     cells.push(
       `<div class="ghead${isMe ? ' me' : ''}${inactive ? ' inactive' : ''}" title="${escapeHtml(displayNameOf(m))}">` +
         (inactive ? `<span class="ghead-inactive">inactive</span>` : '') +
@@ -745,7 +756,7 @@ function renderGrid(now) {
         wtag = `<span class="gcell-wtag" aria-hidden="true">${escapeHtml(WTYPE_TAG[day.workoutType])}</span>`;
       }
       cells.push(
-        `<div class="gcell w-${wStatus} n-${nStatus}${isMe ? ' me' : ''}${prejoin ? ' prejoin' : ''}${memberInactive(m) ? ' inactive' : ''}${daypopSelected && daypopSelected.uid === uid && daypopSelected.date === dk ? ' gcell-selected' : ''}" ` +
+        `<div class="gcell w-${wStatus} n-${nStatus}${isMe ? ' me' : ''}${prejoin ? ' prejoin' : ''}${memberInactive(m, today) ? ' inactive' : ''}${daypopSelected && daypopSelected.uid === uid && daypopSelected.date === dk ? ' gcell-selected' : ''}" ` +
           `style="opacity:${op}" data-uid="${escapeHtml(uid)}" data-date="${escapeHtml(dk)}" ` +
           `role="button" tabindex="0" aria-label="${escapeHtml(aria)}">` +
           `<div class="seg-w">${wtag}</div><div class="seg-n"></div></div>`
@@ -956,12 +967,20 @@ function buildWeightChart(now) {
       const lb = wmap[dk];
       if (Number.isFinite(lb)) {
         pts.push({ dk, lb, idx: dateIndex.get(dk) });
-        if (lb < yMin) yMin = lb;
-        if (lb > yMax) yMax = lb;
       }
     }
     if (!pts.length) continue; // no in-range data -> no line (no flat zero, no NaN)
-    series.push({ uid, member: m, isMe: uid === myUserId, pts });
+    // v7.6: Robinhood per-window re-basing. Each member re-bases to their EARLIEST in-window
+    // weigh-in (pts[0], chronologically first since we walked keysOldestFirst); we plot the
+    // DELTA lb-base so everyone starts level at 0 and trajectories are comparable. Pool the
+    // deltas (not absolute lbs) so the shared y-axis fits the changes, not the weights.
+    const base = pts[0].lb;
+    for (const p of pts) {
+      const dv = p.lb - base;
+      if (dv < yMin) yMin = dv;
+      if (dv > yMax) yMax = dv;
+    }
+    series.push({ uid, member: m, isMe: uid === myUserId, pts, base });
   }
 
   // ---- empty: zero shared in-range points across everyone -> hide SVG, show the note.
@@ -987,7 +1006,8 @@ function buildWeightChart(now) {
     lo = _wzoom.lo; hi = _wzoom.hi;
   }
   const span = hi - lo || 1;
-  const yOf = (lb) => PAD_T + (1 - (lb - lo) / span) * innerH;
+  // dv = delta lbs from member base (re-based view); lo/hi/span are all in delta units.
+  const yOf = (dv) => PAD_T + (1 - (dv - lo) / span) * innerH;
 
   // ---- assign colors: "me" is red; others cycle the tokenized grays.
   let otherI = 0;
@@ -1030,16 +1050,20 @@ function buildWeightChart(now) {
   const gridVals = [];
   for (let g = Math.ceil(lo / gstep) * gstep; g <= hi + 0.001; g += gstep) gridVals.push(g);
   if (!gridVals.length) gridVals.push(lo, hi);
+  // v7.6: re-based axis -> labels are signed deltas (+2/+1/0/-1/-2), not absolute lbs.
+  // niceStep can return 0.5 on a small re-based range, so Math.round would duplicate/mislabel;
+  // use a sign+decimal-aware format with an fp-drift guard. The 0 line (always present since
+  // every series contributes a delta-0 base point) gets a darker monochrome emphasis — NOT red
+  // (red stays the ME accent per the single-accent rule).
   for (const gv of gridVals) {
+    const gvr = Math.round(gv * 100) / 100;
+    const isZero = Math.abs(gvr) < 1e-6;
     const gy = yOf(gv).toFixed(2);
-    parts.push(
-      `<line x1="${PAD_L}" y1="${gy}" x2="${(vbW - PAD_R).toFixed(2)}" y2="${gy}" ` +
-        `stroke="var(--hairline)" stroke-width="0.6" />`
-    );
-    parts.push(
-      `<text x="${(PAD_L - 5).toFixed(2)}" y="${(yOf(gv) + 3).toFixed(2)}" ` +
-        `font-size="7" fill="var(--txt3)" text-anchor="end">${Math.round(gv)}</text>`
-    );
+    parts.push(`<line x1="${PAD_L}" y1="${gy}" x2="${(vbW - PAD_R).toFixed(2)}" y2="${gy}" stroke="${isZero ? 'var(--txt3)' : 'var(--hairline)'}" stroke-width="${isZero ? 1.1 : 0.6}" />`);
+    const sign = gvr > 0 ? '+' : gvr < 0 ? '-' : '';
+    const mag = Number.isInteger(gvr) ? Math.abs(gvr) : Math.abs(gvr).toFixed(1);
+    const txt = isZero ? '0' : sign + mag;
+    parts.push(`<text x="${(PAD_L - 5).toFixed(2)}" y="${(yOf(gv) + 3).toFixed(2)}" font-size="7" fill="var(--txt3)" text-anchor="end">${txt}</text>`);
   }
 
   // one line (or dot) per member; collect end-labels anchored to each member's OWN
@@ -1052,7 +1076,7 @@ function buildWeightChart(now) {
   // assigned on each series above, so reordering the draw is purely about z-stacking.
   const drawOrder = series.slice().sort((a, b) => (a.isMe ? 1 : 0) - (b.isMe ? 1 : 0));
   for (const s of drawOrder) {
-    const coords = s.pts.map((p) => ({ x: xOf(p.idx), y: yOf(p.lb) }));
+    const coords = s.pts.map((p) => ({ x: xOf(p.idx), y: yOf(p.lb - s.base) }));
     const last = coords[coords.length - 1];
     if (coords.length === 1) {
       parts.push(`<circle cx="${last.x.toFixed(2)}" cy="${last.y.toFixed(2)}" r="2.2" fill="${s.color}" opacity="${s.opacity}"${clipAttr} />`);
@@ -1060,9 +1084,11 @@ function buildWeightChart(now) {
       const d = smoothPath(coords);
       if (s.isMe) {
         // v5.4: translucent red area under the ME line so you can find yourself at a glance.
-        const bottomY = (vbH - PAD_B).toFixed(2);
+        // v7.6: anchor the fill to the 0 (baseline) line, not the chart bottom — in delta space
+        // a cutter's line dips below 0 and a fill-to-floor would yawn open.
+        const baseY = yOf(0).toFixed(2);
         parts.push(
-          `<path d="${d} L ${last.x.toFixed(2)} ${bottomY} L ${coords[0].x.toFixed(2)} ${bottomY} Z" ` +
+          `<path d="${d} L ${last.x.toFixed(2)} ${baseY} L ${coords[0].x.toFixed(2)} ${baseY} Z" ` +
             `fill="url(#wcMeFill)" stroke="none"${clipAttr} />`
         );
       }
@@ -3838,7 +3864,10 @@ function wchartViewBox(clientX, clientY) {
   };
 }
 
-// invert yOf: a viewBox y -> a weight, using the geometry the chart was drawn with.
+// invert yOf: a viewBox y -> a value, using the geometry the chart was drawn with.
+// v7.6: lo/hi (and thus the returned value) are now DELTA lbs from each member's base, not
+// absolute weights — this operates purely in delta space and is self-consistent. There is no
+// single cross-member base, so do NOT add a base back here.
 function wchartLbAtY(vy, g) {
   const span = (g.hi - g.lo) || 1;
   return g.lo + (1 - (vy - g.PAD_T) / g.innerH) * span;
@@ -3992,7 +4021,7 @@ function renderScrub() {
   for (const s of g.series) {
     const w = wchartWeightAtIdx(s, idx);
     if (!w) continue;
-    const d = cursorVy === null ? (s.isMe ? 0 : 1) : Math.abs(g.yOf(w.lb) - cursorVy);
+    const d = cursorVy === null ? (s.isMe ? 0 : 1) : Math.abs(g.yOf(w.lb - s.base) - cursorVy);
     if (d < best) { best = d; nearest = s; nearestW = w; }
   }
   if (!nearest) {
@@ -4002,7 +4031,7 @@ function renderScrub() {
   }
 
   // a single dot, sitting on the nearest line at the scrubbed date.
-  const dy = toY(g.yOf(nearestW.lb));
+  const dy = toY(g.yOf(nearestW.lb - nearest.base));
   const dot = wchartDot(0);
   dot.style.display = 'block';
   dot.style.left = (lineX - 4) + 'px';
@@ -4027,7 +4056,11 @@ function renderScrub() {
   tag.textContent = abbrevName(displayNameOf(nearest.member)) || '?';
   const val = document.createElement('span');
   val.style.cssText = 'color:var(--txt); margin-left:auto; padding-left:10px;';
-  val.textContent = wchartFmtLb(nearestW.lb);
+  // v7.6: chart is re-based, but the scrub readout shows the REAL weight + signed delta from
+  // their window base so "what do I weigh" is still answered (wchartFmtLb prints the minus for
+  // negatives; we prefix '+' only for positives).
+  const dlt = nearestW.lb - nearest.base;
+  val.textContent = wchartFmtLb(nearestW.lb) + (Math.abs(dlt) < 0.05 ? '' : ' (' + (dlt > 0 ? '+' : '') + wchartFmtLb(dlt) + ')');
   row.appendChild(sw); row.appendChild(tag); row.appendChild(val);
   _wscrubBox.appendChild(row);
 

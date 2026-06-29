@@ -443,6 +443,18 @@ function dayKeyDiff(a, b) {
   return Math.round((ub - ua) / 86400000);
 }
 
+// A member is INACTIVE when their last activity OR, if they never logged, their join
+// is >= thresholdDays civil days before today (DST-safe via dayKeyDiff, not raw ms).
+// Branches are mutually exclusive on whether a lastActiveKey exists, so this IS the
+// brief's OR. No lastActive AND no join -> can't judge -> active. Join <3d ago with no
+// logs -> diff<3 -> active (the grace window so brand-new joiners aren't grayed).
+export function memberInactiveByKeys(lastActiveKey, joinDateKey, todayKey, thresholdDays = 3) {
+  if (!isDayKey(todayKey)) return false;
+  if (isDayKey(lastActiveKey)) return dayKeyDiff(lastActiveKey, todayKey) >= thresholdDays;
+  if (isDayKey(joinDateKey)) return dayKeyDiff(joinDateKey, todayKey) >= thresholdDays;
+  return false;
+}
+
 // Maintain band: a move within +/-1.0 lb of the comparison reads as "holding",
 // which for a maintain goal is TOWARD the goal. Stored once so the helper and
 // its tests agree on the threshold.
