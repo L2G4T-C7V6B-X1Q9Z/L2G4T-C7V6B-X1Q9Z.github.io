@@ -1022,96 +1022,101 @@
 
 <script>
 // ============ CONFIG ============
-const dayType = "Lower";
+const dayType = "Upper";
 
-// LOWER session (next, per U/L rotation -- Fri 6/26 Upper DONE 39m06s; flipped Upper->Lower at day-close). PHASE 2A. Order: Leg Press -> Calf Raises -> DB Romanian Deadlift -> Leg Extension -> Cable Face Pulls. BUILD RULES (Soren, FIRM): ONE weight per exercise, NO backoffs / "drop to X" prompts / "specify weight" options (no backoff fields), NO RIR cues, setNotes are FORM/LOAD cues ONLY -- NEVER echo his prior reps. Deltas this build: Leg Press 250->235 (250 cratered 12/7/8/7 on 6/25); Leg Curl PULLED (medial-thigh nerve) -> DB Romanian Deadlift (Soren's improvised hamstring swap, clean 6/25); Calf next-up 145 (no 135 on the stack). Voice = ElevenLabs static bank, workout-agnostic -- no regen, build id unchanged.
+// UPPER session (next, per U/L rotation -- Mon 6/29 Lower DONE 32m10s; flipped Lower->Upper at day-close). PHASE 2A. Order: Chest Press -> Cable Row -> Cable Pushdown -> DB Lateral Raise -> DB Curls (compounds FIRST/fresh per Soren 6/26). AUTO-DROP IS BACK (Soren 6/29 = Option A): a non-final set at the rep FLOOR at MAX auto-drops the next set to ex.backoff and STATES it (no decision prompt -- the no-decision part is what the 6/24 kill-rule actually meant). Backoffs: Chest Press 110 (floor, NEVER 100), Cable Row 110, Cable Pushdown 30. DB Lateral Raise = straight sets, NO backoff (delt groover). DB Curls = NO backoff, SUPINATED, NEVER to failure (musculocutaneous nerve). setNotes are FORM/LOAD cues ONLY -- never echo prior reps. 6/26 baselines: CP 120 (9/8/6/7), Row 120 (10/8/8/8), Pushdown 35 (12/12/9), DB LR 15 strict (15/17/11 -- the 10 was too light), DB Curls 20 (11/10/7). Voice = ElevenLabs static bank, workout-agnostic -- no regen, build id unchanged.
 const workout = [
   {
-    name: "Leg Press",
+    name: "Chest Press Machine",
     sets: 4,
     reps: "8-12",
-    weight: "235 lbs",
+    weight: "120 lbs",
+    backoff: "110 lbs",
     rest: 150,
-    note: "Hold 235 (dropped from 250 -- it cratered under the rep floor across 4 sets). Full depth, controlled descent, drive through the heels, don't slam the knees straight at the top.",
+    note: "Hold 120, do it FIRST while fresh. Full ROM, controlled descent to the chest, drive without slamming the elbows locked. Floor is 110 -- never 100.",
     setNotes: [
-      "S1: full depth, controlled descent, drive through the heels.",
+      "S1: fresh -- full ROM, controlled descent to the chest.",
       "S2: full 2.5-min rest first, same depth and tempo.",
-      "S3: knees track over the toes, no bouncing out of the bottom.",
-      "S4: last set, empty the tank, full depth, controlled negative."
+      "S3: drive through the mid-chest, no half reps.",
+      "S4: last set, empty the tank, controlled negative."
     ],
     trigger: [12, 12, 12, 12],
-    triggerWeight: "250 lbs",
+    triggerWeight: "130 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Leg Press Calf Raises",
+    name: "Cable Rope Row",
+    sets: 4,
+    reps: "8-12",
+    weight: "120 lbs",
+    backoff: "110 lbs",
+    rest: 150,
+    note: "Hold 120, run it earlier in the order. Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return -- no jerking with the low back.",
+    setNotes: [
+      "S1: chest tall, pull to the waist, squeeze the blades.",
+      "S2: full rest, elbows close, no torso heave.",
+      "S3: controlled return, full stretch at the front.",
+      "S4: last set, drive the elbows back, clean reps."
+    ],
+    trigger: [12, 12, 12, 12],
+    triggerWeight: "130 lbs",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "Cable Tricep Pushdown",
     sets: 3,
     reps: "12-15",
-    weight: "130 lbs",
+    weight: "35 lbs",
+    backoff: "30 lbs",
     rest: 90,
-    note: "Hold 130 (same Leg Press machine, stay on it). Full stretch at the bottom, hard squeeze and pause at the top, no bouncing. Next jump is 145 (no 135 on the stack).",
+    note: "Hold 35. Elbows pinned to the sides, full lockout at the bottom, control the negative -- no leaning into it or flaring the elbows.",
     setNotes: [
-      "S1: full stretch at the bottom, big squeeze at the top.",
-      "S2: pause the top contraction, slow controlled negative.",
-      "S3: last set, full range, no bouncing the weight up."
+      "S1: elbows pinned, full lockout at the bottom.",
+      "S2: control the negative, no body english.",
+      "S3: last set, squeeze the lockout, clean reps."
     ],
     trigger: [15, 15, 15],
-    triggerWeight: "145 lbs",
-    adviceFor: function(setIdx, prev) {
-      return null;
-    }
-  },
-  {
-    name: "DB Romanian Deadlift",
-    sets: 3,
-    reps: "8-12",
-    weight: "35 lbs",
-    rest: 120,
-    note: "Hamstring movement (replaces the leg curl that twangs the nerve). Hinge at the hips, soft knees, neutral spine, DBs sliding close down the thighs, feel the hamstring stretch -- don't round the low back or turn it into a squat. STOP on any medial-thigh pain.",
-    setNotes: [
-      "S1: hinge from the hips, soft knees, slide the DBs down the thighs.",
-      "S2: neutral spine, feel the hamstring stretch, squeeze the glutes at the top.",
-      "S3: last set, keep the DBs close, no rounding the low back."
-    ],
-    trigger: [12, 12, 12],
     triggerWeight: "40 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Leg Extension",
+    name: "DB Lateral Raise",
     sets: 3,
-    reps: "8-12",
-    weight: "70 lbs",
+    reps: "15-20",
+    weight: "15 lbs",
     rest: 90,
-    note: "Hold 70 (banking 80 until all 3 sets groove clean). Squeeze the quads hard at the top, control the negative, no swinging or kicking the weight up.",
+    note: "Strict 15 (the 10 was too light). Lead with the elbows, raise to parallel -- no higher (L-shoulder clicks above parallel), no swinging or momentum.",
     setNotes: [
-      "S1: full extension, hard quad squeeze at the top.",
-      "S2: control the negative, no kicking or swinging.",
-      "S3: last set, pause the top contraction, clean reps."
+      "S1: strict, lead with the elbows, raise to parallel.",
+      "S2: no swing, slow controlled negative.",
+      "S3: last set, keep it strict, stop at parallel."
     ],
-    trigger: [12, 12, 12],
-    triggerWeight: "80 lbs",
+    trigger: [20, 20, 20],
+    triggerWeight: "17.5 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
   },
   {
-    name: "Cable Face Pulls",
-    sets: 2,
-    reps: "15-20",
-    weight: "40 lbs",
+    name: "DB Curls (supinated)",
+    sets: 3,
+    reps: "8-12",
+    weight: "20 lbs",
     rest: 90,
-    note: "Groover -- shoulder health, not to failure. Pull to the forehead, elbows high, squeeze the rear delts, slow controlled return. Keep it at or below parallel.",
+    note: "Hold 20, SUPINATED grip only (no hammer -- it twangs the nerve). Controlled, no swinging. STOP on any forearm/elbow nerve sensation -- never grind these to failure.",
     setNotes: [
-      "S1: elbows high, pull to the forehead, squeeze the rear delts.",
-      "S2: last set, slow controlled return, no heaving the weight."
+      "S1: supinated grip, controlled, no swing.",
+      "S2: squeeze the top, slow negative.",
+      "S3: last set, clean reps, stop on any nerve twang."
     ],
-    trigger: [20, 20],
-    triggerWeight: "45 lbs",
+    trigger: [12, 12, 12],
+    triggerWeight: "25 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
@@ -2058,26 +2063,28 @@ function dynamicRepAdvice(setIdx, prev, ex) {
   if (maxed) { pLo = Math.max(r - 2, 1); pHi = Math.max(r - 1, 1); }
   else if (roomLeft) { pLo = r; pHi = Math.min(r + 2, hi); }
   else { pLo = Math.max(r - 1, 1); pHi = r; }
-  // Downtrend autoregulation (Soren's rule, 6/10): if reps are sliding across
-  // max-effort sets and the NEXT set projects under the floor, LEAD with a
-  // decisive weight drop -- never chase a number he's fading away from.
-  if (bo && maxed && prev.length >= 2) {
-    var firstR = Number(prev[0].reps);
-    if (!isNaN(firstR)) {
+  // Auto-drop autoregulation (Soren 6/29 = Option A, resolves the 6/25 A/B):
+  // a non-final set ground out at/under the floor at MAX effort, OR a multi-set
+  // fade projecting under the floor (the 6/10 rule), means the weight is too
+  // heavy to progress. STATE the drop decisively -- no "hold or drop" choice
+  // (that ambiguity is exactly what Soren killed on 6/24).
+  if (bo && maxed) {
+    var firstR = prev.length >= 2 ? Number(prev[0].reps) : r;
+    var fadeUnder = false;
+    if (prev.length >= 2 && !isNaN(firstR)) {
       var lostPerSet = (firstR - r) / (prev.length - 1);
-      if (lostPerSet >= 1 && (r - Math.round(lostPerSet)) < lo) {
-        return "Fading " + firstR + "->" + r + " at max, next lands under " + lo + " at " + w + ". DROP to " + bo + ", aim " + lo + "-" + aimHi + ".";
-      }
+      fadeUnder = lostPerSet >= 1 && (r - Math.round(lostPerSet)) < lo;
+    }
+    if (r <= lo || fadeUnder) {
+      return L + ": floor at max (" + r + "). Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
     }
   }
   if (r <= 0) return L + " stopped early. Reset, go by feel this set.";
   if (r < lo && maxed) {
-    return bo ? L + " was " + r + ", a hair under " + lo + "-" + hi + " at max. Hold " + w + " and grind " + Math.max(r, 1) + "+ -- drop to " + bo + " ONLY if it stalls out next set."
-              : L + " was " + r + ", under " + lo + ". Hold " + w + ", grind " + Math.max(r, 1) + "+ or drop a notch.";
+    return L + " was " + r + ", under " + lo + ". Hold " + w + " and grind " + Math.max(r, 1) + "+, or drop a notch.";
   }
   if (r <= lo && maxed) {
-    return bo ? L + " hit the floor (" + r + " at max). Hold " + w + " for ~" + pLo + "-" + pHi + ", or drop to " + bo + " for " + lo + "-" + aimHi + "."
-              : L + " at the floor (" + r + "). ~" + pLo + "-" + pHi + " here, that's the set.";
+    return L + " at the floor (" + r + "). ~" + pLo + "-" + pHi + " here, that's the set.";
   }
   if (r >= hi && roomLeft) {
     return L + " hit " + r + " (top) with room. Bump the weight next session. Here: " + (hi - 1) + "-" + hi + ".";
@@ -2154,12 +2161,12 @@ function effectiveWeight(exIdx, setIdx) {
     const m = baseStr.match(/(?:→|->|drop to)\s*(\d+(?:\.\d+)?)/i);
     if (m) dropNum = m[1];
   }
-  // (b) reactive drop: ONLY on a genuine multi-set downtrend at max effort
-  // (reps fading >=1/set AND the next set projecting under the floor). A single
-  // set that merely lands a hair under range must NOT auto-drop the loaded
-  // weight -- that over-triggered on 6/17 (a 9-rep S1 leg curl flipped 50->40
-  // when 50 should have held). The advisor note still suggests an optional drop.
-  if (dropNum == null && setIdx >= 2 && ex.backoff) {
+  // (b) reactive auto-drop (Soren 6/29 = Option A): fire when a non-final set
+  // grinds out the rep FLOOR at MAX effort, OR a multi-set fade projects under
+  // the floor (the 6/10 rule). setIdx>=1 so a cratered S2 (e.g. LE 12->8@max)
+  // drops S3, not just S4. Guards against the 6/17 over-trigger: S1 never drops
+  // (setIdx>=1), and a rep ABOVE the floor never fires (last.reps <= lo).
+  if (dropNum == null && setIdx >= 1 && ex.backoff) {
     const prevLogs = [];
     let allLogged = true;
     for (let i = 0; i < setIdx; i++) {
@@ -2174,8 +2181,13 @@ function effectiveWeight(exIdx, setIdx) {
       if (rng && last && first && typeof last.reps === "number" && !isNaN(last.reps) && typeof first.reps === "number" && !isNaN(first.reps)) {
         const lo = +rng[1];
         const maxed = (+last.difficulty || 0) >= 5;
-        const lostPerSet = (first.reps - last.reps) / (prevLogs.length - 1);
-        if (maxed && lostPerSet >= 1 && (last.reps - Math.round(lostPerSet)) < lo) {
+        const atFloorMax = maxed && last.reps <= lo;
+        let fadeUnder = false;
+        if (prevLogs.length >= 2) {
+          const lostPerSet = (first.reps - last.reps) / (prevLogs.length - 1);
+          fadeUnder = maxed && lostPerSet >= 1 && (last.reps - Math.round(lostPerSet)) < lo;
+        }
+        if (atFloorMax || fadeUnder) {
           dropNum = (String(ex.backoff).match(/(\d+(?:\.\d+)?)/) || [])[1] || null;
         }
       }
@@ -2782,38 +2794,31 @@ function skipRest() {
   syncLogArea();
   saveState();
 
-  // Voice cue: same shape as restDone autoStart path. If skipping inter-exercise rest
-  // (currentSet === 0 of a freshly-advanced exercise), re-announce the upcoming exercise
-  // since the original "up-next + ex-name" chain was cancelled mid-flight.
+  // Voice cue (Soren 6/29): on an IN-EXERCISE skip (set 1+), do NOT re-announce
+  // the set/weight/position cues he just heard -- play "rest complete" and stop.
+  // Only an INTER-EXERCISE skip (currentSet === 0, freshly-advanced exercise)
+  // re-announces the upcoming exercise, since its up-next chain was cancelled.
   {
     const seq = ['rest-complete'];
-    const setStart = setStartClipFor(currentExercise, currentSet);
-    if (setStart) {
-      seq.push(setStart);
-    } else if (currentSet === 0) {
-      const isFinalExercise = (currentExercise === workout.length - 1);
-      const exClip = exerciseClipName(workout[currentExercise] && workout[currentExercise].name);
-      // v2: ALWAYS push up-next (or final-exercise) before the exercise name on inter-exercise skip.
-      // Previously this was omitted, leaving "Rest complete. [ExName]..." without the transition cue.
-      seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
-      if (exClip) seq.push(exClip);
-    }
-    // v2: announce weight + rep range ONLY when re-entering an exercise at set 0 (skipped inter-exercise rest);
-    // for in-exercise sets (set 1+), weight is already known from prior announcement — just play position cue.
-    const ex = workout[currentExercise];
-    if (ex) {
-      if (currentSet === 0) {
-        if (!dailyClipFor(currentExercise, 0)) {
-          seq.push(...weightClipsFor(ex));
-          const repClip = repRangeClipFor(ex.reps);
-          if (repClip) seq.push(repClip);
-        }
+    if (currentSet === 0) {
+      const setStart = setStartClipFor(currentExercise, currentSet);
+      if (setStart) {
+        seq.push(setStart);
       } else {
-        seq.push(...setPositionCuesFor(currentSet, ex.sets));
+        const isFinalExercise = (currentExercise === workout.length - 1);
+        const exClip = exerciseClipName(workout[currentExercise] && workout[currentExercise].name);
+        seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
+        if (exClip) seq.push(exClip);
       }
+      const ex = workout[currentExercise];
+      if (ex && !dailyClipFor(currentExercise, 0)) {
+        seq.push(...weightClipsFor(ex));
+        const repClip = repRangeClipFor(ex.reps);
+        if (repClip) seq.push(repClip);
+      }
+      const _dc = dailyClipFor(currentExercise, 0);
+      if (_dc) seq.push(_dc);
     }
-    const _dc = dailyClipFor(currentExercise, currentSet);
-    if (_dc) seq.push(_dc);
     VoiceCue.playSequence(seq);
   }
 }
