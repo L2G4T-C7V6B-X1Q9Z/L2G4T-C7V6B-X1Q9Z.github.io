@@ -43,6 +43,7 @@ import {
   layoutChartEndLabels,
   abbrevName,
   nutritionStatus,
+  nutritionProgress,
   emojiOf,
   EMOJI_SET,
   isDayKey,
@@ -523,7 +524,16 @@ function classifyDay(subject, dateKey, now, day) {
     isPast: dateKey < cur,
   });
 
-  return { wStatus, nStatus };
+  // v8: the fraction of the calorie (or protein) goal logged -> drives the
+  // dithered partial-fill on the nutrition triangle. null when there's no
+  // measurable goal (manual mode / goal unset) -> cell stays the flat binary.
+  const nProgress = nutritionProgress(day, {
+    nutritionMode: subject.nutritionMode,
+    kcalGoal: subject.kcalGoal,
+    proteinGoal: subject.proteinGoal,
+  });
+
+  return { wStatus, nStatus, nProgress };
 }
 
 const CELL_LABEL = {
@@ -745,7 +755,15 @@ function renderGrid(now) {
       const subject = subjectOf(m);
       const isMe = uid === myUserId;
       const day = effectiveDays(uid)[dk];
-      const { wStatus, nStatus } = classifyDay(subject, dk, now, day);
+      const { wStatus, nStatus, nProgress } = classifyDay(subject, dk, now, day);
+      // v8: dithered partial-fill class for a not-yet-hit nutrition cell that has a
+      // goal to measure against. Bayer density bucket 1..16 (mask tiles in styles.css);
+      // bucket 0 (barely any intake) and 'hit' both stay unfilled here (hit = solid).
+      let nfill = '';
+      if (nStatus !== 'hit' && typeof nProgress === 'number') {
+        const nb = Math.round(nProgress * 16);
+        if (nb > 0) nfill = ` n-fill n-d${nb}`;
+      }
       const prejoin = wStatus === 'prejoin';
       const aria = `${displayNameOf(m)} ${dk} — workout ${CELL_LABEL[wStatus] || wStatus}, nutrition ${nStatus}`;
       // v3 cell body: a TOP workout band + a BOTTOM nutrition band (V1 horizontal
@@ -756,7 +774,7 @@ function renderGrid(now) {
         wtag = `<span class="gcell-wtag" aria-hidden="true">${escapeHtml(WTYPE_TAG[day.workoutType])}</span>`;
       }
       cells.push(
-        `<div class="gcell w-${wStatus} n-${nStatus}${isMe ? ' me' : ''}${prejoin ? ' prejoin' : ''}${memberInactive(m, today) ? ' inactive' : ''}${daypopSelected && daypopSelected.uid === uid && daypopSelected.date === dk ? ' gcell-selected' : ''}" ` +
+        `<div class="gcell w-${wStatus} n-${nStatus}${nfill}${isMe ? ' me' : ''}${prejoin ? ' prejoin' : ''}${memberInactive(m, today) ? ' inactive' : ''}${daypopSelected && daypopSelected.uid === uid && daypopSelected.date === dk ? ' gcell-selected' : ''}" ` +
           `style="opacity:${op}" data-uid="${escapeHtml(uid)}" data-date="${escapeHtml(dk)}" ` +
           `role="button" tabindex="0" aria-label="${escapeHtml(aria)}">` +
           `<div class="seg-w">${wtag}</div><div class="seg-n"></div></div>`

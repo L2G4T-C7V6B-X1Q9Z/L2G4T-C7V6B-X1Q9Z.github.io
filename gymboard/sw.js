@@ -23,7 +23,7 @@
 // =============================================================================
 
 // Bumped v1 -> v2 so the old network-first cache bucket is dropped on activate.
-const CACHE = 'gymboard-shell-v2';
+const CACHE = 'gymboard-shell-v3';
 
 // Take over as soon as installed (don't wait for every tab to close).
 self.addEventListener('install', () => self.skipWaiting());

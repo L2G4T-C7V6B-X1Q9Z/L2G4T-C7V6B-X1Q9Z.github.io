@@ -647,6 +647,38 @@ export function nutritionStatus(day, opts = {}) {
   return calorieOk && proteinOk ? 'hit' : notMet;
 }
 
+/**
+ * nutritionProgress(day, opts) -> number in [0,1], or null
+ *
+ * The FRACTION of the day's calorie (or protein) goal that's logged — drives the
+ * SEGMENTED partial-fill on the nutrition triangle. Companion to nutritionStatus:
+ * status decides hit/pending/none (and color); this decides how FULL a not-yet-hit
+ * cell reads. Returns null when there is no measurable goal to fill against (manual
+ * mode, or the relevant goal unset/<=0) -> the caller falls back to the binary
+ * triangle. Mode-aware, matching nutritionStatus's metric:
+ *   manual  -> null (no auto goal).
+ *   protein -> protein / proteinGoal.
+ *   both    -> kcal / kcalGoal (calorie progress; direction-AGNOSTIC — a 'lose' day
+ *              still reads as "budget used"; hit/miss stays nutritionStatus's job).
+ * Clamped to [0,1]; absent/0 intake reads as 0 (empty).
+ */
+export function nutritionProgress(day, opts = {}) {
+  const { nutritionMode, kcalGoal, proteinGoal } = opts;
+  const mode =
+    nutritionMode === 'manual' || nutritionMode === 'protein' ? nutritionMode : 'both';
+  if (mode === 'manual') return null;
+  const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+  if (mode === 'protein') {
+    if (!Number.isFinite(proteinGoal) || proteinGoal <= 0) return null;
+    const P = day && Number.isFinite(day.protein) ? day.protein : 0;
+    return clamp01(P / proteinGoal);
+  }
+  // both
+  if (!Number.isFinite(kcalGoal) || kcalGoal <= 0) return null;
+  const K = day && Number.isFinite(day.kcal) ? day.kcal : 0;
+  return clamp01(K / kcalGoal);
+}
+
 // ---- compliance % over a trailing window (SPEC-v4 §5) ------------------------
 
 /**
