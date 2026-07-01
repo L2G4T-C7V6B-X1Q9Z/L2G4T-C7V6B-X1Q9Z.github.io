@@ -1197,6 +1197,10 @@ export async function setMacros(businessDate, macros = {}) {
     throw taggedError('gymboard/bad-value', 'setMacros: provide kcal and/or protein.');
   }
 
+  // v9: snapshot the current goal onto the day so it freezes (a later goal change
+  // won't rewrite this day's dither/hit). Safe no-op if no goal is set.
+  Object.assign(payload, await ownGoalSnapshot());
+
   const batch = writeBatch(_db);
   const dayRef = doc(_db, 'users', id, 'days', businessDate);
   batch.set(dayRef, payload, { merge: true });
@@ -1219,6 +1223,30 @@ export async function setMacros(businessDate, macros = {}) {
 // =============================================================================
 
 const MAX_MEALS_PER_DAY = 50; // matches the rule's meals.size() <= 50 cap.
+
+/**
+ * ownGoalSnapshot() -> Promise<{ kcalGoal?, proteinGoal?, goalDir? }>
+ * v9: read the bound user's CURRENT goal so a nutrition-log write can snapshot it
+ * onto the day cell. That freezes each day against the goal in effect when it was
+ * logged -> a later goal change never rewrites past days' dither/hit. Returns {} on
+ * any miss/error (the day then falls back to the live goal client-side, no worse
+ * than before), so the log write NEVER fails because of this read.
+ */
+async function ownGoalSnapshot() {
+  try {
+    if (!_userId) return {};
+    const snap = await getDoc(doc(_db, 'users', _userId));
+    const u = snap && snap.exists() ? snap.data() : null;
+    if (!u) return {};
+    const out = {};
+    if (Number.isFinite(u.kcalGoal)) out.kcalGoal = u.kcalGoal;
+    if (Number.isFinite(u.proteinGoal)) out.proteinGoal = u.proteinGoal;
+    if (u.goal === 'gain' || u.goal === 'lose' || u.goal === 'maintain') out.goalDir = u.goal;
+    return out;
+  } catch (_e) {
+    return {};
+  }
+}
 
 /**
  * addMeal(businessDate, { kcal, protein }) -> Promise<void>
@@ -1307,10 +1335,13 @@ export async function addMeal(businessDate, meal = {}) {
   }
   const newMeals = prevMeals.concat([mealEl]);
 
+  // v9: snapshot the current goal onto the day (freezes it vs future goal changes).
+  const goalSnap = await ownGoalSnapshot();
+
   const batch = writeBatch(_db);
   batch.set(
     dayRef,
-    { kcal: newKcal, protein: newProtein, meals: newMeals, updatedAt: serverTimestamp() },
+    { kcal: newKcal, protein: newProtein, meals: newMeals, ...goalSnap, updatedAt: serverTimestamp() },
     { merge: true }
   );
   bumpLastActiveInBatch(batch, id);
