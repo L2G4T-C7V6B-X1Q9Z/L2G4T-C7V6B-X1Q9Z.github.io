@@ -516,11 +516,21 @@ function classifyDay(subject, dateKey, now, day) {
   // returns red — 'hit'|'pending'|'none' map to green/quiet-fill/quiet-gray.
   const { h, m } = { h: subject.rolloverHour, m: subject.rolloverMinute };
   const cur = currentBusinessDate(now, subject.ianaTz, h, m);
+  // v9: evaluate each day against the goal that was IN EFFECT THEN, not the live one.
+  // A day snapshots its own kcalGoal/proteinGoal/goalDir when it's logged, so changing
+  // your goal later never rewrites past days' hit/dither. Fall back to the current goal
+  // only for days with no snapshot (older days / not-yet-snapshotted).
+  const dayKcalGoal = day && Number.isFinite(day.kcalGoal) ? day.kcalGoal : subject.kcalGoal;
+  const dayProteinGoal = day && Number.isFinite(day.proteinGoal) ? day.proteinGoal : subject.proteinGoal;
+  const dayGoalDir = day && (day.goalDir === 'gain' || day.goalDir === 'lose' || day.goalDir === 'maintain')
+    ? day.goalDir
+    : (subject.goal || 'maintain');
+
   const nStatus = nutritionStatus(day, {
     nutritionMode: subject.nutritionMode, // v4 (#6): mode-aware auto-check
-    kcalGoal: subject.kcalGoal,
-    proteinGoal: subject.proteinGoal,
-    goal: subject.goal || 'maintain',
+    kcalGoal: dayKcalGoal,
+    proteinGoal: dayProteinGoal,
+    goal: dayGoalDir,
     isPast: dateKey < cur,
   });
 
@@ -529,8 +539,8 @@ function classifyDay(subject, dateKey, now, day) {
   // measurable goal (manual mode / goal unset) -> cell stays the flat binary.
   const nProgress = nutritionProgress(day, {
     nutritionMode: subject.nutritionMode,
-    kcalGoal: subject.kcalGoal,
-    proteinGoal: subject.proteinGoal,
+    kcalGoal: dayKcalGoal,
+    proteinGoal: dayProteinGoal,
   });
 
   return { wStatus, nStatus, nProgress };

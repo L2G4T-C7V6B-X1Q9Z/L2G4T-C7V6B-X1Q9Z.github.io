@@ -547,6 +547,10 @@ export function weightTrend(weightsByDate, goal, asOfKey) {
 // Stored once so the helper and its tests agree on the threshold (mirrors the
 // MAINTAIN_BAND_LB pattern weightTrend uses).
 const MAINTAIN_PCT = 0.1; // +/-10%
+// v9: one-sided hit tolerance for gain/lose + a grace on the protein floor, so a day
+// within logging noise of goal isn't marked a miss. gain/lose only; maintain uses its
+// own MAINTAIN_PCT band.
+const HIT_TOL_PCT = 0.05; // +/-5%
 
 /**
  * nutritionStatus(day, opts) -> 'hit' | 'pending' | 'none'
@@ -585,10 +589,11 @@ const MAINTAIN_PCT = 0.1; // +/-10%
  *           (half-configured treated as unset, no accidental silent pass).
  *        b. K = finite day.kcal; if !(K > 0) -> notMet (0-kcal never auto-greens).
  *        c. P = finite day.protein else 0.
- *        d. band = MAINTAIN_PCT*kcalGoal; direction rule (inclusive bounds):
- *             lose     : K <= KG          AND P >= PG
- *             gain     : K >= KG          AND P >= PG
- *             maintain : |K - KG| <= band AND P >= PG   (unknown goal => maintain)
+ *        d. calTol = HIT_TOL_PCT*kcalGoal; band = MAINTAIN_PCT*kcalGoal; the protein
+ *           floor gets a HIT_TOL_PCT grace too. Direction rule (inclusive bounds):
+ *             lose     : K <= KG + calTol AND P >= PG - protTol
+ *             gain     : K >= KG - calTol AND P >= PG - protTol
+ *             maintain : |K - KG| <= band AND P >= PG - protTol  (unknown => maintain)
  *        e. rule met -> 'hit', else notMet.
  *
  * protein is treated as 0 when absent (so a kcal-only 'both' day can't pass the
@@ -631,13 +636,17 @@ export function nutritionStatus(day, opts = {}) {
   const KG = kcalGoal;
   const PG = proteinGoal;
 
-  // 4d. Direction rule. Unknown goal falls back to maintain (matches weightTrend).
-  const proteinOk = P >= PG;
+  // 4d. Direction rule with a tolerance band (v9): a little on the "wrong" side of the
+  // goal still counts (over logging noise). gain/lose get a one-sided HIT_TOL_PCT grace
+  // (the "right" side always counts); maintain keeps its two-sided +/-10% band. The
+  // protein floor gets the same small grace. Unknown goal falls back to maintain.
+  const calTol = HIT_TOL_PCT * KG;
+  const proteinOk = P >= PG - HIT_TOL_PCT * PG;
   let calorieOk;
   if (goal === 'lose') {
-    calorieOk = K <= KG;
+    calorieOk = K <= KG + calTol; // a little over the cap still counts
   } else if (goal === 'gain') {
-    calorieOk = K >= KG;
+    calorieOk = K >= KG - calTol; // a little under the target still counts
   } else {
     const band = MAINTAIN_PCT * KG; // maintain (and any unknown goal)
     calorieOk = Math.abs(K - KG) <= band;
