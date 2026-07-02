@@ -91,6 +91,7 @@ let _serverOffsetEstablished = false;
 // reclaim callback (LOUD "signed out elsewhere — tap to reclaim").
 let _reclaimCb = null;
 let _reclaimFired = false; // de-dup: only fire the loud prompt once per detection
+let _reclaimProbing = false; // an ownership probe is in flight (don't start a second)
 
 // OPTIONAL Spotify-sync Worker (v5.1). When firebase-config.js sets
 // `spotifyWorker: { url, secret }`, a successful addSong ALSO best-effort POSTs
@@ -591,22 +592,65 @@ export function onReclaimNeeded(cb) {
 }
 
 /**
- * Decide whether a permission-denied on an OWN-doc operation is the
- * single-active-device mismatch (vs a transient/other denial), and if so fire
- * the loud prompt exactly once. Returns true if it was treated as a reclaim.
+ * confirmWriteOwnershipLost() -> Promise<boolean>
+ * The disambiguator behind the LOUD modal. A permission-denied on an owner op has
+ * TWO indistinguishable causes from the client's side: (a) another device overwrote
+ * /bindings to ITS uid — a REAL "signed out elsewhere" that reclaim fixes; or (b) the
+ * rules rejected an otherwise-valid session's write for a NON-binding reason (a field/
+ * shape/whitelist skew) — reclaim can't fix that. We CANNOT read /bindings (its deny-
+ * read is load-bearing), so we PROBE: attempt the most minimal always-valid owner write
+ * (a lastActiveAt bump — whitelisted on /users, resolves to request.time). It succeeds
+ * iff we still own the binding.
+ *   - probe succeeds          -> we still own it        -> NOT a reclaim (false)
+ *   - probe permission-denied -> ownership really gone   -> real reclaim (true)
+ *   - probe otherwise (offline/transient) -> inconclusive; fail toward the modal (true)
+ *     so a genuinely signed-out device is never left silently unable to write.
+ */
+async function confirmWriteOwnershipLost() {
+  if (!_bound || !_userId) return false;
+  try {
+    await setDoc(doc(_db, 'users', _userId), { lastActiveAt: serverTimestamp() }, { merge: true });
+    return false; // an owner write went through -> the binding is ours -> not a reclaim
+  } catch (e) {
+    if (isPermissionDenied(e)) return true; // owner write denied -> ownership really lost
+    return true; // inconclusive -> preserve the pre-probe "show the modal" posture
+  }
+}
+
+/**
+ * Decide whether a permission-denied on an OWN-doc operation should raise the LOUD
+ * "signed out elsewhere" prompt. Returns true SYNCHRONOUSLY for any post-bind
+ * permission-denied (so callers keep their rollback / reclaim-needed control flow),
+ * but the modal itself is DEFERRED behind confirmWriteOwnershipLost(): _reclaimCb only
+ * fires once the probe confirms write-ownership is actually gone. This stops a non-
+ * binding rules rejection (e.g. a client/rules field-whitelist skew) from masquerading
+ * as a stolen session — the bug that locked goal-having users out of nutrition logging
+ * on 2026-07-01 with a "tap to reclaim" that could never work.
  */
 function maybeFireReclaim(err) {
   if (!isPermissionDenied(err)) return false;
   // Only meaningful once we've successfully bound this session and are signed in.
   if (!_bound || !_uid) return false;
   if (_reclaimFired) return true; // already prompted; treat as reclaim, don't spam
-  _reclaimFired = true;
-  if (_reclaimCb) {
-    try {
-      _reclaimCb();
-    } catch (_) {
-      /* a throwing UI handler must not break the data layer */
-    }
+  if (!_reclaimProbing) {
+    _reclaimProbing = true;
+    confirmWriteOwnershipLost()
+      .then((lost) => {
+        _reclaimProbing = false;
+        if (lost && !_reclaimFired) {
+          _reclaimFired = true;
+          if (_reclaimCb) {
+            try {
+              _reclaimCb();
+            } catch (_) {
+              /* a throwing UI handler must not break the data layer */
+            }
+          }
+        }
+      })
+      .catch(() => {
+        _reclaimProbing = false;
+      });
   }
   return true;
 }

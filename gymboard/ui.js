@@ -2381,9 +2381,9 @@ async function commitThemeEdit() {
     try {
       await data.setPlaylistTheme(key, val);
     } catch (err) {
-      const code = String((err && (err.code || err.message)) || err);
-      if (/reclaim/i.test(code)) plHint('Signed out elsewhere — tap to reclaim.', 'err');
-      else plHint('Could not save the theme.', 'err');
+      // Theme writes are allowlist-gated, not binding-gated, so a denial here is not a
+      // reclaim; data.js probes + raises the modal if the binding is genuinely gone.
+      plHint('Could not save the theme.', 'err');
     }
     return;
   }
@@ -2393,9 +2393,7 @@ async function commitThemeEdit() {
     await data.submitTheme(next, val);
     plHint('Idea submitted for next period!', 'dupe'); // 'dupe' = the neutral (non-error) pulse style
   } catch (err) {
-    const code = String((err && (err.code || err.message)) || err);
-    if (/reclaim/i.test(code)) plHint('Signed out elsewhere — tap to reclaim.', 'err');
-    else plHint('Could not submit that idea.', 'err');
+    plHint('Could not submit that idea.', 'err');
   }
 }
 
@@ -2466,8 +2464,6 @@ async function submitSong() {
   try {
     songId = await data.addSong(payload, workerCtx); // stamps addedBy* + createdAt; returns the id
   } catch (err) {
-    const code = String((err && (err.code || err.message)) || err);
-    if (/reclaim/i.test(code)) { plHint('Signed out elsewhere — tap to reclaim.', 'err'); return; }
     plHint('Could not add that song.', 'err');
     return;
   }
@@ -3448,9 +3444,12 @@ async function meSaveSettings() {
 
 function handleWriteError(err) {
   const tag = String((err && (err.code || err.message)) || err);
-  if (/reclaim/i.test(tag)) {
-    showReclaim();
-  } else if (/bad-value|bad-date|bad-range/i.test(tag)) {
+  // The LOUD "signed out elsewhere" modal is NOT raised here anymore. A permission-
+  // denied write can be a real binding takeover OR a non-binding rules rejection (a
+  // field/shape skew), and only data.js can tell them apart: it probes write-ownership
+  // and fires data.onReclaimNeeded (-> showReclaim) ONLY on a confirmed takeover. Here
+  // we just report the failed save; a real takeover surfaces the modal a beat later.
+  if (/bad-value|bad-date|bad-range/i.test(tag)) {
     toast('check the value and try again');
   } else {
     toast('could not save — try again');
