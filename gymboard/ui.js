@@ -4675,12 +4675,14 @@ async function boot() {
     return;
   }
 
-  try {
-    // 3. self-create the minimal first-run /users doc if absent (joinDate + rest anchor).
-    await data.ensureUserDoc(myUserId);
-  } catch (e) {
-    // non-fatal: the doc may already exist (seeded by admin). Proceed to subscribe.
-  }
+  // 3. self-create the minimal first-run /users doc if absent (joinDate + rest anchor).
+  // Fire-and-forget: the live subscribe below does NOT depend on it. A returning user's
+  // doc already exists; a first-run doc lands in the snapshot the moment its create commits.
+  // Awaiting it here previously put a serial getDoc round-trip in front of the first paint on
+  // EVERY boot (the biggest avoidable cold-load stall after auth+bind). Still non-fatal.
+  data.ensureUserDoc(myUserId).catch(() => {
+    /* non-fatal: doc may already exist (admin-seeded) or self-create races the snapshot */
+  });
 
   // v4.5: the header "live" text + sync pip were removed (replaced by the theme
   // toggle). booted still gates the sync-pip class updates (harmless no-ops now).

@@ -24,10 +24,10 @@
 import {
   initializeApp,
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
-import {
-  initializeAppCheck,
-  ReCaptchaV3Provider,
-} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app-check.js';
+// firebase-app-check.js is imported DYNAMICALLY (see initApp) only when an App Check
+// site key is configured. App Check is OFF on this project, so a static import would
+// download + parse the App Check SDK on every load for nothing — a pure mobile
+// cold-load tax. The dynamic import keeps the feature re-enableable at zero idle cost.
 import {
   getAuth,
   signInAnonymously,
@@ -358,6 +358,11 @@ export async function initApp(firebaseConfig, appCheckSiteKey, opts = {}) {
       // eslint-disable-next-line no-undef
       self.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken; // true => printed token, or a fixed string
     }
+    // Load the App Check SDK on demand (only when a site key is set) so it's entirely
+    // off the critical path while App Check is disabled — which it currently is.
+    const { initializeAppCheck, ReCaptchaV3Provider } = await import(
+      'https://www.gstatic.com/firebasejs/12.15.0/firebase-app-check.js'
+    );
     _appCheck = initializeAppCheck(_app, {
       provider: new ReCaptchaV3Provider(appCheckSiteKey),
       isTokenAutoRefreshEnabled: true,
