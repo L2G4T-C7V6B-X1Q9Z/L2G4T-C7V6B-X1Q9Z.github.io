@@ -381,6 +381,11 @@ export function groupConsistency(allMembersDays, weekKey, nowInstant) {
     const { h, m } = rollover(subject);
     const cur = currentBusinessDate(nowInstant, subject.ianaTz, h, m);
     const joinDate = subject.profile && subject.profile.joinDate;
+    // DESIGN §12 fail-safe (mirrors missed/computeStreak/computeCompliance): an
+    // unconfigured member (no joinDate anchor) contributes NOTHING — otherwise
+    // every past non-rest week-day would count as expected-and-uncompleted while
+    // the board renders those same cells 'pending' (missed() fails safe to false).
+    if (!isDayKey(joinDate)) continue;
 
     for (const D of weekDays) {
       // pre-join days are out of scope entirely.
@@ -688,6 +693,37 @@ export function nutritionProgress(day, opts = {}) {
   return clamp01(K / kcalGoal);
 }
 
+/**
+ * nutritionGoalOpts(day, subject) -> { nutritionMode, kcalGoal, proteinGoal, goal }
+ *
+ * v9 goal-freeze READ helper: the goal set a day is judged against. A day
+ * SNAPSHOTS kcalGoal/proteinGoal/goalDir when nutrition is logged onto it
+ * (data.js setMacros/addMeal, the admin day-close), so a later goal change never
+ * rewrites that day's hit/dither. Precedence is PER FIELD: the day's snapshotted
+ * value when valid (finite number / known direction), else the subject's LIVE
+ * value (covers pre-v9 days with no snapshot). nutritionMode is NEVER
+ * snapshotted — always the subject's live mode. Missing subject goal -> 'maintain'
+ * (nutritionStatus's own unknown-goal fallback, made explicit here).
+ *
+ * This is the ONE precedence rule. Every read path — the grid/month cell
+ * (classifyDay), the day popover, computeCompliance's nutrition % — must build
+ * its nutritionStatus/nutritionProgress opts through it, so two views of the
+ * same day can never disagree. Pure; day/subject may be null/undefined.
+ */
+export function nutritionGoalOpts(day, subject) {
+  const goal =
+    day && (day.goalDir === 'gain' || day.goalDir === 'lose' || day.goalDir === 'maintain')
+      ? day.goalDir
+      : ((subject && subject.goal) || 'maintain');
+  return {
+    nutritionMode: subject ? subject.nutritionMode : undefined,
+    kcalGoal: day && Number.isFinite(day.kcalGoal) ? day.kcalGoal : subject ? subject.kcalGoal : undefined,
+    proteinGoal:
+      day && Number.isFinite(day.proteinGoal) ? day.proteinGoal : subject ? subject.proteinGoal : undefined,
+    goal,
+  };
+}
+
 // ---- compliance % over a trailing window (SPEC-v4 §5) ------------------------
 
 /**
@@ -721,7 +757,10 @@ export function nutritionProgress(day, opts = {}) {
  * NUTRITION %: nutrition is expected on EVERY in-window past non-prejoin day
  *   (you eat on rest days too). completed when nutritionStatus(...isPast:true)
  *   === 'hit' for the subject's mode/goals. Unset goals honestly yield low % —
- *   intentional, not special-cased.
+ *   intentional, not special-cased. v9: each day is judged against its OWN
+ *   snapshotted goal (nutritionGoalOpts), falling back to the live goal for
+ *   un-snapshotted days — so the % agrees with the painted cells and a goal
+ *   change never rewrites history.
  *
  * Pure: no Firebase/DOM. Fail-safe: a subject with no ianaTz or no joinDate
  * yields all-zero expected => percent null on both.
@@ -741,10 +780,6 @@ export function computeCompliance(daysMap, subject, nowInstant, opts = {}) {
   const { h, m } = rollover(subject);
   const cur = currentBusinessDate(nowInstant, subject.ianaTz, h, m);
   const days = daysMap || {};
-  const mode = subject.nutritionMode;
-  const kcalGoal = subject.kcalGoal;
-  const proteinGoal = subject.proteinGoal;
-  const goal = subject.goal;
 
   let wExpected = 0;
   let wCompleted = 0;
@@ -768,13 +803,9 @@ export function computeCompliance(daysMap, subject, nowInstant, opts = {}) {
       if (day && day.workout === true) wCompleted += 1;
 
       nExpected += 1;
-      const ns = nutritionStatus(day, {
-        nutritionMode: mode,
-        kcalGoal,
-        proteinGoal,
-        goal,
-        isPast: true,
-      });
+      // v9: judge the day against its own snapshotted goal (else the live one) —
+      // the same precedence classifyDay paints the cell with (nutritionGoalOpts).
+      const ns = nutritionStatus(day, { ...nutritionGoalOpts(day, subject), isPast: true });
       if (ns === 'hit') nCompleted += 1;
     }
 

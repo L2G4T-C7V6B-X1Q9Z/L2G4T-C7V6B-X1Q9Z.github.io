@@ -1247,8 +1247,9 @@ export async function setMacros(businessDate, macros = {}) {
   }
 
   // v9: snapshot the current goal onto the day so it freezes (a later goal change
-  // won't rewrite this day's dither/hit). Safe no-op if no goal is set.
-  Object.assign(payload, await ownGoalSnapshot());
+  // won't rewrite this day's dither/hit). Safe no-op if no goal is set, and a
+  // no-op for a PAST day (v9.1: never overwrite a frozen snapshot).
+  Object.assign(payload, await ownGoalSnapshot(businessDate));
 
   const batch = writeBatch(_db);
   const dayRef = doc(_db, 'users', id, 'days', businessDate);
@@ -1274,19 +1275,32 @@ export async function setMacros(businessDate, macros = {}) {
 const MAX_MEALS_PER_DAY = 50; // matches the rule's meals.size() <= 50 cap.
 
 /**
- * ownGoalSnapshot() -> Promise<{ kcalGoal?, proteinGoal?, goalDir? }>
+ * ownGoalSnapshot(businessDate?) -> Promise<{ kcalGoal?, proteinGoal?, goalDir? }>
  * v9: read the bound user's CURRENT goal so a nutrition-log write can snapshot it
  * onto the day cell. That freezes each day against the goal in effect when it was
  * logged -> a later goal change never rewrites past days' dither/hit. Returns {} on
  * any miss/error (the day then falls back to the live goal client-side, no worse
  * than before), so the log write NEVER fails because of this read.
+ *
+ * v9.1: when `businessDate` is a PAST day (before the user's current business-date),
+ * return {} — re-stamping a past day's write with the LIVE goal would overwrite its
+ * frozen snapshot, which is the exact rewrite v9 exists to prevent. The app only
+ * writes meals to the current day today, so this is a structural guard for any
+ * future past-day editor, not a behavior change. Today keeps re-stamping (a mid-day
+ * goal change should update today's snapshot so the cell tracks the ME card).
  */
-async function ownGoalSnapshot() {
+async function ownGoalSnapshot(businessDate) {
   try {
     if (!_userId) return {};
     const snap = await getDoc(doc(_db, 'users', _userId));
     const u = snap && snap.exists() ? snap.data() : null;
     if (!u) return {};
+    if (isDayKey(businessDate)) {
+      const h = Number.isFinite(u.rolloverHour) ? u.rolloverHour : DEFAULT_ROLLOVER_HOUR;
+      const m = Number.isFinite(u.rolloverMinute) ? u.rolloverMinute : DEFAULT_ROLLOVER_MINUTE;
+      const cur = currentBusinessDate(anchoredNow(), u.ianaTz || DEFAULT_TZ, h, m);
+      if (businessDate < cur) return {}; // past day: never overwrite its frozen snapshot
+    }
     const out = {};
     if (Number.isFinite(u.kcalGoal)) out.kcalGoal = u.kcalGoal;
     if (Number.isFinite(u.proteinGoal)) out.proteinGoal = u.proteinGoal;
@@ -1385,7 +1399,8 @@ export async function addMeal(businessDate, meal = {}) {
   const newMeals = prevMeals.concat([mealEl]);
 
   // v9: snapshot the current goal onto the day (freezes it vs future goal changes).
-  const goalSnap = await ownGoalSnapshot();
+  // v9.1: pass the date — a past-day write must never re-stamp the frozen snapshot.
+  const goalSnap = await ownGoalSnapshot(businessDate);
 
   const batch = writeBatch(_db);
   batch.set(

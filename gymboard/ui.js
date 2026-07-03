@@ -44,6 +44,7 @@ import {
   abbrevName,
   nutritionStatus,
   nutritionProgress,
+  nutritionGoalOpts,
   emojiOf,
   EMOJI_SET,
   isDayKey,
@@ -518,30 +519,17 @@ function classifyDay(subject, dateKey, now, day) {
   const cur = currentBusinessDate(now, subject.ianaTz, h, m);
   // v9: evaluate each day against the goal that was IN EFFECT THEN, not the live one.
   // A day snapshots its own kcalGoal/proteinGoal/goalDir when it's logged, so changing
-  // your goal later never rewrites past days' hit/dither. Fall back to the current goal
-  // only for days with no snapshot (older days / not-yet-snapshotted).
-  const dayKcalGoal = day && Number.isFinite(day.kcalGoal) ? day.kcalGoal : subject.kcalGoal;
-  const dayProteinGoal = day && Number.isFinite(day.proteinGoal) ? day.proteinGoal : subject.proteinGoal;
-  const dayGoalDir = day && (day.goalDir === 'gain' || day.goalDir === 'lose' || day.goalDir === 'maintain')
-    ? day.goalDir
-    : (subject.goal || 'maintain');
+  // your goal later never rewrites past days' hit/dither. nutritionGoalOpts (logic.js)
+  // is the ONE snapshot-else-live precedence rule, shared with the day popover and
+  // computeCompliance so no two views of the same day can disagree.
+  const goalOpts = nutritionGoalOpts(day, subject);
 
-  const nStatus = nutritionStatus(day, {
-    nutritionMode: subject.nutritionMode, // v4 (#6): mode-aware auto-check
-    kcalGoal: dayKcalGoal,
-    proteinGoal: dayProteinGoal,
-    goal: dayGoalDir,
-    isPast: dateKey < cur,
-  });
+  const nStatus = nutritionStatus(day, { ...goalOpts, isPast: dateKey < cur });
 
   // v8: the fraction of the calorie (or protein) goal logged -> drives the
   // dithered partial-fill on the nutrition triangle. null when there's no
   // measurable goal (manual mode / goal unset) -> cell stays the flat binary.
-  const nProgress = nutritionProgress(day, {
-    nutritionMode: subject.nutritionMode,
-    kcalGoal: dayKcalGoal,
-    proteinGoal: dayProteinGoal,
-  });
+  const nProgress = nutritionProgress(day, goalOpts);
 
   return { wStatus, nStatus, nProgress };
 }
@@ -878,10 +866,11 @@ function smoothPath(points) {
 function weightChartSig(now) {
   const cur = viewerBusinessDate(now);
   const rangeDays = wchartRange;
-  // capture EVERY in-range point (key=lb) per visible member, PLUS the emoji label — i.e.
-  // everything the chart actually draws. Editing any point (interior/first/last) or changing
-  // an emoji changes the sig, so the dirty-check can never leave a stale chart. Cheap:
-  // <=rangeDays lookups x members, string concat only.
+  // capture EVERY in-range point (key=lb) per visible member, PLUS the 3-letter name tag
+  // the end-labels draw (v7.4 switched labels from emoji to abbrevName, so the sig must
+  // track the NAME — tracking the emoji left a renamed member's tag stale). Editing any
+  // point or renaming changes the sig, so the dirty-check can never leave a stale chart.
+  // Cheap: <=rangeDays lookups x members, string concat only.
   const keys = [cur];
   for (let i = 1; i < rangeDays; i++) keys.push(prevBusinessDate(keys[i - 1]));
   const width = (elWchartSvg && elWchartSvg.clientWidth) || (elSocialChart && elSocialChart.clientWidth) || 0;
@@ -896,7 +885,7 @@ function weightChartSig(now) {
       const lb = wmap[dk];
       if (Number.isFinite(lb)) pts += dk + '=' + lb + ',';
     }
-    parts.push(uid + ':' + emojiOf(m) + ':' + pts);
+    parts.push(uid + ':' + (abbrevName(displayNameOf(m)) || '?') + ':' + pts);
   }
   return parts.join('|');
 }
@@ -1301,6 +1290,20 @@ function commitWithTimeout(promise, ms = 7000) {
 // Await a best-effort refetch but never let it hang the handler (getDocs can stall offline).
 function withSoftTimeout(promise, ms = 3000) {
   return Promise.race([Promise.resolve(promise).catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
+}
+
+// v9.1: meal writes are READ-MODIFY-WRITE (data.addMeal/removeMeal getDoc a base, then
+// merge recomputed totals), so two CONCURRENT calls read the same base and the second
+// commit silently reverts the first — the quick-meal chips have no disable guard, so a
+// double-tap logged only one meal (both toasts said "meal logged"). Serialize every
+// meal-path write through one promise chain: each RMW starts only after the previous
+// write settles, so it reads the committed totals. A rejection doesn't break the chain
+// (each caller still awaits + handles its own error), and offline writes queue in order.
+let _mealWriteChain = Promise.resolve();
+function enqueueMealWrite(startWrite) {
+  const run = _mealWriteChain.then(startWrite, startWrite);
+  _mealWriteChain = run.then(() => {}, () => {});
+  return run;
 }
 
 // =============================================================================
@@ -1803,7 +1806,9 @@ function renderMonth(now) {
   // subject). The dirty-check inside makes it fire at most once per subject+month, so this
   // never loops. Within the window it resolves false (a pure no-op).
   ensureMonthDays(uid, y, m, now).then((fetched) => {
-    if (fetched && activeTab === 'month' && monthSubjectUid === uid) renderMonth(anchoredNow());
+    // desktop shows MONTH alongside the other panes with activeTab elsewhere, so the
+    // post-fetch repaint needs the same isDesktop() gate every other callback uses.
+    if (fetched && (isDesktop() || activeTab === 'month') && monthSubjectUid === uid) renderMonth(anchoredNow());
   });
 }
 
@@ -3049,7 +3054,7 @@ async function meAddMeal() {
   }
   if (elMeAddMeal) elMeAddMeal.disabled = true;
   try {
-    const status = await commitWithTimeout(data.addMeal(cur, { kcal, protein: protein != null ? protein : 0 }));
+    const status = await commitWithTimeout(enqueueMealWrite(() => data.addMeal(cur, { kcal, protein: protein != null ? protein : 0 })));
     if (elMeAddKcal) elMeAddKcal.value = '';
     if (elMeAddProtein) elMeAddProtein.value = '';
     await withSoftTimeout(refetchMyDays());
@@ -3067,7 +3072,7 @@ async function meRemoveMeal(idx) {
   const cur = myCurrentBiz();
   if (!cur) return;
   try {
-    const status = await commitWithTimeout(data.removeMeal(cur, idx));
+    const status = await commitWithTimeout(enqueueMealWrite(() => data.removeMeal(cur, idx)));
     await withSoftTimeout(refetchMyDays());
     toast(status === 'queued' ? 'meal removed · will sync' : 'meal removed');
   } catch (err) {
@@ -3105,7 +3110,7 @@ async function meLogQuickMeal(presetIdx) {
     if (typeof m.label === 'string' && m.label.trim()) mealArg.label = m.label.trim();
     // v4 (#7): also forward the preset's note so it rides through to the logged meal.
     if (m.note) mealArg.note = m.note;
-    const status = await commitWithTimeout(data.addMeal(cur, mealArg));
+    const status = await commitWithTimeout(enqueueMealWrite(() => data.addMeal(cur, mealArg)));
     await withSoftTimeout(refetchMyDays());
     toast(status === 'queued' ? 'meal saved · will sync' : 'meal logged');
   } catch (err) {
@@ -3576,16 +3581,13 @@ function buildDayPopBody(member, dateKey) {
   if (day.workout === true && day.workoutType && WTYPE_LABEL[day.workoutType]) {
     lines.push(line('Type', WTYPE_LABEL[day.workoutType]));
   }
-  // nutrition status for THIS day, mode-aware (read-only; never red).
+  // nutrition status for THIS day, mode-aware (read-only; never red). v9: judged
+  // against the day's own snapshotted goal (else live) via nutritionGoalOpts — the
+  // SAME precedence classifyDay paints the cell with, so the popover can never
+  // contradict the cell it was opened from after a goal change.
   const now = anchoredNow();
   const cur = currentBusinessDate(now, subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
-  const ns = nutritionStatus(day, {
-    nutritionMode: subject.nutritionMode,
-    kcalGoal: subject.kcalGoal,
-    proteinGoal: subject.proteinGoal,
-    goal: subject.goal || 'maintain',
-    isPast: dateKey < cur,
-  });
+  const ns = nutritionStatus(day, { ...nutritionGoalOpts(day, subject), isPast: dateKey < cur });
   lines.push(line('Nutrition', ns === 'hit' ? 'hit' : '—'));
   if (Number.isFinite(day.kcal)) lines.push(line('Calories', `${day.kcal}`));
   if (Number.isFinite(day.protein)) lines.push(line('Protein', `${day.protein}g`));
@@ -3639,10 +3641,13 @@ function buildDayPopBody(member, dateKey) {
 // running, so nothing is duplicated or leaked). If the cell fell out of the window, close.
 function reanchorDayPopover() {
   if (!daypopOpen || !daypopAnchor || !elDayPop) return;
-  // v5.4 (#6): the popover can be anchored to a SOCIAL grid cell OR a MONTH cell. Re-query the
-  // ACTIVE tab's container only — grid and month cells share .gcell + data-uid/data-date, so
-  // querying both would cross-match the offscreen tab's stale node.
-  const inMonth = activeTab === 'month';
+  // v5.4 (#6): the popover can be anchored to a SOCIAL grid cell OR a MONTH cell. Re-query
+  // ONLY the pane it was OPENED from (stashed on the anchor) — grid and month cells share
+  // .gcell + data-uid/data-date, so querying the other pane would cross-match its node.
+  // v9.1: the pane comes from the anchor, NOT activeTab — on desktop all panes render at
+  // once with activeTab parked elsewhere ('me'), so activeTab mis-picked the container and
+  // every repaint either jumped a MONTH popover onto the social grid or closed it.
+  const inMonth = daypopAnchor.pane === 'month';
   const container = inMonth ? elMonthGrid : elGrid;
   if (!container) return;
   const sel = `${inMonth ? '.month-cell' : '.gcell'}[data-uid="${cssAttrEscape(daypopAnchor.uid)}"][data-date="${cssAttrEscape(daypopAnchor.date)}"]`;
@@ -3682,7 +3687,11 @@ function openDayPopover(member, dateKey, cellEl, opts) {
   positionDayPop(cellEl);
   daypopOpen = true;
   daypopHover = hover;
-  daypopAnchor = { uid: idOf(member), date: dateKey }; // v4 (#4): remember what it points at
+  // v4 (#4): remember what it points at. v9.1: ALSO which pane the anchor cell lives in —
+  // derived from the clicked element itself, so reanchorDayPopover re-queries the right
+  // container on desktop, where grid + month are both live and activeTab says neither.
+  const pane = elMonthGrid && cellEl && typeof elMonthGrid.contains === 'function' && elMonthGrid.contains(cellEl) ? 'month' : 'grid';
+  daypopAnchor = { uid: idOf(member), date: dateKey, pane };
 
   clearTimeout(daypopTimer);
   removeDayPopOutside();
