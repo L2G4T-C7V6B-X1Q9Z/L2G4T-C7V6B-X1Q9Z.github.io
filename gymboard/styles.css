@@ -529,7 +529,9 @@ button:disabled { cursor:default; }
 }
 .gcell.prejoin { --w:var(--g1); --n:var(--g1); border-color:var(--hairline); clip-path:polygon(9px 0, 100% 0, 100% 100%, 0 100%, 0 9px); }
 .gcell.prejoin .seg-w::before, .gcell.prejoin .gcell-wtag { display:none; }
-.gcell.me { box-shadow:inset 2px 0 0 var(--red); }
+/* v9.2.1 (Soren 7/4): the .gcell.me inset red left-edge stripe is REMOVED — it peeked
+   past the rounded corners as a broken-looking red sliver ("that little red thing in the
+   corner"). The red NAME in the column header still marks the ME column. */
 
 /* v7.1 (Soren 6/25): a member inactive >=3 days — gray their whole column + an "(inactive)"
    tag in the header. grayscale desaturates; cells keep their row-fade opacity. The tag stays
@@ -1265,25 +1267,34 @@ button:disabled { cursor:default; }
   #screen-month    { grid-area:month; }    /* top-right half: calendar */
 
   /* v9.2: the weight chart's desktop panel (the #social-chart node is MOVED in here by
-     enterDesktopMode). The chart fills the whole half-column: the mobile fixed 152px
-     body height is released, and the mobile collapse state is pinned OPEN (a collapsed
-     chart in a dedicated panel would just be dead space — the pill becomes a no-op here;
-     mobile keeps its collapse untouched). */
+     enterDesktopMode). v9.2.1 (Soren 7/4): DON'T stretch the chart to the whole
+     half-column — a ~450px-tall plot read as vertically blown-out. Cap the body at a
+     chart-like height and center the whole unit vertically in the panel. The mobile
+     collapse state is pinned OPEN here (a collapsed chart in a dedicated panel is dead
+     space; the pill becomes a no-op — mobile keeps its collapse untouched). */
   #desk-chart {
     grid-area:chart;
-    display:flex; flex-direction:column;
+    display:flex; flex-direction:column; justify-content:center;
     min-height:0; min-width:0; overflow:hidden;
     background:var(--g0);
   }
   /* the author display:flex above would defeat the UA [hidden] rule — keep the slot
      honest until enterDesktopMode unhides it (and re-hidden if modes flip). */
   #desk-chart[hidden] { display:none; }
-  #desk-chart .social-chart { flex:1 1 auto; min-height:0; border-top:none; }
+  #desk-chart .social-chart { flex:0 1 auto; min-height:0; border-top:none; }
   #desk-chart .wchart-body,
   #desk-chart .social-chart.collapsed .wchart-body {
-    height:auto; flex:1 1 auto; opacity:1;
-    padding-bottom:10px;
+    height:auto; flex:0 0 auto; opacity:1;
+    padding-bottom:6px;
   }
+  /* deterministic plot height (no %-against-indefinite games): the SVG host is a fixed
+     300px; the viewBox math in buildWeightChart derives its aspect from this box. */
+  #desk-chart .wchart-svg { height:300px; flex:0 0 auto; }
+  /* v9.2.1: kill the reload FLASH — until enterDesktopMode moves the chart node into
+     this slot, it still sits inside #screen-grid (its mobile home); hide it there so it
+     never blinks under the board during boot. Once moved, this selector no longer
+     matches. Desktop-only (@media scope), so mobile keeps the chart under the grid. */
+  #screen-grid .social-chart { display:none; }
 
   /* each pane keeps its own scroll region; nothing scrolls the page. */
   .screen > .scrolly { flex:1 1 auto; min-height:0; }
@@ -1301,14 +1312,17 @@ button:disabled { cursor:default; }
   #grid-scroll { display:flex; flex-direction:column; }
   #grid        { margin-block:auto; }
 
-  /* MONTH sits in the right column's top now. Its cells are aspect-ratio:1/1 (square), which
-     in a wide column makes a 5-week month far too tall to fit (it was clipping). Compact it
-     for desktop: short cells + tighter chrome so the whole month is visible without scrolling.
-     The 320px row cap (above) then leaves the rest of the column to the playlist. (Soren 6/25
-     — "make both parts smaller so you can actually see the calendar".) */
+  /* MONTH gets the right column's top HALF. v9.2.1 (Soren 7/4): fill it — the old
+     compact 28px cells left a dead band under the calendar. Rows now SHARE the pane's
+     height (grid-auto-rows:1fr on a 100%-height grid), so the month stretches edge to
+     edge whatever the row count (5 or 6 weeks). aspect-ratio released so rows control
+     cell height. */
   #screen-month .gcell.month-cell,
-  #screen-month .month-cell.pad { aspect-ratio:auto; height:28px; }
-  #screen-month .month-grid  { gap:4px; padding:8px 10px 10px; }
+  #screen-month .month-cell.pad { aspect-ratio:auto; height:auto; min-height:0; }
+  #screen-month #month-scroll { display:flex; flex-direction:column; }
+  /* first (explicit) row = the SUN..SAT header, stays auto; every implicit week row
+     shares the remaining height equally. */
+  #screen-month .month-grid  { flex:1 1 auto; height:auto; grid-template-rows:auto; grid-auto-rows:minmax(0, 1fr); align-content:stretch; gap:4px; padding:8px 10px 10px; }
   #screen-month .month-head  { padding:6px 12px; }
   #screen-month .month-label { font-size:11.5px; min-width:104px; }
   #screen-month .month-chips { padding:5px 10px; gap:6px; }

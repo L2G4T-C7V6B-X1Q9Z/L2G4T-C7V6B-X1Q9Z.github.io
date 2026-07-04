@@ -724,7 +724,13 @@ function renderGrid(now) {
   // cap (max 56px) stops 3 people from stretching full-width; #grid (width:max-content,
   // margin-inline:auto, justify-content:center) centers the block when narrow and lets
   // #grid-scroll scroll horizontally when many columns overflow.
-  elGrid.style.gridTemplateColumns = `44px repeat(${cols.length}, minmax(40px, 56px))`;
+  // v9.2.1 (Soren 7/4): DESKTOP sizes the board UP — the full-height middle column made
+  // the mobile-capped 56px cells float tiny in empty space. Cells are aspect-ratio:1/1,
+  // so wider columns scale the whole board. (Inline style, so it must branch here — a
+  // CSS override can't beat it.)
+  elGrid.style.gridTemplateColumns = isDesktop()
+    ? `52px repeat(${cols.length}, minmax(48px, 84px))`
+    : `44px repeat(${cols.length}, minmax(40px, 56px))`;
 
   const cells = [];
   // header row: corner + member-name headers. v3.1: emit the stat stack FIRST and the
