@@ -104,6 +104,9 @@ const WCHART_PAD_B = 8;
 // v4.5: tokenized so the light theme can darken them (light grays vanish on white).
 const WCHART_OTHER_COLORS = ['var(--wc-o1)', 'var(--wc-o2)', 'var(--wc-o3)', 'var(--wc-o4)', 'var(--wc-o5)'];
 let wchartRange = 30; // selected window in days (30d default; 90d via the toggle)
+// v9.2 (Soren 7/4): chart mode. 'rel' (default) = Robinhood re-based deltas (everyone starts
+// at 0, y = +/- lbs change); 'abs' = absolute weight (y = real lbs, no re-basing).
+let wchartMode = 'rel';
 // v4 (#1): weight-chart perf. _wchartSig is the signature of the LAST real rebuild; a
 // repaint whose signature matches it skips the (expensive) SVG rebuild + innerHTML parse.
 // Set _wchartSig = null to FORCE the next rebuild (e.g. the 30d/90d toggle).
@@ -133,7 +136,12 @@ const elTabs = $('tabs');
 // do index math over this one list, and each .screen's resting transform is computed off
 // its index vs the active index (idx-activeIdx)*100% — robust for 3+ panes where the old
 // declarative ±100% rules break (non-adjacent panes would slide from the wrong side).
-const SCREENS = ['me', 'grid', 'month', 'playlist'];
+// v9.2 (Soren 7/4): PLAYLIST is PARKED — flag off so none of it loads (no tab, no pane,
+// no /playlist + /playlistSlots subscriptions, no Worker fetches, no reset-badge timer).
+// To bring it back: set true AND restore the #screen-playlist section + PLAYLIST tab
+// button in index.html (removed same day; see git history at Pages ae0a8ff).
+const PLAYLIST_ENABLED = false;
+const SCREENS = PLAYLIST_ENABLED ? ['me', 'grid', 'month', 'playlist'] : ['me', 'grid', 'month'];
 // v7 (#B): the ONE desktop-vs-mobile decision. matchMedia('(min-width:1024px) and
 // (pointer:fine)') is true ONLY on a wide screen whose PRIMARY pointer is fine (a mouse /
 // trackpad). A phone/tablet reports pointer:coarse, so it returns false even at 1300px
@@ -725,15 +733,12 @@ function renderGrid(now) {
   cells.push('<div class="gcell-corner"></div>');
   for (const m of cols) {
     const isMe = idOf(m) === myUserId;
-    // v4 (#14): the per-person emoji sits ABOVE the name (between the stat stack and the
-    // name span). emojiOf falls back to a deterministic id-hash for demo users with none.
-    const emoji = emojiOf({ emoji: m.emoji, id: idOf(m) });
+    // v9.2 (Soren 7/4): emoji removed — the name IS the identity everywhere now.
     const inactive = memberInactive(m, today);
     cells.push(
       `<div class="ghead${isMe ? ' me' : ''}${inactive ? ' inactive' : ''}" title="${escapeHtml(displayNameOf(m))}">` +
         (inactive ? `<span class="ghead-inactive">inactive</span>` : '') +
         headStackHtml(m, now, today) +
-        `<span class="ghead-emoji" aria-hidden="true">${escapeHtml(emoji)}</span>` +
         `<span class="ghead-v">${escapeHtml(displayNameOf(m))}</span>` +
         `</div>`
     );
@@ -874,7 +879,7 @@ function weightChartSig(now) {
   const keys = [cur];
   for (let i = 1; i < rangeDays; i++) keys.push(prevBusinessDate(keys[i - 1]));
   const width = (elWchartSvg && elWchartSvg.clientWidth) || (elSocialChart && elSocialChart.clientWidth) || 0;
-  const parts = [`r${rangeDays}`, `w${width}`];
+  const parts = [`r${rangeDays}`, `w${width}`, `m${wchartMode}`]; // v9.2: rel/abs mode redraws
   for (const m of orderedMembers()) {
     const uid = idOf(m);
     if (uid !== myUserId && m.hideWeight === true) continue; // mirror the render's gate (#2)
@@ -897,8 +902,15 @@ function renderWeightChart(now) {
   // safe to run (idempotent), so it stays OUTSIDE the dirty-check / rAF coalescing.
   if (elWchartRangeLabel) elWchartRangeLabel.textContent = String(wchartRange);
   if (elWchartToggle) {
-    for (const btn of elWchartToggle.querySelectorAll('.wc-range')) {
+    for (const btn of elWchartToggle.querySelectorAll('[data-range]')) {
       const on = Number(btn.dataset.range) === wchartRange;
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    // v9.2: the REL/ABS mode pair syncs the same way (scoped by data-mode so the two
+    // segmented groups never strip each other's .on).
+    for (const btn of elWchartToggle.querySelectorAll('[data-mode]')) {
+      const on = btn.dataset.mode === wchartMode;
       btn.classList.toggle('on', on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
@@ -991,7 +1003,9 @@ function buildWeightChart(now) {
     // weigh-in (pts[0], chronologically first since we walked keysOldestFirst); we plot the
     // DELTA lb-base so everyone starts level at 0 and trajectories are comparable. Pool the
     // deltas (not absolute lbs) so the shared y-axis fits the changes, not the weights.
-    const base = pts[0].lb;
+    // v9.2: ABS mode sets base=0, which collapses every downstream (lb - base) to the real
+    // absolute weight — one switch, same code path for both modes.
+    const base = wchartMode === 'abs' ? 0 : pts[0].lb;
     for (const p of pts) {
       const dv = p.lb - base;
       if (dv < yMin) yMin = dv;
@@ -1072,14 +1086,22 @@ function buildWeightChart(now) {
   // use a sign+decimal-aware format with an fp-drift guard. The 0 line (always present since
   // every series contributes a delta-0 base point) gets a darker monochrome emphasis — NOT red
   // (red stays the ME accent per the single-accent rule).
+  // v9.2: ABS mode labels are plain absolute lbs (no sign, no 0-line emphasis — 0 lb is
+  // never in an absolute weight range anyway).
+  const relMode = wchartMode !== 'abs';
   for (const gv of gridVals) {
     const gvr = Math.round(gv * 100) / 100;
-    const isZero = Math.abs(gvr) < 1e-6;
+    const isZero = relMode && Math.abs(gvr) < 1e-6;
     const gy = yOf(gv).toFixed(2);
     parts.push(`<line x1="${PAD_L}" y1="${gy}" x2="${(vbW - PAD_R).toFixed(2)}" y2="${gy}" stroke="${isZero ? 'var(--txt3)' : 'var(--hairline)'}" stroke-width="${isZero ? 1.1 : 0.6}" />`);
-    const sign = gvr > 0 ? '+' : gvr < 0 ? '-' : '';
     const mag = Number.isInteger(gvr) ? Math.abs(gvr) : Math.abs(gvr).toFixed(1);
-    const txt = isZero ? '0' : sign + mag;
+    let txt;
+    if (relMode) {
+      const sign = gvr > 0 ? '+' : gvr < 0 ? '-' : '';
+      txt = isZero ? '0' : sign + mag;
+    } else {
+      txt = Number.isInteger(gvr) ? String(gvr) : gvr.toFixed(1);
+    }
     parts.push(`<text x="${(PAD_L - 5).toFixed(2)}" y="${(yOf(gv) + 3).toFixed(2)}" font-size="7" fill="var(--txt3)" text-anchor="end">${txt}</text>`);
   }
 
@@ -1102,8 +1124,9 @@ function buildWeightChart(now) {
       if (s.isMe) {
         // v5.4: translucent red area under the ME line so you can find yourself at a glance.
         // v7.6: anchor the fill to the 0 (baseline) line, not the chart bottom — in delta space
-        // a cutter's line dips below 0 and a fill-to-floor would yawn open.
-        const baseY = yOf(0).toFixed(2);
+        // a cutter's line dips below 0 and a fill-to-floor would yawn open. v9.2: ABS mode
+        // has no 0 baseline in range — fill to the plot floor (the pre-relative behavior).
+        const baseY = (relMode ? yOf(0) : vbH - PAD_B).toFixed(2);
         parts.push(
           `<path d="${d} L ${last.x.toFixed(2)} ${baseY} L ${coords[0].x.toFixed(2)} ${baseY} Z" ` +
             `fill="url(#wcMeFill)" stroke="none"${clipAttr} />`
@@ -1174,7 +1197,7 @@ function repaint() {
     renderMe(now);
     renderGrid(now);
     renderMonth(now);
-    renderPlaylist();
+    if (PLAYLIST_ENABLED) renderPlaylist();
     updateSyncPip();
     return;
   }
@@ -1243,7 +1266,7 @@ function onVisibility() {
     repaint();
     scheduleNextRollover();
     // v7 #1: re-sync the real playlist on focus/visibility return (cache-guarded; no-op off-playlist).
-    if (isDesktop() || activeTab === 'playlist') syncRealPlaylist(false);
+    if (PLAYLIST_ENABLED && (isDesktop() || activeTab === 'playlist')) syncRealPlaylist(false);
   }
 }
 
@@ -1503,14 +1526,27 @@ function enterDesktopMode() {
   for (let i = 0; i < SCREENS.length; i++) {
     const el = elScreens[SCREENS[i]];
     if (!el) continue;
-    el.hidden = false; // MONTH + PLAYLIST ship with the boolean `hidden` attr; the grid shows all four
+    el.hidden = false; // MONTH ships with the boolean `hidden` attr; the grid shows every pane
     el.setAttribute('aria-hidden', 'false');
     el.style.transform = ''; // drop any stale inline translateX from mobile
   }
+  // v9.2: on desktop the weight chart is its OWN bottom-right panel (#desk-chart slot),
+  // not the strip under the SOCIAL board — the middle column gives the week grid its full
+  // height. A DOM move (not a rebuild) keeps the chart's listeners/scrub overlay intact;
+  // the repaint below re-measures + redraws it at the slot's size (the sig tracks width).
+  const slot = document.getElementById('desk-chart');
+  if (slot && elSocialChart && !slot.contains(elSocialChart)) slot.appendChild(elSocialChart);
+  if (slot) slot.hidden = false;
   closeDayPopover(); // a popover anchored to a mobile-positioned cell would be misplaced
-  repaint();         // renders ALL FOUR panes (isDesktop() branch)
+  repaint();         // renders ALL panes (isDesktop() branch)
 }
 function enterMobileMode() {
+  // v9.2: return the weight chart to its mobile home (last child of the SOCIAL pane,
+  // under the grid — unchanged mobile layout) before the tabbed repaint.
+  const slot = document.getElementById('desk-chart');
+  const gridScreen = document.getElementById('screen-grid');
+  if (slot && gridScreen && elSocialChart && slot.contains(elSocialChart)) gridScreen.appendChild(elSocialChart);
+  if (slot) slot.hidden = true;
   setTab(activeTab); // re-applies the slide transforms, is-active, aria-hidden, repaints the active pane
 }
 function applyResponsiveMode() {
@@ -1701,23 +1737,23 @@ async function ensureMonthDays(uid, y, m, now) {
   return true;
 }
 
-// The chip row: one tappable emoji chip per member (me first), the selected subject ringed
-// in --red. Rebuilt only when the member set or selection changes (a cheap signature), so
-// repaints don't thrash the DOM.
+// The chip row: one tappable chip per member (me first), the selected subject ringed in
+// --red. v9.2: chips show the SAME 3-letter abbrevName tag the weight chart uses (emoji
+// removed — Soren 7/4). Rebuilt only when the member set / names / selection change.
 function renderMonthChips() {
   if (!elMonthChips) return;
   const cols = orderedMembers();
-  const sig = cols.map((m) => idOf(m) + ':' + emojiOf({ emoji: m.emoji, id: idOf(m) })).join('|') + '#' + (monthSubjectUid || '');
+  const sig = cols.map((m) => idOf(m) + ':' + (abbrevName(displayNameOf(m)) || '?')).join('|') + '#' + (monthSubjectUid || '');
   if (elMonthChips.dataset.sig !== sig) {
     elMonthChips.innerHTML = cols.map((m) => {
       const uid = idOf(m);
-      const emoji = emojiOf({ emoji: m.emoji, id: uid });
+      const tag = abbrevName(displayNameOf(m)) || '?';
       const on = uid === monthSubjectUid;
       return (
         `<button class="month-chip${on ? ' on' : ''}" type="button" data-uid="${escapeHtml(uid)}" ` +
         `aria-pressed="${on ? 'true' : 'false'}" title="${escapeHtml(displayNameOf(m))}" ` +
         `aria-label="show ${escapeHtml(displayNameOf(m))}'s month">` +
-        `<span class="month-chip-emoji" aria-hidden="true">${escapeHtml(emoji)}</span></button>`
+        `<span class="month-chip-abbr" aria-hidden="true">${escapeHtml(tag)}</span></button>`
       );
     }).join('');
     elMonthChips.dataset.sig = sig;
@@ -1778,14 +1814,21 @@ function renderMonth(now) {
       cells.push(`<div class="month-cell pad" aria-hidden="true"><span class="month-num">${dayNum}</span></div>`);
     } else {
       const day = effectiveDays(uid)[k];
-      const { wStatus, nStatus } = classifyDay(subject, k, now, day);
+      const { wStatus, nStatus, nProgress } = classifyDay(subject, k, now, day);
       const prejoin = wStatus === 'prejoin';
-      const isToday = k === subjCur;
+      // v9.2: the dithered nutrition partial-fill now paints MONTH cells too (same Bayer
+      // bucket rule as renderGrid — the 12px mask tiles repeat at any cell size). And the
+      // today red outline (col-today) is GONE (Soren 7/4) — no today marker on the month.
+      let nfill = '';
+      if (nStatus !== 'hit' && typeof nProgress === 'number') {
+        const nb = Math.round(nProgress * 16);
+        if (nb > 0) nfill = ` n-fill n-d${nb}`;
+      }
       const aria = `${displayNameOf(member)} ${k} — workout ${CELL_LABEL[wStatus] || wStatus}, nutrition ${nStatus}`;
       // reuse the exact .gcell + w-/n- classes so the diagonal split + colors match the board.
       // No workout corner-tag in this density (too small to read; color carries the signal).
       cells.push(
-        `<div class="gcell month-cell w-${wStatus} n-${nStatus}${prejoin ? ' prejoin' : ''}${isToday ? ' col-today' : ''}" ` +
+        `<div class="gcell month-cell w-${wStatus} n-${nStatus}${nfill}${prejoin ? ' prejoin' : ''}" ` +
           `data-uid="${escapeHtml(uid)}" data-date="${escapeHtml(k)}" ` +
           `role="button" tabindex="0" aria-label="${escapeHtml(aria)}">` +
           `<div class="seg-w"></div><div class="seg-n"></div>` +
@@ -2207,7 +2250,7 @@ async function syncRealPlaylist(force) {
 }
 
 function renderPlaylist() {
-  if (!elPlList) return;
+  if (!PLAYLIST_ENABLED || !elPlList) return; // v9.2: parked (and the pane's markup is removed)
   const { key } = viewedPlaylistSlot();
 
   // v7 #4: lazily resolve this period's theme from submissions the first time it's opened in-period,
@@ -3673,9 +3716,9 @@ function openDayPopover(member, dateKey, cellEl, opts) {
   const hover = !!(opts && opts.hover); // v7.1: HOVER = transient preview (no 5s timer, no
   // outside-tap; closes on mouseleave). CLICK (default) = pinned, with the 5s/outside-tap
   // dismiss so own-cell edit buttons stay usable.
-  const emoji = emojiOf({ emoji: member.emoji, id: idOf(member) });
+  // v9.2: name only — emoji removed app-wide (Soren 7/4).
   if (elDayPopTitle) elDayPopTitle.innerHTML =
-    `<span aria-hidden="true">${escapeHtml(emoji)}</span><span>${escapeHtml(displayNameOf(member))}</span>`;
+    `<span>${escapeHtml(displayNameOf(member))}</span>`;
   if (elDayPopSub) {
     const g = fmtDateGutter(dateKey);
     elDayPopSub.textContent = `${g.dow} ${g.md}`;
@@ -4094,9 +4137,11 @@ function renderScrub() {
   val.style.cssText = 'color:var(--txt); margin-left:auto; padding-left:10px;';
   // v7.6: chart is re-based, but the scrub readout shows the REAL weight + signed delta from
   // their window base so "what do I weigh" is still answered (wchartFmtLb prints the minus for
-  // negatives; we prefix '+' only for positives).
+  // negatives; we prefix '+' only for positives). v9.2: ABS mode plots real lbs already
+  // (base=0 -> dlt IS the weight), so the delta suffix is suppressed there.
   const dlt = nearestW.lb - nearest.base;
-  val.textContent = wchartFmtLb(nearestW.lb) + (Math.abs(dlt) < 0.05 ? '' : ' (' + (dlt > 0 ? '+' : '') + wchartFmtLb(dlt) + ')');
+  val.textContent = wchartFmtLb(nearestW.lb) +
+    (wchartMode === 'abs' || Math.abs(dlt) < 0.05 ? '' : ' (' + (dlt > 0 ? '+' : '') + wchartFmtLb(dlt) + ')');
   row.appendChild(sw); row.appendChild(tag); row.appendChild(val);
   _wscrubBox.appendChild(row);
 
@@ -4384,7 +4429,23 @@ function wireChartCollapse() {
 function wireWeightChart() {
   if (!elWchartToggle) return;
   elWchartToggle.addEventListener('click', (e) => {
-    const btn = e.target.closest('.wc-range');
+    // v9.2: REL/ABS mode pair (checked FIRST — the mode buttons reuse .wc-range for styling).
+    const modeBtn = e.target.closest('[data-mode]');
+    if (modeBtn) {
+      const m = modeBtn.dataset.mode;
+      if ((m !== 'rel' && m !== 'abs') || m === wchartMode) return;
+      wchartMode = m;
+      // the y space changes entirely (deltas vs absolute lbs) — a carried zoom window or
+      // scrub index would be meaningless, same reasoning as the range switch below.
+      _wzoom = null;
+      _wscrubIdx = null;
+      _wchartSig = null;
+      renderWeightChart(anchoredNow());
+      syncWchartResetBtn();
+      renderScrub();
+      return;
+    }
+    const btn = e.target.closest('[data-range]');
     if (!btn) return;
     const r = Number(btn.dataset.range);
     if (r !== 30 && r !== 90) return;
@@ -4554,6 +4615,32 @@ function reconcileOptimistic() {
   }
 }
 
+// v9.2 (perf): CACHE-FIRST content paint. On a returning device the first /users
+// snapshot arrives from IndexedDB in ~ms, but every cell then sat 'pending' until the
+// members' /days + /weights getDocs returned from the SERVER (a full round-trip on gym
+// wifi). Prime both maps from the local Firestore cache once — last session's truth
+// paints instantly — then the normal server fetch below overwrites with live truth.
+// Guards: per-uid has() checks so a server result that somehow lands first is never
+// clobbered by the (stale) cache pass; a fresh install just gets empty maps back.
+let _cachePrimed = false;
+function primeFromCache(uids, now) {
+  if (_cachePrimed || !uids.length) return;
+  _cachePrimed = true;
+  const cur = viewerBusinessDate(now);
+  const fromD = fromKeyFor(cur, 120);
+  const fromW = fromKeyFor(cur, WEIGHT_WINDOW_DAYS);
+  Promise.all(uids.map(async (uid) => {
+    try {
+      const [d, w] = await Promise.all([
+        data.fetchDays(uid, fromD, cur, { fromCache: true }),
+        data.fetchWeights(uid, fromW, cur, { fromCache: true }),
+      ]);
+      if (d && Object.keys(d).length && !daysByUser.has(uid)) daysByUser.set(uid, d);
+      if (w && Object.keys(w).length && !weightsByUser.has(uid)) weightsByUser.set(uid, w);
+    } catch (_) { /* cache miss — the server pass fills it */ }
+  })).then(() => repaint());
+}
+
 // onSnapshot callback: a /users doc changed (someone joined/archived, or a log bumped
 // rollup/lastActiveAt). We DIFF against the previous snapshot and refetch ONLY the
 // members who materially changed: a moved lastActiveAt/rollup => that member logged
@@ -4567,6 +4654,10 @@ function onMembers(usersArray) {
   members = Array.isArray(usersArray) ? usersArray.slice() : [];
   const mySeq = ++snapshotSeq;
   const now = anchoredNow();
+
+  // v9.2 (perf): instant content from the local cache on the very first snapshot; the
+  // server fetch below then overwrites it with live truth (per-uid guards inside).
+  primeFromCache(members.map(idOf), now);
 
   const curSig = new Map(members.map((m) => [idOf(m), memberSig(m)]));
   const daysUids = [];
@@ -4705,20 +4796,21 @@ async function boot() {
     return;
   }
 
-  // 4b. v5 (#5): live PLAYLIST wall (onSnapshot on /playlist, newest first). Non-fatal — a
-  // playlist subscribe hiccup must not blank the board; the tab just stays empty. The unsub is
-  // tracked inside data.subscribePlaylist (detached by data.teardown).
-  try {
-    data.subscribePlaylist(onSongs);
-    data.subscribePlaylistSlots(onSlots); // v5.2: themed-slot names (+ spotify ids in phase 2)
-  } catch (e) {
-    /* non-fatal: the playlist tab degrades to empty */
+  // 4b. v5 (#5): live PLAYLIST wall — PARKED behind PLAYLIST_ENABLED (v9.2): skips both
+  // onSnapshot listeners, the playlistMeta getDoc, and everything downstream of them.
+  if (PLAYLIST_ENABLED) {
+    try {
+      data.subscribePlaylist(onSongs);
+      data.subscribePlaylistSlots(onSlots); // v5.2: themed-slot names (+ spotify ids in phase 2)
+    } catch (e) {
+      /* non-fatal: the playlist tab degrades to empty */
+    }
+    // one-shot read of the optional Admin-seeded collaborative-playlist link (footer button).
+    data.fetchPlaylistMeta().then((meta) => {
+      plCollabUrl = (meta && meta.collabUrl) || null;
+      if (activeTab === 'playlist') renderPlaylist();
+    });
   }
-  // one-shot read of the optional Admin-seeded collaborative-playlist link (footer button).
-  data.fetchPlaylistMeta().then((meta) => {
-    plCollabUrl = (meta && meta.collabUrl) || null;
-    if (activeTab === 'playlist') renderPlaylist();
-  });
 
   // wire interactions + timers
   wireTabs();
@@ -4729,7 +4821,7 @@ async function boot() {
   wireGridTaps();
   wireWeekNav();
   wireMonth(); // v5 (#4): MONTH tab — chip selector + month nav + day taps
-  wirePlaylist(); // v5 (#5): PLAYLIST tab — add-bar, delegated remove, footer open-buttons
+  if (PLAYLIST_ENABLED) wirePlaylist(); // v5 (#5): parked — add-bar wiring + the 60s reset-badge tick
   wireWeightChart();
   wireWchartScrub(); // v7.2: tap/drag scrubber + pinch/wheel zoom on the weight chart
   wireChartCollapse();

@@ -44,6 +44,7 @@ import {
   onSnapshot,
   getDoc,
   getDocs,
+  getDocsFromCache, // v9.2: cache-only reads for the instant boot paint
   setDoc,
   updateDoc,
   arrayUnion,
@@ -501,9 +502,19 @@ export async function authAndBind() {
   // Token-proof binding. A permission-denied HERE means the presented token did
   // not match /_tokenIndex (wrong/rotated link) — NOT a uid mismatch — so it is
   // a hard bad-token, surfaced as such (reclaim is for the post-bind mismatch).
+  //
+  // v9.2 (perf): the read self-enrollment (appendSelfToActive) runs IN PARALLEL with
+  // the binding write instead of serially after it — they were two back-to-back awaited
+  // server acks on EVERY boot's critical path. Safe: the /meta/active append rule is
+  // signedIn()-only by design ("a reader self-enrolling is not yet a bound owner"), so
+  // it has no dependency on the binding existing; it swallows its own errors (never
+  // blocks auth; subscribeUsers self-heals a missed enrollment); and we still await the
+  // BINDING before setting any bound state, so a rotated link doormats exactly as before.
+  const enrollP = appendSelfToActive(); // self-swallowing, non-fatal
   try {
     await writeBinding(cap.userId, cap.token);
   } catch (err) {
+    await enrollP.catch(() => {}); // settle the parallel write before throwing
     if (isPermissionDenied(err)) {
       throw taggedError(
         'gymboard/bind-denied',
@@ -518,8 +529,7 @@ export async function authAndBind() {
   _bound = true;
   _reclaimFired = false; // a fresh successful bind re-arms the loud prompt
 
-  // Self-enroll for reads (non-fatal).
-  await appendSelfToActive();
+  await enrollP; // already settled or in flight; appendSelfToActive never rejects
 
   // v4.4: do NOT strip the fragment. iOS "Add to Home Screen" captures the CURRENT
   // URL, and a standalone home-screen PWA gets ISOLATED storage — the localStorage
@@ -831,7 +841,7 @@ export function subscribeUsers(cb) {
  * groupConsistency. Bounds by documentId() (the date key) so it needs no extra
  * index. Both bounds must be valid 'YYYY-MM-DD'.
  */
-export async function fetchDays(userId, fromKey, toKey) {
+export async function fetchDays(userId, fromKey, toKey, opts) {
   assertInit();
   const id = userId || _userId;
   if (!id) throw taggedError('gymboard/not-bound', 'fetchDays: no userId.');
@@ -843,8 +853,12 @@ export async function fetchDays(userId, fromKey, toKey) {
   const q = query(daysCol, orderBy(documentId()), startAt(fromKey), endAt(toKey));
   let qs;
   try {
-    qs = await getDocs(q);
+    // v9.2 (perf): { fromCache:true } reads the local IndexedDB mirror ONLY — no network,
+    // resolves in ~ms with last session's docs (empty on a fresh install). The boot path
+    // uses it to paint content instantly, then repeats the normal server read for truth.
+    qs = opts && opts.fromCache ? await getDocsFromCache(q) : await getDocs(q);
   } catch (err) {
+    if (opts && opts.fromCache) return {}; // a cache miss/paused persistence is never an error
     if (maybeFireReclaim(err)) return {};
     throw err;
   }
@@ -1907,7 +1921,7 @@ export async function setEmoji(emoji) {
  * reclaim). Any non-permission error (offline/transient) propagates so ui.js can
  * distinguish "hidden" (={}) from "couldn't load".
  */
-export async function fetchWeights(userId, fromKey, toKey) {
+export async function fetchWeights(userId, fromKey, toKey, opts) {
   assertInit();
   const id = userId || _userId;
   if (!id) throw taggedError('gymboard/not-bound', 'fetchWeights: no userId.');
@@ -1919,8 +1933,10 @@ export async function fetchWeights(userId, fromKey, toKey) {
   const q = query(weightsCol, orderBy(documentId()), startAt(fromKey), endAt(toKey));
   let qs;
   try {
-    qs = await getDocs(q);
+    // v9.2 (perf): cache-only variant for the instant boot paint (see fetchDays).
+    qs = opts && opts.fromCache ? await getDocsFromCache(q) : await getDocs(q);
   } catch (err) {
+    if (opts && opts.fromCache) return {}; // cache miss is never an error
     if (isPermissionDenied(err)) return {}; // gated => hidden (SPEC); not a reclaim.
     throw err;
   }

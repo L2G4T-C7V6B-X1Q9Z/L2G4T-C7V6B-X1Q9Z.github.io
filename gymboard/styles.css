@@ -452,8 +452,9 @@ button:disabled { cursor:default; }
   border-radius:var(--r-sm);
 }
 .grow-name.me { color:var(--red); }
-/* faint highlight on today's column cells so the current day stands out */
-.gcell.col-today { outline:1px solid var(--red-wash-bd); outline-offset:-1px; }
+/* v9.2 (Soren 7/4): the .gcell.col-today red outline on the current-day cell is REMOVED —
+   it rendered as a broken-looking partial ring against the diagonal segs. No today marker
+   on month cells now (the SOCIAL date gutter still tints today's DOW). */
 .gdate {
   font-size:10px; color:var(--txt2); letter-spacing:.02em;
   font-variant-numeric:tabular-nums lining-nums;
@@ -575,7 +576,9 @@ button:disabled { cursor:default; }
   -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; touch-action:manipulation;
 }
 .month-chip:active { background:var(--g3); }
-.month-chip-emoji { font-size:18px; line-height:1; }
+/* v9.2: chips show the 3-letter abbrevName tag (emoji removed app-wide, Soren 7/4). */
+.month-chip-abbr { font-size:10px; font-weight:700; letter-spacing:.05em; line-height:1; color:var(--txt2); }
+.month-chip.on .month-chip-abbr { color:var(--txt); }
 .month-chip.on { background:var(--red-wash); border-color:var(--red-wash-bd); box-shadow:0 0 0 1px var(--red-wash-bd); }
 
 /* the 7-col grid. The weekday header row + the day cells share the same template so columns
@@ -1157,6 +1160,9 @@ button:disabled { cursor:default; }
   border-top:1px solid var(--hairline); background:var(--g0);
   overflow:hidden;
 }
+/* v9.2: the desktop-only chart slot (bottom-right panel). Inert on mobile — the chart
+   node lives under the SOCIAL grid there; enterDesktopMode moves it in here. */
+#desk-chart { display:none; }
 .social-chart.collapsed .wchart-body { height:0; opacity:0; padding-top:0; padding-bottom:0; }
 .social-chart.hidden { display:none; }
 .wchart-head {
@@ -1179,7 +1185,9 @@ button:disabled { cursor:default; }
 }
 /* collapsed = just the tab; the 30d/90d range picker is meaningless with no chart. */
 .social-chart.collapsed .wchart-toggle { display:none; }
-.wchart-toggle { display:flex; gap:2px; }
+.wchart-toggle { display:flex; gap:2px; align-items:center; }
+/* v9.2: thin divider between the REL/ABS pair and the 30d/90d pair. */
+.wc-toggle-sep { width:1px; height:12px; background:var(--hairline); margin:0 4px; }
 .wchart-toggle .wc-range {
   font:inherit; font-size:9px; letter-spacing:.04em; line-height:1;
   padding:3px 7px; border-radius:var(--r-sm);
@@ -1224,16 +1232,18 @@ button:disabled { cursor:default; }
   /* the tab strip is meaningless when all panes show at once. */
   #tabs { display:none; }
 
-  /* #stage becomes a one-screen grid: ME on the left (a clamped third), SOCIAL + MONTH +
-     PLAYLIST on the right. Still a bounded flex child of #app, so the page never scrolls —
-     only each pane's .scrolly does. */
+  /* #stage becomes a one-screen grid. v9.2 (Soren 7/4): PLAYLIST is gone — ME on the left
+     (a clamped third), the SOCIAL week board gets the middle column's FULL height (its
+     weight-chart strip moves out), and the right column splits in half: MONTH calendar on
+     top, the weight chart (in the #desk-chart slot) on the bottom. Still a bounded flex
+     child of #app, so the page never scrolls — only each pane's .scrolly does. */
   #stage {
     display:grid;
     grid-template-columns:clamp(360px, 30%, 480px) 1fr 1fr;
-    grid-template-rows:min-content minmax(0, 1fr);
+    grid-template-rows:minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
       "me social month"
-      "me social playlist";
+      "me social chart";
     gap:1px;
     background:var(--hairline); /* the 1px gaps read as hairline dividers */
     overflow:hidden;
@@ -1251,9 +1261,29 @@ button:disabled { cursor:default; }
     background:var(--g0);
   }
   #screen-me       { grid-area:me; }       /* left, both rows */
-  #screen-grid     { grid-area:social; }   /* middle, both rows: board + chart */
-  #screen-month    { grid-area:month; }    /* top-right ~1/3: calendar */
-  #screen-playlist { grid-area:playlist; } /* bottom-right ~2/3: songs */
+  #screen-grid     { grid-area:social; }   /* middle, both rows: the week board, full height */
+  #screen-month    { grid-area:month; }    /* top-right half: calendar */
+
+  /* v9.2: the weight chart's desktop panel (the #social-chart node is MOVED in here by
+     enterDesktopMode). The chart fills the whole half-column: the mobile fixed 152px
+     body height is released, and the mobile collapse state is pinned OPEN (a collapsed
+     chart in a dedicated panel would just be dead space — the pill becomes a no-op here;
+     mobile keeps its collapse untouched). */
+  #desk-chart {
+    grid-area:chart;
+    display:flex; flex-direction:column;
+    min-height:0; min-width:0; overflow:hidden;
+    background:var(--g0);
+  }
+  /* the author display:flex above would defeat the UA [hidden] rule — keep the slot
+     honest until enterDesktopMode unhides it (and re-hidden if modes flip). */
+  #desk-chart[hidden] { display:none; }
+  #desk-chart .social-chart { flex:1 1 auto; min-height:0; border-top:none; }
+  #desk-chart .wchart-body,
+  #desk-chart .social-chart.collapsed .wchart-body {
+    height:auto; flex:1 1 auto; opacity:1;
+    padding-bottom:10px;
+  }
 
   /* each pane keeps its own scroll region; nothing scrolls the page. */
   .screen > .scrolly { flex:1 1 auto; min-height:0; }
@@ -1261,7 +1291,6 @@ button:disabled { cursor:default; }
   /* inner content was max-width-capped + centered for a phone column; let it breathe. */
   #grid       { margin-inline:auto; }
   .month-grid { max-width:none; }
-  .pl-list    { max-width:none; }
 
   /* v7.4 (#5): the SOCIAL pane's week board is short, but its scroll region (#grid-scroll, flex:1)
      fills the tall gap between the legend and the weight-chart section — leaving the board pinned to
@@ -1283,8 +1312,8 @@ button:disabled { cursor:default; }
   #screen-month .month-head  { padding:6px 12px; }
   #screen-month .month-label { font-size:11.5px; min-width:104px; }
   #screen-month .month-chips { padding:5px 10px; gap:6px; }
-  #screen-month .month-chip  { width:28px; height:28px; }
-  #screen-month .month-chip-emoji { font-size:14px; }
+  #screen-month .month-chip  { width:30px; height:26px; border-radius:13px; }
+  #screen-month .month-chip-abbr { font-size:8.5px; }
   #screen-month .month-num   { font-size:10px; }
   #screen-month .month-dow   { font-size:8px; padding:1px 0 2px; }
 

@@ -56,15 +56,15 @@
     </div>
   </header>
 
-  <!-- ===== TAB STRIP: Me | Social | Month | Playlist. v4: ME is first + default-active.
+  <!-- ===== TAB STRIP: Me | Social | Month. v4: ME is first + default-active.
        SOCIAL's internal id/data-tab stays 'grid' to minimize churn (label-only rename).
-       v5 (#3): MONTH + PLAYLIST added — order matches SCREENS in ui.js (the slide order).
-       4 tabs use tighter type/spacing (.tabs-4 in styles.css) so PLAYLIST still fits. ===== -->
-  <nav id="tabs" class="tabs-4" aria-label="Sections">
+       v9.2 (Soren 7/4): the PLAYLIST tab is PARKED — its button + #screen-playlist section
+       are removed and ui.js has PLAYLIST_ENABLED=false (no subscriptions, nothing loads).
+       Restore both from git (Pages ae0a8ff) + flip the flag to bring it back. ===== -->
+  <nav id="tabs" aria-label="Sections">
     <button class="tab is-active" data-tab="me" aria-pressed="true">ME</button>
     <button class="tab" data-tab="grid" aria-pressed="false">SOCIAL</button>
     <button class="tab" data-tab="month" aria-pressed="false">MONTH</button>
-    <button class="tab" data-tab="playlist" aria-pressed="false">PLAYLIST</button>
   </nav>
 
   <!-- ===== STAGE: the two screens. ME is default-active; only the inner scroll regions scroll. ===== -->
@@ -215,11 +215,9 @@
                 </label>
               </div>
               <div class="me-row"><span class="me-label">Hide my weight</span><button id="me-hideweight" class="me-toggle" type="button">shared</button></div>
-              <!-- v4 (#14): personal emoji picker — tap a curated symbol to set it -->
-              <div class="me-row me-row-stack">
-                <span class="me-label me-label-sub">Your symbol</span>
-                <div id="me-emoji" class="me-emoji-pick" aria-label="Pick your symbol"></div>
-              </div>
+              <!-- v9.2 (Soren 7/4): the personal-emoji picker row is REMOVED (emoji are gone
+                   app-wide; names/3-letter tags carry identity). ui.js self-disables all
+                   emoji-picker code when #me-emoji is absent. Restore from git if wanted. -->
               <button id="me-save-settings" class="me-save" type="button">save profile</button>
             </div>
 
@@ -261,7 +259,11 @@
             <span class="wchart-caret" aria-hidden="true">▾</span>
             <span class="wchart-title">WEIGHT · <span id="wchart-range-label">30</span> DAYS</span>
           </button>
-          <div class="wchart-toggle" id="wchart-toggle" role="group" aria-label="Chart range">
+          <div class="wchart-toggle" id="wchart-toggle" role="group" aria-label="Chart range and mode">
+            <!-- v9.2: REL = re-based +/- lbs change (default) · ABS = absolute weight. -->
+            <button class="wc-range on" data-mode="rel" type="button" aria-pressed="true">REL</button>
+            <button class="wc-range" data-mode="abs" type="button" aria-pressed="false">ABS</button>
+            <span class="wc-toggle-sep" aria-hidden="true"></span>
             <button class="wc-range on" data-range="30" type="button" aria-pressed="true">30d</button>
             <button class="wc-range" data-range="90" type="button" aria-pressed="false">90d</button>
           </div>
@@ -295,56 +297,16 @@
       </div>
     </section>
 
-    <!-- ---- PLAYLIST (v5 #5) — a shared in-app song WALL. One live onSnapshot list the
-         group builds together: paste a Spotify / YT-Music link OR type "Song - Artist", tap
-         ADD. Each row deep-links out to BOTH services (open the pasted link, or search the
-         title+artist) and ANYONE can ✕-remove it (shared-jukebox model). It is NOT a real
-         Spotify sync (a public SPA can't); the footer's OPEN buttons search the whole list
-         or open an Admin-stored collaborative-playlist link. Same `hidden`-until-first-setTab
-         handling as MONTH. ---- -->
-    <section id="screen-playlist" class="screen" aria-label="Playlist" aria-hidden="true" hidden>
-      <!-- header: title + a live "· N SONGS" count, a REFRESH (re-sync from Spotify) + HISTORY
-           (past playlists) row, and the theme line (v7: name THIS period, or once named suggest the
-           NEXT period's theme). The Mon–Wed / Thu–Sun half-week boundary stays; the on-screen A/B
-           toggle is gone (#3). -->
-      <div id="pl-head" class="pl-head">
-        <div class="pl-title">PLAYLIST<span id="pl-count" class="pl-count mono" aria-live="polite"></span></div>
-        <div class="pl-halfrow">
-          <button id="pl-refresh" class="pl-foot-btn pl-refresh" type="button" aria-label="Refresh the playlist from Spotify">↻ REFRESH</button>
-          <select id="pl-history" class="pl-history" aria-label="Open a past playlist"><option value="" selected>HISTORY ▾</option></select>
-          <span id="pl-reset" class="pl-reset mono" aria-live="polite"></span>
-        </div>
-        <div id="pl-theme" class="pl-theme">
-          <span id="pl-theme-name" class="pl-theme-name" role="button" tabindex="0" title="Tap to name this period’s theme, or suggest next period’s">…</span>
-          <button id="pl-theme-edit" class="pl-theme-edit" type="button" aria-label="Name this theme, or suggest next period’s">✎</button>
-          <span id="pl-theme-by" class="pl-theme-by hidden" aria-live="polite"></span>
-          <input id="pl-theme-input" class="pl-theme-input hidden" type="text" maxlength="60" autocomplete="off" autocapitalize="words" placeholder="name this period’s vibe">
-          <span id="pl-theme-ideas" class="pl-theme-ideas mono" aria-live="polite"></span>
-        </div>
-      </div>
-      <!-- fixed add-bar: paste a link OR type "Song - Artist". One input + ADD. The hint line
-           below it doubles as the "already added" pulse target. -->
-      <div id="pl-add" class="pl-add">
-        <div class="pl-add-row">
-          <input id="pl-input" class="me-input me-input-text pl-in" type="text" inputmode="text"
-                 autocapitalize="off" autocorrect="off" spellcheck="false"
-                 placeholder="Paste a Spotify link or type Song - Artist"
-                 aria-label="Paste a Spotify link or type Song - Artist">
-          <button id="pl-add-btn" class="me-meal-btn pl-add-btn" type="button">ADD</button>
-        </div>
-        <div id="pl-add-hint" class="pl-add-hint" aria-live="polite"></div>
-      </div>
-      <!-- the live song list (newest first). Built + reconciled by ui.js renderPlaylist. -->
-      <div id="pl-scroll" class="scrolly">
-        <div id="pl-list" class="pl-list" role="list" aria-label="Shared playlist"></div>
-      </div>
-      <!-- footer: OPEN-the-whole-list-on-each-service + (when Admin-seeded) the shared
-           collaborative-playlist link. -->
-      <div id="pl-foot" class="pl-foot">
-        <button id="pl-open-spotify" class="pl-foot-btn" type="button" aria-label="Search the whole list on Spotify">OPEN ON SPOTIFY ↗</button>
-        <a id="pl-collab" class="pl-foot-btn pl-collab hidden" target="_blank" rel="noopener" href="#" aria-label="Open the shared collaborative playlist">OPEN SHARED PLAYLIST ↗</a>
-      </div>
-    </section>
+    <!-- v9.2: DESKTOP-ONLY slot for the weight chart (bottom-right panel). On desktop,
+         enterDesktopMode MOVES the #social-chart node in here so the middle column gives
+         the week board its full height; enterMobileMode moves it back under the SOCIAL
+         grid. display:none on mobile (base CSS) + `hidden` until desktop mode runs. -->
+    <div id="desk-chart" hidden></div>
+
+    <!-- PLAYLIST section PARKED (v9.2, Soren 7/4): the whole #screen-playlist block was
+         removed so none of it parses/loads. ui.js gates all playlist code behind
+         PLAYLIST_ENABLED=false. To restore: git show ae0a8ff:gymboard/index.html (deploy
+         repo) for the section + tab button, and flip the flag in ui.js. -->
 
   </main>
 

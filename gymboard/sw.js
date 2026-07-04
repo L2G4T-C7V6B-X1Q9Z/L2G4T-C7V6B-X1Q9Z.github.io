@@ -50,13 +50,23 @@ self.addEventListener('fetch', (event) => {
 
   // Stale-while-revalidate: return the cached copy IMMEDIATELY when present, and kick
   // off a background refresh that overwrites the cache for next time. On a cache MISS
-  // (first-ever visit) we await the network. cache:'no-store' on the refresh guarantees
-  // a genuine network hit (not a browser-HTTP-cached stale copy), so deploys still
-  // propagate. The refresh runs fire-and-forget on a cache hit; its cache.put is fast.
+  // (first-ever visit) we await the network.
+  //
+  // v9.2 (perf): the refresh uses cache:'no-cache' (REVALIDATE), not 'no-store'
+  // (RE-DOWNLOAD). no-cache still forces a real server round-trip on every load — the
+  // browser may only reuse its HTTP-cache copy after a conditional If-None-Match to the
+  // server — so a deploy still propagates in exactly one reload (GitHub Pages serves
+  // ETags; changed content gets a fresh 200 on the wire). When NOTHING changed — every
+  // load between deploys — the wire carries a 304 and fetch() resolves with the
+  // revalidated cached body (a normal ok:true 200 to us), so the ~600KB app shell costs
+  // a few hundred header bytes instead of a full re-download. That was the single
+  // biggest repeat-load bandwidth burn on gym wifi. This is NOT the 6/23 stale-cache
+  // bug: that was DEFAULT cache mode (reuse without revalidating); no-cache can never
+  // skip the server check.
   event.respondWith(
     caches.open(CACHE).then((cache) =>
       cache.match(req).then((cached) => {
-        const fresh = fetch(req, { cache: 'no-store' })
+        const fresh = fetch(req, { cache: 'no-cache' })
           .then((resp) => {
             if (resp && resp.ok) cache.put(req, resp.clone());
             return resp;
