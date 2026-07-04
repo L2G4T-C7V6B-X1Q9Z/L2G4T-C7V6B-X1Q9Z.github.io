@@ -1024,7 +1024,7 @@
 // ============ CONFIG ============
 const dayType = "Lower";
 
-// LOWER session (next, per U/L rotation -- Thu 7/2 Upper DONE 40m22s; flipped Upper->Lower). PHASE 2A. Order: Leg Press -> Calf Raises -> DB Romanian Deadlift -> Leg Extension -> Cable Face Pulls. AUTO-DROP v3 (Soren 6/30): at a HARD/MAX effort the next set drops to ex.backoff when the last set was BELOW the floor, OR exactly AT the floor while MAXED (next set falls under), OR a multi-set downtrend projects the next set under the floor. A HARD set exactly AT the floor HOLDS (reserve left). MOD/LIGHT never drop. It STATES the drop, no decision prompt; note + on-screen weight always agree. Backoffs: Leg Press 205 (Soren 7/1: the 220 backoff was too small a drop), Calf 115, Leg Extension 60. DB RDL = NO backoff (pain-limited hinge -- the stop is lumbar/medial-thigh pain, not rep failure). Cable Face Pulls = groover, NO backoff. setNotes are FORM/LOAD cues ONLY -- never echo prior reps. Deltas from the last Lower (7/1): DB RDL 40->35 (LUMBAR pain at 40 cut S3; 35 was clean 12/12/12 on 6/29) + tightened hip-hinge cue, Leg Press backoff 220->205. NOTE: the auto-drop predictive-projection fix (require TWO declining MAX sets before a predictive drop) is PENDING Soren's OK -- NOT applied here; v3 carried as-is. Voice = ElevenLabs static bank, workout-agnostic -- no regen, build id unchanged.
+// LOWER session (next, per U/L rotation -- Thu 7/2 Upper DONE 40m22s; flipped Upper->Lower). PHASE 2A. Order: Leg Press -> Calf Raises -> DB Romanian Deadlift -> Leg Extension -> Cable Face Pulls. AUTO-DROP v4 (Soren 7/2 fix, applied 7/4): at a HARD/MAX effort the next set drops to ex.backoff when the last set was BELOW the floor, OR exactly AT the floor while MAXED (next set falls under), OR -- predictive -- the last TWO sets were both MAX and declining with the decline projecting the next set under the floor (v3's any-downtrend projection misfired on Row 7/2: a paced HARD S1 falling to a MAX S2 is pacing, not fatigue). A HARD set exactly AT the floor HOLDS (reserve left). MOD/LIGHT never drop. It STATES the drop, no decision prompt; note + on-screen weight always agree. Backoffs: Leg Press 205 (Soren 7/1: the 220 backoff was too small a drop), Calf 115, Leg Extension 60. DB RDL = NO backoff + noDropAdvice (pain-limited hinge -- the stop is lumbar/medial-thigh pain, not rep failure, so no "drop a notch" advisories either). Cable Face Pulls = groover, NO backoff. setNotes are FORM/LOAD cues ONLY -- never echo prior reps. Deltas from the last Lower (7/1): DB RDL 40->35 (LUMBAR pain at 40 cut S3; 35 was clean 12/12/12 on 6/29) + tightened hip-hinge cue, Leg Press backoff 220->205. 7/4 bugfix sweep: skip = fully silent, stale-cue queue clears on user actions, play() honors cancel during decode-wait, Sortable CDN failure no longer kills audio init + state restore, summary records auto-dropped weights. Voice = ElevenLabs static bank, workout-agnostic -- no regen, build id unchanged.
 const workout = [
   {
     name: "Leg Press",
@@ -1070,6 +1070,7 @@ const workout = [
     sets: 3,
     reps: "8-12",
     weight: "35 lbs",
+    noDropAdvice: true,
     rest: 120,
     note: "DROP to 35 (lumbar pain cut this at 40 last Lower; 35 was clean 12/12/12 on 6/29). Strict hip-hinge: hips back, soft knees, NEUTRAL braced spine, DBs sliding close down the thighs, limit the range to where the low back stays neutral -- feel the hamstring stretch, don't round the low back or turn it into a squat. STOP on any lumbar pain OR medial-thigh pain (this slot's been flagged twice -- if the low back still complains at 35 with clean form, we swap the movement).",
     setNotes: [
@@ -1546,9 +1547,11 @@ function attachGlobalAudioRecovery() {
         if (!audioCtx || audioCtx.state !== 'running') return;
         const drained = pendingPostGestureCues.slice();
         pendingPostGestureCues.length = 0;
-        drained.forEach(seq => {
-          try { VoiceCue.playSequence(seq); } catch(e) {}
-        });
+        // Play ONLY the newest queued announcement -- it describes the current
+        // state. Playing all of them was self-defeating anyway (each
+        // playSequence cancels the previous one mid-word).
+        const lastSeq = drained[drained.length - 1];
+        if (lastSeq) { try { VoiceCue.playSequence(lastSeq); } catch(e) {} }
       }).catch(() => {});
     }
   };
@@ -1619,14 +1622,14 @@ const DAILY_BUILD_ID = '20260604a';
 const VoiceCue = (() => {
   const FILES = [
     'start-upper', 'start-lower', 'received', 'set-2', 'set-3', 'set-4', 'final-set',
-    'rest-3min', 'rest-2min', 'rest-90sec', 'rest-60sec',
+    'rest-3min', 'rest-2min', 'rest-150sec', 'rest-90sec', 'rest-60sec',
     '1min-remaining', '30sec-remaining', '10sec-remaining',
     'countdown-5', 'countdown-4', 'countdown-3', 'countdown-2', 'countdown-1',
     'rest-complete', 'tap-to-start',
     'exercise-complete', 'up-next', 'final-exercise',
     'ex-chest-press', 'ex-lat-pulldown', 'ex-db-lat-raise', 'ex-db-curls',
     'ex-leg-press', 'ex-leg-curl', 'ex-calf-raises', 'ex-face-pulls',
-    'ex-cable-row', 'ex-single-arm-db-row',
+    'ex-cable-row', 'ex-single-arm-db-row', 'ex-db-rdl',
     'ex-leg-extension', 'ex-incline-press', 'ex-overhead-press',
     'ex-tricep-pushdown', 'ex-rear-delt-flyes', 'ex-hammer-curls',
     'paused', 'resumed', 'final-set-logged', 'workout-complete', 'workout-reset',
@@ -1660,10 +1663,16 @@ const VoiceCue = (() => {
   ];
   const arrayBuffers = new Map();   // raw, pre-decode
   const decodedBuffers = new Map(); // post-decode, ready to play
+  const fetchFailed = new Set();    // 404/offline clips: play() skips these instantly (no 3s dead gap)
   let initialized = false;
   let unlocked = false;
   let currentSources = [];
   let currentChain = null;
+  // Bumped by cancel(). An in-flight play() awaiting decode/resume captures the
+  // generation at entry and bails if it changed -- without this, a clip whose
+  // decode-wait straddled a cancel() would still fire seconds later, playing a
+  // STALE announcement over (or after) the sequence that superseded it.
+  let playGen = 0;
 
   function init() {
     if (initialized) return;
@@ -1674,7 +1683,7 @@ const VoiceCue = (() => {
       fetch('audio/' + name + '.mp3' + (name.indexOf('daily-') === 0 ? '?v=' + DAILY_BUILD_ID : ''))
         .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
         .then(ab => { arrayBuffers.set(name, ab); decodeIfReady(name); })
-        .catch(() => {});
+        .catch(() => { fetchFailed.add(name); });
     });
   }
 
@@ -1726,6 +1735,7 @@ const VoiceCue = (() => {
     if (!settings.voice) return;
     recoverAudioCtx();
     if (!audioCtx || !unlocked) return;
+    const myPlayGen = playGen;
     // Wait briefly for the buffer to finish decoding if a play() races with
     // the post-unlock decode pass (first cue right after a user gesture).
     // Without this, the first audio in a sequence frequently silent-fails
@@ -1738,6 +1748,11 @@ const VoiceCue = (() => {
     // patience window kills that workaround.
     let waited = 0;
     while (!decodedBuffers.has(name) && waited < 3000) {
+      // Never-fetched clip (404: name not yet recorded, or offline load): it will
+      // never decode, so bail NOW instead of stalling the whole sequence 3s per clip.
+      if (fetchFailed.has(name) && !arrayBuffers.has(name)) return;
+      // Superseded (cancel() ran) or voice toggled off while waiting: stay silent.
+      if (playGen !== myPlayGen || !settings.voice) return;
       await new Promise(r => setTimeout(r, 50));
       waited += 50;
     }
@@ -1750,6 +1765,7 @@ const VoiceCue = (() => {
       try { await audioCtx.resume(); } catch(e) {}
     }
     if (audioCtx.state !== 'running') return;
+    if (playGen !== myPlayGen || !settings.voice) return;
     return new Promise(resolve => {
       try {
         const source = audioCtx.createBufferSource();
@@ -1786,6 +1802,7 @@ const VoiceCue = (() => {
   }
 
   function cancel() {
+    playGen++;
     if (currentChain) currentChain.cancelled = true;
     currentChain = null;
     currentSources.forEach(s => {
@@ -1831,6 +1848,9 @@ function exerciseClipName(name) {
     "Cable Rope Row": "ex-cable-row",
     "Cable Tricep Pushdown": "ex-tricep-pushdown",
     "Single-Arm DB Row": "ex-single-arm-db-row",
+    "DB Romanian Deadlift": "ex-db-rdl",
+    "DB RDL": "ex-db-rdl",
+    "Romanian Deadlift": "ex-db-rdl",
     "Leg Extension": "ex-leg-extension",
     "Leg Extension Machine": "ex-leg-extension",
     "Incline Press": "ex-incline-press",
@@ -1845,6 +1865,7 @@ function exerciseClipName(name) {
 
 function restClipForDuration(seconds) {
   if (seconds === 180) return 'rest-3min';
+  if (seconds === 150) return 'rest-150sec'; // clip not recorded yet; fetchFailed guard skips it gap-free until it exists
   if (seconds === 120) return 'rest-2min';
   if (seconds === 90) return 'rest-90sec';
   if (seconds === 60) return 'rest-60sec';
@@ -2065,28 +2086,36 @@ function dynamicRepAdvice(setIdx, prev, ex) {
 
   if (r <= 0) return L + " stopped early. Reset, go by feel this set.";
 
-  // AUTO-DROP (Soren 6/30 v3): at a real (HARD/MAX) effort, drop the next set to
+  // AUTO-DROP (v4, Soren 7/2): at a real (HARD/MAX) effort, drop the next set to
   // the backoff when he can't sustain the range -- (1) BELOW the floor on any
   // HARD/MAX set, (2) exactly AT the floor but MAXED (next set falls under), or
-  // (3) a multi-set downtrend projecting the next set under the floor. A HARD set
-  // exactly at the floor HOLDS (reserve left). MOD/LIGHT never drop. effectiveWeight
-  // mirrors this EXACTLY so the note and the on-screen weight always agree.
+  // (3) PREDICTIVE: the last TWO sets were both MAX and declining, and that
+  // decline projects the next set under the floor. v3 projected off ANY
+  // downtrend, which misfired on Row 7/2 -- a paced HARD S1 (12) falling to a
+  // MAX S2 (9) read as fatigue when it was pacing; S4=12 proved the weight fine.
+  // A HARD set exactly at the floor HOLDS (reserve left). MOD/LIGHT never drop.
+  // effectiveWeight mirrors this EXACTLY so note + on-screen weight always agree.
   if (bo && hardOrMax) {
     if (r < lo || (r === lo && maxed)) {
       var why = (r < lo) ? (r + " under " + lo) : (r + " at the floor, maxed");
       return L + ": " + why + ". Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
     }
-    if (r > lo && prev.length >= 2) {
-      var firstR = Number(prev[0].reps);
-      if (!isNaN(firstR)) {
-        var lostPerSet = (firstR - r) / (prev.length - 1);
-        var projNext = r - Math.round(lostPerSet);
-        if (lostPerSet >= 1 && projNext < lo) {
-          return L + ": trending under " + lo + " (proj ~" + projNext + " next). Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
+    if (r > lo && prev.length >= 2 && maxed) {
+      var prev2 = prev[prev.length - 2];
+      var r2 = Number(prev2.reps);
+      var d2 = +prev2.difficulty || 0;
+      if (!isNaN(r2) && d2 >= 5 && r2 > r) {
+        var projNext = r - (r2 - r);
+        if (projNext < lo) {
+          return L + ": two MAX sets fading (" + r2 + " to " + r + ", proj ~" + projNext + " next). Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
         }
       }
     }
   }
+
+  // Pain-limited slots (DB RDL): a short set means the pain stopped it, not the
+  // weight. Never advise a drop -- fall through to the static form/STOP cues.
+  if (ex.noDropAdvice && hardOrMax && r <= lo) return null;
 
   // No backoff defined (groovers like Face Pulls): advise only, never auto-drop.
   if (r < lo && hardOrMax) {
@@ -2171,12 +2200,14 @@ function effectiveWeight(exIdx, setIdx) {
     const m = baseStr.match(/(?:→|->|drop to)\s*(\d+(?:\.\d+)?)/i);
     if (m) dropNum = m[1];
   }
-  // (b) AUTO-DROP (Soren 6/30 v3): from set 2 on, drop the loaded weight to the
+  // (b) AUTO-DROP (v4, Soren 7/2): from set 2 on, drop the loaded weight to the
   // backoff when -- at a HARD/MAX effort -- the last set was BELOW the floor, or
-  // exactly AT the floor while MAXED, or a multi-set downtrend projects the next
-  // set under the floor. A HARD set exactly at the floor holds (reserve left).
-  // MOD/LIGHT never drop. Mirrors dynamicRepAdvice EXACTLY so the on-screen weight
-  // matches the note (no "note says drop but weight stays" mismatch).
+  // exactly AT the floor while MAXED, or (predictive) the last TWO sets were both
+  // MAX and declining with the decline projecting the next set under the floor.
+  // A HARD set exactly at the floor holds (reserve left). MOD/LIGHT never drop.
+  // A zero-rep set never drops here (the advisor reads it as "stopped early, go
+  // by feel" -- weight must agree with that note). Mirrors dynamicRepAdvice
+  // EXACTLY so the on-screen weight matches the note.
   if (dropNum == null && setIdx >= 1 && ex.backoff) {
     const prevLogs = [];
     let allLogged = true;
@@ -2188,20 +2219,20 @@ function effectiveWeight(exIdx, setIdx) {
     if (allLogged && prevLogs.length === setIdx && prevLogs.length >= 1) {
       const rng = String(ex.reps || "").match(/(\d+)\D+(\d+)/);
       const last = prevLogs[prevLogs.length - 1];
-      const first = prevLogs[0];
-      if (rng && last && first && typeof last.reps === "number" && !isNaN(last.reps) && typeof first.reps === "number" && !isNaN(first.reps)) {
+      if (rng && last && typeof last.reps === "number" && !isNaN(last.reps)) {
         const lo = +rng[1];
         const dd = (+last.difficulty || 0);
         const hardOrMax = dd >= 4;
         const maxed = dd >= 5;
         let doDrop = false;
-        if (hardOrMax) {
+        if (hardOrMax && last.reps > 0) {
           if (last.reps < lo || (last.reps === lo && maxed)) {
             doDrop = true;
-          } else if (last.reps > lo && prevLogs.length >= 2) {
-            const lostPerSet = (first.reps - last.reps) / (prevLogs.length - 1);
-            const projNext = last.reps - Math.round(lostPerSet);
-            if (lostPerSet >= 1 && projNext < lo) doDrop = true;
+          } else if (last.reps > lo && prevLogs.length >= 2 && maxed) {
+            const prev2 = prevLogs[prevLogs.length - 2];
+            const r2 = Number(prev2.reps);
+            const d2 = (+prev2.difficulty || 0);
+            if (!isNaN(r2) && d2 >= 5 && r2 > last.reps && (last.reps - (r2 - last.reps)) < lo) doDrop = true;
           }
         }
         if (doDrop) {
@@ -2211,9 +2242,9 @@ function effectiveWeight(exIdx, setIdx) {
     }
   }
   if (dropNum != null && dropNum !== baseNum) {
-    return { dropped: true, html: '<span class="wt-now">▼ ' + dropNum + ' lbs</span><span class="wt-was">from ' + baseNum + '</span>' };
+    return { dropped: true, num: dropNum, html: '<span class="wt-now">▼ ' + dropNum + ' lbs</span><span class="wt-was">from ' + baseNum + '</span>' };
   }
-  return { dropped: false, html: clean };
+  return { dropped: false, num: baseNum, html: clean };
 }
 function setInfoHTML(exIdx, setIdx) {
   const ex = workout[exIdx];
@@ -2297,11 +2328,18 @@ function stopFlash() {
 
 // ============ REST RING ============
 function updateRestRing() {
-  if (!restEndTime || !restTotalSeconds) {
+  // While paused, restEndTime is frozen in the past -- the live value is the
+  // captured restRemaining. Without this branch, a reload/back while paused
+  // rendered the ring EMPTY instead of the paused fraction.
+  let remaining;
+  if (state === "paused" && restTotalSeconds) {
+    remaining = Math.max(0, restRemaining);
+  } else if (restEndTime && restTotalSeconds) {
+    remaining = Math.max(0, (restEndTime - Date.now()) / 1000);
+  } else {
     elRingBar.setAttribute("stroke-dashoffset", RING_CIRCUMFERENCE);
     return;
   }
-  const remaining = Math.max(0, (restEndTime - Date.now()) / 1000);
   const fraction = Math.max(0, Math.min(1, remaining / restTotalSeconds));
   const offset = RING_CIRCUMFERENCE * (1 - fraction);
   elRingBar.setAttribute("stroke-dashoffset", offset);
@@ -2314,7 +2352,7 @@ function showRestRing(show, paused) {
 // ============ LOG AREA ============
 function showLogArea(exerciseIdx) {
   logExerciseIndex = exerciseIdx;
-  elNotesInput.placeholder = "notes...";
+  elNotesInput.placeholder = "+ note";
   elLogArea.style.display = "flex";
   syncLogArea();
 }
@@ -2367,6 +2405,7 @@ function applySnapshot(s) {
   cancelRestNotif();
   stopFlash();
   VoiceCue.cancel();
+  pendingPostGestureCues.length = 0; // navigating away from the state those cues described
 
   currentExercise = s.currentExercise;
   currentSet = s.currentSet;
@@ -2427,7 +2466,14 @@ function applyState(notesValue) {
         }
         const _dc = dailyClipFor(currentExercise, currentSet);
         if (_dc) seq.push(_dc);
-        VoiceCue.playSequence(seq);
+        // This branch is reached on page-load restore into an already-expired
+        // rest -- there's been no user gesture, so playing now silent-fails.
+        // Queue for the first real tap (same pattern as restDone).
+        if (audioCtx && audioCtx.state === 'running') {
+          VoiceCue.playSequence(seq);
+        } else {
+          pendingPostGestureCues.push(seq);
+        }
       }
     } else {
       restRemaining = remaining;
@@ -2552,6 +2598,7 @@ function updateNavButtons() {}
 // day-type + first-exercise audio cue (user gesture unlocks audio on iOS).
 function startWorkout() {
   workoutStartTime = Date.now();
+  pendingPostGestureCues.length = 0;
   state = "ready";
   applyState("");
   saveState();
@@ -2574,6 +2621,11 @@ function startWorkout() {
 function setDone() {
   pushHistory();
   stopFlash();
+  // Any announcement queued while audio was suspended (e.g. the rest-expiry
+  // cue from a phone-in-pocket rest) is now STALE -- the user just acted on
+  // the state it described. Without this clear, the first tap after returning
+  // to the tab replayed "rest complete, set N..." over the new "received" cue.
+  pendingPostGestureCues.length = 0;
   // Read the user's in-progress inputs BEFORE creating the new log entry,
   // so reps/difficulty/notes typed DURING the set (before Set Done) carry
   // over instead of getting clobbered by defaults. (Old code created the
@@ -2755,6 +2807,7 @@ function restDone() {
 
 function pauseRest() {
   captureLog();
+  pendingPostGestureCues.length = 0;
   cancelRestNotif();
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   // Capture EXACT remaining time (float seconds) so resume doesn't round-up jump
@@ -2779,22 +2832,28 @@ function resumeRest() {
   showRestRing(true, false);
   renderProgress();
 
-  // Defer timer restart until the 'resumed' cue finishes playing.
-  // If voice is OFF, playSequence resolves immediately so timer restart is synchronous.
-  // If user pauses/skips during the cue, the state-check bails out cleanly.
+  // Restart the clock IMMEDIATELY. The old code deferred restEndTime +
+  // startCountdown until the 'resumed' cue finished -- pausing again inside
+  // that ~1s window read the STALE (already-expired) restEndTime and zeroed
+  // the remaining rest. The cue just plays over the running countdown now.
+  restEndTime = Date.now() + restRemaining * 1000;
+  scheduleRestNotif(restRemaining * 1000);
+  saveState();
+  startCountdown();
   VoiceCue.cancel();
-  VoiceCue.playSequence(['resumed']).then(() => {
-    if (state !== "resting") return;
-    restEndTime = Date.now() + restRemaining * 1000;
-    scheduleRestNotif(restRemaining * 1000);
-    saveState();
-    startCountdown();
-  });
+  VoiceCue.play('resumed');
 }
 
 function skipRest() {
+  // Re-entry guard: the skip button defers this call 160ms for its press
+  // animation, so a rapid double-tap queued TWO calls -- the second re-ran the
+  // whole transition (junk history entry + doubled audio). State has already
+  // moved on by then; bail.
+  if (state !== "resting" && state !== "paused") return;
   pushHistory();
   VoiceCue.cancel();
+  // A queued rest-expiry announcement is stale the moment he skips.
+  pendingPostGestureCues.length = 0;
   cancelRestNotif();
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   captureLog();
@@ -2811,39 +2870,18 @@ function skipRest() {
   syncLogArea();
   saveState();
 
-  // Voice cue (Soren 6/29): on an IN-EXERCISE skip (set 1+), do NOT re-announce
-  // the set/weight/position cues he just heard -- play "rest complete" and stop.
-  // Only an INTER-EXERCISE skip (currentSet === 0, freshly-advanced exercise)
-  // re-announces the upcoming exercise, since its up-next chain was cancelled.
-  {
-    const seq = ['rest-complete'];
-    if (currentSet === 0) {
-      const setStart = setStartClipFor(currentExercise, currentSet);
-      if (setStart) {
-        seq.push(setStart);
-      } else {
-        const isFinalExercise = (currentExercise === workout.length - 1);
-        const exClip = exerciseClipName(workout[currentExercise] && workout[currentExercise].name);
-        seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
-        if (exClip) seq.push(exClip);
-      }
-      const ex = workout[currentExercise];
-      if (ex && !dailyClipFor(currentExercise, 0)) {
-        seq.push(...weightClipsFor(ex));
-        const repClip = repRangeClipFor(ex.reps);
-        if (repClip) seq.push(repClip);
-      }
-      const _dc = dailyClipFor(currentExercise, 0);
-      if (_dc) seq.push(_dc);
-    }
-    VoiceCue.playSequence(seq);
-  }
+  // Voice (Soren 7/4): a skip plays NOTHING. He tapped it -- he knows the rest
+  // is over and the screen already shows what's next. Every prior version
+  // (full re-announce, then the 6/29 "rest complete"-only cut) was still
+  // repeat-audio noise on an action he initiated. Cancel + silence.
 }
 
 function acknowledgeAlert() {
   pushHistory();
   captureLog();  // Safety: ensure any pending reps/notes are pinned to the log entry
   stopFlash();
+  // The queued cue (if any) IS this alert's announcement -- acting on it makes it stale.
+  pendingPostGestureCues.length = 0;
   state = "ready";
   elTimer.textContent = "-:--";
   elTimerLabel.textContent = "";
@@ -2989,6 +3027,18 @@ const DIFFICULTY_LABELS = ['', 'EASY', 'LIGHT', 'MOD', 'HARD', 'MAX'];
 function formatDifficulty(log) {
   return (log && log.difficulty) ? ' [' + DIFFICULTY_LABELS[log.difficulty] + ']' : '';
 }
+// User-typed set notes go into innerHTML in buildSummaryHTML -- a note with "<"
+// (e.g. "<10 clean") swallowed the rest of the summary as a bogus tag.
+function escapeHTML(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+// The weight tag a set line gets when the auto-drop (or a structural drop set)
+// changed the load for that set. Without it the summary claimed every set was
+// at the header weight -- 7/2's "were S3/S4 at 120 or 100?" ambiguity.
+function setDropTag(exIdx, setIdx) {
+  const eff = effectiveWeight(exIdx, setIdx);
+  return (eff.dropped && eff.num) ? " @ " + eff.num : "";
+}
 function buildSummary() {
   let text = dayType + " -- " + summaryDateStr() + "\n\n";
   for (let i = 0; i < workout.length; i++) {
@@ -3002,7 +3052,7 @@ function buildSummary() {
       if (log) {
         const diff = formatDifficulty(log);
         const note = log.note ? " -- " + log.note : "";
-        text += "  S" + (j + 1) + ": " + log.reps + " reps" + diff + note + "\n";
+        text += "  S" + (j + 1) + ": " + log.reps + " reps" + setDropTag(i, j) + diff + note + "\n";
       } else {
         text += "  S" + (j + 1) + ": -\n";
       }
@@ -3025,8 +3075,8 @@ function buildSummaryHTML() {
       const log = setLogs.find(l => l.exercise === i && l.set === j);
       if (log) {
         const diff = formatDifficulty(log);
-        const note = log.note ? ' -- ' + log.note : '';
-        html += '<div class="set-line">S' + (j + 1) + ': <span class="set-note">' + log.reps + ' reps' + diff + note + '</span></div>';
+        const note = log.note ? ' -- ' + escapeHTML(log.note) : '';
+        html += '<div class="set-line">S' + (j + 1) + ': <span class="set-note">' + log.reps + ' reps' + setDropTag(i, j) + diff + note + '</span></div>';
       } else {
         html += '<div class="set-line">S' + (j + 1) + ': -</div>';
       }
@@ -3073,6 +3123,7 @@ function finishWorkout() {
   } catch(e) {}
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
   VoiceCue.cancel();
+  pendingPostGestureCues.length = 0;
   VoiceCue.play('workout-complete');
   if (_audioKeepaliveInterval) {
     clearInterval(_audioKeepaliveInterval);
@@ -3146,6 +3197,7 @@ elSettingsReset.addEventListener("click", () => {
   // Single-tap reset -- no confirm step. Modal is buried behind the gear icon
   // so an accidental tap is already two-clicks deep.
   VoiceCue.cancel();
+  pendingPostGestureCues.length = 0;
   VoiceCue.play('workout-reset');
   setTimeout(() => {
     try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
@@ -3220,9 +3272,20 @@ elDifficultyRow.addEventListener("click", (e) => {
   const diff = Number(btn.dataset.diff);
   if (!diff) return;
   const log = getActiveLogForEdit();
-  if (!log) return;
-  log.difficulty = (log.difficulty === diff) ? null : diff;
-  renderDifficulty(log);
+  if (log) {
+    log.difficulty = (log.difficulty === diff) ? null : diff;
+    renderDifficulty(log);
+  } else if (!isBrowsing()) {
+    // Mid-set (no log entry yet): keep the tap as a visual DRAFT selection.
+    // setDone() reads the .selected button into the new log (that read
+    // already existed but was unreachable -- the old handler bailed here,
+    // so grading during a set was a silently dead control).
+    const wasSelected = btn.classList.contains('selected');
+    elDifficultyRow.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+    if (!wasSelected) btn.classList.add('selected');
+  } else {
+    return; // browsing a future set: nothing to grade
+  }
   // Refresh next set's advice — difficulty grade is the gate that triggers
   // dynamic notes (computeSetNote requires diff != null on prior sets).
   refreshSetNote();
@@ -3252,7 +3315,15 @@ elSetCurrentBtn.addEventListener("click", () => {
 // taps from accidentally triggering drag. fallbackOnBody:false anchors
 // the clone inside #progress so drag position matches the finger.
 // direction:'horizontal' matches the actual row layout.
-const sortable = Sortable.create(elProgress, {
+// GUARD: Sortable comes from a CDN. At the gym (spotty signal / offline reload)
+// that fetch can fail, leaving `Sortable` undefined -- and an unguarded
+// Sortable.create THREW here, killing every statement below it: VoiceCue.init
+// (=> zero audio all session), restoreState (=> lost mid-workout state), and
+// the progress-dot tap handlers. Degrade to "no drag-reorder" instead.
+let sortable = null;
+try {
+  if (typeof Sortable !== 'undefined') {
+    sortable = Sortable.create(elProgress, {
   animation: 180,
   easing: "cubic-bezier(0.2, 0, 0, 1)",
   delay: 600,
@@ -3282,7 +3353,9 @@ const sortable = Sortable.create(elProgress, {
     if (from == null || to == null || from === to) return;
     reorderExercise(from, to);
   },
-});
+    });
+  }
+} catch (e) {}
 
 // Tap-to-cycle via RAW touch events (bypasses SortableJS's click suppression
 // on iOS). Click fallback for desktop mouse. Dedupe with lastTapTime so we
@@ -3371,14 +3444,22 @@ elProgress.addEventListener("click", (e) => {
 elProgress.addEventListener("contextmenu", (e) => e.preventDefault());
 elCopy.addEventListener("click", () => {
   const text = buildSummary();
-  navigator.clipboard.writeText(text).then(() => {
-    elCopy.textContent = "Copied";
-    elCopy.className = "copied";
-    setTimeout(() => {
-      elCopy.textContent = "Copy Summary";
-      elCopy.className = "";
-    }, 2000);
-  });
+  const revert = () => setTimeout(() => {
+    elCopy.textContent = "Copy Summary";
+    elCopy.className = "";
+  }, 2000);
+  // Clipboard API can be missing (file:// testing) or reject -- without the
+  // catch the button just died silently. Say so instead.
+  try {
+    navigator.clipboard.writeText(text).then(() => {
+      elCopy.textContent = "Copied";
+      elCopy.className = "copied";
+      revert();
+    }).catch(() => { elCopy.textContent = "Copy failed"; revert(); });
+  } catch (e) {
+    elCopy.textContent = "Copy failed";
+    revert();
+  }
 });
 
 // ============ STATE PERSISTENCE ============
@@ -3476,7 +3557,10 @@ function handleResumeFromBackground() {
       startAudioKeepalive();
     }
   }
-  if (state !== "ready" && state !== "finished" && !wakeLock) {
+  // Re-acquire in every ACTIVE state. "ready" was wrongly excluded -- ready
+  // means he's mid-set with Set Done pending; backgrounding releases the wake
+  // lock, so returning in ready state let the screen sleep during the set.
+  if (state !== "finished" && state !== "pre-start" && !wakeLock) {
     requestWakeLock();
   }
 }
@@ -3525,6 +3609,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">prism · 2026-05-13 11:50</div>
+<div class="build-stamp">prism · 2026-07-04 bugsweep</div>
 </body>
 </html>
