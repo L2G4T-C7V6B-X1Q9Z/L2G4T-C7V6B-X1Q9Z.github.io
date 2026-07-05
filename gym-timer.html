@@ -1057,7 +1057,7 @@
 // ============ CONFIG ============
 const dayType = "Upper";
 
-// UPPER session (next, per U/L rotation -- Fri 7/3 Lower DONE 33m29s; flipped Lower->Upper). PHASE 2A. Order: Chest Press -> Cable Row -> Cable Pushdown -> DB Lateral Raise -> DB Curls (compounds FIRST/fresh). AUTO-DROP v5 (Soren OK'd 7/5): reactive triggers unchanged -- at HARD/MAX the next set drops to ex.backoff when the last set was BELOW the floor, OR exactly AT the floor while MAXED. PREDICTIVE now needs a SUSTAINED fade: the last THREE sets all MAX with two declining steps, projecting the next set under the floor (v3/v4 fired off a single declining step -- Row 7/2's paced-12-to-9 and LP 7/4's 11-to-9, both normal early-set fades; 13->11->9 fires, 11->9 never does). STICKY (Soren 7/5): once a drop materializes, every later set of that exercise stays at the backoff -- display, advice, and summary all say so; a recovered set no longer flips the screen back to the prescription (the 7/4 "Hold 235 while on 205" incoherence). A HARD set AT the floor HOLDS. MOD/LIGHT never drop. States the drop, no decision prompt; note + on-screen weight share one predicate so they can never disagree. NEW 7/5: "Skip rest between exercises" settings toggle (DEFAULT ON, Soren's request) -- finishing an exercise goes straight to ready, no 60s UP NEXT countdown; voice still announces the next exercise + weight + rep range for the walk; in-exercise rests unchanged. Backoffs: Chest Press 100, Cable Row 100, Cable Pushdown 20, DB Lateral Raise 10, DB Curls 20 (locked 7/2 so the drop can NAME "drop to 20" instead of a vague "drop a notch"). DB Curls SUPINATED, failure ALLOWED (nerve-safe), stop ONLY on a nerve twang. setNotes are FORM/LOAD cues ONLY -- never echo prior reps. Carried from 7/2 Upper (all weights HOLD): CP 120 (10/7/8/8, build reps), Row 120 (12/9 clean; the v3 misfire's S3/S4 void), Pushdown 25 (15/15/13, one rep from the 30 trigger), DB LR 15 (13/9/13), DB Curls 25 (10/7/8, no twang). Voice = ElevenLabs static bank, workout-agnostic -- no regen, build id unchanged; ex-db-rdl + rest-150sec mp3s still missing from the bank (wired, skip gap-free until Soren's ElevenLabs session drops them in).
+// UPPER session (next = Mon 7/6 pre-shift ~6:30 PM, per U/L rotation -- Fri 7/3 Lower DONE; nights week, lift post-wake/fresh). PHASE 2B VOLUME BLOCK LIVE (Soren 7/5, this is the first 2B session): 21 sets, ~48-50 min. Order: Chest Press -> Cable Row (5 SETS, was 4) -> INCLINE DB PRESS (NEW: 2-set staged groover, DISCOVERY at 30/hand, bench 30-45 deg NOT overhead, STOP on any cuff pain -- French-press history; no backoff until a working weight exists) -> Cable Pushdown -> DB Lateral Raise (4 SETS, was 3) -> DB Curls (compounds FIRST/fresh). Weekly landing: chest 15 / back 12.5 / side delts 10 hard sets (the audit's 12-15 spec; 6/27 photo: upper chest + side-delt width = the visual gaps). AUTO-DROP v5 (Soren OK'd 7/5): reactive triggers unchanged -- at HARD/MAX the next set drops to ex.backoff when the last set was BELOW the floor, OR exactly AT the floor while MAXED. PREDICTIVE now needs a SUSTAINED fade: the last THREE sets all MAX with two declining steps, projecting the next set under the floor (v3/v4 fired off a single declining step -- Row 7/2's paced-12-to-9 and LP 7/4's 11-to-9, both normal early-set fades; 13->11->9 fires, 11->9 never does). STICKY (Soren 7/5): once a drop materializes, every later set of that exercise stays at the backoff -- display, advice, and summary all say so; a recovered set no longer flips the screen back to the prescription (the 7/4 "Hold 235 while on 205" incoherence). A HARD set AT the floor HOLDS. MOD/LIGHT never drop. States the drop, no decision prompt; note + on-screen weight share one predicate so they can never disagree. NEW 7/5: "Skip rest between exercises" settings toggle (DEFAULT ON, Soren's request) -- finishing an exercise goes straight to ready, no 60s UP NEXT countdown; voice still announces the next exercise + weight + rep range for the walk; in-exercise rests unchanged. Backoffs: Chest Press 100, Cable Row 100, Cable Pushdown 20, DB Lateral Raise 10, DB Curls 20 (locked 7/2 so the drop can NAME "drop to 20" instead of a vague "drop a notch"); Incline DB Press NONE (discovery session -- no drops on an unknown working weight). DB Curls SUPINATED, failure ALLOWED (nerve-safe), stop ONLY on a nerve twang. setNotes are FORM/LOAD cues ONLY -- never echo prior reps. Carried from 7/2 Upper (all weights HOLD): CP 120 (10/7/8/8, build reps), Row 120 (12/9 clean; the v3 misfire's S3/S4 void), Pushdown 25 (15/15/13, one rep from the 30 trigger), DB LR 15 (13/9/13), DB Curls 25 (10/7/8, no twang). True-failure RIR anchor starts 7/13, NOT this week (don't stack a failure max onto the 2B debut). Voice = ElevenLabs static bank, workout-agnostic -- no regen, build id unchanged; ex-incline-press.mp3 EXISTS in the bank and "Incline DB Press" is aliased to it; ex-db-rdl + rest-150sec mp3s still missing (wired, skip gap-free until Soren's ElevenLabs session drops them in).
 const workout = [
   {
     name: "Chest Press Machine",
@@ -1081,20 +1081,38 @@ const workout = [
   },
   {
     name: "Cable Rope Row",
-    sets: 4,
+    sets: 5,
     reps: "8-12",
     weight: "120 lbs",
     backoff: "100 lbs",
     rest: 150,
-    note: "Hold 120, run it earlier in the order. Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return -- no jerking with the low back.",
+    note: "Hold 120 -- 5 SETS now (Phase 2B volume block). Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return -- no jerking with the low back.",
     setNotes: [
       "S1: chest tall, pull to the waist, squeeze the blades.",
       "S2: full rest, elbows close, no torso heave.",
       "S3: controlled return, full stretch at the front.",
-      "S4: last set, drive the elbows back, clean reps."
+      "S4: drive the elbows back, clean reps.",
+      "S5: last set -- the NEW Phase 2B set. Empty it, no torso heave."
     ],
-    trigger: [12, 12, 12, 12],
+    trigger: [12, 12, 12, 12, 12],
     triggerWeight: "130 lbs",
+    adviceFor: function(setIdx, prev) {
+      return null;
+    }
+  },
+  {
+    name: "Incline DB Press",
+    sets: 2,
+    reps: "8-12",
+    weight: "30 lbs",
+    rest: 120,
+    note: "NEW (Phase 2B) -- discovery session at 30s per hand. Bench at 30-45 degrees, NOT steeper (incline press, not overhead work). Feet planted, slight arch, lower to the UPPER chest with elbows ~45 deg, press up and slightly back. If 30s are way off (12+ easy or under 8 grinding), swap DBs between sets and say so after. STOP on ANY rotator-cuff pain -- French-press history, nothing gets pushed through.",
+    setNotes: [
+      "S1: discovery -- 30-45 deg bench, elbows ~45, lower to the upper chest.",
+      "S2: same groove, controlled negative. Stop on any cuff signal."
+    ],
+    trigger: [12, 12],
+    triggerWeight: "35 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
     }
@@ -1120,18 +1138,19 @@ const workout = [
   },
   {
     name: "DB Lateral Raise",
-    sets: 3,
+    sets: 4,
     reps: "12-15",
     weight: "15 lbs",
     backoff: "10 lbs",
     rest: 90,
-    note: "Strict 15, range 12-15 (drops to 10 if you fall under the floor). Lead with the elbows, raise to parallel -- no higher (L-shoulder clicks above parallel), no swinging or momentum.",
+    note: "Strict 15, range 12-15, 4 SETS now (Phase 2B). Lead with the elbows, raise to parallel -- no higher (L-shoulder clicks above parallel), no swinging or momentum. Drops to 10 if you fall under the floor.",
     setNotes: [
       "S1: strict, lead with the elbows, raise to parallel.",
       "S2: no swing, slow controlled negative.",
-      "S3: last set, keep it strict, stop at parallel."
+      "S3: keep it strict, stop at parallel.",
+      "S4: last set -- the NEW Phase 2B set. Strict to the end."
     ],
-    trigger: [15, 15, 15],
+    trigger: [15, 15, 15, 15],
     triggerWeight: "17.5 lbs",
     adviceFor: function(setIdx, prev) {
       return null;
@@ -1916,6 +1935,7 @@ function exerciseClipName(name) {
     "Leg Extension": "ex-leg-extension",
     "Leg Extension Machine": "ex-leg-extension",
     "Incline Press": "ex-incline-press",
+    "Incline DB Press": "ex-incline-press",
     "Overhead Press": "ex-overhead-press",
     "Tricep Pushdown": "ex-tricep-pushdown",
     "Rear Delt Flyes": "ex-rear-delt-flyes",
