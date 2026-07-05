@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#111111">
 <title>Gym Timer</title>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
@@ -911,7 +912,10 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 </button>
 
-<h1 id="day-title">Lower</h1>
+<!-- Filled by JS from dayType (line ~1025). Kept empty in the markup so the
+     static text can never contradict the config again (it drifted: said "Lower"
+     under an Upper build). One less surface for the daily flip to touch. -->
+<h1 id="day-title"></h1>
 <div id="exercise-name"></div>
 <div id="set-info"></div>
 <div id="exercise-note"></div>
@@ -971,6 +975,13 @@
     </div>
     <div class="setting-row">
       <div>
+        <div class="setting-label">Skip rest between exercises</div>
+        <div class="setting-sub">Straight to the next machine -- walk time is the rest</div>
+      </div>
+      <div class="toggle" id="toggle-skiprest" role="switch"></div>
+    </div>
+    <div class="setting-row">
+      <div>
         <div class="setting-label">Voice cues</div>
         <div class="setting-sub">Spoken set/rest/exercise announcements</div>
       </div>
@@ -1024,7 +1035,7 @@
 // ============ CONFIG ============
 const dayType = "Upper";
 
-// UPPER session (next, per U/L rotation -- Fri 7/3 Lower DONE 33m29s; flipped Lower->Upper). PHASE 2A. Order: Chest Press -> Cable Row -> Cable Pushdown -> DB Lateral Raise -> DB Curls (compounds FIRST/fresh). AUTO-DROP v3 (Soren 6/30): at HARD/MAX the next set drops to ex.backoff when the last set was BELOW the floor, OR exactly AT the floor while MAXED, OR a multi-set downtrend projects under. A HARD set AT the floor HOLDS. MOD/LIGHT never drop. States the drop, no decision prompt; note + on-screen weight always agree. Backoffs: Chest Press 100, Cable Row 100, Cable Pushdown 20, DB Lateral Raise 10, DB Curls 20 (NEW -- locked 7/2 so the drop can NAME "drop to 20" instead of a vague "drop a notch"). DB Curls SUPINATED, failure ALLOWED (nerve-safe), stop ONLY on a nerve twang. setNotes are FORM/LOAD cues ONLY -- never echo prior reps. Carried from 7/2 Upper (all weights HOLD): CP 120 (10/7/8/8, build reps), Row 120 (12/9 clean; auto-drop misfired to 100, S3/S4 void), Pushdown 25 (15/15/13, one rep from the 30 trigger), DB LR 15 (13/9/13), DB Curls 25 (10/7/8, no twang). NOTE: the auto-drop predictive-projection fix (require TWO declining MAX sets before a predictive drop) is STILL PENDING Soren's OK -- NOT applied; it misfired again on Lower LP 7/4. Voice = ElevenLabs static bank, workout-agnostic -- no regen, build id unchanged.
+// UPPER session (next, per U/L rotation -- Fri 7/3 Lower DONE 33m29s; flipped Lower->Upper). PHASE 2A. Order: Chest Press -> Cable Row -> Cable Pushdown -> DB Lateral Raise -> DB Curls (compounds FIRST/fresh). AUTO-DROP v5 (Soren OK'd 7/5): reactive triggers unchanged -- at HARD/MAX the next set drops to ex.backoff when the last set was BELOW the floor, OR exactly AT the floor while MAXED. PREDICTIVE now needs a SUSTAINED fade: the last THREE sets all MAX with two declining steps, projecting the next set under the floor (v3/v4 fired off a single declining step -- Row 7/2's paced-12-to-9 and LP 7/4's 11-to-9, both normal early-set fades; 13->11->9 fires, 11->9 never does). STICKY (Soren 7/5): once a drop materializes, every later set of that exercise stays at the backoff -- display, advice, and summary all say so; a recovered set no longer flips the screen back to the prescription (the 7/4 "Hold 235 while on 205" incoherence). A HARD set AT the floor HOLDS. MOD/LIGHT never drop. States the drop, no decision prompt; note + on-screen weight share one predicate so they can never disagree. NEW 7/5: "Skip rest between exercises" settings toggle (DEFAULT ON, Soren's request) -- finishing an exercise goes straight to ready, no 60s UP NEXT countdown; voice still announces the next exercise + weight + rep range for the walk; in-exercise rests unchanged. Backoffs: Chest Press 100, Cable Row 100, Cable Pushdown 20, DB Lateral Raise 10, DB Curls 20 (locked 7/2 so the drop can NAME "drop to 20" instead of a vague "drop a notch"). DB Curls SUPINATED, failure ALLOWED (nerve-safe), stop ONLY on a nerve twang. setNotes are FORM/LOAD cues ONLY -- never echo prior reps. Carried from 7/2 Upper (all weights HOLD): CP 120 (10/7/8/8, build reps), Row 120 (12/9 clean; the v3 misfire's S3/S4 void), Pushdown 25 (15/15/13, one rep from the 30 trigger), DB LR 15 (13/9/13), DB Curls 25 (10/7/8, no twang). Voice = ElevenLabs static bank, workout-agnostic -- no regen, build id unchanged; ex-db-rdl + rest-150sec mp3s still missing from the bank (wired, skip gap-free until Soren's ElevenLabs session drops them in).
 const workout = [
   {
     name: "Chest Press Machine",
@@ -1137,7 +1148,10 @@ const originalWorkout = workout.slice();
 const defaultSettings = {
   sound: true,
   autoStart: true,
-  voice: true
+  voice: true,
+  // Soren 7/5: no UP NEXT countdown between exercises -- the walk to the next
+  // machine IS the rest. Ships ON (his call); the settings toggle turns it off.
+  skipExerciseRest: true
 };
 let settings = { ...defaultSettings };
 function loadSettings() {
@@ -1257,6 +1271,8 @@ let wakeLock = null;
 let restNotifTimer = null;
 let audioCtx = null;
 let countdownFiredThresholds = new Set();
+// Brief Set-Done lockout after a skip-rest exercise transition (see setDone).
+let setDoneLockUntil = 0;
 
 let editingLog = null;
 let editRepCount = 0;
@@ -1289,6 +1305,7 @@ const elSettingsBtn = document.getElementById("settings-btn");
 const elSettingsModal = document.getElementById("settings-modal");
 const elSettingsClose = document.getElementById("settings-close");
 const elToggleAutoStart = document.getElementById("toggle-autostart");
+const elToggleSkipRest = document.getElementById("toggle-skiprest");
 const elToggleVoice = document.getElementById("toggle-voice");
 const elReturnPill = document.getElementById("return-pill");
 const elSetCurrentBtn = document.getElementById("set-current-btn");
@@ -2051,6 +2068,70 @@ function renderProgress() {
   }
 }
 
+// ============ AUTO-DROP PREDICATE (v5, Soren OK'd 7/5) ============
+// THE single source of truth for "should the next set load the backoff?".
+// Both the advice text (dynamicRepAdvice) and the on-screen weight
+// (effectiveWeight, via stickyDropState) route through this one function, so
+// the note and the loaded weight can never disagree by construction.
+// Given the graded logs so far (prevLogs = sets 0..n-1), decide for set n:
+//   (1) REACTIVE: last set BELOW the floor at HARD/MAX, or exactly AT the
+//       floor while MAXED (a HARD set at the floor HOLDS -- reserve left).
+//   (2) PREDICTIVE: the last THREE sets all MAX with TWO declining steps,
+//       and the last step's slope projects the next set under the floor.
+//       History: v3 projected off ANY downtrend (misfired on Row 7/2 -- a
+//       paced HARD 12 falling to a MAX 9 is pacing, not fatigue); v4 required
+//       two MAX sets + one declining step (still fired on LP 7/4's 11->9,
+//       a normal early-set fade). One declining step is ordinary; TWO at MAX
+//       is a real crater forming. 13->11->9 fires; 11->9 never does.
+//   MOD/LIGHT never drop. A zero-rep set reads as "stopped early", never a
+//   weight failure.
+function dropPredicate(prevLogs, lo) {
+  const last = prevLogs[prevLogs.length - 1];
+  if (!last) return false;
+  const r = Number(last.reps);
+  if (isNaN(r) || r <= 0) return false;
+  const d = +last.difficulty || 0;
+  const hardOrMax = d >= 4;
+  const maxed = d >= 5;
+  if (!hardOrMax) return false;
+  if (r < lo || (r === lo && maxed)) return true;
+  if (r > lo && maxed && prevLogs.length >= 3) {
+    const p2 = prevLogs[prevLogs.length - 2];
+    const p3 = prevLogs[prevLogs.length - 3];
+    const r2 = Number(p2.reps), r3 = Number(p3.reps);
+    const d2 = +p2.difficulty || 0, d3 = +p3.difficulty || 0;
+    if (!isNaN(r2) && !isNaN(r3) && d2 >= 5 && d3 >= 5 && r3 > r2 && r2 > r) {
+      if ((r - (r2 - r)) < lo) return true;
+    }
+  }
+  return false;
+}
+
+// STICKY DROP (Soren 7/5): once the drop materializes for a set, every later
+// set of that exercise stays at the backoff. A recovered set no longer flips
+// the display back to the prescription -- that produced the 7/4 incoherence
+// where the note said "Hold 235" while he was riding the 205 the timer had
+// dropped him to two sets earlier. Walks the graded sets in order and latches
+// at the FIRST set the predicate fires for; an ungraded set before any latch
+// means we can't evaluate (no drop), an ungraded set after the latch changes
+// nothing (the drop already happened on the machine).
+// Returns { dropped, firedAt } -- firedAt = first set index loaded at the backoff.
+function stickyDropState(exIdx, setIdx) {
+  const ex = workout[exIdx];
+  if (!ex || !ex.backoff || setIdx < 1) return { dropped: false, firedAt: null };
+  const rng = String(ex.reps || "").match(/(\d+)\D+(\d+)/);
+  if (!rng) return { dropped: false, firedAt: null };
+  const lo = +rng[1];
+  const prevLogs = [];
+  for (let i = 0; i < setIdx; i++) {
+    const lg = setLogs.find(l => l.exercise === exIdx && l.set === i);
+    if (!lg || lg.difficulty == null) break; // ungraded gap: can't evaluate further
+    prevLogs.push({ reps: lg.reps, difficulty: lg.difficulty });
+    if (dropPredicate(prevLogs, lo)) return { dropped: true, firedAt: i + 1 };
+  }
+  return { dropped: false, firedAt: null };
+}
+
 // Dynamic set advice: returns a string tailored to the user's prior-set
 // performance in this exercise, or null to fall back to static setNotes.
 // Gated on previous sets being FULLY logged (reps + difficulty) so the
@@ -2089,30 +2170,32 @@ function dynamicRepAdvice(setIdx, prev, ex) {
 
   if (r <= 0) return L + " stopped early. Reset, go by feel this set.";
 
-  // AUTO-DROP (v4, Soren 7/2): at a real (HARD/MAX) effort, drop the next set to
-  // the backoff when he can't sustain the range -- (1) BELOW the floor on any
-  // HARD/MAX set, (2) exactly AT the floor but MAXED (next set falls under), or
-  // (3) PREDICTIVE: the last TWO sets were both MAX and declining, and that
-  // decline projects the next set under the floor. v3 projected off ANY
-  // downtrend, which misfired on Row 7/2 -- a paced HARD S1 (12) falling to a
-  // MAX S2 (9) read as fatigue when it was pacing; S4=12 proved the weight fine.
-  // A HARD set exactly at the floor HOLDS (reserve left). MOD/LIGHT never drop.
-  // effectiveWeight mirrors this EXACTLY so note + on-screen weight always agree.
-  if (bo && hardOrMax) {
-    if (r < lo || (r === lo && maxed)) {
-      var why = (r < lo) ? (r + " under " + lo) : (r + " at the floor, maxed");
-      return L + ": " + why + ". Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
+  // AUTO-DROP (v5 + sticky, Soren 7/5): all drop decisions route through
+  // dropPredicate -- the same function effectiveWeight consults -- so the
+  // advice and the on-screen weight share one brain and cannot disagree.
+  if (bo) {
+    // Sticky-continues: the drop already materialized for an EARLIER set of
+    // this exercise. This set stays at the backoff -- never bounce the screen
+    // back to the prescription off one recovered set (the 7/4 incoherence).
+    var earlierFired = false;
+    for (var k = 1; k < prev.length; k++) {
+      if (dropPredicate(prev.slice(0, k), lo)) { earlierFired = true; break; }
     }
-    if (r > lo && prev.length >= 2 && maxed) {
-      var prev2 = prev[prev.length - 2];
-      var r2 = Number(prev2.reps);
-      var d2 = +prev2.difficulty || 0;
-      if (!isNaN(r2) && d2 >= 5 && r2 > r) {
-        var projNext = r - (r2 - r);
-        if (projNext < lo) {
-          return L + ": two MAX sets fading (" + r2 + " to " + r + ", proj ~" + projNext + " next). Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
-        }
+    if (earlierFired) {
+      var boNum = (String(bo).match(/(\d+(?:\.\d+)?)/) || [])[1] || String(bo);
+      return L + " stays at " + boNum + " (dropped from " + w + "). Aim " + pLo + "-" + pHi + ".";
+    }
+    // Drop materializes on THIS set: pick the message by which rule fired.
+    if (hardOrMax && dropPredicate(prev, lo)) {
+      if (r < lo || (r === lo && maxed)) {
+        var why = (r < lo) ? (r + " under " + lo) : (r + " at the floor, maxed");
+        return L + ": " + why + ". Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
       }
+      // Predictive: predicate guarantees three MAX sets, two declining steps.
+      var pv2 = prev[prev.length - 2];
+      var pv3 = prev[prev.length - 3];
+      var projNext = r - (Number(pv2.reps) - r);
+      return L + ": three MAX sets fading (" + Number(pv3.reps) + " to " + Number(pv2.reps) + " to " + r + ", proj ~" + projNext + " next). Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
     }
   }
 
@@ -2203,45 +2286,15 @@ function effectiveWeight(exIdx, setIdx) {
     const m = baseStr.match(/(?:→|->|drop to)\s*(\d+(?:\.\d+)?)/i);
     if (m) dropNum = m[1];
   }
-  // (b) AUTO-DROP (v4, Soren 7/2): from set 2 on, drop the loaded weight to the
-  // backoff when -- at a HARD/MAX effort -- the last set was BELOW the floor, or
-  // exactly AT the floor while MAXED, or (predictive) the last TWO sets were both
-  // MAX and declining with the decline projecting the next set under the floor.
-  // A HARD set exactly at the floor holds (reserve left). MOD/LIGHT never drop.
-  // A zero-rep set never drops here (the advisor reads it as "stopped early, go
-  // by feel" -- weight must agree with that note). Mirrors dynamicRepAdvice
-  // EXACTLY so the on-screen weight matches the note.
+  // (b) AUTO-DROP (v5 + sticky, Soren 7/5): from set 2 on, the loaded weight is
+  // the backoff whenever stickyDropState says a drop has materialized for this
+  // set OR any earlier set of the exercise. stickyDropState routes through the
+  // same dropPredicate the advice text uses, so the on-screen weight and the
+  // note agree by construction -- and once dropped, later sets stay dropped
+  // (no bouncing back to the prescription off one recovered set).
   if (dropNum == null && setIdx >= 1 && ex.backoff) {
-    const prevLogs = [];
-    let allLogged = true;
-    for (let i = 0; i < setIdx; i++) {
-      const lg = setLogs.find(l => l.exercise === exIdx && l.set === i);
-      if (lg && lg.difficulty != null) prevLogs.push({ reps: lg.reps, difficulty: lg.difficulty });
-      else { allLogged = false; break; }
-    }
-    if (allLogged && prevLogs.length === setIdx && prevLogs.length >= 1) {
-      const rng = String(ex.reps || "").match(/(\d+)\D+(\d+)/);
-      const last = prevLogs[prevLogs.length - 1];
-      if (rng && last && typeof last.reps === "number" && !isNaN(last.reps)) {
-        const lo = +rng[1];
-        const dd = (+last.difficulty || 0);
-        const hardOrMax = dd >= 4;
-        const maxed = dd >= 5;
-        let doDrop = false;
-        if (hardOrMax && last.reps > 0) {
-          if (last.reps < lo || (last.reps === lo && maxed)) {
-            doDrop = true;
-          } else if (last.reps > lo && prevLogs.length >= 2 && maxed) {
-            const prev2 = prevLogs[prevLogs.length - 2];
-            const r2 = Number(prev2.reps);
-            const d2 = (+prev2.difficulty || 0);
-            if (!isNaN(r2) && d2 >= 5 && r2 > last.reps && (last.reps - (r2 - last.reps)) < lo) doDrop = true;
-          }
-        }
-        if (doDrop) {
-          dropNum = (String(ex.backoff).match(/(\d+(?:\.\d+)?)/) || [])[1] || null;
-        }
-      }
+    if (stickyDropState(exIdx, setIdx).dropped) {
+      dropNum = (String(ex.backoff).match(/(\d+(?:\.\d+)?)/) || [])[1] || null;
     }
   }
   if (dropNum != null && dropNum !== baseNum) {
@@ -2695,10 +2748,57 @@ function setDone() {
   viewingExercise = currentExercise;
   viewingSet = currentSet;
 
+  const switchingExercise = (finishedExercise !== currentExercise);
+
+  // SKIP REST BETWEEN EXERCISES (Soren 7/5, settings toggle, default ON):
+  // no 60s UP NEXT countdown -- the walk to the next machine IS the rest.
+  // Straight to ready for the new exercise's S1; the voice still announces
+  // what's next (name + weight + rep range) for the walk, minus the
+  // rest-duration clip. In-exercise rests are untouched by this.
+  if (switchingExercise && settings.skipExerciseRest) {
+    state = "ready";
+    restEndTime = null;
+    restRemaining = 0;
+    restTotalSeconds = 0;
+    // The old UP NEXT rest was an accidental double-tap guard at exercise
+    // boundaries (2nd tap hit Pause, harmless). Without it, a bounce-tap on
+    // Set Done would instantly log a phantom S1 -- brief lockout instead.
+    setDoneLockUntil = Date.now() + 900;
+    elTimer.textContent = "-:--";
+    elTimerLabel.textContent = "";
+    elBtn.textContent = "Set Done";
+    elBtn.className = "";
+    elSkip.style.display = "none";
+    renderExercise();
+    showRestRing(false);
+    {
+      const isFinalExercise = (currentExercise === workout.length - 1);
+      const exClip = exerciseClipName(workout[currentExercise].name);
+      const seq = ['received', 'exercise-complete'];
+      seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
+      if (exClip) seq.push(exClip);
+      // Same daily-clip guard as the rested path: a set-1 daily line states
+      // the weight/target itself, so don't double-announce.
+      if (!dailyClipFor(currentExercise, 0)) {
+        seq.push(...weightClipsFor(workout[currentExercise]));
+        const repClipSkip = repRangeClipFor(workout[currentExercise].reps);
+        if (repClipSkip) seq.push(repClipSkip);
+      }
+      const _dcSkip = dailyClipFor(currentExercise, 0);
+      if (_dcSkip) seq.push(_dcSkip);
+      VoiceCue.playSequence(seq);
+    }
+    requestAnimationFrame(() => {
+      initAudio();
+      requestWakeLock();
+      saveState();
+    });
+    return;
+  }
+
   elSkip.style.display = "flex";
   elSkip.style.pointerEvents = "auto";
   state = "resting";
-  const switchingExercise = (finishedExercise !== currentExercise);
   restRemaining = switchingExercise ? 60 : workout[finishedExercise].rest;
   restTotalSeconds = restRemaining;
   restEndTime = Date.now() + restRemaining * 1000;
@@ -3141,7 +3241,11 @@ function openEditModal(exerciseIdx, setIdx) {
   editingLog = log;
   editRepCount = log.reps;
   elEditExercise.textContent = workout[exerciseIdx].name;
-  elEditSet.textContent = "Set " + (setIdx + 1) + " \u00b7 " + workout[exerciseIdx].weight;
+  // Show the weight THIS set was actually done at -- a set done at the backoff
+  // (auto-drop / drop set) used to display the header prescription here.
+  const editEff = effectiveWeight(exerciseIdx, setIdx);
+  elEditSet.textContent = "Set " + (setIdx + 1) + " \u00b7 " +
+    (editEff.dropped ? editEff.num + " lbs (dropped)" : workout[exerciseIdx].weight);
   elEditNotes.value = log.note || "";
   elEditModal.classList.add("show");
   // Picker scrollLeft only behaves correctly once the modal is laid out
@@ -3177,6 +3281,8 @@ document.addEventListener("keydown", (e) => {
 function applySettingsToggles() {
   elToggleAutoStart.classList.toggle("on", !!settings.autoStart);
   elToggleAutoStart.setAttribute("aria-checked", !!settings.autoStart);
+  elToggleSkipRest.classList.toggle("on", !!settings.skipExerciseRest);
+  elToggleSkipRest.setAttribute("aria-checked", !!settings.skipExerciseRest);
   elToggleVoice.classList.toggle("on", !!settings.voice);
   elToggleVoice.setAttribute("aria-checked", !!settings.voice);
 }
@@ -3213,6 +3319,9 @@ elSettingsModal.addEventListener("click", (e) => {
 elToggleAutoStart.addEventListener("click", () => {
   settings.autoStart = !settings.autoStart; saveSettings(); applySettingsToggles();
 });
+elToggleSkipRest.addEventListener("click", () => {
+  settings.skipExerciseRest = !settings.skipExerciseRest; saveSettings(); applySettingsToggles();
+});
 elToggleVoice.addEventListener("click", () => {
   settings.voice = !settings.voice;
   if (!settings.voice) VoiceCue.cancel();
@@ -3226,7 +3335,10 @@ elBtn.addEventListener("click", () => {
   VoiceCue.unlock();
   startAudioKeepalive();
   if (state === "pre-start") startWorkout();
-  else if (state === "ready") setDone();
+  else if (state === "ready") {
+    if (Date.now() < setDoneLockUntil) return; // bounce-tap right after a skip-rest transition
+    setDone();
+  }
   else if (state === "alert") acknowledgeAlert();
   else if (state === "resting") pauseRest();
   else if (state === "paused") resumeRest();
@@ -3612,6 +3724,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">prism · 2026-07-04 bugsweep</div>
+<div class="build-stamp">prism · 2026-07-05 drop-v5 sticky skiprest</div>
 </body>
 </html>
