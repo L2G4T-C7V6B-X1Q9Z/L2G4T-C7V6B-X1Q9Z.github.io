@@ -895,6 +895,23 @@
     background: #1a1a1a;
     color: #c0392b;
   }
+  /* Compact-height mode (SE-class screens, or a modern iPhone whose Safari
+     URL bar never collapses because this page can't scroll -- innerHeight
+     lands ~660-720). The fixed stack (header + note + timer) plus the
+     bottom bar left a <104px slot at 667px, so the main button overlapped
+     its neighbors no matter how it was clamped (7/5 layout hunt). Tighten
+     the stack ~70px so the button gets a real slot. fitNoteToBox and
+     centerMainButton both read live geometry, so they adapt automatically. */
+  @media (max-height: 740px) {
+    body { padding-top: 12px; }
+    h1 { margin-bottom: 8px; }
+    #exercise-name { font-size: 19px; }
+    #exercise-note { height: 58px; }
+    #timer-display { font-size: 56px; }
+    #timer-label { margin-bottom: 10px; }
+    #progress { padding: 8px 24px 10px; }
+  }
+
   .build-stamp {
     position: fixed;
     left: 4px;
@@ -1218,7 +1235,13 @@ function centerMainButton() {
   if (!elTimer || !elTimerLabel || !elDifficultyRow || !elBtnWrap || !elBtn) return;
   const labelRect = elTimerLabel.getBoundingClientRect();
   const diffRect = elDifficultyRow.getBoundingClientRect();
-  if (diffRect.height === 0) return;
+  // Anchor the slot bottom on the difficulty row when the log area is shown,
+  // else on the bottom bar (pre-start hides the log area now, and the old
+  // bail-out left the button at its CSS default -- which overlapped the timer
+  // on short viewports).
+  const barRect = elBottomBar ? elBottomBar.getBoundingClientRect() : null;
+  const anchorTop = (diffRect.height > 0) ? diffRect.top : (barRect ? barRect.top : 0);
+  if (!anchorTop) return;
   // Adaptive button size: try for 184, shrink to fit the slot between
   // (timer-label bottom + 24) and (difficulty-row top - 24). The old floor
   // of 148 GUARANTEED an overlap whenever the slot was smaller than 148 --
@@ -1232,7 +1255,7 @@ function centerMainButton() {
   const MAX_BTN = 184;
   const MIN_BTN = 104;
   const slotTop = labelRect.bottom + CLEAR_ABOVE;
-  const slotBottom = diffRect.top - CLEAR_BELOW;
+  const slotBottom = anchorTop - CLEAR_BELOW;
   const slotHeight = Math.max(0, slotBottom - slotTop);
   const btnH = Math.max(MIN_BTN, Math.min(MAX_BTN, slotHeight));
   if (btnH < 140) {
@@ -1328,6 +1351,7 @@ const elReturnPill = document.getElementById("return-pill");
 const elSetCurrentBtn = document.getElementById("set-current-btn");
 const elPillsStack = document.querySelector(".pills-stack");
 const elDifficultyRow = document.getElementById("difficulty-row");
+const elBottomBar = document.getElementById("bottom-bar");
 const elSetLabelText = document.getElementById("set-label-text");
 const elEditModal = document.getElementById("edit-modal");
 const elEditExercise = document.getElementById("edit-exercise");
@@ -3757,6 +3781,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">prism · 2026-07-05b v5+layout</div>
+<div class="build-stamp">prism · 2026-07-05c v5+layout+compact</div>
 </body>
 </html>
