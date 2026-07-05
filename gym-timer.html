@@ -443,10 +443,15 @@
     padding: 12px 24px 16px;
     width: 100%;
   }
-  /* NOW + SET pills stacked vertically on the LEFT side of the progress row,
-     next to the exercise-name labels. Fade + slide-in from the left. */
+  /* NOW + SET pills stacked vertically, floating LEFT of the main button
+     (fixed; centerMainButton aligns them to the button's vertical center).
+     They used to sit over the progress row's left edge -- at phone width the
+     5-exercise row fills the full 390px, so the pills landed ON TOP of the
+     first exercise's label and dots and blocked those dot taps (found in the
+     7/5 layout hunt). The band beside the main button is guaranteed empty at
+     every viewport (the button is a centered circle), so they live there now. */
   .pills-stack {
-    position: absolute;
+    position: fixed;
     left: 10px;
     top: 50%;
     transform: translateY(-50%);
@@ -1214,20 +1219,29 @@ function centerMainButton() {
   const labelRect = elTimerLabel.getBoundingClientRect();
   const diffRect = elDifficultyRow.getBoundingClientRect();
   if (diffRect.height === 0) return;
-  // Adaptive button size: try for 184, but shrink the wrapper + button to
-  // fit the slot between (timer-label bottom + 8) and (difficulty-row top
-  // - 24). Floor at 148 so the START WORKOUT text still fits and the
-  // tap target stays reasonable. On compact iPhones this prevents the
-  // button from hiding REST/GO above OR overlapping LIGHT/MOD/HARD/MAX
-  // below -- both have happened with prior "clamp top" approaches.
+  // Adaptive button size: try for 184, shrink to fit the slot between
+  // (timer-label bottom + 24) and (difficulty-row top - 24). The old floor
+  // of 148 GUARANTEED an overlap whenever the slot was smaller than 148 --
+  // at 375x667 (SE-class, or a modern iPhone with the Safari URL bar eating
+  // the viewport, which never collapses because this page can't scroll) the
+  // ring sat on top of the timer AND the difficulty chips (7/5 layout hunt).
+  // Now the button shrinks to the slot down to a 104px tap-target floor,
+  // stepping the label font down when compact so START WORKOUT still fits.
   const CLEAR_ABOVE = 24;
   const CLEAR_BELOW = 24;
   const MAX_BTN = 184;
-  const MIN_BTN = 148;
+  const MIN_BTN = 104;
   const slotTop = labelRect.bottom + CLEAR_ABOVE;
   const slotBottom = diffRect.top - CLEAR_BELOW;
   const slotHeight = Math.max(0, slotBottom - slotTop);
   const btnH = Math.max(MIN_BTN, Math.min(MAX_BTN, slotHeight));
+  if (btnH < 140) {
+    elBtn.style.fontSize = "11px";
+    elBtn.style.letterSpacing = "1px";
+  } else {
+    elBtn.style.fontSize = "";
+    elBtn.style.letterSpacing = "";
+  }
   elBtnWrap.style.width = btnH + "px";
   elBtnWrap.style.height = btnH + "px";
   elBtn.style.width = (btnH - 4) + "px";
@@ -1235,6 +1249,9 @@ function centerMainButton() {
   const top = slotTop + (slotHeight - btnH) / 2;
   elBtnWrap.style.top = top + "px";
   elBtnWrap.style.transform = "translateX(-50%)";
+  // Keep the NOW/SET pills vertically centered on the button (they float in
+  // the empty band at its left -- see .pills-stack).
+  if (elPillsStack) elPillsStack.style.top = (top + btnH / 2) + "px";
 }
 function syncLogArea() {
   const log = getActiveLogForEdit();
@@ -1309,6 +1326,7 @@ const elToggleSkipRest = document.getElementById("toggle-skiprest");
 const elToggleVoice = document.getElementById("toggle-voice");
 const elReturnPill = document.getElementById("return-pill");
 const elSetCurrentBtn = document.getElementById("set-current-btn");
+const elPillsStack = document.querySelector(".pills-stack");
 const elDifficultyRow = document.getElementById("difficulty-row");
 const elSetLabelText = document.getElementById("set-label-text");
 const elEditModal = document.getElementById("edit-modal");
@@ -2162,13 +2180,17 @@ function dynamicRepAdvice(setIdx, prev, ex) {
   var w = wm ? wm[1] : "the weight";
   var bo = ex.backoff || null;
   var L = "S" + (setIdx + 1);
+  // P = the COMPLETED set the numbers describe. The old texts hung the prior
+  // set's reps on the upcoming set's label ("S2 was 12 at max" shown while S2
+  // hasn't happened -- 7/5 hunt). Facts get P; instructions get "here"/L.
+  var P = "S" + setIdx;
   var aimHi = Math.min(lo + 2, hi);
   var pLo, pHi;
   if (hardOrMax) { pLo = Math.max(r - 2, 1); pHi = Math.max(r - 1, 1); }
   else if (roomLeft) { pLo = r; pHi = Math.min(r + 2, hi); }
   else { pLo = Math.max(r - 1, 1); pHi = r; }
 
-  if (r <= 0) return L + " stopped early. Reset, go by feel this set.";
+  if (r <= 0) return P + " stopped early. Reset, go by feel this set.";
 
   // AUTO-DROP (v5 + sticky, Soren 7/5): all drop decisions route through
   // dropPredicate -- the same function effectiveWeight consults -- so the
@@ -2188,14 +2210,14 @@ function dynamicRepAdvice(setIdx, prev, ex) {
     // Drop materializes on THIS set: pick the message by which rule fired.
     if (hardOrMax && dropPredicate(prev, lo)) {
       if (r < lo || (r === lo && maxed)) {
-        var why = (r < lo) ? (r + " under " + lo) : (r + " at the floor, maxed");
-        return L + ": " + why + ". Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
+        var why = (r < lo) ? (" was " + r + ", under " + lo) : (" was " + r + " at the floor, maxed");
+        return P + why + ". Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
       }
       // Predictive: predicate guarantees three MAX sets, two declining steps.
       var pv2 = prev[prev.length - 2];
       var pv3 = prev[prev.length - 3];
       var projNext = r - (Number(pv2.reps) - r);
-      return L + ": three MAX sets fading (" + Number(pv3.reps) + " to " + Number(pv2.reps) + " to " + r + ", proj ~" + projNext + " next). Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
+      return "Three MAX sets fading (" + Number(pv3.reps) + " to " + Number(pv2.reps) + " to " + r + ", proj ~" + projNext + " next). Dropping to " + bo + " -- aim " + lo + "-" + aimHi + ".";
     }
   }
 
@@ -2205,20 +2227,20 @@ function dynamicRepAdvice(setIdx, prev, ex) {
 
   // No backoff defined (groovers like Face Pulls): advise only, never auto-drop.
   if (r < lo && hardOrMax) {
-    return L + " was " + r + ", under " + lo + ". Drop a notch next set.";
+    return P + " was " + r + ", under " + lo + ". Drop a notch here.";
   }
   if (r === lo && hardOrMax) {
     return maxed
-      ? L + " at the floor (" + r + "), maxed. Drop a notch next set."
-      : L + " at the floor (" + r + ") with a little left. Hold " + w + ", push for more.";
+      ? P + " at the floor (" + r + "), maxed. Drop a notch here."
+      : P + " at the floor (" + r + ") with a little left. Hold " + w + ", push for more.";
   }
   if (r >= hi && roomLeft) {
-    return L + " hit " + r + " (top) with room. Bump the weight next session. Here: " + (hi - 1) + "-" + hi + ".";
+    return P + " hit " + r + " (top) with room. Bump the weight next session. Here: " + (hi - 1) + "-" + hi + ".";
   }
   if (roomLeft) {
-    return L + " was " + r + " with room. Push " + pLo + "-" + pHi + ", hold " + w + ".";
+    return P + " was " + r + " with room. Push " + pLo + "-" + pHi + " here, hold " + w + ".";
   }
-  return L + " was " + r + (hardOrMax ? " at max" : "") + ". Aim " + pLo + "-" + pHi + ", hold " + w + ".";
+  return P + " was " + r + (hardOrMax ? " at max" : "") + ". Aim " + pLo + "-" + pHi + " here, hold " + w + ".";
 }
 
 function defaultAdvice(setIdx, prev, ex) {
@@ -2617,8 +2639,12 @@ function applyState(notesValue) {
     elReturnPill.classList.remove('visible');
     elSetCurrentBtn.classList.remove('visible');
     elBtn.classList.remove('browsing');
-    // Keep log area visible in non-finished states (user can always see/edit notes)
-    if (state !== 'finished') elLogArea.style.display = 'flex';
+    // Keep log area visible in non-finished states (user can always see/edit
+    // notes). Pre-start is excluded: nothing exists to log before the workout
+    // starts, and this unconditional re-show was overriding the pre-start
+    // branch's hide 30 lines up -- the grading UI (chips/reps/note) sat on the
+    // Start Workout screen (found in the 7/5 layout hunt).
+    if (state !== 'finished' && state !== 'pre-start') elLogArea.style.display = 'flex';
   }
   // Sync log area UI (reps/notes/difficulty) with the active log entry.
   // Overrides per-branch repPicker/elNotesInput values set above, ensuring
@@ -2771,6 +2797,13 @@ function setDone() {
     elSkip.style.display = "none";
     renderExercise();
     showRestRing(false);
+    // Reset the log area to the NEW exercise's fresh S1 defaults. The rested
+    // path does this at rest-end (restDone -> captureLog); without it the
+    // previous exercise's just-logged set (its S-label, reps, and difficulty
+    // chip) carried over onto the next machine's screen (7/5 layout hunt).
+    // Last-set corrections still work via the progress-dot edit modal.
+    captureLog();
+    syncLogArea();
     {
       const isFinalExercise = (currentExercise === workout.length - 1);
       const exClip = exerciseClipName(workout[currentExercise].name);
@@ -3724,6 +3757,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">prism · 2026-07-05 drop-v5 sticky skiprest</div>
+<div class="build-stamp">prism · 2026-07-05b v5+layout</div>
 </body>
 </html>
