@@ -485,6 +485,31 @@
     pointer-events: auto;
     transform: translateX(0);
   }
+  /* Superset linkage (2026-07-06): live ss-group members get a red underline
+     rail + a tiny ↔partner tag; the group's first member carries the one-tap
+     unlink (machine taken -> dissolve back to straight sets). */
+  .exercise-group.ss-linked {
+    border-bottom: 2px solid rgba(192, 57, 43, 0.55);
+    padding-bottom: 3px;
+  }
+  .ss-tag {
+    font-size: 7px;
+    letter-spacing: 0.5px;
+    color: #c0392b;
+    white-space: nowrap;
+  }
+  .ss-unlink {
+    font-size: 7px;
+    letter-spacing: 0.5px;
+    color: #666;
+    background: none;
+    border: 1px solid #333;
+    border-radius: 3px;
+    padding: 2px 5px;
+    margin-top: 2px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
   .exercise-group {
     display: flex;
     flex-direction: column;
@@ -1058,9 +1083,22 @@
 const dayType = "Upper";
 
 // UPPER session (next = Mon 7/6 pre-shift ~6:30 PM, per U/L rotation -- Fri 7/3 Lower DONE; nights week, lift post-wake/fresh). PHASE 2B VOLUME BLOCK LIVE (Soren 7/5, this is the first 2B session): 21 sets, ~48-50 min. Order: Chest Press -> Cable Row (5 SETS, was 4) -> INCLINE DB PRESS (NEW: 2-set staged groover, DISCOVERY at 30/hand, bench 30-45 deg NOT overhead, STOP on any cuff pain -- French-press history; no backoff until a working weight exists) -> Cable Pushdown -> DB Lateral Raise (4 SETS, was 3) -> DB Curls (compounds FIRST/fresh). Weekly landing: chest 15 / back 12.5 / side delts 10 hard sets (the audit's 12-15 spec; 6/27 photo: upper chest + side-delt width = the visual gaps). AUTO-DROP v5 (Soren OK'd 7/5): reactive triggers unchanged -- at HARD/MAX the next set drops to ex.backoff when the last set was BELOW the floor, OR exactly AT the floor while MAXED. PREDICTIVE now needs a SUSTAINED fade: the last THREE sets all MAX with two declining steps, projecting the next set under the floor (v3/v4 fired off a single declining step -- Row 7/2's paced-12-to-9 and LP 7/4's 11-to-9, both normal early-set fades; 13->11->9 fires, 11->9 never does). STICKY (Soren 7/5): once a drop materializes, every later set of that exercise stays at the backoff -- display, advice, and summary all say so; a recovered set no longer flips the screen back to the prescription (the 7/4 "Hold 235 while on 205" incoherence). A HARD set AT the floor HOLDS. MOD/LIGHT never drop. States the drop, no decision prompt; note + on-screen weight share one predicate so they can never disagree. NEW 7/5: "Skip rest between exercises" settings toggle (DEFAULT ON, Soren's request) -- finishing an exercise goes straight to ready, no 60s UP NEXT countdown; voice still announces the next exercise + weight + rep range for the walk; in-exercise rests unchanged. Backoffs: Chest Press 100, Cable Row 100, Cable Pushdown 20, DB Lateral Raise 10, DB Curls 20 (locked 7/2 so the drop can NAME "drop to 20" instead of a vague "drop a notch"); Incline DB Press NONE (discovery session -- no drops on an unknown working weight). DB Curls SUPINATED, failure ALLOWED (nerve-safe), stop ONLY on a nerve twang. setNotes are FORM/LOAD cues ONLY -- never echo prior reps. Carried from 7/2 Upper (all weights HOLD): CP 120 (10/7/8/8, build reps), Row 120 (12/9 clean; the v3 misfire's S3/S4 void), Pushdown 25 (15/15/13, one rep from the 30 trigger), DB LR 15 (13/9/13), DB Curls 25 (10/7/8, no twang). True-failure RIR anchor starts 7/13, NOT this week (don't stack a failure max onto the 2B debut). Voice = ElevenLabs static bank, workout-agnostic -- no regen, build id unchanged; ex-incline-press.mp3 EXISTS in the bank and "Incline DB Press" is aliased to it; ex-db-rdl + rest-150sec mp3s still missing (wired, skip gap-free until Soren's ElevenLabs session drops them in).
+// SUPERSETS (standing default, Soren 7/6): ss:"A1" = group A slot 1 (ANCHOR chain
+// -- slot-1 exercises run in array order, e.g. flat press then incline);
+// ss:"A2" = the FILLER whose sets fire immediately after each anchor set.
+// Interleave: P1 R1 P2 R2 P3 R3 P4 R4 I1 R5 I2 (exactly the 7/6 session).
+// Anchor->filler = instant GO (the walk is the transition); filler->anchor =
+// the anchor's full configured rest (150s compounds -- Soren's pick 7/6).
+// `short:` = the board tag / GO-label name. One-tap "unlink" on the board
+// dissolves a group mid-session (machine taken) back to straight sets.
+// FLIP-TIME RULE: every future build tags its pairs -- Upper: press+incline(A1)
+// vs row(A2), pushdown+curls(B1) vs lat raise(B2); Lower: leg press(A1) vs
+// LP calf raises(A2, same machine), RDL(B1) vs leg extension(B2).
 const workout = [
   {
     name: "Chest Press Machine",
+    ss: "A1",
+    short: "PRESS",
     sets: 4,
     reps: "8-12",
     weight: "120 lbs",
@@ -1081,6 +1119,8 @@ const workout = [
   },
   {
     name: "Cable Rope Row",
+    ss: "A2",
+    short: "ROW",
     sets: 5,
     reps: "8-12",
     weight: "120 lbs",
@@ -1102,6 +1142,8 @@ const workout = [
   },
   {
     name: "Incline DB Press",
+    ss: "A1",
+    short: "INCLINE",
     sets: 2,
     reps: "8-12",
     weight: "30 lbs",
@@ -1119,6 +1161,8 @@ const workout = [
   },
   {
     name: "Cable Tricep Pushdown",
+    ss: "B1",
+    short: "PUSHDOWN",
     sets: 3,
     reps: "12-15",
     weight: "25 lbs",
@@ -1138,6 +1182,8 @@ const workout = [
   },
   {
     name: "DB Lateral Raise",
+    ss: "B2",
+    short: "LAT RAISE",
     sets: 4,
     reps: "12-15",
     weight: "15 lbs",
@@ -1158,6 +1204,8 @@ const workout = [
   },
   {
     name: "DB Curls (supinated)",
+    ss: "B1",
+    short: "CURLS",
     sets: 3,
     reps: "8-12",
     weight: "25 lbs",
@@ -1217,6 +1265,101 @@ let viewingExercise = 0;
 let viewingSet = 0;
 function isBrowsing() {
   return viewingExercise !== currentExercise || viewingSet !== currentSet;
+}
+
+// ============ SUPERSET SEQUENCE ENGINE (2026-07-06) ============
+// The working cursor walks `sequence` (the interleaved set order) instead of
+// (exercise, set++). Logs, dots, advice, and auto-drop still key on
+// (exercise, set) -- per-exercise set order is preserved inside the interleave,
+// so none of that machinery changes. `dissolvedGroups` holds groups unlinked
+// mid-session (machine taken); their members fall back to straight sets.
+let dissolvedGroups = new Set();
+
+function parseSS(ex) {
+  if (!ex || !ex.ss) return null;
+  const m = String(ex.ss).match(/^([A-Za-z])([12])$/);
+  if (!m) return null;
+  if (dissolvedGroups.has(m[1])) return null;
+  return { g: m[1], slot: +m[2] };
+}
+function groupIdOf(exIdx) {
+  const t = parseSS(workout[exIdx]);
+  return t ? t.g : null;
+}
+function slotOf(exIdx) {
+  const t = parseSS(workout[exIdx]);
+  return t ? t.slot : null;
+}
+function firstMemberOfGroup(g) {
+  for (let i = 0; i < workout.length; i++) if (groupIdOf(i) === g) return i;
+  return -1;
+}
+function partnerShort(exIdx) {
+  const g = groupIdOf(exIdx), s = slotOf(exIdx);
+  if (!g) return "";
+  const names = [];
+  for (let k = 0; k < workout.length; k++) {
+    if (k !== exIdx && groupIdOf(k) === g && slotOf(k) !== s) {
+      names.push(workout[k].short || workout[k].name);
+    }
+  }
+  return names.join("+");
+}
+function buildSequence() {
+  const seq = [];
+  const emitted = new Set();
+  for (let i = 0; i < workout.length; i++) {
+    if (emitted.has(i)) continue;
+    const tag = parseSS(workout[i]);
+    if (!tag) {
+      for (let s = 0; s < workout[i].sets; s++) seq.push({ ex: i, set: s });
+      emitted.add(i);
+      continue;
+    }
+    // Whole group emits at its first member's board position: build both slot
+    // queues in array order, interleave anchor-first; an unequal queue drains
+    // its remainder linearly (6 presses vs 5 rows ends ...I1 R5 I2).
+    const q1 = [], q2 = [];
+    for (let k = 0; k < workout.length; k++) {
+      const tk = parseSS(workout[k]);
+      if (!tk || tk.g !== tag.g) continue;
+      const dst = (tk.slot === 1) ? q1 : q2;
+      for (let s = 0; s < workout[k].sets; s++) dst.push({ ex: k, set: s });
+      emitted.add(k);
+    }
+    let a = 0, b = 0;
+    while (a < q1.length || b < q2.length) {
+      if (a < q1.length) seq.push(q1[a++]);
+      if (b < q2.length) seq.push(q2[b++]);
+    }
+  }
+  return seq;
+}
+let sequence = buildSequence();
+let seqIndex = 0;
+function seqPosOf(exIdx, setIdx) {
+  const p = sequence.findIndex(e => e.ex === exIdx && e.set === setIdx);
+  return p >= 0 ? p : 0;
+}
+function syncSeqIndex() { seqIndex = seqPosOf(currentExercise, currentSet); }
+function rebuildSequence() {
+  sequence = buildSequence();
+  syncSeqIndex();
+}
+function dissolveGroup(g) {
+  pushHistory();
+  dissolvedGroups.add(g);
+  rebuildSequence();
+  renderExercise(); // rerenders the board (rail/tag/unlink drop off)
+  saveState();
+}
+// A config whose sequence doesn't start at workout[0] S1 (e.g. a slot-2 member
+// listed first) still starts the workout at the sequence head.
+if (sequence.length && (sequence[0].ex !== currentExercise || sequence[0].set !== currentSet)) {
+  currentExercise = sequence[0].ex;
+  currentSet = sequence[0].set;
+  viewingExercise = currentExercise;
+  viewingSet = currentSet;
 }
 // Returns the log entry to display/edit in the log area.
 // - Browsing: the viewed set's log (may be null for future sets)
@@ -2077,24 +2220,32 @@ function getExerciseDuration(exerciseIdx) {
 }
 
 // ============ RENDERING ============
-function getGlobalSetIndex() {
-  let idx = 0;
-  for (let i = 0; i < currentExercise; i++) idx += workout[i].sets;
-  return idx + currentSet;
+// Sequence position of every (exercise,set) — the dots' completed/active
+// semantics follow PERFORMED order (the interleave), not linear order, so a
+// finished row S1 reads completed while press S2-S4 are still pending.
+function seqPosMap() {
+  const m = new Map();
+  sequence.forEach((e, i) => m.set(e.ex + ":" + e.set, i));
+  return m;
 }
 
 function renderProgress() {
   elProgress.innerHTML = "";
-  const globalCurrent = getGlobalSetIndex();
+  const pos = seqPosMap();
   const isResting = (state === "resting" || state === "paused");
   const isDoingSet = (state === "ready" || state === "alert" || state === "finishing");
-  let idx = 0;
   for (let i = 0; i < workout.length; i++) {
     const group = document.createElement("div");
     group.className = "exercise-group";
     group.dataset.exerciseIdx = i;
+    const gid = groupIdOf(i);
+    if (gid) {
+      group.classList.add("ss-linked");
+      group.dataset.ssGroup = gid;
+    }
     const dotsRow = document.createElement("div");
     dotsRow.className = "exercise-dots";
+    let maxPos = -1;
     for (let j = 0; j < workout[i].sets; j++) {
       const dot = document.createElement("div");
       dot.className = "dot";
@@ -2102,14 +2253,17 @@ function renderProgress() {
       // Dataset drives the unified pointer-up tap handler on #progress.
       dot.dataset.exerciseIdx = exIdx;
       dot.dataset.setIdx = setIdx;
-      if (idx < globalCurrent) {
+      const key = exIdx + ":" + setIdx;
+      const p = pos.has(key) ? pos.get(key) : 0;
+      if (p > maxPos) maxPos = p;
+      if (p < seqIndex) {
         dot.classList.add("completed");
-        if (idx === globalCurrent - 1 && isResting) {
+        if (p === seqIndex - 1 && isResting) {
           dot.classList.add("echoing");
         }
         dot.setAttribute("role", "button");
         dot.setAttribute("aria-label", "View " + workout[i].name + " set " + (j + 1));
-      } else if (idx === globalCurrent) {
+      } else if (p === seqIndex) {
         dot.classList.add("active");
         if (isDoingSet) dot.classList.add("blinking");
       }
@@ -2117,15 +2271,32 @@ function renderProgress() {
         dot.classList.add("cursor");
       }
       dotsRow.appendChild(dot);
-      idx++;
     }
     const label = document.createElement("div");
     label.className = "exercise-label";
-    if (i < currentExercise) label.classList.add("completed");
-    else if (i === currentExercise) label.classList.add("active");
+    if (i === currentExercise) label.classList.add("active");
+    else if (maxPos < seqIndex) label.classList.add("completed");
     label.textContent = workout[i].name;
     group.appendChild(label);
     group.appendChild(dotsRow);
+    if (gid) {
+      const tag = document.createElement("div");
+      tag.className = "ss-tag";
+      tag.textContent = "↔ " + partnerShort(i);
+      group.appendChild(tag);
+      if (firstMemberOfGroup(gid) === i) {
+        const un = document.createElement("button");
+        un.className = "ss-unlink";
+        un.type = "button";
+        un.textContent = "unlink";
+        un.setAttribute("aria-label", "Dissolve superset " + gid);
+        // Keep the tap out of the drag-reorder + dot-tap delegation on #progress.
+        un.addEventListener("pointerdown", ev => ev.stopPropagation());
+        un.addEventListener("pointerup", ev => ev.stopPropagation());
+        un.addEventListener("click", ev => { ev.stopPropagation(); dissolveGroup(gid); });
+        group.appendChild(un);
+      }
+    }
     elProgress.appendChild(group);
   }
 }
@@ -2519,7 +2690,8 @@ function snapshot() {
     repCount, logExerciseIndex,
     notes: elNotesInput.value,
     currentLogEntryIdx: currentLogEntry ? setLogs.indexOf(currentLogEntry) : -1,
-    countdownFiredThresholds: [...countdownFiredThresholds]
+    countdownFiredThresholds: [...countdownFiredThresholds],
+    dissolvedGroups: [...dissolvedGroups]
   };
 }
 function applySnapshot(s) {
@@ -2531,6 +2703,10 @@ function applySnapshot(s) {
 
   currentExercise = s.currentExercise;
   currentSet = s.currentSet;
+  // Restore superset linkage as of the snapshot (undo across an unlink
+  // re-links the group), then re-derive the sequence + seqIndex.
+  dissolvedGroups = new Set(Array.isArray(s.dissolvedGroups) ? s.dissolvedGroups : []);
+  rebuildSequence();
   viewingExercise = currentExercise;
   viewingSet = currentSet;
   state = s.state;
@@ -2729,16 +2905,20 @@ function startWorkout() {
   applyState("");
   saveState();
   const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
-  const firstExClip = exerciseClipName(workout[0] && workout[0].name);
+  // First exercise = the sequence head (with supersets this is still the first
+  // anchor, but a slot-2-first config would start elsewhere than workout[0]).
+  const first = sequence[0] || { ex: 0, set: 0 };
+  const firstEx = workout[first.ex];
+  const firstExClip = exerciseClipName(firstEx && firstEx.name);
   const seq = [startClip, firstExClip].filter(Boolean);
-  const _dcStart = dailyClipFor(0, 0);
+  const _dcStart = dailyClipFor(first.ex, first.set);
   if (_dcStart) {
     // Daily hype line states the weight + target itself.
     seq.push(_dcStart);
-  } else if (workout[0]) {
+  } else if (firstEx) {
     // v2: append weight + rep range for the first exercise of the workout
-    seq.push(...weightClipsFor(workout[0]));
-    const repClip = repRangeClipFor(workout[0].reps);
+    seq.push(...weightClipsFor(firstEx));
+    const repClip = repRangeClipFor(firstEx.reps);
     if (repClip) seq.push(repClip);
   }
   if (seq.length) VoiceCue.playSequence(seq);
@@ -2788,11 +2968,19 @@ function setDone() {
   currentLogEntry = logEntry;
 
   const finishedExercise = currentExercise;
+  const finishedSet = currentSet;
+  // SUPERSET ENGINE: advancement walks `sequence` (interleaved order), not
+  // (exercise, set++). Sync first in case an external path (jump-to-set,
+  // snapshot restore) moved the cursor without updating seqIndex.
+  if (!sequence[seqIndex] || sequence[seqIndex].ex !== finishedExercise || sequence[seqIndex].set !== finishedSet) {
+    syncSeqIndex();
+  }
+  const nextEntry = sequence[seqIndex + 1] || null;
   currentSet++;
 
   showLogArea(finishedExercise);
 
-  const isLastSet = finishedExercise >= workout.length - 1 && currentSet >= workout[finishedExercise].sets;
+  const isLastSet = !nextEntry;
   if (isLastSet) {
     viewingExercise = currentExercise;
     viewingSet = currentSet - 1;
@@ -2809,23 +2997,28 @@ function setDone() {
     return;
   }
 
-  if (currentSet >= workout[currentExercise].sets) {
-    currentExercise++;
-    currentSet = 0;
-  }
+  // Advance along the interleaved sequence.
+  seqIndex++;
+  currentExercise = nextEntry.ex;
+  currentSet = nextEntry.set;
 
   // Keep viewing cursor pinned to working position after advancement
   viewingExercise = currentExercise;
   viewingSet = currentSet;
 
   const switchingExercise = (finishedExercise !== currentExercise);
+  const gFin = groupIdOf(finishedExercise);
+  const supersetHop = switchingExercise && !!gFin && groupIdOf(currentExercise) === gFin;
+  // Anchor (slot 1) -> filler (slot 2): GO immediately -- the walk between
+  // machines IS the transition (Soren's superset spec 7/6).
+  const supersetGo = supersetHop && slotOf(finishedExercise) === 1;
+  // Filler -> anchor: the REAL pair rest (the upcoming anchor's full rest).
+  const supersetReturn = supersetHop && !supersetGo;
 
-  // SKIP REST BETWEEN EXERCISES (Soren 7/5, settings toggle, default ON):
-  // no 60s UP NEXT countdown -- the walk to the next machine IS the rest.
-  // Straight to ready for the new exercise's S1; the voice still announces
-  // what's next (name + weight + rep range) for the walk, minus the
-  // rest-duration clip. In-exercise rests are untouched by this.
-  if (switchingExercise && settings.skipExerciseRest) {
+  // IMMEDIATE hops: a superset GO (always, regardless of the toggle), or an
+  // exercise boundary with the skip-rest setting ON (Soren 7/5): no countdown,
+  // the voice announces the walk. In-exercise + superset-return rests below.
+  if (supersetGo || (switchingExercise && !supersetHop && settings.skipExerciseRest)) {
     state = "ready";
     restEndTime = null;
     restRemaining = 0;
@@ -2835,13 +3028,15 @@ function setDone() {
     // Set Done would instantly log a phantom S1 -- brief lockout instead.
     setDoneLockUntil = Date.now() + 900;
     elTimer.textContent = "-:--";
-    elTimerLabel.textContent = "";
+    elTimerLabel.textContent = supersetGo
+      ? ("SUPERSET → " + (workout[currentExercise].short || workout[currentExercise].name).toUpperCase())
+      : "";
     elBtn.textContent = "Set Done";
     elBtn.className = "";
     elSkip.style.display = "none";
     renderExercise();
     showRestRing(false);
-    // Reset the log area to the NEW exercise's fresh S1 defaults. The rested
+    // Reset the log area to the NEW exercise's upcoming-set defaults. The rested
     // path does this at rest-end (restDone -> captureLog); without it the
     // previous exercise's just-logged set (its S-label, reps, and difficulty
     // chip) carried over onto the next machine's screen (7/5 layout hunt).
@@ -2849,19 +3044,21 @@ function setDone() {
     captureLog();
     syncLogArea();
     {
-      const isFinalExercise = (currentExercise === workout.length - 1);
+      const isFinalExercise = !sequence.slice(seqIndex + 1).some(e => e.ex !== currentExercise);
       const exClip = exerciseClipName(workout[currentExercise].name);
-      const seq = ['received', 'exercise-complete'];
+      // supersetGo: the finished exercise is NOT complete (more of its sets
+      // pend in the interleave) -- no 'exercise-complete', keep the cue tight.
+      const seq = supersetGo ? ['received'] : ['received', 'exercise-complete'];
       seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
       if (exClip) seq.push(exClip);
-      // Same daily-clip guard as the rested path: a set-1 daily line states
-      // the weight/target itself, so don't double-announce.
-      if (!dailyClipFor(currentExercise, 0)) {
+      // Weight/reps announce only on the exercise's FIRST set (same daily-clip
+      // guard as the rested path); re-announcing every superset hop is noise.
+      if (currentSet === 0 && !dailyClipFor(currentExercise, 0)) {
         seq.push(...weightClipsFor(workout[currentExercise]));
         const repClipSkip = repRangeClipFor(workout[currentExercise].reps);
         if (repClipSkip) seq.push(repClipSkip);
       }
-      const _dcSkip = dailyClipFor(currentExercise, 0);
+      const _dcSkip = (currentSet === 0) ? dailyClipFor(currentExercise, 0) : null;
       if (_dcSkip) seq.push(_dcSkip);
       VoiceCue.playSequence(seq);
     }
@@ -2876,11 +3073,13 @@ function setDone() {
   elSkip.style.display = "flex";
   elSkip.style.pointerEvents = "auto";
   state = "resting";
-  restRemaining = switchingExercise ? 60 : workout[finishedExercise].rest;
+  restRemaining = supersetReturn ? workout[currentExercise].rest
+                : switchingExercise ? 60
+                : workout[finishedExercise].rest;
   restTotalSeconds = restRemaining;
   restEndTime = Date.now() + restRemaining * 1000;
   elTimer.textContent = formatTime(restRemaining);
-  elTimerLabel.textContent = switchingExercise ? "UP NEXT" : "REST";
+  elTimerLabel.textContent = (switchingExercise && !supersetReturn) ? "UP NEXT" : "REST";
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
   renderExercise();
@@ -2888,11 +3087,20 @@ function setDone() {
   countdownFiredThresholds = new Set();
   startCountdown();
 
-  // Voice cue: "Received" then branch (exercise switch vs normal in-exercise rest)
+  // Voice cue: "Received" then branch (superset return vs exercise switch vs in-exercise rest)
   {
     let seq;
-    if (switchingExercise) {
-      const isFinalExercise = (currentExercise === workout.length - 1);
+    if (supersetReturn) {
+      // Back to the anchor after the filler set: where we're headed + the pair
+      // rest. No 'exercise-complete' (the pair is mid-flight), no weight
+      // re-announce (same weight all sets; announced at the anchor's S1).
+      const exClip = exerciseClipName(workout[currentExercise].name);
+      seq = ['received', 'up-next'];
+      if (exClip) seq.push(exClip);
+      const pairRestClip = restClipForDuration(restRemaining);
+      if (pairRestClip) seq.push(pairRestClip);
+    } else if (switchingExercise) {
+      const isFinalExercise = !sequence.slice(seqIndex + 1).some(e => e.ex !== currentExercise);
       const exClip = exerciseClipName(workout[currentExercise].name);
       seq = ['received', 'exercise-complete'];
       seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
@@ -3119,6 +3327,10 @@ function reorderExercise(fromIdx, toIdx) {
   };
   history.forEach(remapSnapshot);
   future.forEach(remapSnapshot);
+
+  // Superset groups ride on the exercise objects (ss tags), which just moved:
+  // re-derive the interleaved sequence and re-locate the working cursor in it.
+  rebuildSequence();
 
   renderExercise();  // rerenders name/weight/reps + calls renderProgress()
   saveState();
@@ -3491,6 +3703,7 @@ elSetCurrentBtn.addEventListener("click", () => {
   pushHistory();
   currentExercise = viewingExercise;
   currentSet = viewingSet;
+  syncSeqIndex();
   // viewing now equals working, so isBrowsing() is false.
   elReturnPill.classList.remove('visible');
   elSetCurrentBtn.classList.remove('visible');
@@ -3665,6 +3878,7 @@ function saveState() {
     notes: elNotesInput.value,
     logExerciseIndex,
     countdownFiredThresholds: [...countdownFiredThresholds],
+    dissolvedGroups: [...dissolvedGroups],
     // Persist any mid-session reorder so refreshes/background kills don't snap back
     workoutOrder: workout.map(ex => ex.name),
     history: history.map(h => ({...h, setLogs: h.setLogs.map(l => ({...l}))})),
@@ -3707,6 +3921,10 @@ function restoreState() {
     restRemaining = s.restRemaining;
     restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
     countdownFiredThresholds = new Set(s.countdownFiredThresholds || []);
+    // Superset linkage: restore any mid-session unlinks, then re-derive the
+    // sequence from the (possibly reordered) workout and re-locate the cursor.
+    dissolvedGroups = new Set(Array.isArray(s.dissolvedGroups) ? s.dissolvedGroups : []);
+    rebuildSequence();
 
     history.length = 0;
     if (Array.isArray(s.history)) s.history.forEach(h => history.push(h));
@@ -3801,6 +4019,6 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">prism · 2026-07-05d 2B-upper</div>
+<div class="build-stamp">prism · 2026-07-06a 2B-upper SS-engine</div>
 </body>
 </html>
