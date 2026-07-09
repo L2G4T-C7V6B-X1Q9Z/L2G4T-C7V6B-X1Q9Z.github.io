@@ -136,7 +136,7 @@
   #main-btn.go {
     border-color: #c0392b;
     background: #c0392b;
-    color: #fff;
+    color: #eee;
   }
 
   /* Progress ring (drains as rest counts down) */
@@ -328,7 +328,7 @@
   .diff-btn:active { background: #1e1e1e; }
   .diff-btn.selected {
     background: #c0392b;
-    color: #fff;
+    color: #eee;
     border-color: #c0392b;
   }
   /* Rep picker — horizontal scroll-snap wheel. Replaces +/- buttons.
@@ -340,8 +340,8 @@
     width: 160px;
     height: 56px;
     flex-shrink: 0;
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 22%, black 78%, transparent 100%);
-            mask-image: linear-gradient(to right, transparent 0%, black 22%, black 78%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, #111 22%, #111 78%, transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0%, #111 22%, #111 78%, transparent 100%);
   }
   .rep-picker__strip {
     display: flex;
@@ -582,7 +582,7 @@
     box-sizing: border-box;
   }
   .dot.active { background: #c0392b; }
-  .dot.completed { background: #fafafa; cursor: pointer; }
+  .dot.completed { background: #e8e8e8; cursor: pointer; }
   .dot.cursor {
     border: 2px solid #c0392b;
     background: transparent;
@@ -616,7 +616,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #fafafa;
+    background: #e8e8e8;
     animation: echo-travel 1.4s ease-out infinite;
     pointer-events: none;
   }
@@ -641,7 +641,7 @@
   #settings-modal, #edit-modal, #note-modal {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.85);
+    background: rgba(17, 17, 17, 0.94);
     display: none;
     align-items: center;
     justify-content: center;
@@ -704,7 +704,7 @@
     left: 2px;
     width: 20px;
     height: 20px;
-    background: #f0f0f0;
+    background: #e8e8e8;
     border-radius: 50%;
     transition: left 0.18s;
   }
@@ -734,7 +734,7 @@
   }
   .modal-close.danger.confirming {
     background: #c0392b;
-    color: #fff;
+    color: #eee;
     border-color: #c0392b;
   }
 
@@ -823,7 +823,7 @@
   .edit-btn.primary {
     border-color: #c0392b;
     background: #c0392b;
-    color: #fff;
+    color: #eee;
   }
 
   /* Done screen */
@@ -891,7 +891,7 @@
     padding: 14px;
     border: 2px solid #c0392b;
     background: #c0392b;
-    color: #fff;
+    color: #eee;
     font-family: 'JetBrains Mono', monospace;
     font-size: 13px;
     font-weight: 600;
@@ -947,12 +947,466 @@
     left: 8px;
     top: calc(env(safe-area-inset-top, 0px) + 5px);
     font-size: 9px;
-    color: rgba(255, 255, 255, 0.28);
+    color: rgba(238, 238, 238, 0.28);
     font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
     pointer-events: none;
     user-select: none;
     z-index: 1;
     letter-spacing: 0.5px;
+  }
+  /* v5: restrained instrument surfaces and class-driven visual feedback. */
+  :root {
+    color-scheme: dark;
+    --v5-ink: #eee;
+    --v5-muted: #888;
+    --v5-panel: #171717;
+    --v5-edge: #2a2a2a;
+    --v5-red: #c0392b;
+    --v5-red-hi: #e0584a;
+    --v5-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  body { background: #111; color: #c9c9c9; }
+
+  h1 {
+    color: #777;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 4.8px;
+    margin-bottom: 12px;
+    opacity: 0.92;
+  }
+
+  #exercise-name {
+    color: var(--v5-ink);
+    font-size: 23px;
+    letter-spacing: -0.8px;
+    margin-bottom: 7px;
+    text-shadow: 0 1px 0 #111;
+  }
+
+  #set-info {
+    color: #9a9a9a;
+    font-size: 11px;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+
+  #set-info .wt-now {
+    color: var(--v5-red-hi);
+    letter-spacing: 0.35px;
+  }
+
+  #set-info .wt-was { color: #777; }
+
+  #exercise-note {
+    background: linear-gradient(180deg, #191919, #151515);
+    border-color: #282828;
+    border-radius: 9px;
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.025), inset 0 -1px 0 rgba(17, 17, 17, 0.72);
+    color: #c8c8c8;
+    font-size: 12px;
+    line-height: 1.38;
+    padding: 9px 13px;
+  }
+
+  #timer-display {
+    color: var(--v5-ink);
+    font-size: 80px;
+    letter-spacing: -2.8px;
+    margin-bottom: 5px;
+    text-shadow: 0 0 24px rgba(238, 238, 238, 0.035);
+    will-change: transform, opacity;
+  }
+
+  #timer-label {
+    color: #8c8c8c;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 3.6px;
+  }
+
+  #main-btn {
+    background: #191919;
+    border-color: #303030;
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.035), 0 12px 28px rgba(17, 17, 17, 0.44);
+    color: #c4c4c4;
+    transition: transform 160ms var(--v5-ease), opacity 160ms var(--v5-ease);
+    will-change: transform, opacity;
+  }
+
+  #main-btn:active { transform: scale(0.972); }
+
+  #main-btn.resting,
+  #main-btn.paused {
+    background: #171717;
+    border-color: rgba(192, 57, 43, 0.38);
+    color: var(--v5-red);
+  }
+
+  #main-btn.go {
+    background: var(--v5-red);
+    border-color: var(--v5-red);
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.16), 0 10px 24px rgba(192, 57, 43, 0.18);
+    color: #eee;
+  }
+
+  #rest-ring { filter: drop-shadow(0 0 1px rgba(192, 57, 43, 0.38)); }
+
+  #rest-ring-track {
+    stroke: rgba(192, 57, 43, 0.15);
+    stroke-width: 3.25;
+  }
+
+  #rest-ring-bar {
+    stroke: var(--v5-red);
+    stroke-width: 3.25;
+  }
+
+  #btn-wrap.v5-final-countdown #rest-ring-bar {
+    filter: drop-shadow(0 0 2px rgba(224, 88, 74, 0.72));
+    animation: v5-ring-breathe 900ms var(--v5-ease) infinite;
+  }
+
+  #skip-btn,
+  .top-btn {
+    background: #191919;
+    border-color: #303030;
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.03);
+    transition: transform 150ms var(--v5-ease), opacity 150ms var(--v5-ease);
+  }
+
+  #skip-btn:active { transform: translateY(-50%) scale(0.9); }
+  .top-btn:active { transform: scale(0.94); }
+
+  #log-area { gap: 10px; padding-top: 12px; }
+  #set-label-col { border-right-color: #2a2a2a; }
+  #set-label-text { color: #858585; font-size: 10px; letter-spacing: 2.2px; }
+  #difficulty-row { gap: 6px; }
+
+  .diff-btn {
+    background: #161616;
+    border-color: #2d2d2d;
+    border-radius: 6px;
+    color: #848484;
+    font-weight: 600;
+    min-height: 31px;
+    transition: transform 150ms var(--v5-ease), opacity 150ms var(--v5-ease);
+  }
+
+  .diff-btn:active { transform: scale(0.96); }
+
+  .diff-btn.selected {
+    background: var(--v5-red);
+    border-color: var(--v5-red);
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.12);
+    color: #eee;
+  }
+
+  .rep-picker__num {
+    transition: transform 180ms var(--v5-ease), opacity 180ms var(--v5-ease);
+  }
+
+  .rep-picker__num.is-active {
+    color: var(--v5-red);
+    text-shadow: 0 0 16px rgba(192, 57, 43, 0.16);
+  }
+
+  #notes-input,
+  #edit-notes,
+  #note-modal-text {
+    background: #171717;
+    border-color: #2d2d2d;
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.02);
+    transition: opacity 150ms var(--v5-ease), transform 150ms var(--v5-ease);
+  }
+
+  #notes-input:focus,
+  #edit-notes:focus,
+  #note-modal-text:focus { border-color: rgba(192, 57, 43, 0.76); }
+
+  /* Direct children remain SortableJS items. Fixed rows give the pair two
+     parallel tracks while every lower row ends on the same dot baseline. */
+  #bottom-bar #progress {
+    --rail-track-height: 20px;
+    --rail-label-room: 132px;
+    display: grid;
+    grid-template-rows: repeat(2, var(--rail-track-height));
+    grid-auto-columns: max-content;
+    grid-auto-flow: column;
+    justify-content: center;
+    align-content: end;
+    align-items: end;
+    column-gap: 10px;
+    row-gap: 0;
+    min-width: 0;
+    /* Safety valve from the 2026-07-08 crowding fix: horizontal overflow must
+       scroll, not vanish. overflow:hidden here made scrollWidth==clientWidth,
+       which silently hides crowding from any rect check. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: var(--rail-label-room) 12px 16px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  #progress > .exercise-group {
+    grid-column: var(--rail-column);
+    grid-row: var(--rail-row);
+    align-self: end;
+    justify-self: start;
+    height: var(--rail-track-height);
+    min-width: 0;
+    position: relative;
+    justify-content: flex-end;
+    width: max-content;
+  }
+
+  #progress .exercise-dots { gap: 5px; }
+
+  /* Superset labels deliberately inherit .exercise-label unchanged: vertical
+     writing, the 180deg rotation, and the original active/completed colors. */
+  #progress .ss-track .exercise-dots { align-self: start; }
+  #progress .ss-track-anchor .exercise-label { align-self: start; }
+  #progress .ss-track-filler .exercise-label { align-self: end; }
+
+  /* The filler's label bottom-anchors to its own track and grows upward through
+     track 1, landing on the anchor's dots (measured 12x8px overlap at 390 and
+     375). Lift it one track height so both pair labels share a bottom edge. */
+  #progress .ss-track-filler .exercise-label { margin-bottom: var(--rail-track-height); }
+
+  #progress .exercise-group.ss-linked {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  /* Each linked member keeps its red underline without affecting its track
+     height. The one vertical rule joins the two left-aligned dot tracks. */
+  #progress .ss-track::after {
+    background: rgba(192, 57, 43, 0.62);
+    bottom: -4px;
+    content: "";
+    height: 2px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+  }
+
+  #progress .ss-track-group-start::before {
+    background: #c0392b;
+    bottom: calc(-1 * var(--rail-track-height));
+    content: "";
+    height: var(--rail-track-height);
+    left: -5px;
+    pointer-events: none;
+    position: absolute;
+    width: 1px;
+  }
+
+  #progress .ss-unlink {
+    bottom: 0;
+    border-color: #3b2b29;
+    color: #8b8b8b;
+    font-size: 6px;
+    letter-spacing: 0.4px;
+    margin: 0;
+    padding: 2px 4px;
+    position: absolute;
+    right: calc(100% + 7px);
+    z-index: 1;
+  }
+
+  .dot {
+    background: #2b2b2b;
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.035);
+    transition: transform 160ms var(--v5-ease), opacity 160ms var(--v5-ease);
+    will-change: transform, opacity;
+  }
+
+  .dot.active {
+    background: var(--v5-red);
+    box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.11);
+  }
+
+  .dot.completed { background: #e8e8e8; }
+
+  .dot.completed.echoing::after {
+    background: #e8e8e8;
+    animation: v5-dot-echo 280ms var(--v5-ease) 1 both;
+  }
+
+  #progress.v5-rail-refresh .dot.active:not(.blinking) {
+    animation: v5-dot-arrive 180ms var(--v5-ease) both;
+  }
+
+  #progress.v5-rail-refresh .dot.active.blinking {
+    animation: v5-dot-arrive 180ms var(--v5-ease) both, mazda-edge 0.7s ease-out infinite;
+  }
+
+  #settings-modal,
+  #edit-modal,
+  #note-modal { background: rgba(17, 17, 17, 0.94); }
+
+  .modal-card {
+    background: linear-gradient(180deg, #1b1b1b, #181818);
+    border-color: #303030;
+    box-shadow: 0 18px 44px rgba(17, 17, 17, 0.78), inset 0 1px 0 rgba(238, 238, 238, 0.035);
+  }
+
+  #settings-modal.show .modal-card,
+  #edit-modal.show .modal-card,
+  #note-modal.show .modal-card { animation: v5-modal-arrive 220ms var(--v5-ease) both; }
+
+  .modal-title { color: #8b8b8b; font-weight: 600; letter-spacing: 4.4px; }
+  .setting-row { border-bottom-color: #292929; }
+
+  .toggle {
+    background: #303030;
+    transition: transform 160ms var(--v5-ease), opacity 160ms var(--v5-ease);
+  }
+
+  .toggle::after {
+    background: #e8e8e8;
+    left: 2px;
+    transform: translateX(0);
+    transition: transform 180ms var(--v5-ease), opacity 180ms var(--v5-ease);
+  }
+
+  .toggle.on::after {
+    left: 2px;
+    transform: translateX(20px);
+  }
+
+  .modal-close.danger,
+  #copy-btn { transition: transform 160ms var(--v5-ease), opacity 160ms var(--v5-ease); }
+
+  .edit-btn {
+    background: #171717;
+    border-color: #303030;
+    color: #b3b3b3;
+  }
+
+  .edit-btn.primary,
+  #copy-btn {
+    background: var(--v5-red);
+    border-color: var(--v5-red);
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.14);
+    color: #eee;
+  }
+
+  .edit-btn:active,
+  #copy-btn:active { transform: scale(0.975); }
+
+  #copy-btn.copied,
+  body.finished #copy-btn.copied {
+    background: #1a1a1a;
+    color: var(--v5-red);
+  }
+
+  #workout-done h2 {
+    font-size: 30px;
+    letter-spacing: -1.4px;
+    margin-bottom: 18px;
+  }
+
+  #summary {
+    background: linear-gradient(180deg, #1a1a1a, #171717);
+    border-color: #2d2d2d;
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.025);
+  }
+
+  body.finished #workout-done { animation: v5-done-arrive 260ms var(--v5-ease) both; }
+  body.alert-flashing { animation: none; }
+  body.alert-flashing #timer-display { animation: v5-alert-nudge 280ms var(--v5-ease) both; }
+
+  @media (max-height: 740px) {
+    h1 { margin-bottom: 8px; }
+    #exercise-name { font-size: 19px; }
+    #timer-display { font-size: 56px; }
+    #progress { padding: 8px 12px 10px; }
+  }
+
+  #timer-display.v5-digit-tick {
+    animation: v5-digit-settle 180ms var(--v5-ease) both;
+  }
+
+  .btn-wrap.v5-control-shift #main-btn {
+    animation: v5-control-settle 180ms var(--v5-ease) both;
+  }
+  @keyframes v5-digit-settle {
+    0% { opacity: 0.68; transform: translateY(-2px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes v5-control-settle {
+    0% { opacity: 0.82; transform: scale(0.978); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes v5-dot-arrive {
+    0% { opacity: 0.42; transform: scale(0.66); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes v5-dot-echo {
+    0% { opacity: 0.66; transform: translate(-50%, -50%) translateX(0); }
+    100% { opacity: 0; transform: translate(-50%, -50%) translateX(8px); }
+  }
+
+  @keyframes v5-modal-arrive {
+    0% { opacity: 0; transform: translateY(8px) scale(0.985); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes v5-done-arrive {
+    0% { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes v5-alert-nudge {
+    0% { opacity: 0.74; transform: scale(0.988); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes v5-ring-breathe {
+    0%, 100% { opacity: 0.9; }
+    50% { opacity: 1; }
+  }
+
+  /* One final, centralized opt-out for every v5 transform/opacity effect. */
+  @media (prefers-reduced-motion: reduce) {
+    #timer-display.v5-digit-tick,
+    .btn-wrap.v5-control-shift #main-btn,
+    #btn-wrap.v5-final-countdown #rest-ring-bar,
+    #progress.v5-rail-refresh .dot.active,
+    #progress.v5-rail-refresh .dot.active.blinking,
+    .dot.completed.echoing::after,
+    #settings-modal.show .modal-card,
+    #edit-modal.show .modal-card,
+    #note-modal.show .modal-card,
+    body.finished #workout-done,
+    body.alert-flashing #timer-display,
+    #skip-btn.pressed svg {
+      animation: none !important;
+    }
+
+    #main-btn,
+    #skip-btn,
+    #skip-btn svg,
+    .top-btn,
+    .diff-btn,
+    .rep-picker__num,
+    #notes-input,
+    #edit-notes,
+    #note-modal-text,
+    .toggle,
+    .toggle::after,
+    .modal-close.danger,
+    #copy-btn,
+    .dot {
+      transition: none !important;
+    }
   }
 </style>
 </head>
@@ -2206,15 +2660,60 @@ function renderProgress() {
   const pos = seqPosMap();
   const isResting = (state === "resting" || state === "paused");
   const isDoingSet = (state === "ready" || state === "alert" || state === "finishing");
+
+  // VISUAL-ONLY RAIL MAP: grouped exercises occupy parallel tracks in one
+  // column. Standalones use the lower track, so every lower dot row shares a
+  // baseline. Every exercise remains a direct #progress child, preserving
+  // SortableJS indices and delegated tap targets.
+  const railPositions = new Map();
+  const railLayouts = new Map();
+  let nextRailColumn = 1;
+
+  for (let i = 0; i < workout.length; i++) {
+    const gid = groupIdOf(i);
+    if (!gid) {
+      railPositions.set(i, { column: nextRailColumn++, row: "2" });
+      continue;
+    }
+
+    let layout = railLayouts.get(gid);
+    if (!layout) {
+      let anchors = 0;
+      let fillers = 0;
+      for (let k = 0; k < workout.length; k++) {
+        if (groupIdOf(k) !== gid) continue;
+        if (slotOf(k) === 2) fillers++;
+        else anchors++;
+      }
+      layout = { column: nextRailColumn, offsets: { 1: 0, 2: 0 } };
+      railLayouts.set(gid, layout);
+      nextRailColumn += Math.max(1, anchors, fillers);
+    }
+
+    const slot = slotOf(i) === 2 ? 2 : 1;
+    railPositions.set(i, {
+      column: layout.column + layout.offsets[slot]++,
+      row: String(slot)
+    });
+  }
+
   for (let i = 0; i < workout.length; i++) {
     const group = document.createElement("div");
     group.className = "exercise-group";
     group.dataset.exerciseIdx = i;
     const gid = groupIdOf(i);
+    const slot = slotOf(i) === 2 ? 2 : 1;
+    const railPosition = railPositions.get(i);
+    group.style.setProperty("--rail-column", String(railPosition.column));
+    group.style.setProperty("--rail-row", railPosition.row);
+
     if (gid) {
-      group.classList.add("ss-linked");
+      group.classList.add("ss-linked", "ss-track", slot === 2 ? "ss-track-filler" : "ss-track-anchor");
+      if (firstMemberOfGroup(gid) === i) group.classList.add("ss-track-group-start");
       group.dataset.ssGroup = gid;
+      group.dataset.ssTrack = String(slot);
     }
+
     const dotsRow = document.createElement("div");
     dotsRow.className = "exercise-dots";
     let maxPos = -1;
@@ -3987,6 +4486,78 @@ window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 </script>
 
-<div class="build-stamp">prism · 2026-07-09 2B-lower SS</div>
+<script>
+/* v5 visual feedback only: observes presentation changes and toggles CSS classes.
+   It never reads or changes workout state, timing, audio, storage, or controls. */
+(function () {
+  const timer = document.getElementById("timer-display");
+  const mainButton = document.getElementById("main-btn");
+  const buttonWrap = document.getElementById("btn-wrap");
+  const progress = document.getElementById("progress");
+  if (!timer || !mainButton || !buttonWrap || !progress) return;
+
+  const cleanupTimers = new WeakMap();
+  function pulse(node, className, duration) {
+    const oldTimer = cleanupTimers.get(node);
+    if (oldTimer) clearTimeout(oldTimer);
+    node.classList.remove(className);
+    node.classList.add(className);
+    cleanupTimers.set(node, setTimeout(function () {
+      node.classList.remove(className);
+      cleanupTimers.delete(node);
+    }, duration));
+  }
+
+  let timerText = timer.textContent;
+  function syncTimer() {
+    const nextText = timer.textContent;
+    if (nextText !== timerText) {
+      if (timerText) pulse(timer, "v5-digit-tick", 180);
+      timerText = nextText;
+    }
+    const parts = /^(\d+):(\d{2})$/.exec(nextText);
+    const seconds = parts ? (Number(parts[1]) * 60 + Number(parts[2])) : NaN;
+    const finalCountdown = buttonWrap.classList.contains("show-ring") &&
+      Number.isFinite(seconds) && seconds > 0 && seconds <= 10;
+    buttonWrap.classList.toggle("v5-final-countdown", finalCountdown);
+  }
+
+  let controlKey = "";
+  function syncControl() {
+    const nextKey = mainButton.className + "|" + mainButton.textContent + "|" +
+      String(buttonWrap.classList.contains("show-ring")) + "|" +
+      String(buttonWrap.classList.contains("paused"));
+    if (controlKey && nextKey !== controlKey) pulse(buttonWrap, "v5-control-shift", 180);
+    controlKey = nextKey;
+  }
+
+  new MutationObserver(syncTimer).observe(timer, {
+    childList: true,
+    characterData: true,
+    subtree: true
+  });
+
+  new MutationObserver(syncControl).observe(mainButton, {
+    attributes: true,
+    childList: true,
+    characterData: true,
+    subtree: true
+  });
+
+  new MutationObserver(syncControl).observe(buttonWrap, {
+    attributes: true,
+    attributeFilter: ["class"]
+  });
+
+  new MutationObserver(function () {
+    pulse(progress, "v5-rail-refresh", 220);
+  }).observe(progress, { childList: true });
+
+  syncTimer();
+  syncControl();
+}());
+</script>
+
+<div class="build-stamp">prism · 2026-07-09 2B-lower SS v5</div>
 </body>
 </html>
