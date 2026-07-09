@@ -1125,97 +1125,6 @@
   #edit-notes:focus,
   #note-modal-text:focus { border-color: rgba(192, 57, 43, 0.76); }
 
-  /* Direct children remain SortableJS items. Fixed rows give the pair two
-     parallel tracks while every lower row ends on the same dot baseline. */
-  #bottom-bar #progress {
-    --rail-track-height: 20px;
-    --rail-label-room: 132px;
-    display: grid;
-    grid-template-rows: repeat(2, var(--rail-track-height));
-    grid-auto-columns: max-content;
-    grid-auto-flow: column;
-    justify-content: center;
-    align-content: end;
-    align-items: end;
-    column-gap: 10px;
-    row-gap: 0;
-    min-width: 0;
-    /* Safety valve from the 2026-07-08 crowding fix: horizontal overflow must
-       scroll, not vanish. overflow:hidden here made scrollWidth==clientWidth,
-       which silently hides crowding from any rect check. */
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: var(--rail-label-room) 12px 16px;
-    width: 100%;
-    max-width: 100%;
-  }
-
-  #progress > .exercise-group {
-    grid-column: var(--rail-column);
-    grid-row: var(--rail-row);
-    align-self: end;
-    justify-self: start;
-    height: var(--rail-track-height);
-    min-width: 0;
-    position: relative;
-    justify-content: flex-end;
-    width: max-content;
-  }
-
-  #progress .exercise-dots { gap: 5px; }
-
-  /* Superset labels deliberately inherit .exercise-label unchanged: vertical
-     writing, the 180deg rotation, and the original active/completed colors. */
-  #progress .ss-track .exercise-dots { align-self: start; }
-  #progress .ss-track-anchor .exercise-label { align-self: start; }
-  #progress .ss-track-filler .exercise-label { align-self: end; }
-
-  /* The filler's label bottom-anchors to its own track and grows upward through
-     track 1, landing on the anchor's dots (measured 12x8px overlap at 390 and
-     375). Lift it one track height so both pair labels share a bottom edge. */
-  #progress .ss-track-filler .exercise-label { margin-bottom: var(--rail-track-height); }
-
-  #progress .exercise-group.ss-linked {
-    border-bottom: 0;
-    padding-bottom: 0;
-  }
-
-  /* Each linked member keeps its red underline without affecting its track
-     height. The one vertical rule joins the two left-aligned dot tracks. */
-  #progress .ss-track::after {
-    background: rgba(192, 57, 43, 0.62);
-    bottom: -4px;
-    content: "";
-    height: 2px;
-    left: 0;
-    pointer-events: none;
-    position: absolute;
-    right: 0;
-  }
-
-  #progress .ss-track-group-start::before {
-    background: #c0392b;
-    bottom: calc(-1 * var(--rail-track-height));
-    content: "";
-    height: var(--rail-track-height);
-    left: -5px;
-    pointer-events: none;
-    position: absolute;
-    width: 1px;
-  }
-
-  #progress .ss-unlink {
-    bottom: 0;
-    border-color: #3b2b29;
-    color: #8b8b8b;
-    font-size: 6px;
-    letter-spacing: 0.4px;
-    margin: 0;
-    padding: 2px 4px;
-    position: absolute;
-    right: calc(100% + 7px);
-    z-index: 1;
-  }
 
   .dot {
     background: #2b2b2b;
@@ -2660,60 +2569,15 @@ function renderProgress() {
   const pos = seqPosMap();
   const isResting = (state === "resting" || state === "paused");
   const isDoingSet = (state === "ready" || state === "alert" || state === "finishing");
-
-  // VISUAL-ONLY RAIL MAP: grouped exercises occupy parallel tracks in one
-  // column. Standalones use the lower track, so every lower dot row shares a
-  // baseline. Every exercise remains a direct #progress child, preserving
-  // SortableJS indices and delegated tap targets.
-  const railPositions = new Map();
-  const railLayouts = new Map();
-  let nextRailColumn = 1;
-
-  for (let i = 0; i < workout.length; i++) {
-    const gid = groupIdOf(i);
-    if (!gid) {
-      railPositions.set(i, { column: nextRailColumn++, row: "2" });
-      continue;
-    }
-
-    let layout = railLayouts.get(gid);
-    if (!layout) {
-      let anchors = 0;
-      let fillers = 0;
-      for (let k = 0; k < workout.length; k++) {
-        if (groupIdOf(k) !== gid) continue;
-        if (slotOf(k) === 2) fillers++;
-        else anchors++;
-      }
-      layout = { column: nextRailColumn, offsets: { 1: 0, 2: 0 } };
-      railLayouts.set(gid, layout);
-      nextRailColumn += Math.max(1, anchors, fillers);
-    }
-
-    const slot = slotOf(i) === 2 ? 2 : 1;
-    railPositions.set(i, {
-      column: layout.column + layout.offsets[slot]++,
-      row: String(slot)
-    });
-  }
-
   for (let i = 0; i < workout.length; i++) {
     const group = document.createElement("div");
     group.className = "exercise-group";
     group.dataset.exerciseIdx = i;
     const gid = groupIdOf(i);
-    const slot = slotOf(i) === 2 ? 2 : 1;
-    const railPosition = railPositions.get(i);
-    group.style.setProperty("--rail-column", String(railPosition.column));
-    group.style.setProperty("--rail-row", railPosition.row);
-
     if (gid) {
-      group.classList.add("ss-linked", "ss-track", slot === 2 ? "ss-track-filler" : "ss-track-anchor");
-      if (firstMemberOfGroup(gid) === i) group.classList.add("ss-track-group-start");
+      group.classList.add("ss-linked");
       group.dataset.ssGroup = gid;
-      group.dataset.ssTrack = String(slot);
     }
-
     const dotsRow = document.createElement("div");
     dotsRow.className = "exercise-dots";
     let maxPos = -1;
@@ -4558,6 +4422,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism · 2026-07-09 2B-lower SS v5</div>
+<div class="build-stamp">prism · 2026-07-09 2B-lower SS v5.1</div>
 </body>
 </html>
