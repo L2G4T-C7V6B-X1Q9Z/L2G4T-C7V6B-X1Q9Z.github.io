@@ -497,12 +497,6 @@
     border-bottom: 2px solid rgba(192, 57, 43, 0.55);
     padding-bottom: 3px;
   }
-  .ss-tag {
-    font-size: 7px;
-    letter-spacing: 0.5px;
-    color: #c0392b;
-    white-space: nowrap;
-  }
   .ss-unlink {
     font-size: 7px;
     letter-spacing: 0.5px;
@@ -1317,6 +1311,83 @@
       transition: none !important;
     }
   }
+
+  /* ================= v6 layer (2026-07-09) =================
+     Deltas only, on top of the kept v5 look. Board structure untouched
+     (single dot baseline -- the two-track rail design is dead, Soren 7/9). */
+
+  /* Chronograph bezel: 12 machined ticks inside the rest ring + a comet head
+     riding the arc's leading edge (position synced by updateRestRing). */
+  .ring-tick {
+    stroke: rgba(238, 238, 238, 0.07);
+    stroke-width: 1;
+  }
+  #rest-ring-head {
+    fill: var(--v5-red);
+    filter: drop-shadow(0 0 2px rgba(224, 88, 74, 0.6));
+  }
+  .btn-wrap.paused #rest-ring-head { fill: #777; filter: none; }
+
+  /* Final 10s of a rest: the digits join the ring in red. */
+  #timer-display.v6-final { color: var(--v5-red-hi); }
+
+  /* Session chronograph: elapsed time shown dim in the big display while he's
+     under the bar (ready) and at the finish screen -- the display never sits
+     at a dead "-:--" mid-session. Countdown rendering removes this class. */
+  #timer-display.v6-elapsed {
+    color: #4f4f4f;
+    text-shadow: none;
+  }
+
+  /* Advisor voice: when the note is a LIVE computed call (drop, hold, aim)
+     rather than a canned form cue, the card carries a red spine. */
+  #exercise-note.v6-advisor {
+    border-left: 2px solid var(--v5-red);
+    color: #d6d6d6;
+  }
+
+  /* Effort chips: selected fill ramps with the grade -- LIGHT reads quieter,
+     MAX reads hotter. Same single accent, intensity encodes meaning. */
+  .diff-btn.selected[data-diff="2"] { background: #8f2b21; border-color: #8f2b21; }
+  .diff-btn.selected[data-diff="3"] { background: #a83227; border-color: #a83227; }
+  .diff-btn.selected[data-diff="5"] {
+    background: #d84a3c;
+    border-color: #d84a3c;
+    box-shadow: inset 0 1px 0 rgba(238, 238, 238, 0.2);
+  }
+
+  /* Fat-finger pad: each 8px dot gets an invisible ~20px hit area.
+     ::before is free here (the echo ghost uses ::after). */
+  .dot::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+  }
+
+  /* Trigger hit: one-shot pulse on the exercise's dots row the moment its
+     final set banks the advance. */
+  @keyframes v6-trigger-pulse {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.28); }
+    100% { transform: scale(1); }
+  }
+  .exercise-dots.v6-trigger-hit .dot.completed {
+    animation: v6-trigger-pulse 0.5s var(--v5-ease) 2;
+  }
+
+  /* Superset context tag on the set label ("CALVES S2") -- slightly tighter
+     so the vertical column never outgrows the log area. */
+  #set-label-text.v6-ctx { font-size: 9px; letter-spacing: 1.4px; }
+
+  /* Summary additions: per-exercise rep totals (quiet) + banked triggers (red). */
+  #summary .sum-reps { color: #666; padding-left: 8px; }
+  #summary .sum-trigger { color: var(--v5-red-hi); padding-left: 8px; font-weight: 700; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .exercise-dots.v6-trigger-hit .dot.completed { animation: none !important; }
+    #rest-ring-head { filter: none; }
+  }
 </style>
 </head>
 <body>
@@ -1629,17 +1700,6 @@ function firstMemberOfGroup(g) {
   for (let i = 0; i < workout.length; i++) if (groupIdOf(i) === g) return i;
   return -1;
 }
-function partnerShort(exIdx) {
-  const g = groupIdOf(exIdx), s = slotOf(exIdx);
-  if (!g) return "";
-  const names = [];
-  for (let k = 0; k < workout.length; k++) {
-    if (k !== exIdx && groupIdOf(k) === g && slotOf(k) !== s) {
-      names.push(workout[k].short || workout[k].name);
-    }
-  }
-  return names.join("+");
-}
 function buildSequence() {
   const seq = [];
   const emitted = new Set();
@@ -1722,7 +1782,19 @@ function renderSetLabel() {
   const setIdx = activeLog
     ? activeLog.set
     : (isBrowsing() ? viewingSet : currentSet);
-  elSetLabelText.textContent = "S" + (setIdx + 1);
+  // Superset ambiguity (v6): mid-pair rest, the header shows the UPCOMING
+  // exercise while the log area edits the partner's just-done set -- a bare
+  // "S2" reads as the wrong exercise's set. Name the exercise when the active
+  // log belongs to a different one than the header is showing.
+  const shownEx = isBrowsing() ? viewingExercise : currentExercise;
+  if (activeLog && activeLog.exercise !== shownEx && workout[activeLog.exercise]) {
+    const tag = workout[activeLog.exercise].short || workout[activeLog.exercise].name;
+    elSetLabelText.textContent = tag + " S" + (setIdx + 1);
+    elSetLabelText.classList.add("v6-ctx");
+  } else {
+    elSetLabelText.textContent = "S" + (setIdx + 1);
+    elSetLabelText.classList.remove("v6-ctx");
+  }
 }
 // Position the main button so its vertical center sits at the midpoint of
 // (timer-display bottom, difficulty-row top), then shifted upward to make
@@ -1969,6 +2041,76 @@ elDayTitle.textContent = dayType;
 document.title = "Gym - " + dayType;
 elRingBar.setAttribute("stroke-dasharray", RING_CIRCUMFERENCE);
 elRingBar.setAttribute("stroke-dashoffset", RING_CIRCUMFERENCE); // start empty
+
+// v6 chronograph bezel: 12 machined ticks inside the ring + a comet head that
+// rides the arc's leading (draining) edge. Position math: the circle's stroke
+// path starts at (cx+r, cy) and sweeps clockwise; with dashoffset =
+// C*(1-fraction) the visible arc runs path-positions 0 -> C*fraction, so the
+// moving end sits at angle 2*PI*fraction. The svg's rotate(-90deg) puts the
+// fixed end at 12 o'clock on screen. Guarded: a failure degrades to the ring
+// exactly as it was.
+let elRingHead = null;
+try {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const ringSvg = document.getElementById("rest-ring");
+  for (let k = 0; k < 12; k++) {
+    const a = k * Math.PI / 6;
+    const tick = document.createElementNS(svgNS, "line");
+    tick.setAttribute("class", "ring-tick");
+    tick.setAttribute("x1", (92 + 84 * Math.cos(a)).toFixed(2));
+    tick.setAttribute("y1", (92 + 84 * Math.sin(a)).toFixed(2));
+    tick.setAttribute("x2", (92 + 88 * Math.cos(a)).toFixed(2));
+    tick.setAttribute("y2", (92 + 88 * Math.sin(a)).toFixed(2));
+    ringSvg.insertBefore(tick, ringSvg.firstChild);
+  }
+  elRingHead = document.createElementNS(svgNS, "circle");
+  elRingHead.setAttribute("id", "rest-ring-head");
+  elRingHead.setAttribute("r", "0");
+  elRingHead.setAttribute("cx", "180");
+  elRingHead.setAttribute("cy", "92");
+  ringSvg.appendChild(elRingHead);
+} catch (e) {}
+
+// v6 timer display modes: v6-final (red digits, last 10s of a rest) and
+// v6-elapsed (dim session chronograph). Countdown/transition writers clear
+// them; the tickers re-apply what their state warrants.
+function clearTimerModes() {
+  elTimer.classList.remove("v6-final");
+  elTimer.classList.remove("v6-elapsed");
+}
+
+// v6 session chronograph: while he's under the bar (ready) or logging the
+// last set (finishing), the big display shows dim elapsed session time
+// instead of a dead "-:--". Countdown states own the display otherwise.
+function updateElapsedDisplay() {
+  if ((state === "ready" || state === "finishing") && workoutStartTime) {
+    elTimer.textContent = formatTime((Date.now() - workoutStartTime) / 1000);
+    elTimer.classList.add("v6-elapsed");
+    if (state === "ready" && !elTimerLabel.textContent) {
+      elTimerLabel.textContent = "ELAPSED";
+    }
+  }
+}
+setInterval(updateElapsedDisplay, 1000);
+
+// Pre-start footer: "15 SETS · ~27 MIN" -- walks the interleaved sequence and
+// prices each transition the way the engine will run it (superset GO = free,
+// filler->anchor = pair rest, boundary = 0/60s by the skip-rest setting).
+function sessionPlanLabel() {
+  const setCount = sequence.length;
+  let restSum = 0;
+  for (let i = 0; i < sequence.length - 1; i++) {
+    const cur = sequence[i], nxt = sequence[i + 1];
+    if (cur.ex === nxt.ex) { restSum += workout[cur.ex].rest || 0; continue; }
+    const g = groupIdOf(cur.ex);
+    const hop = g && groupIdOf(nxt.ex) === g;
+    if (hop && slotOf(cur.ex) === 1) continue;
+    if (hop) { restSum += workout[nxt.ex].rest || 0; continue; }
+    if (!settings.skipExerciseRest) restSum += 60;
+  }
+  const est = Math.round((setCount * 45 + restSum) / 60);
+  return setCount + " SETS · ~" + est + " MIN";
+}
 
 // ============ WAKE LOCK ============
 async function requestWakeLock() {
@@ -2476,6 +2618,20 @@ function weightClipsFor(exerciseObj) {
   return result;
 }
 
+// v6: the weight callout for a freshly-materialized auto-drop. Announced once,
+// at the start of the rest before the set that loads the backoff (that's when
+// he's re-pinning the stack). Sticky continuation sets stay silent; a missing
+// wgt clip skips gap-free via the fetchFailed guard.
+function dropAnnounceClips(exIdx, setIdx) {
+  const ex = workout[exIdx];
+  if (!ex || !ex.backoff || setIdx < 1) return [];
+  const st = stickyDropState(exIdx, setIdx);
+  if (!st.dropped || st.firedAt !== setIdx) return [];
+  const m = String(ex.backoff).match(/(\d+(?:\.\d+)?)/);
+  if (!m) return [];
+  return ['wgt-' + m[1].replace('.', '-')];
+}
+
 // v2 expansion: map a rep range string like "8-12" to its rep-range cue clip.
 function repRangeClipFor(repsStr) {
   if (!repsStr) return null;
@@ -2807,9 +2963,12 @@ function defaultAdvice(setIdx, prev, ex) {
   return null;
 }
 
-function computeSetNote(exIdx, setIdx) {
+// Returns { text, advisor } -- advisor=true when the note is a LIVE computed
+// call (adviceFor / dynamicRepAdvice / trigger advice), false for the canned
+// setNotes/note fallback. The v6 note card styles the two differently.
+function computeSetNoteInfo(exIdx, setIdx) {
   const ex = workout[exIdx];
-  if (!ex) return "";
+  if (!ex) return { text: "", advisor: false };
   // Build prev-set logs in order. Only count a prior set as "logged" if BOTH
   // reps and difficulty are committed -- prevents dynamic advice from firing
   // off default reps before the user has actually graded the set.
@@ -2827,16 +2986,44 @@ function computeSetNote(exIdx, setIdx) {
   if (allLogged && prevLogs.length === setIdx && setIdx > 0) {
     if (typeof ex.adviceFor === 'function') {
       const dynamic = ex.adviceFor(setIdx, prevLogs, ex);
-      if (dynamic) return dynamic;
+      if (dynamic) return { text: dynamic, advisor: true };
     }
     const reactive = dynamicRepAdvice(setIdx, prevLogs, ex);
-    if (reactive) return reactive;
+    if (reactive) return { text: reactive, advisor: true };
     const generic = defaultAdvice(setIdx, prevLogs, ex);
-    if (generic) return generic;
+    if (generic) return { text: generic, advisor: true };
   }
   // Static fallback (S1 always lands here; later sets land here pre-grading).
-  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) return ex.setNotes[setIdx];
-  return ex.note || "";
+  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) return { text: ex.setNotes[setIdx], advisor: false };
+  return { text: ex.note || "", advisor: false };
+}
+function computeSetNote(exIdx, setIdx) {
+  return computeSetNoteInfo(exIdx, setIdx).text;
+}
+
+// v6: did this exercise bank its advance trigger? Every set's logged reps must
+// meet the trigger row, at the PRESCRIBED weight -- a materialized auto-drop
+// voids the bank (numbers hit at the backoff aren't the trigger).
+function exerciseTriggerHit(exIdx) {
+  const ex = workout[exIdx];
+  if (!ex || !Array.isArray(ex.trigger) || ex.trigger.length !== ex.sets) return false;
+  if (ex.backoff && stickyDropState(exIdx, ex.sets - 1).dropped) return false;
+  for (let i = 0; i < ex.sets; i++) {
+    const log = setLogs.find(l => l.exercise === exIdx && l.set === i);
+    if (!log || Number(log.reps) < ex.trigger[i]) return false;
+  }
+  return true;
+}
+
+// One-shot celebration pulse on the exercise's dots row when its final set
+// banks the trigger. Re-renders during the window simply drop the class early.
+function pulseTriggerHit(exIdx) {
+  requestAnimationFrame(() => {
+    const row = elProgress.querySelector('.exercise-group[data-exercise-idx="' + exIdx + '"] .exercise-dots');
+    if (!row) return;
+    row.classList.add('v6-trigger-hit');
+    setTimeout(() => row.classList.remove('v6-trigger-hit'), 1200);
+  });
 }
 
 // The weight to actually load THIS set. Reflects (a) a structural drop set
@@ -2885,23 +3072,30 @@ function refreshSetNote() {
   // Refresh the weight too: grading the prior set can flip the upcoming set to
   // a reactive drop, and the loaded weight must track that live.
   elSet.innerHTML = setInfoHTML(exIdx, setIdx);
-  elNote.textContent = computeSetNote(exIdx, setIdx);
+  const info = computeSetNoteInfo(exIdx, setIdx);
+  elNote.textContent = info.text;
+  elNote.classList.toggle("v6-advisor", info.advisor);
   fitNoteToBox();
 }
 
 function renderExercise() {
   // When browsing, show the viewed set's context; otherwise current working.
   const exIdx = isBrowsing() ? viewingExercise : currentExercise;
-  const setIdx = isBrowsing() ? viewingSet : currentSet;
+  let setIdx = isBrowsing() ? viewingSet : currentSet;
   const ex = workout[exIdx];
+  // Finishing state: currentSet already ran past the last index (setDone
+  // increments before detecting the end), so an unclamped read renders
+  // "Set 5/4" after a browse-and-return on the finish screen.
+  if (state === "finishing" && setIdx >= ex.sets) setIdx = ex.sets - 1;
   elName.textContent = ex.name;
   // Weight is adaptive: reflects drop sets + reactive drops so it shows the
   // load to actually put on (not the stale prescription). Then Set X/Y, reps.
   elSet.innerHTML = setInfoHTML(exIdx, setIdx);
   // Compute set-specific note (dynamic advice when prev sets are graded,
   // static setNotes[] otherwise).
-  let noteText = computeSetNote(exIdx, setIdx);
-  elNote.textContent = noteText;
+  const noteInfo = computeSetNoteInfo(exIdx, setIdx);
+  elNote.textContent = noteInfo.text;
+  elNote.classList.toggle("v6-advisor", noteInfo.advisor);
   fitNoteToBox();
   renderProgress();
   requestAnimationFrame(centerMainButton);
@@ -2962,11 +3156,18 @@ function updateRestRing() {
     remaining = Math.max(0, (restEndTime - Date.now()) / 1000);
   } else {
     elRingBar.setAttribute("stroke-dashoffset", RING_CIRCUMFERENCE);
+    if (elRingHead) elRingHead.setAttribute("r", "0");
     return;
   }
   const fraction = Math.max(0, Math.min(1, remaining / restTotalSeconds));
   const offset = RING_CIRCUMFERENCE * (1 - fraction);
   elRingBar.setAttribute("stroke-dashoffset", offset);
+  if (elRingHead) {
+    const a = 2 * Math.PI * fraction;
+    elRingHead.setAttribute("r", fraction > 0 ? "3.4" : "0");
+    elRingHead.setAttribute("cx", (92 + 88 * Math.cos(a)).toFixed(2));
+    elRingHead.setAttribute("cy", (92 + 88 * Math.sin(a)).toFixed(2));
+  }
 }
 function showRestRing(show, paused) {
   elBtnWrap.classList.toggle("show-ring", !!show);
@@ -3006,6 +3207,7 @@ function startCountdown() {
       const secCeil = Math.ceil(remaining);
       maybeFireCountdownCue(secCeil);
       elTimer.textContent = formatTime(secCeil);
+      elTimer.classList.toggle("v6-final", secCeil <= 10);
       updateRestRing();
     }
   }, 100);
@@ -3067,6 +3269,7 @@ function applySnapshot(s) {
 }
 function applyState(notesValue) {
   showRestRing(false, false);
+  clearTimerModes();
 
   if (state === "resting" && restEndTime) {
     const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
@@ -3167,8 +3370,12 @@ function applyState(notesValue) {
     // the day-name + first-exercise audio, record workoutStartTime, and
     // transition to "ready". Log area hidden — there's nothing to log yet.
     renderExercise();
-    elTimer.textContent = "-:--";
-    elTimerLabel.textContent = "";
+    // v6: chronograph at zero + the session plan (set count, honest time
+    // estimate priced off the interleave + rest config) instead of a dead
+    // "-:--" over an empty label.
+    elTimer.textContent = "0:00";
+    elTimer.classList.add("v6-elapsed");
+    elTimerLabel.textContent = sessionPlanLabel();
     elBtn.textContent = "Start Workout";
     elBtn.className = "go";
     elSkip.style.display = "none";
@@ -3201,6 +3408,7 @@ function applyState(notesValue) {
   // Overrides per-branch repPicker/elNotesInput values set above, ensuring
   // UI matches whichever log is being edited (current working or viewed).
   if (elLogArea.style.display === 'flex') syncLogArea();
+  updateElapsedDisplay();
   updateNavButtons();
 }
 function pushHistory() {
@@ -3300,6 +3508,11 @@ function setDone() {
 
   const finishedExercise = currentExercise;
   const finishedSet = currentSet;
+  // v6: exercise just completed its final set with the advance trigger banked
+  // -> celebrate (voice + dots pulse) and let the summary flag the advance.
+  const bankedTrigger = (finishedSet === workout[finishedExercise].sets - 1) &&
+    exerciseTriggerHit(finishedExercise);
+  clearTimerModes();
   // SUPERSET ENGINE: advancement walks `sequence` (interleaved order), not
   // (exercise, set++). Sync first in case an external path (jump-to-set,
   // snapshot restore) moved the cursor without updating seqIndex.
@@ -3323,7 +3536,11 @@ function setDone() {
     elSkip.style.display = "none";
     showRestRing(false);
     renderProgress();
-    VoiceCue.playSequence(['received', 'final-set-logged']);
+    if (bankedTrigger) pulseTriggerHit(finishedExercise);
+    updateElapsedDisplay();
+    VoiceCue.playSequence(bankedTrigger
+      ? ['received', 'cue-trigger-hit', 'final-set-logged']
+      : ['received', 'final-set-logged']);
     requestAnimationFrame(() => { saveState(); });
     return;
   }
@@ -3380,6 +3597,7 @@ function setDone() {
       // supersetGo: the finished exercise is NOT complete (more of its sets
       // pend in the interleave) -- no 'exercise-complete', keep the cue tight.
       const seq = supersetGo ? ['received'] : ['received', 'exercise-complete'];
+      if (bankedTrigger) seq.splice(1, 0, 'cue-trigger-hit');
       seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
       if (exClip) seq.push(exClip);
       // Weight/reps announce only on the exercise's FIRST set (same daily-clip
@@ -3389,10 +3607,15 @@ function setDone() {
         const repClipSkip = repRangeClipFor(workout[currentExercise].reps);
         if (repClipSkip) seq.push(repClipSkip);
       }
+      // A drop that just materialized for the upcoming set: state the new
+      // weight now, while he's at the machine setting the pin.
+      seq.push(...dropAnnounceClips(currentExercise, currentSet));
       const _dcSkip = (currentSet === 0) ? dailyClipFor(currentExercise, 0) : null;
       if (_dcSkip) seq.push(_dcSkip);
       VoiceCue.playSequence(seq);
     }
+    if (bankedTrigger) pulseTriggerHit(finishedExercise);
+    updateElapsedDisplay();
     requestAnimationFrame(() => {
       initAudio();
       requestWakeLock();
@@ -3414,9 +3637,15 @@ function setDone() {
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
   renderExercise();
+  // Re-render the set label AFTER the cursor advanced: the pre-advancement
+  // showLogArea render can't know the header now shows a different exercise
+  // than the log being edited (the superset-return "CALVES S1" tag case).
+  renderSetLabel();
   showRestRing(true, false);
   countdownFiredThresholds = new Set();
   startCountdown();
+
+  if (bankedTrigger) pulseTriggerHit(finishedExercise);
 
   // Voice cue: "Received" then branch (superset return vs exercise switch vs in-exercise rest)
   {
@@ -3428,6 +3657,9 @@ function setDone() {
       const exClip = exerciseClipName(workout[currentExercise].name);
       seq = ['received', 'up-next'];
       if (exClip) seq.push(exClip);
+      // Auto-drop that just materialized for the upcoming anchor set: state
+      // the new weight during the rest, while the pin is being set.
+      seq.push(...dropAnnounceClips(currentExercise, currentSet));
       const pairRestClip = restClipForDuration(restRemaining);
       if (pairRestClip) seq.push(pairRestClip);
     } else if (switchingExercise) {
@@ -3449,7 +3681,11 @@ function setDone() {
     } else {
       const restClip = restClipForDuration(workout[finishedExercise].rest);
       seq = restClip ? ['received', restClip] : ['received'];
+      // In-exercise rest: the drop the set he just logged may have triggered
+      // applies to the very next set -- announce the backoff weight once.
+      seq.push(...dropAnnounceClips(currentExercise, currentSet));
     }
+    if (bankedTrigger) seq.splice(1, 0, 'cue-trigger-hit');
     VoiceCue.playSequence(seq);
   }
 
@@ -3468,6 +3704,7 @@ function restDone() {
   pushHistory();
   cancelRestNotif();
   captureLog();
+  clearTimerModes();
   // Log area stays visible across rest->ready/alert transition so user always
   // has access to notes/reps/diff, even on the Start Set / Set Done screens.
   showRestRing(false);
@@ -3493,6 +3730,7 @@ function restDone() {
   syncLogArea();
   startFlash();
   updateNavButtons();
+  updateElapsedDisplay();
   // Voice cue: "Rest complete" + (set-N + position cue if autoStart, "Tap to start" if alert mode)
   // v2: weight is NOT re-announced — same weight all sets of an exercise. Exercise transition handled it.
   {
@@ -3532,6 +3770,7 @@ function pauseRest() {
   // Capture EXACT remaining time (float seconds) so resume doesn't round-up jump
   restRemaining = Math.max(0, (restEndTime - Date.now()) / 1000);
   state = "paused";
+  clearTimerModes();
   elBtn.textContent = "Resume";
   elBtn.className = "paused";
   elTimerLabel.textContent = "PAUSED";
@@ -3579,6 +3818,7 @@ function skipRest() {
   // Log area stays visible across skip (user still has notes/reps/diff UI)
   showRestRing(false);
   state = "ready";
+  clearTimerModes();
   elTimer.textContent = "-:--";
   elTimerLabel.textContent = "";
   elBtn.textContent = "Set Done";
@@ -3587,6 +3827,7 @@ function skipRest() {
   renderExercise();
   elLogArea.style.display = "flex";
   syncLogArea();
+  updateElapsedDisplay();
   saveState();
 
   // Voice (Soren 7/4): a skip plays NOTHING. He tapped it -- he knows the rest
@@ -3602,11 +3843,13 @@ function acknowledgeAlert() {
   // The queued cue (if any) IS this alert's announcement -- acting on it makes it stale.
   pendingPostGestureCues.length = 0;
   state = "ready";
+  clearTimerModes();
   elTimer.textContent = "-:--";
   elTimerLabel.textContent = "";
   elBtn.textContent = "Set Done";
   elBtn.className = "";
   renderExercise();
+  updateElapsedDisplay();
   saveState();
 }
 
@@ -3780,6 +4023,15 @@ function buildSummary() {
         text += "  S" + (j + 1) + ": -\n";
       }
     }
+    // v6: total-rep volume (the tracker's volume-PR currency) + a banked
+    // trigger called out explicitly so the advance never rests on recall.
+    const exLogs = setLogs.filter(l => l.exercise === i);
+    if (exLogs.length) {
+      text += "  total " + exLogs.reduce((a, l) => a + (Number(l.reps) || 0), 0) + " reps\n";
+    }
+    if (exerciseTriggerHit(i)) {
+      text += "  TRIGGER HIT -> " + (ex.triggerWeight || "advance") + " next session\n";
+    }
     if (i < workout.length - 1) text += "\n";
   }
   const total = getTotalDuration();
@@ -3803,6 +4055,13 @@ function buildSummaryHTML() {
       } else {
         html += '<div class="set-line">S' + (j + 1) + ': -</div>';
       }
+    }
+    const exLogs = setLogs.filter(l => l.exercise === i);
+    if (exLogs.length) {
+      html += '<div class="sum-reps">total ' + exLogs.reduce((a, l) => a + (Number(l.reps) || 0), 0) + ' reps</div>';
+    }
+    if (exerciseTriggerHit(i)) {
+      html += '<div class="sum-trigger">TRIGGER HIT &rarr; ' + escapeHTML(ex.triggerWeight || 'advance') + ' next session</div>';
     }
     if (i < workout.length - 1) html += '<br>';
   }
@@ -3843,6 +4102,12 @@ function finishWorkout() {
       elCopy.className = "copied";
       setTimeout(() => { elCopy.textContent = "Copy Summary"; elCopy.className = ""; }, 2500);
     }).catch(() => {});
+  } catch(e) {}
+  // v6 insurance: the finished summary survives a closed tab (state is wiped
+  // below, and clipboard writes can fail). Retrievable from localStorage.
+  try {
+    localStorage.setItem("gym-timer-last-summary",
+      JSON.stringify({ at: Date.now(), text: buildSummary() }));
   } catch(e) {}
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
   VoiceCue.cancel();
@@ -4200,8 +4465,18 @@ elCopy.addEventListener("click", () => {
 
 // ============ STATE PERSISTENCE ============
 function saveState() {
+  // A finished session must never persist: a save deferred past finishWorkout's
+  // wipe (rAF race) would resurrect a dead state on the next load.
+  if (state === "finished") {
+    try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+    return;
+  }
   const s = {
     savedAt: Date.now(),
+    // Guards a saved session against being restored into a DIFFERENT day's
+    // build (config flips at day-close; indexes would point at the wrong
+    // exercises). restoreState discards on mismatch.
+    dayKey: dayType,
     currentExercise, currentSet, state, workoutStartTime, restEndTime, restRemaining, restTotalSeconds,
     viewingExercise, viewingSet,
     setLogs: setLogs.map(l => ({...l})),
@@ -4211,9 +4486,10 @@ function saveState() {
     countdownFiredThresholds: [...countdownFiredThresholds],
     dissolvedGroups: [...dissolvedGroups],
     // Persist any mid-session reorder so refreshes/background kills don't snap back
-    workoutOrder: workout.map(ex => ex.name),
-    history: history.map(h => ({...h, setLogs: h.setLogs.map(l => ({...l}))})),
-    future:  future.map(f => ({...f, setLogs: f.setLogs.map(l => ({...l}))}))
+    workoutOrder: workout.map(ex => ex.name)
+    // v6: undo history/future are NO LONGER persisted. The back/forward UI was
+    // removed long ago, so serializing 30 deep snapshots on every keystroke
+    // was pure weight; the in-memory machinery is untouched.
   };
   try { localStorage.setItem("gym-timer-state", JSON.stringify(s)); } catch(e) {}
 }
@@ -4223,6 +4499,17 @@ function restoreState() {
     if (!raw) return false;
     const s = JSON.parse(raw);
     if (s.savedAt && (Date.now() - s.savedAt > STATE_TTL_MS)) {
+      try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+      return false;
+    }
+    // v6 cross-build guards: a state saved under a different day's config, or
+    // one whose cursor doesn't fit this build's shape, must not restore --
+    // stale indexes would render (or crash on) the wrong exercises.
+    if (s.state === "finished") {
+      try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+      return false;
+    }
+    if (s.dayKey && s.dayKey !== dayType) {
       try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
       return false;
     }
@@ -4236,6 +4523,16 @@ function restoreState() {
         workout.length = 0;
         reordered.forEach(ex => workout.push(ex));
       }
+    }
+
+    // Cursor-shape guard, AFTER the reorder so the indexes are checked against
+    // the same exercise order they were saved under.
+    if (typeof s.currentExercise !== 'number' || s.currentExercise < 0 ||
+        s.currentExercise >= workout.length ||
+        typeof s.currentSet !== 'number' || s.currentSet < 0 ||
+        s.currentSet > workout[s.currentExercise].sets) {
+      try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+      return false;
     }
 
     currentExercise = s.currentExercise;
@@ -4257,10 +4554,9 @@ function restoreState() {
     dissolvedGroups = new Set(Array.isArray(s.dissolvedGroups) ? s.dissolvedGroups : []);
     rebuildSequence();
 
+    // v6: persisted undo history is no longer read back (see saveState).
     history.length = 0;
-    if (Array.isArray(s.history)) s.history.forEach(h => history.push(h));
     future.length = 0;
-    if (Array.isArray(s.future)) s.future.forEach(f => future.push(f));
 
     if (state === "resting" || state === "paused" || state === "finishing") {
       const lastLog = setLogs[setLogs.length - 1];
@@ -4422,6 +4718,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism · 2026-07-09 2B-lower SS v5.1</div>
+<div class="build-stamp">prism · 2026-07-09 2B-lower SS v6</div>
 </body>
 </html>
