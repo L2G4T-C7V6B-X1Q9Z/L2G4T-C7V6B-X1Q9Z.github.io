@@ -1002,6 +1002,53 @@ button:disabled { cursor:default; }
 .me-meal-name .me-meal-nametext { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .me-meal-name .me-meal-rownote { font-size:10px; color:var(--txt3); letter-spacing:.02em; line-height:1.3; white-space:normal; }
 
+/* ---------------------------------------------------------------------------
+   v9.3 CATCH-UP EDITOR — set a PAST day's macros. A modal, deliberately: the ME
+   card never leaves today, so the daily one-tap controls can't be re-pointed at
+   an old date. The sheet is neutral chrome (not the red alarm of errpop — this
+   is a normal action, not a failure) with red reserved for the date, SAVE, and
+   errors. Reuses the errpop geometry so it lands where the eye expects.
+   --------------------------------------------------------------------------- */
+#mx-backdrop { position:absolute; inset:0; z-index:100; background:rgba(0,0,0,.82); animation:fadein 160ms ease; }
+#mx {
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  z-index:110; width:min(340px,calc(100% - 36px));
+  background:linear-gradient(180deg,var(--g1),var(--g0));
+  border:1px solid var(--hairline); border-radius:18px;
+  box-shadow:0 18px 60px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.05);
+  padding:18px 20px 16px;
+  display:flex; flex-direction:column;
+  max-height:calc(100dvh - 80px); overflow-y:auto;
+  animation:reclaimpop 300ms var(--spring);
+}
+.mx-head { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.mx-headline { flex:1 1 auto; min-width:0; text-align:center; }
+.mx-title { font-size:9.5px; font-weight:700; letter-spacing:.16em; color:var(--txt3); text-transform:uppercase; }
+/* the date is the single most important thing in this sheet — it is WHAT you are editing. */
+.mx-date { font-family:var(--font-mono); font-size:16px; font-weight:700; letter-spacing:.04em; color:var(--red); text-transform:uppercase; margin-top:3px; font-variant-numeric:tabular-nums lining-nums; }
+.mx-nav { flex:0 0 auto; width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:16px; line-height:1; }
+.mx-nav:active:not(:disabled) { background:var(--g4); color:var(--txt); }
+.mx-nav:disabled { opacity:.28; }
+
+.mx-goal { font-size:10.5px; color:var(--txt3); line-height:1.45; margin-bottom:12px; text-align:center; }
+.mx-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.mx-lbl { flex:1 1 auto; font-size:10px; font-weight:700; letter-spacing:.14em; color:var(--txt3); text-transform:uppercase; }
+.mx-input { flex:0 0 auto; width:120px; height:38px; text-align:right; background:var(--g2); border:1px solid var(--hairline); border-radius:var(--r-sm); color:var(--txt); font-family:var(--font-mono); font-size:15px; padding:0 12px; font-variant-numeric:tabular-nums lining-nums; }
+.mx-input:focus { outline:none; border-color:var(--red-wash-bd); }
+
+.mx-meals { font-size:10px; color:var(--txt3); line-height:1.5; margin:4px 0 10px; }
+.mx-meals:empty { display:none; }
+.mx-err { margin:2px 0 10px; padding:8px 10px; border-radius:var(--r-sm); background:var(--red-wash); border:1px solid var(--red-wash-bd); color:var(--red); font-size:10.5px; line-height:1.4; }
+
+.mx-save { height:42px; margin-top:4px; border-radius:var(--r-sm); background:var(--red); border:1px solid var(--red); color:#fff; font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:.08em; }
+.mx-save:active:not(:disabled) { filter:brightness(.9); }
+.mx-save:disabled { opacity:.5; }
+.mx-hit { height:36px; margin-top:8px; border-radius:var(--r-sm); background:var(--g2); border:1px solid var(--hairline); color:var(--txt2); font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.04em; }
+.mx-hit.on { background:var(--g4); border-color:var(--etch); color:var(--txt); }
+.mx-close { height:34px; margin-top:8px; background:transparent; border:none; color:var(--txt3); font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; }
+.mx-close:active { color:var(--txt2); }
+.me-catchup { margin-top:8px; }
+
 /* v4 (#14): personal-emoji picker — a wrap of curated symbols to tap. Selected = filled. */
 .me-emoji-pick { display:flex; flex-wrap:wrap; gap:6px; }
 .me-emoji-btn {

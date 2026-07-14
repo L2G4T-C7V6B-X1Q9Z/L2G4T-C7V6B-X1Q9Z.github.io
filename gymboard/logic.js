@@ -724,6 +724,68 @@ export function nutritionGoalOpts(day, subject) {
   };
 }
 
+// ---- meal totals vs. the un-itemized base (v9.3) -----------------------------
+
+/**
+ * sumMeals(meals) -> { kcal, protein }
+ *
+ * Total a day's meals[] array. A non-array, a hole, or a non-finite field all count
+ * as zero, so one malformed element can never poison the sum (elements are
+ * client-trusted — the Firestore rules cannot iterate a list). Pure.
+ */
+export function sumMeals(meals) {
+  let kcal = 0;
+  let protein = 0;
+  if (Array.isArray(meals)) {
+    for (const m of meals) {
+      if (m && Number.isFinite(m.kcal)) kcal += m.kcal;
+      if (m && Number.isFinite(m.protein)) protein += m.protein;
+    }
+  }
+  return { kcal, protein };
+}
+
+/**
+ * untrackedBase(day) -> { kcal, protein }
+ *
+ * The part of a day's kcal/protein SCALARS that its meals[] does not account for.
+ * Two real sources: (1) the Python coach-sync writes absolute day totals through
+ * the Admin SDK and never writes meals[]; (2) the day editor's "set totals" writes
+ * the scalars directly. This remainder is already USER-VISIBLE — the ME meals list
+ * renders it as "+N kcal logged earlier" — so it is a real quantity, not an artifact.
+ *
+ * Clamped at 0: a negative remainder would mean the scalars trail the array, and in
+ * that case the array is the better truth. Pure; day may be null/undefined.
+ */
+export function untrackedBase(day) {
+  const logged = sumMeals(day && day.meals);
+  const kcal = day && Number.isFinite(day.kcal) ? day.kcal : 0;
+  const protein = day && Number.isFinite(day.protein) ? day.protein : 0;
+  return {
+    kcal: Math.max(0, kcal - logged.kcal),
+    protein: Math.max(0, protein - logged.protein),
+  };
+}
+
+/**
+ * dayTotalsAfterMeals(day, nextMeals) -> { kcal, protein }
+ *
+ * The scalars a day should carry once its meals[] becomes `nextMeals`: the base the
+ * array never accounted for, PLUS the sum of the new array.
+ *
+ * This is what removeMeal writes. Before v9.3 it re-summed the array from zero, so
+ * removing a meal from a coach-synced day (scalars, no meals[]) wrote kcal:0 and
+ * silently erased the synced total. That was tolerable only while the app wrote
+ * meals to TODAY alone; the past-day editor breaks that premise, and "set totals"
+ * creates a second way to hold a base. The base is measured against the day's PRIOR
+ * meals[], so it is invariant under a removal. Pure.
+ */
+export function dayTotalsAfterMeals(day, nextMeals) {
+  const base = untrackedBase(day);
+  const next = sumMeals(nextMeals);
+  return { kcal: base.kcal + next.kcal, protein: base.protein + next.protein };
+}
+
 // ---- compliance % over a trailing window (SPEC-v4 §5) ------------------------
 
 /**

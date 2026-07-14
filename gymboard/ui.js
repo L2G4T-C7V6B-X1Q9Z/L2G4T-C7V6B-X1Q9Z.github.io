@@ -222,6 +222,23 @@ const elMeAddMeal = $('me-add-meal');
 const elMeSaveQuickMeal = $('me-save-quickmeal'); // v3.1 "+ save as quick meal"
 const elMeQuickMeals = $('me-quickmeals'); // v3.1 quick-meal preset chips (TODAY)
 const elMeMeals = $('me-meals');
+const elMeCatchup = $('me-catchup'); // v9.3 "+ log an earlier day" -> the catch-up editor
+// v9.3 CATCH-UP EDITOR (past-day macros). Every lookup is null-guarded at its use site,
+// so a stale-cached index.html without this markup degrades to "the button does nothing"
+// instead of throwing — see the sw.js skew note in data.js.
+const elMx = $('mx');
+const elMxBackdrop = $('mx-backdrop');
+const elMxDate = $('mx-date');
+const elMxPrev = $('mx-prev');
+const elMxNext = $('mx-next');
+const elMxGoal = $('mx-goal');
+const elMxKcal = $('mx-kcal');
+const elMxProtein = $('mx-protein');
+const elMxMeals = $('mx-meals');
+const elMxErr = $('mx-err');
+const elMxSave = $('mx-save');
+const elMxHit = $('mx-hit');
+const elMxClose = $('mx-close');
 const elMeWorkout = $('me-workout');
 const elMeWType = $('me-wtype'); // workout-type picker (ME today card)
 const elMeRestday = $('me-restday'); // "make today a rest day" toggle
@@ -3533,6 +3550,24 @@ function wireMe() {
       const x = e.target.closest('.me-meal-x');
       if (x) meRemoveMeal(Number(x.dataset.idx));
     });
+  // ---- v9.3 CATCH-UP EDITOR (past-day macros) ----
+  if (elMeCatchup) elMeCatchup.addEventListener('click', () => openMacrosEditor(null));
+  if (elMxPrev) elMxPrev.addEventListener('click', () => mxStep(-1));
+  if (elMxNext) elMxNext.addEventListener('click', () => mxStep(1));
+  if (elMxSave) elMxSave.addEventListener('click', mxSave);
+  if (elMxHit) elMxHit.addEventListener('click', mxToggleHit);
+  if (elMxClose) elMxClose.addEventListener('click', closeMacrosEditor);
+  // The backdrop closes it. Safe: the sheet holds no write that isn't an explicit tap, so
+  // the worst a stray outside-tap can cost is two typed numbers.
+  if (elMxBackdrop) elMxBackdrop.addEventListener('click', closeMacrosEditor);
+  if (elMxKcal)
+    elMxKcal.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); mxSave(); }
+    });
+  if (elMxProtein)
+    elMxProtein.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); mxSave(); }
+    });
   // ---- TODAY: WORKOUT ----
   if (elMeWorkout) elMeWorkout.addEventListener('click', meToggleWorkout);
   if (elMeWType)
@@ -3598,6 +3633,246 @@ function toggleSettings() {
   if (!elMeSettings || !elMeSettingsToggle) return;
   const nowCollapsed = elMeSettings.classList.toggle('collapsed');
   elMeSettingsToggle.setAttribute('aria-expanded', nowCollapsed ? 'false' : 'true');
+}
+
+// =============================================================================
+// v9.3 CATCH-UP EDITOR — set a PAST day's macros
+// -----------------------------------------------------------------------------
+// WHY A MODAL, and not a date-stepper on the ME card. The ME card's controls are
+// one-tap (quick-meal chips, ADD, mark-done) and they resolve their target date at
+// CLICK time. Give that a mutable "selected day" and a stale selection quietly becomes
+// a WRONG-DAY WRITE: you backfill Tuesday, get distracted, and Thursday's breakfast
+// lands on Tuesday. No banner reliably beats muscle memory, and a "safety check" that
+// falls back to today is not a check — it is the bug. So the ME card never leaves today.
+//
+// This editor owns ONE date: captured when it opens, shown in red at the top, and passed
+// EXPLICITLY to every write. It cannot target today (mxValidDate demands < today), and if
+// the date fails validation at save time the save ABORTS with an error rather than
+// silently retargeting.
+//
+// It writes TOTALS, not meals — which is also what you actually remember two days later.
+// Confining past-day writes to setMacros means meals[] is only ever mutated for TODAY, so
+// the scalar = base + sum(meals) invariant (logic.untrackedBase) holds and the
+// index-addressed meal-removal path is left completely alone.
+// =============================================================================
+const MX_BACK_DAYS = DAY_WINDOW_DAYS; // only offer days whose data we've actually fetched
+let mxDate = null; // the ONE date this editor writes; null when closed
+let mxBusy = false; // a write is in flight (blocks stepping + double-submits)
+
+function mxFloor(cur) {
+  const winFloor = fromKeyFor(cur, MX_BACK_DAYS);
+  const me = memberById(myUserId);
+  const jd = me && me.profile && me.profile.joinDate;
+  return isDayKey(jd) && jd > winFloor ? jd : winFloor;
+}
+
+// A date this editor may target: a real day-key, strictly BEFORE today, at or after the
+// floor. Today is excluded deliberately — today is logged with meals, on the ME card.
+function mxValidDate(dateKey) {
+  const cur = myCurrentBiz();
+  if (!cur || !isDayKey(dateKey)) return false;
+  return dateKey < cur && dateKey >= mxFloor(cur);
+}
+
+function mxShowErr(msg) {
+  if (!elMxErr) return;
+  elMxErr.textContent = msg;
+  elMxErr.classList.remove('hidden');
+}
+
+function openMacrosEditor(dateKey) {
+  const cur = myCurrentBiz();
+  if (!cur) return;
+  const d = isDayKey(dateKey) ? dateKey : prevBusinessDate(cur); // default: yesterday
+  if (!mxValidDate(d)) return;
+  mxDate = d;
+  mxBusy = false;
+  if (elMx) elMx.classList.remove('hidden');
+  if (elMxBackdrop) elMxBackdrop.classList.remove('hidden');
+  renderMacrosEditor(true);
+}
+
+function closeMacrosEditor() {
+  mxDate = null;
+  mxBusy = false;
+  if (elMx) elMx.classList.add('hidden');
+  if (elMxBackdrop) elMxBackdrop.classList.add('hidden');
+  if (elMxErr) elMxErr.classList.add('hidden');
+}
+
+// Paint the sheet from its target day. `prefill` re-seeds the two number inputs, and it
+// happens ONLY on open, on a date step, and after a successful save. This function is
+// deliberately NOT wired into repaint(), so the 60s heartbeat can never eat a half-typed
+// number — the bug you get from guarding only document.activeElement is that tabbing from
+// kcal to protein leaves kcal unguarded for the next repaint.
+function renderMacrosEditor(prefill) {
+  if (!mxDate) return;
+  const me = memberById(myUserId);
+  const cur = myCurrentBiz();
+  if (!me || !cur) return;
+  const subject = subjectOf(me);
+  const day = effectiveDays(myUserId)[mxDate];
+
+  const g = fmtDateGutter(mxDate);
+  if (elMxDate) elMxDate.textContent = `${g.dow} ${g.md}`;
+  if (elMxPrev) elMxPrev.disabled = mxBusy || !mxValidDate(prevBusinessDate(mxDate));
+  if (elMxNext) elMxNext.disabled = mxBusy || !mxValidDate(nextDayKey(mxDate));
+
+  const kcal = day && Number.isFinite(day.kcal) ? day.kcal : 0;
+  const protein = day && Number.isFinite(day.protein) ? day.protein : 0;
+  if (prefill) {
+    if (elMxKcal) elMxKcal.value = kcal > 0 ? String(Math.round(kcal)) : '';
+    if (elMxProtein) elMxProtein.value = protein > 0 ? String(Math.round(protein)) : '';
+    if (elMxErr) elMxErr.classList.add('hidden');
+  }
+
+  // The goal THIS day is judged against: its frozen snapshot when it has one, else the
+  // live goal. nutritionGoalOpts is the ONE precedence rule every read path goes through
+  // (classifyDay, the popover, computeCompliance) — bypass it and this sheet would
+  // contradict the grid cell it was opened from the moment a goal changes.
+  const gOpts = nutritionGoalOpts(day, subject);
+  const mode = nutritionModeOf(me);
+  const ns = nutritionStatus(day, { ...gOpts, nutritionMode: mode, isPast: true });
+
+  if (elMxGoal) {
+    const kg = Number.isFinite(gOpts.kcalGoal) ? Math.round(gOpts.kcalGoal) : null;
+    const pg = Number.isFinite(gOpts.proteinGoal) ? Math.round(gOpts.proteinGoal) : null;
+    let line;
+    if (mode === 'manual') {
+      // manual mode never auto-checks off numbers (logic.nutritionStatus step 2), so say
+      // the quiet part: the totals alone will NOT green this day.
+      line = 'You check nutrition off by hand — set the numbers, then Mark nutrition hit.';
+    } else if (mode === 'protein') {
+      line = pg != null ? `Goal · ${pg}g protein` : 'No protein goal set — this day cannot auto-check.';
+    } else {
+      line = kg != null && pg != null
+        ? `Goal · ${kg} kcal / ${pg}g protein`
+        : 'No goal set — this day cannot auto-check.';
+    }
+    elMxGoal.textContent = `${line}${mode === 'manual' ? '' : ns === 'hit' ? ' · counts as HIT' : ' · not a hit yet'}`;
+  }
+
+  // Meals already itemized on this day. Sum inlined ON PURPOSE rather than importing
+  // logic.sumMeals: a NEW named import from logic.js is a hard module-instantiation error
+  // if sw.js serves a stale logic.js against a fresh ui.js (see data.js's import note).
+  let mealsKcal = 0;
+  let mealsProtein = 0;
+  const arr = day && Array.isArray(day.meals) ? day.meals : [];
+  for (const m of arr) {
+    if (m && Number.isFinite(m.kcal)) mealsKcal += m.kcal;
+    if (m && Number.isFinite(m.protein)) mealsProtein += m.protein;
+  }
+  if (elMxMeals) {
+    elMxMeals.textContent = arr.length
+      ? `${arr.length} meal${arr.length > 1 ? 's' : ''} already itemized here (${Math.round(mealsKcal)} kcal / ${Math.round(mealsProtein)}g). Your totals can't go below that.`
+      : '';
+  }
+
+  if (elMxHit) {
+    const manualAte = !!(day && (day.ate === true || day.macros === true));
+    elMxHit.classList.toggle('on', manualAte);
+    elMxHit.textContent = manualAte ? 'Nutrition hit ✓ · tap to clear' : 'Mark nutrition hit';
+    elMxHit.disabled = mxBusy;
+  }
+  if (elMxSave) elMxSave.disabled = mxBusy;
+}
+
+// Step the target. A step re-seeds from the new day, so an unsaved draft is dropped — the
+// date is the loudest thing on the sheet and the step is an explicit tap, so this is
+// obvious rather than surprising.
+function mxStep(delta) {
+  if (!mxDate || mxBusy) return;
+  const next = delta < 0 ? prevBusinessDate(mxDate) : nextDayKey(mxDate);
+  if (!mxValidDate(next)) return;
+  mxDate = next;
+  renderMacrosEditor(true);
+}
+
+async function mxSave() {
+  if (mxBusy || !mxDate) return;
+  const target = mxDate; // capture ONCE — never re-resolve a global mid-write
+  // ABORT, don't retarget. If the day stopped being editable (the 4am rollover crossed
+  // it, a joinDate landed), say so and write nothing.
+  if (!mxValidDate(target)) {
+    mxShowErr('That day is no longer editable. Close and reopen.');
+    return;
+  }
+
+  // Blank means "leave this field alone"; a non-number means a fat finger. readNumInput
+  // maps BOTH to null, which would silently turn a mistyped protein into "kcal only" —
+  // so parse the raw strings here instead.
+  const kcalRaw = elMxKcal ? elMxKcal.value.trim() : '';
+  const proteinRaw = elMxProtein ? elMxProtein.value.trim() : '';
+  if (kcalRaw === '' && proteinRaw === '') {
+    mxShowErr("Enter the day's calories, protein, or both.");
+    return;
+  }
+  const kcal = kcalRaw === '' ? null : Number(kcalRaw);
+  const protein = proteinRaw === '' ? null : Number(proteinRaw);
+  if (kcal !== null && !Number.isFinite(kcal)) return mxShowErr('Calories must be a number.');
+  if (protein !== null && !Number.isFinite(protein)) return mxShowErr('Protein must be a number.');
+  if (kcal !== null && (kcal < 0 || kcal > 10000)) return mxShowErr('Calories must be 0–10,000.');
+  if (protein !== null && (protein < 0 || protein > 1000)) return mxShowErr('Protein must be 0–1,000 g.');
+
+  mxBusy = true;
+  if (elMxSave) elMxSave.disabled = true;
+  try {
+    const macros = {};
+    if (kcal !== null) macros.kcal = kcal; // 0 is legal — it clears the day
+    if (protein !== null) macros.protein = protein;
+    // NOT routed through enqueueMealWrite, deliberately. That chain exists to serialize
+    // read-modify-writes against the SAME doc, and every meal write targets TODAY while
+    // this one targets a PAST day — different documents, no race. Staying off the chain
+    // also keeps this write clear of a known flaw in it: an offline write never settles,
+    // so anything queued behind it never reaches Firestore at all.
+    const status = await commitWithTimeout(data.setMacros(target, macros));
+    await withSoftTimeout(refetchMyDays());
+    const g = fmtDateGutter(target);
+    toast(`${status === 'queued' ? 'saved · will sync' : 'saved'} · ${g.dow} ${g.md}`);
+    if (elMxErr) elMxErr.classList.add('hidden');
+    renderMacrosEditor(true); // show what actually landed
+    repaint(); // the grid cell, the month, the compliance % all move
+  } catch (err) {
+    // setMacros' "below the itemized meals" refusal carries a message worth showing.
+    if (err && err.code === 'gymboard/below-meals') {
+      mxShowErr(err.message);
+    } else {
+      mxShowErr('Could not save. Check your connection and try again.');
+      handleWriteError(err);
+    }
+  } finally {
+    mxBusy = false;
+    if (elMxSave) elMxSave.disabled = false;
+    renderMacrosEditor(false);
+  }
+}
+
+async function mxToggleHit() {
+  if (mxBusy || !mxDate) return;
+  const target = mxDate;
+  if (!mxValidDate(target)) {
+    mxShowErr('That day is no longer editable. Close and reopen.');
+    return;
+  }
+  const day = effectiveDays(myUserId)[target];
+  const wasManual = !!(day && (day.ate === true || day.macros === true));
+  mxBusy = true;
+  if (elMxHit) elMxHit.disabled = true;
+  try {
+    const status = await commitWithTimeout(data.setNutritionHit(target, !wasManual));
+    await withSoftTimeout(refetchMyDays());
+    const g = fmtDateGutter(target);
+    toast(
+      `${!wasManual ? 'marked hit' : 'hit cleared'} · ${g.dow} ${g.md}${status === 'queued' ? ' · will sync' : ''}`
+    );
+    repaint();
+  } catch (err) {
+    mxShowErr('Could not save. Check your connection and try again.');
+    handleWriteError(err);
+  } finally {
+    mxBusy = false;
+    renderMacrosEditor(false);
+  }
 }
 
 // =============================================================================
@@ -3677,6 +3952,14 @@ function buildDayPopBody(member, dateKey) {
         `<button class="dd-edit-act" type="button" data-edit-workout="clear">Clear workout</button>` +
         `<div class="dd-edit-h">Edit · nutrition</div>` +
         `<button class="dd-edit-act${nutHit ? ' on' : ''}" type="button" data-edit-nut="${nutHit ? 'clear' : 'hit'}">${nutHit ? 'Clear hit' : 'Mark hit'}</button>` +
+        // v9.3: the popover is a ~150px mini-panel — far too small to hold number inputs,
+        // and its outside-tap dismiss would eat a half-typed draft. So it BRIDGES to the
+        // catch-up editor instead. Gated on mxValidDate, not just ownEditable: the popover
+        // allows any post-join past day and MONTH can fetch days older than the editor's
+        // window, so offering the button outside that range would open nothing.
+        (mxValidDate(dateKey)
+          ? `<button class="dd-edit-act" type="button" data-edit-macros="1">Edit macros →</button>`
+          : '') +
       `</div>`
     );
   }
@@ -3847,7 +4130,8 @@ function onGridCellActivate(target) {
 // same popover). Re-checks ownership + not-future on every click — never trusts the markup.
 async function onDayPopEditClick(e) {
   const btn =
-    e.target.closest && e.target.closest('[data-edit-wtype],[data-edit-workout],[data-edit-nut]');
+    e.target.closest &&
+    e.target.closest('[data-edit-wtype],[data-edit-workout],[data-edit-nut],[data-edit-macros]');
   if (!btn || !daypopAnchor) return;
   const { uid, date } = daypopAnchor;
   if (uid !== myUserId || !isDayKey(date)) return; // own cells only
@@ -3858,6 +4142,16 @@ async function onDayPopEditClick(e) {
   const me = memberById(myUserId);
   const jd = me && me.profile && me.profile.joinDate;
   if (isDayKey(jd) && date < jd) return;
+
+  // v9.3 "Edit macros →": not a write — hand this exact date to the catch-up editor.
+  // openMacrosEditor re-validates it itself, so a stale popover can't open on an illegal
+  // day, and it simply does nothing rather than falling back to some other date.
+  if (btn.dataset.editMacros) {
+    closeDayPopover();
+    openMacrosEditor(date);
+    return; // popover is closed — nothing to rebuild
+  }
+
   try {
     if (btn.dataset.editWtype) {
       // v5.4 (#7): a workout and a rest day are mutually exclusive. On a rest day the rule

@@ -65,6 +65,20 @@ import {
   mxtPlaylistName,
 } from './logic.js';
 
+// v9.3: a NAMESPACE import, deliberately, and it must stay one.
+//
+// sw.js is stale-while-revalidate and caches every asset INDEPENDENTLY, so a refresh
+// that completes for data.js but not for logic.js (app closed mid-revalidate, network
+// dropped) leaves a NEW data.js paired with a STILL-CACHED OLD logic.js on the next
+// load. A missing NAMED export is a hard module-instantiation error — the whole app
+// would fail to boot, white screen, for a user who did nothing wrong. A namespace
+// lookup just yields undefined, so we degrade to the old behavior for that one load
+// and self-heal on the next.
+//
+// Never add a bare `import { newThing } from './logic.js'` here without this guard, and
+// never rely on the cache bump to save you: the project deliberately does not bump.
+import * as logic from './logic.js';
+
 // =============================================================================
 // module-private state
 // =============================================================================
@@ -1260,13 +1274,47 @@ export async function setMacros(businessDate, macros = {}) {
     throw taggedError('gymboard/bad-value', 'setMacros: provide kcal and/or protein.');
   }
 
-  // v9: snapshot the current goal onto the day so it freezes (a later goal change
-  // won't rewrite this day's dither/hit). Safe no-op if no goal is set, and a
-  // no-op for a PAST day (v9.1: never overwrite a frozen snapshot).
-  Object.assign(payload, await ownGoalSnapshot(businessDate));
+  // v9.3: READ the day first — this is now a read-modify-write. Two things need it.
+  const dayRef = doc(_db, 'users', id, 'days', businessDate);
+  let snap;
+  try {
+    snap = await getDoc(dayRef);
+  } catch (err) {
+    if (maybeFireReclaim(err)) {
+      throw taggedError('gymboard/reclaim-needed', 'Write rejected - this device was signed out elsewhere.');
+    }
+    throw err;
+  }
+  const existing = snap.exists() ? snap.data() : {};
+
+  // (1) THE INVARIANT: a day's scalar totals may never fall BELOW the meals it itemizes.
+  //     scalar = untracked base + sum(meals),  base >= 0
+  // Break it and logic.untrackedBase goes negative, which means removeMeal can no longer
+  // tell a coach-written total from a stale one. The tempting fix — clamp the base at 0 —
+  // silently DISCARDS the correction the user just asked for. So refuse the write instead,
+  // and say what the floor is. Backfilling a day with nothing on it (the entire point of
+  // this feature) has a meal sum of 0, so this can never fire there.
+  const logged =
+    typeof logic.sumMeals === 'function' ? logic.sumMeals(existing.meals) : { kcal: 0, protein: 0 };
+  if (payload.kcal !== undefined && payload.kcal < logged.kcal) {
+    throw taggedError(
+      'gymboard/below-meals',
+      `This day already itemizes ${Math.round(logged.kcal)} kcal of meals. Set at least that, or remove them first.`
+    );
+  }
+  if (payload.protein !== undefined && payload.protein < logged.protein) {
+    throw taggedError(
+      'gymboard/below-meals',
+      `This day already itemizes ${Math.round(logged.protein)}g of protein. Set at least that, or remove them first.`
+    );
+  }
+
+  // (2) v9: snapshot the current goal onto the day so it freezes (a later goal change
+  // won't rewrite this day's dither/hit). v9.3 passes the day it just read, so a PAST day
+  // that already carries a snapshot is left alone while one that carries NONE gets frozen.
+  Object.assign(payload, await ownGoalSnapshot(businessDate, existing));
 
   const batch = writeBatch(_db);
-  const dayRef = doc(_db, 'users', id, 'days', businessDate);
   batch.set(dayRef, payload, { merge: true });
   bumpLastActiveInBatch(batch, id);
 
@@ -1289,7 +1337,10 @@ export async function setMacros(businessDate, macros = {}) {
 const MAX_MEALS_PER_DAY = 50; // matches the rule's meals.size() <= 50 cap.
 
 /**
- * ownGoalSnapshot(businessDate?) -> Promise<{ kcalGoal?, proteinGoal?, goalDir? }>
+ * ownGoalSnapshot(businessDate?, existingDay?) -> Promise<{ kcalGoal?, proteinGoal?, goalDir? }>
+ *
+ * v9.3: `existingDay` is the day doc the CALLER already read (addMeal / setMacros both
+ * do). Pass it. Omitting it keeps the conservative v9.1 behavior for past days ({}).
  * v9: read the bound user's CURRENT goal so a nutrition-log write can snapshot it
  * onto the day cell. That freezes each day against the goal in effect when it was
  * logged -> a later goal change never rewrites past days' dither/hit. Returns {} on
@@ -1303,7 +1354,21 @@ const MAX_MEALS_PER_DAY = 50; // matches the rule's meals.size() <= 50 cap.
  * future past-day editor, not a behavior change. Today keeps re-stamping (a mid-day
  * goal change should update today's snapshot so the cell tracks the ME card).
  */
-async function ownGoalSnapshot(businessDate) {
+// v9.3: does this day already carry a goal snapshot? A PARTIAL one counts as present —
+// topping up its missing fields from today's goal would splice two goal eras into one
+// day, which is a subtler lie than leaving the gap.
+function dayHasGoalSnapshot(day) {
+  if (!day) return false;
+  return (
+    Number.isFinite(day.kcalGoal) ||
+    Number.isFinite(day.proteinGoal) ||
+    day.goalDir === 'gain' ||
+    day.goalDir === 'lose' ||
+    day.goalDir === 'maintain'
+  );
+}
+
+async function ownGoalSnapshot(businessDate, existingDay) {
   try {
     if (!_userId) return {};
     const snap = await getDoc(doc(_db, 'users', _userId));
@@ -1313,7 +1378,21 @@ async function ownGoalSnapshot(businessDate) {
       const h = Number.isFinite(u.rolloverHour) ? u.rolloverHour : DEFAULT_ROLLOVER_HOUR;
       const m = Number.isFinite(u.rolloverMinute) ? u.rolloverMinute : DEFAULT_ROLLOVER_MINUTE;
       const cur = currentBusinessDate(anchoredNow(), u.ianaTz || DEFAULT_TZ, h, m);
-      if (businessDate < cur) return {}; // past day: never overwrite its frozen snapshot
+      if (businessDate < cur) {
+        // A caller that did not read the day cannot tell us whether one exists, so stay
+        // with the v9.1 behavior and write nothing.
+        if (existingDay === undefined) return {};
+        // Already frozen: never overwrite it. This is the rewrite v9 exists to prevent.
+        if (dayHasGoalSnapshot(existingDay)) return {};
+        // v9.3: a past day with NO snapshot at all — stamping it overwrites nothing, and
+        // it FREEZES the day you just backfilled so a later goal change can't retroactively
+        // flip it (which is what used to happen: backfilled days rode the live goal
+        // forever). Be honest about what this means: it is "the goal in effect when you
+        // backfilled", NOT "the goal that historically applied that day". No goal history
+        // is stored, so the latter is unrecoverable. Note also that nutritionMode is
+        // deliberately never snapshotted (logic.nutritionGoalOpts) — a later mode switch
+        // still reinterprets old numeric days. This freezes the goal, not the whole past.
+      }
     }
     const out = {};
     if (Number.isFinite(u.kcalGoal)) out.kcalGoal = u.kcalGoal;
@@ -1414,7 +1493,9 @@ export async function addMeal(businessDate, meal = {}) {
 
   // v9: snapshot the current goal onto the day (freezes it vs future goal changes).
   // v9.1: pass the date — a past-day write must never re-stamp the frozen snapshot.
-  const goalSnap = await ownGoalSnapshot(businessDate);
+  // v9.3: pass the day we already read, so a past day with NO snapshot can be frozen
+  // while one that already has a snapshot is still left strictly alone.
+  const goalSnap = await ownGoalSnapshot(businessDate, existing);
 
   const batch = writeBatch(_db);
   batch.set(
@@ -1446,13 +1527,18 @@ export async function addMeal(businessDate, meal = {}) {
 /**
  * removeMeal(businessDate, index) -> Promise<void>
  *
- * READ-MODIFY-WRITE: drop meals[index], recompute scalar kcal/protein as the SUM of
- * the REMAINING array (re-summing, not subtraction, self-heals any prior drift).
- * Write back { kcal, protein, meals, updatedAt } + a lastActive bump.
+ * READ-MODIFY-WRITE: drop meals[index], recompute the scalar kcal/protein via
+ * logic.dayTotalsAfterMeals = the day's UN-ITEMIZED BASE + the sum of the remaining
+ * array. Write back { kcal, protein, meals, updatedAt } + a lastActive bump.
  *
- * Caveat (SPEC §3): a day whose total included a pre-array manual number loses that
- * amount on the first remove (the array never held it). Acceptable for a ~5-person
- * app; the day editor can re-set the number. Empty array => totals go to 0.
+ * v9.3: this used to re-sum the array from ZERO, which silently erased any part of
+ * the totals the array never held — and there are two real sources of exactly that:
+ * the Admin coach-sync writes absolute day totals and no meals[], and "set totals"
+ * in the day editor writes the scalars directly. Removing one meal from such a day
+ * wrote kcal:0. The old caveat was tolerable only while the app wrote meals to TODAY
+ * alone; the past-day editor breaks that premise, so the base is now preserved.
+ * (The ME meals list already showed this base as "+N kcal logged earlier" — the UI
+ * displayed it while the write path destroyed it.) Empty array + no base => 0.
  */
 export async function removeMeal(businessDate, index) {
   assertInit();
@@ -1483,11 +1569,19 @@ export async function removeMeal(businessDate, index) {
   }
 
   const newMeals = prevMeals.slice(0, idx).concat(prevMeals.slice(idx + 1));
+  // base (what meals[] never accounted for) + the remaining array. Measured against the
+  // PRIOR meals[], so the base is invariant under this removal. See logic.untrackedBase.
+  // Namespace-guarded: an old cached logic.js (see the import note) falls back to the
+  // pre-v9.3 re-sum, which is exactly the behavior that old logic.js shipped with.
   let newKcal = 0;
   let newProtein = 0;
-  for (const mDoc of newMeals) {
-    if (mDoc && Number.isFinite(mDoc.kcal)) newKcal += mDoc.kcal;
-    if (mDoc && Number.isFinite(mDoc.protein)) newProtein += mDoc.protein;
+  if (typeof logic.dayTotalsAfterMeals === 'function') {
+    ({ kcal: newKcal, protein: newProtein } = logic.dayTotalsAfterMeals(existing, newMeals));
+  } else {
+    for (const mDoc of newMeals) {
+      if (mDoc && Number.isFinite(mDoc.kcal)) newKcal += mDoc.kcal;
+      if (mDoc && Number.isFinite(mDoc.protein)) newProtein += mDoc.protein;
+    }
   }
 
   const batch = writeBatch(_db);

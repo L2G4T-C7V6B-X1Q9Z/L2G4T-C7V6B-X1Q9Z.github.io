@@ -120,6 +120,11 @@
             <button id="me-save-quickmeal" class="me-textbtn" type="button">+ save as quick meal</button>
           </div>
           <div id="me-meals" class="me-meals" aria-label="Meals logged today"></div>
+
+          <!-- v9.3: the ONLY door out of TODAY on this card. Opens the catch-up editor on a
+               past day; everything above it stays hard-wired to today. -->
+          <div class="me-track-sep"></div>
+          <button id="me-catchup" class="me-textbtn me-catchup" type="button">+ log an earlier day</button>
         </div>
 
         <!-- WORKOUT: mark-done + enabled-type picker -->
@@ -344,6 +349,43 @@
     <div id="errpop-title" class="errpop-title">CAN'T DO THAT</div>
     <div id="errpop-body" class="errpop-body"></div>
     <button id="errpop-btn" class="errpop-btn" type="button">OK</button>
+  </section>
+
+  <!-- ===== v9.3 CATCH-UP EDITOR — set a PAST day's macros (never today) =====
+       A modal on purpose. The ME card stays hard-wired to TODAY: no mutable "selected
+       day" that the one-tap daily controls could silently resolve against, so a quick-meal
+       chip can never land on last Tuesday. This editor writes to ONE date, captured when
+       it opens, shown in its header, and passed explicitly to every write. If that date
+       stops being valid (the 4am rollover crosses it mid-edit), the save ABORTS with an
+       error — it never silently retargets today. ===== -->
+  <div id="mx-backdrop" class="hidden" aria-hidden="true"></div>
+  <section id="mx" class="hidden" role="dialog" aria-modal="true" aria-labelledby="mx-title">
+    <div class="mx-head">
+      <button id="mx-prev" class="mx-nav" type="button" aria-label="Previous day">&lsaquo;</button>
+      <div class="mx-headline">
+        <div id="mx-title" class="mx-title">CATCH UP</div>
+        <div id="mx-date" class="mx-date"></div>
+      </div>
+      <button id="mx-next" class="mx-nav" type="button" aria-label="Next day">&rsaquo;</button>
+    </div>
+
+    <div id="mx-goal" class="mx-goal"></div>
+
+    <div class="mx-row">
+      <label class="mx-lbl" for="mx-kcal">CALORIES</label>
+      <input id="mx-kcal" class="mx-input" type="number" inputmode="numeric" placeholder="kcal">
+    </div>
+    <div class="mx-row">
+      <label class="mx-lbl" for="mx-protein">PROTEIN</label>
+      <input id="mx-protein" class="mx-input" type="number" inputmode="numeric" placeholder="grams">
+    </div>
+
+    <div id="mx-meals" class="mx-meals"></div>
+    <div id="mx-err" class="mx-err hidden" role="alert"></div>
+
+    <button id="mx-save" class="mx-save" type="button">SAVE</button>
+    <button id="mx-hit" class="mx-hit" type="button">Mark nutrition hit</button>
+    <button id="mx-close" class="mx-close" type="button">Done</button>
   </section>
 
   <!-- ===== FATAL / BOOT BANNER (bad link, App Check fail, etc.) ===== -->
