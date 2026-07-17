@@ -1178,105 +1178,130 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // ======================= CONFIG START =======================
 // The daily flip splices ONLY the fenced block (dayType + build note +
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
-const dayType = "Lower";
+const dayType = "Upper";
 
-// LOWER session (Wed 7/15, JAR2 -- after-work lift). PHASE 2B, 15 sets. ALL FIVE WEIGHTS HOLD from the 7/13 CONTAMINATED read (all 15 sets rated MAX on ~4h sleep + a 702-cal ward day = a fatigue signature, NOT weakness; do NOT rebase off it). Carries: (1) LEG PRESS 250 (bo 235) -- 7/13 was 9/9/6, a fatigue crater vs the 7/9 rep PR of 36; HOLD 250. (2) CALF 145 (bo 130) -- second session at 145; HOLD. (3) DB RDL 30 (noDropAdvice, no backoff) -- 10/12/12 CLEAN, zero pain, IDENTICAL to 7/9, second clean session; officially rehabilitated, STAYS at 30. Do NOT advance to 35 (back pain 7/7) or 40 (lumbar 7/1); if it needs more, add a 4th SET, never load. (4) LEG EXTENSION 70 (bo 60) -- 7/13 S1=8 (ran 4th, fatigued); HOLD, needs all 3 sets at 12 to climb. (5) FACE PULLS 40 (bo 35) -- ran last, empty (12 then 13@35); HOLD, chase 18/18 before re-earning 45. RE-PAIRING THIS SESSION: RDL<->LE come back as a B1/B2 superset (Soren's export note: "RDL and extensions could be supersetted"); they went standalone on 7/13 only for the RDL pain trial, which it passed. SS map: LP(A1)<->Calf(A2) same machine; RDL(B1)<->LE(B2); FP standalone. Interleave: LP1 CF1 LP2 CF2 LP3 CF3 LP4 | RD1 LE1 RD2 LE2 RD3 LE3 | FP1 FP2 = 15 sets. DB RDL keeps its HARD STOP on any lumbar OR medial-thigh pain (noDropAdvice: a short set = pain, not a load call). setNotes = FORM/LOAD cues ONLY, never echo prior reps, never name a weight the auto-drop could contradict. AUTO-DROP v5 + sticky. True-failure RIR anchor is Upper-only (CP/Row), never Lower. Voice = ElevenLabs static bank, workout-agnostic, no regen; ex-db-rdl + rest-150sec mp3s STILL MISSING (wired, skip gap-free until they land in BOTH audio/ folders).
+// UPPER session (next in rotation after the Wed 7/15 Lower). PHASE 2B VOLUME BLOCK, 21 sets. ALL 6 WEIGHTS HOLD -- carried as-was from fdcc483. Why nothing moved: 7/14 was CONTAMINATED READ #2 (20 of 21 sets rated MAX, auto-drops fired on 5 of 6 exercises). Every one of those drops was CORRECT under v5 -- the engine is fine, the athlete was cooked (~4 h sleep, 12 h ward day, ~942 cal logged all day). A 20/21-MAX session is a fatigue reading, not a strength reading, so it cannot rebase a single weight. (1) THE WINS ON 7/14 WERE REAL and are the proof the weights hold: Chest Press first set at 120 was his best ever at that load, Incline first set at 70 was his best to date, Row matched the 7/6 rep PR -- all on FIRST sets, before fatigue compounded, on 4 h sleep. The loads are right; the recovery was not. (2) CHEST PRESS RUNS SLOT 1 -- this is settled, it delivered on 7/14. Take the machine when you walk in. (3) TRICEPS = Cable Pushdown 25; if the cable station is taken, FRENCH PRESS 40 is the proven fallback (zero cuff pain). (4) INCLINE stays the MACHINE at 70 (bo 60), still staged at 2 sets until clean 12s. ** TRUE-FAILURE RIR ANCHOR IS STILL DEFERRED -- DO NOT RUN IT. ** Two straight sessions rating near-universal MAX ARE the evidence his effort perception is fatigue-saturated, which is exactly the state in which the anchor teaches nothing. It needs a REPRESENTATIVE day. Run it on the first genuinely RESTED Upper -- the condition is rest, not a date on the calendar. AUTO-DROP v5 + sticky (Soren 7/5): reactive = below floor at HARD/MAX, or AT floor while MAXED; predictive = three MAX sets, two declining steps, projecting under the floor (13->11->9 fires; 11->9 never). Once a drop materializes, every later set stays at the backoff. MOD/LIGHT never drop. setNotes = FORM/LOAD cues ONLY, never echo prior reps, never name a weight the auto-drop could contradict. Voice = ElevenLabs static bank, workout-agnostic, no regen.
 // SUPERSETS (standing default, Soren 7/6): ss:"A1" = group A slot 1 (ANCHOR chain
-// -- slot-1 exercises run in array order);
+// -- slot-1 exercises run in array order, e.g. flat press then incline);
 // ss:"A2" = the FILLER whose sets fire immediately after each anchor set.
 // Anchor->filler = instant GO (the walk is the transition); filler->anchor =
 // the anchor's full configured rest (150s compounds -- Soren's pick 7/6).
 // `short:` = the board tag / GO-label name. One-tap "unlink" on the board
 // dissolves a group mid-session (machine taken) back to straight sets.
-// FLIP-TIME RULE: Lower pairs -- leg press(A1) vs LP calf raises(A2, same
-// machine); RDL(B1) vs leg extension(B2); face pulls unpaired.
+// FLIP-TIME RULE: every future build tags its pairs -- Upper: press+incline(A1)
+// vs row(A2), pushdown+curls(B1) vs lat raise(B2); Lower: leg press(A1) vs
+// LP calf raises(A2, same machine). RDL/LE/FP unpaired.
 const workout = [
   {
-    name: "Leg Press",
+    name: "Chest Press Machine",
     ss: "A1",
-    short: "LEG PRESS",
+    short: "PRESS",
     sets: 4,
     reps: "8-12",
-    weight: "250 lbs",
-    backoff: "235 lbs",
+    weight: "120 lbs",
+    backoff: "100 lbs",
     rest: 150,
-    note: "Hold 250. Last clean session (7/9) was a rep PR and a four-set volume PR; 7/13 cratered on fatigue, not strength. Full depth, controlled descent, drive through the heels, don't slam the knees straight. Backoff is 235.",
+    note: "Hold 120 -- and run it FIRST, while you are fresh. Slot 1 is settled: it delivered your best-ever opening set at this load last session. This is the priority lift, take the machine when you walk in. Full ROM, controlled descent to the chest, drive without slamming the elbows locked. Backoff is 100.",
     setNotes: [
-      "S1: full depth, controlled descent, drive through the heels.",
-      "S2: same depth and tempo, no shortening the range.",
-      "S3: knees track over the toes, no bouncing out of the bottom.",
-      "S4: last set, empty the tank, full depth, controlled negative."
+      "S1: fresh -- full ROM, controlled descent to the chest.",
+      "S2: full 2.5-min rest first, same depth and tempo.",
+      "S3: drive through the mid-chest, no half reps.",
+      "S4: last set, empty the tank, controlled negative."
     ],
     trigger: [12, 12, 12, 12],
-    triggerWeight: "265 lbs"
+    triggerWeight: "130 lbs"
   },
   {
-    name: "Leg Press Calf Raises",
+    name: "Cable Rope Row",
     ss: "A2",
-    short: "CALVES",
-    sets: 3,
-    reps: "12-15",
-    weight: "145 lbs",
-    backoff: "130 lbs",
-    rest: 90,
-    note: "Hold 145. Superset with the presses -- you're already ON the machine: press set done, slide the feet low and go. Full stretch at the bottom, hard squeeze and pause at the top, no bouncing. Backoff is 130.",
-    setNotes: [
-      "S1: full stretch at the bottom, big squeeze at the top.",
-      "S2: pause the top contraction, slow controlled negative.",
-      "S3: last calf set, full range, no bouncing the weight up."
-    ],
-    trigger: [15, 15, 15],
-    triggerWeight: "160 lbs"
-  },
-  {
-    name: "DB Romanian Deadlift",
-    ss: "B1",
-    short: "RDL",
-    sets: 3,
+    short: "ROW",
+    sets: 5,
     reps: "8-12",
-    weight: "30 lbs",
-    rest: 120,
-    noDropAdvice: true,
-    note: "Rehabilitated -- two clean standalone sessions at 30 (10/12/12 both, zero back or medial-thigh pain), so it STAYS. Back to a superset with leg extension this session. Strict hip-hinge: hips back, soft knees, NEUTRAL braced spine, DBs sliding close down the thighs, range limited to where the low back stays neutral. HARD STOP on any lumbar OR medial-thigh pain -- rack them and skip the rest. No weight-drop prompts here; a short set means pain, not a load call.",
+    weight: "120 lbs",
+    backoff: "100 lbs",
+    rest: 150,
+    note: "Hold 120 -- 5 SETS (Phase 2B volume block). Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return -- no jerking with the low back.",
     setNotes: [
-      "S1: hips back, soft knees, slide the DBs down the thighs, neutral spine. Any low-back twinge = stop.",
-      "S2: brace the core, limit the ROM to the neutral-spine range, feel the hamstrings. Any low-back twinge = stop.",
-      "S3: last RDL, DBs close, no rounding. Stop on any low-back or medial-thigh pain."
-    ]
+      "S1: chest tall, pull to the waist, squeeze the blades.",
+      "S2: full rest, elbows close, no torso heave.",
+      "S3: controlled return, full stretch at the front.",
+      "S4: drive the elbows back, clean reps.",
+      "S5: last set -- the Phase 2B set. Empty it, no torso heave."
+    ],
+    trigger: [12, 12, 12, 12, 12],
+    triggerWeight: "130 lbs"
   },
   {
-    name: "Leg Extension",
-    ss: "B2",
-    short: "LEG EXT",
-    sets: 3,
+    name: "Incline Press",
+    ss: "A1",
+    short: "INCLINE",
+    sets: 2,
     reps: "8-12",
     weight: "70 lbs",
     backoff: "60 lbs",
-    rest: 90,
-    note: "Holding 70 -- last clean session was 11/9/7, need all three sets at the top of the range before it climbs. Supersetted with the RDL now: RDL set done, straight to the extension. Squeeze the quads hard at the top, control the negative, no swinging or kicking the weight up. Backoff is 60.",
+    rest: 120,
+    note: "Incline press MACHINE at 70. Seat at the incline setting, lower to the UPPER chest, elbows ~45 deg, press up and slightly back, controlled negative. Still staged at 2 sets until clean 12s. STOP on ANY rotator-cuff pain -- French-press history, nothing gets pushed through.",
     setNotes: [
-      "S1: full extension, hard quad squeeze at the top.",
-      "S2: control the negative, no kicking or swinging.",
-      "S3: last set, pause the top contraction, clean reps."
+      "S1: machine incline -- lower to the upper chest, elbows ~45, controlled.",
+      "S2: same groove, controlled negative. Stop on any cuff signal."
     ],
-    trigger: [12, 12, 12],
+    trigger: [12, 12],
     triggerWeight: "80 lbs"
   },
   {
-    name: "Cable Face Pulls",
-    short: "FACE PULL",
-    sets: 2,
-    reps: "15-20",
-    weight: "40 lbs",
-    backoff: "35 lbs",
+    name: "Cable Tricep Pushdown",
+    ss: "B1",
+    short: "PUSHDOWN",
+    sets: 3,
+    reps: "12-15",
+    weight: "25 lbs",
+    backoff: "20 lbs",
     rest: 90,
-    note: "Reverted to 40 -- 45 was too heavy (12 reps, under the 15-20 range). Chase 18/18 clean at 40 before re-earning 45. Groover: shoulder health, not to failure. Pull to the forehead, elbows high, squeeze the rear delts, slow controlled return, at or below parallel. Backoff is 35.",
+    note: "Hold 25. Elbows pinned to the sides, full lockout at the bottom, control the negative -- no leaning into it or flaring the elbows. If the cable station is taken, FRENCH PRESS at 40 is the proven fallback (zero cuff pain).",
     setNotes: [
-      "S1: elbows high, pull to the forehead, squeeze the rear delts.",
-      "S2: last set, slow controlled return, no heaving the weight."
+      "S1: elbows pinned, full lockout at the bottom.",
+      "S2: control the negative, no body english.",
+      "S3: last set, squeeze the lockout, clean reps."
     ],
-    trigger: [18, 18],
-    triggerWeight: "45 lbs"
+    trigger: [15, 15, 15],
+    triggerWeight: "30 lbs"
+  },
+  {
+    name: "DB Lateral Raise",
+    ss: "B2",
+    short: "LAT RAISE",
+    sets: 4,
+    reps: "12-15",
+    weight: "15 lbs",
+    backoff: "10 lbs",
+    rest: 90,
+    note: "Strict 15s, range 12-15, 4 SETS (Phase 2B). Lead with the elbows, raise to parallel -- no higher (L-shoulder clicks above parallel), no swinging or momentum.",
+    setNotes: [
+      "S1: strict, lead with the elbows, raise to parallel.",
+      "S2: no swing, slow controlled negative.",
+      "S3: keep it strict, stop at parallel.",
+      "S4: last set -- the Phase 2B set. Strict to the end."
+    ],
+    trigger: [15, 15, 15, 15],
+    triggerWeight: "17.5 lbs"
+  },
+  {
+    name: "DB Curls (supinated)",
+    ss: "B1",
+    short: "CURLS",
+    sets: 3,
+    reps: "8-12",
+    weight: "25 lbs",
+    backoff: "20 lbs",
+    rest: 90,
+    note: "Hold 25, SUPINATED grip only (hammer twangs the nerve). Supinated is nerve-safe, so you CAN push these to failure -- the only stop is an actual nerve twang, not a rep count. Controlled, no swinging.",
+    setNotes: [
+      "S1: supinated grip, controlled, no swing.",
+      "S2: squeeze the top, slow negative.",
+      "S3: last set, push it -- failure is fine supinated, stop only on a nerve twang."
+    ],
+    trigger: [12, 12, 12],
+    triggerWeight: "30 lbs"
   },
 ];
 // ======================== CONFIG END ========================
@@ -4083,6 +4108,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism · 2026-07-15 2B-lower SS v7a</div>
+<div class="build-stamp">prism · 2026-07-17 2B-upper SS v7a</div>
 </body>
 </html>
