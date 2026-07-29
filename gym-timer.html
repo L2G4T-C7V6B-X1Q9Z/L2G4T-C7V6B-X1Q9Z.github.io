@@ -1178,103 +1178,130 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // ======================= CONFIG START =======================
 // The daily flip splices ONLY the fenced block (dayType + build note +
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
-const dayType = "Lower";
+const dayType = "Upper";
 
-// LOWER session (MONDAY 7/27 -- the first genuinely rested + fed lift since the sub-I ended, and also day 1 of the hyperbarics block: 7:30 AM table rounds, so this is an after-work lift with jar B (~1,450 cal / 75P) in him since the morning. That is the whole point -- six straight contaminated reads came from lifting on an empty tank after a 6:30 AM report.) PHASE 2B, 14 sets. *** RDL IS OUT AND THE LYING LEG CURL IS IN -- Soren's call 7/26, the pending decision is now CLOSED. *** The RDL burned 35% of the 7/23 session for 4 sets at 30 lb and its load was capped by his LUMBAR, not his hamstrings (35 = back pain 7/7, 40 = lumbar 7/1), so it could never progress by weight; the only lever left was more sets, which would have pushed it past 40% of the session. The leg curl takes its array slot and becomes the only direct hamstring work. Set count drops 16 -> 14 (RDL was 4 sets, the curl is 2). ALL FOUR RETURNING WEIGHTS HOLD from the 7/21 Lower -- the last genuinely clean Lower read (real effort gradation, 17,540 lb, zero pain). The 7/23 Lower in between was CONTAMINATED (16 of 16 sets MAX, 15,645 lb, -10.8% on identical set count, nothing eaten all day before it) and NOTHING rebases off it. (1) LEG PRESS 250 (bo 235) -- HOLD. (2) CALF 145 (bo 130) -- HOLD; S1 = 13 at 145 has now tied his best twice running. (3) LYING LEG CURL 40 x2 -- *** DIAGNOSTIC RETRY, NOT A PROGRESSION. *** Pulled originally after 4+ medial-thigh nerve recurrences; greenlit 7/25 for this session only. Run it FRESH, 2 sets, HARD STOP on ANY medial-thigh sensation (not pain -- ANY sensation), then move on. noDropAdvice, NO backoff, NO trigger: a short set here means nerve, not load, and nothing about this exercise progresses until a clean read exists. (4) LEG EXTENSION 70 (bo 60) -- HOLD, needs 3x12 to climb; S1 = 10 on 7/23 was his best recent LE opening set. Now runs STRAIGHT (the RDL that paired with it is gone -- same unpairing precedent as 7/9). (5) FACE PULLS 40 (bo 35) -- HOLD, chase 18/18 before re-earning 45. SS map: LP(A1)<->Calf(A2) same machine is the ONLY pair now; leg curl, leg extension and face pulls all run straight. 14 sets. setNotes = FORM/LOAD cues ONLY, never echo prior reps, never name a weight the auto-drop could contradict. AUTO-DROP v5 + sticky. True-failure RIR anchor is UPPER-ONLY, never Lower -- still deferred, lands on Tue 7/28 if that read is clean. Voice = ElevenLabs static bank, workout-agnostic, no regen; ex-leg-curl.mp3 EXISTS in both audio/ folders, so the swap ships with NO audio gap -- and the old missing ex-db-rdl clip leaves the program with the RDL.
+// UPPER session (next in rotation after the Tue 7/28 Lower). PHASE 2B VOLUME BLOCK, 21 sets. ALL 6 WEIGHTS HOLD -- carried unchanged from the 7/24 Upper. *** THE 7/28 LOWER WAS CONTAMINATED READ #7 (12 of 12 rated sets MAX) BUT THE CAUSE CHANGED: HE WAS FED. *** 1,877 cal in before the bar, vs literal zero on 7/23. The fuel showed up exactly where fuel shows up -- LEG PRESS S1 = 10 reps at 250, his best first set at that weight in the whole window (7/21 clean read was 9, 7/23 was 8, 7/18 was 8), with S2 = 9 also beating the clean session. Then it faded hard (S3 = 5) and calf, leg extension and the new leg curl all came in under their recent marks. Strong opener + sharp fade + universal MAX on a FED athlete = SLEEP, not fuel: he worked a full hyperbarics day 7:15-5, slept ~3 h, and lifted at 9 PM. NOTHING REBASES off it. (1) CHEST PRESS RUNS SLOT 1 -- settled. Take the machine when you walk in. (2) TRICEPS = Cable Pushdown 25; if the cable station is taken, FRENCH PRESS 40 is the proven fallback (zero cuff pain). (3) INCLINE stays the MACHINE at 70 (bo 60), staged at 2 sets until clean 12s. (4) FACE PULLS WERE LOGGED AT 0 REPS / 6 SECONDS ON 7/28 -- unexplained, cause not yet established. It is a Lower-day exercise so it does not touch this build, but if the reason was equipment or a timer bug it could recur here. ** TRUE-FAILURE RIR ANCHOR: STILL DEFERRED. ** It is Upper-only, so this session is eligible on paper, but the gate is REST and rest has still not happened -- seven straight near-universal-MAX reads ARE the evidence his effort perception is fatigue-saturated, which is the exact state in which the anchor teaches nothing. Run it on the first Upper that follows a real night of sleep, not a nap. The condition is rest, not a date. AUTO-DROP v5 + sticky (Soren 7/5): reactive = below floor at HARD/MAX, or AT floor while MAXED; predictive = three MAX sets, two declining steps, projecting under the floor (13->11->9 fires; 11->9 never). Once a drop materializes, every later set stays at the backoff. MOD/LIGHT never drop. setNotes = FORM/LOAD cues ONLY, never echo prior reps, never name a weight the auto-drop could contradict. Voice = ElevenLabs static bank, workout-agnostic, no regen.
 // SUPERSETS (standing default, Soren 7/6): ss:"A1" = group A slot 1 (ANCHOR chain
-// -- slot-1 exercises run in array order);
+// -- slot-1 exercises run in array order, e.g. flat press then incline);
 // ss:"A2" = the FILLER whose sets fire immediately after each anchor set.
 // Anchor->filler = instant GO (the walk is the transition); filler->anchor =
 // the anchor's full configured rest (150s compounds -- Soren's pick 7/6).
 // `short:` = the board tag / GO-label name. One-tap "unlink" on the board
 // dissolves a group mid-session (machine taken) back to straight sets.
-// FLIP-TIME RULE: Lower pairs -- leg press(A1) vs LP calf raises(A2, same
-// machine). RDL was DROPPED 7/26, which unpairs leg extension: leg curl, leg
-// extension and face pulls now all run STRAIGHT.
+// FLIP-TIME RULE: every future build tags its pairs -- Upper: press+incline(A1)
+// vs row(A2), pushdown+curls(B1) vs lat raise(B2); Lower: leg press(A1) vs
+// LP calf raises(A2, same machine). RDL/LE/FP unpaired.
 const workout = [
   {
-    name: "Leg Press",
+    name: "Chest Press Machine",
     ss: "A1",
-    short: "LEG PRESS",
+    short: "PRESS",
     sets: 4,
     reps: "8-12",
-    weight: "250 lbs",
-    backoff: "235 lbs",
+    weight: "120 lbs",
+    backoff: "100 lbs",
     rest: 150,
-    note: "Hold 250. Last clean session (7/9) was a rep PR and a four-set volume PR; recent Lowers cratered on fatigue, not strength. Full depth, controlled descent, drive through the heels, don't slam the knees straight. Backoff is 235.",
+    note: "Hold 120 -- and run it FIRST, while you are fresh. Slot 1 is settled: it delivered your best-ever opening set at this load last session. This is the priority lift, take the machine when you walk in. Full ROM, controlled descent to the chest, drive without slamming the elbows locked. Backoff is 100.",
     setNotes: [
-      "S1: full depth, controlled descent, drive through the heels.",
-      "S2: same depth and tempo, no shortening the range.",
-      "S3: knees track over the toes, no bouncing out of the bottom.",
-      "S4: last set, empty the tank, full depth, controlled negative."
+      "S1: fresh -- full ROM, controlled descent to the chest.",
+      "S2: full 2.5-min rest first, same depth and tempo.",
+      "S3: drive through the mid-chest, no half reps.",
+      "S4: last set, empty the tank, controlled negative."
     ],
     trigger: [12, 12, 12, 12],
-    triggerWeight: "265 lbs"
+    triggerWeight: "130 lbs"
   },
   {
-    name: "Leg Press Calf Raises",
+    name: "Cable Rope Row",
     ss: "A2",
-    short: "CALVES",
-    sets: 3,
-    reps: "12-15",
-    weight: "145 lbs",
-    backoff: "130 lbs",
-    rest: 90,
-    note: "Hold 145. Superset with the presses -- you're already ON the machine: press set done, slide the feet low and go. Full stretch at the bottom, hard squeeze and pause at the top, no bouncing. Backoff is 130.",
-    setNotes: [
-      "S1: full stretch at the bottom, big squeeze at the top.",
-      "S2: pause the top contraction, slow controlled negative.",
-      "S3: last calf set, full range, no bouncing the weight up."
-    ],
-    trigger: [15, 15, 15],
-    triggerWeight: "160 lbs"
-  },
-  {
-    name: "Lying Leg Curl",
-    short: "LEG CURL",
-    sets: 2,
+    short: "ROW",
+    sets: 5,
     reps: "8-12",
-    weight: "40 lbs",
-    rest: 90,
-    noDropAdvice: true,
-    note: "RETRY -- this is a DIAGNOSTIC, not a progression. It was pulled from the program after 4+ medial-thigh nerve recurrences; the question tonight is only whether the nerve tolerates it now. 2 sets, that's it, and you're running it fresh on purpose. Pad low on the calves, hips flat on the bench, no jerking the weight up, slow controlled negative. HARD STOP on ANY medial-thigh sensation -- not pain, ANY sensation. Rack it and move to the leg extension, no negotiating. No weight-drop prompts here; a short set means nerve, not load.",
+    weight: "120 lbs",
+    backoff: "100 lbs",
+    rest: 150,
+    note: "Hold 120 -- 5 SETS (Phase 2B volume block). Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return -- no jerking with the low back.",
     setNotes: [
-      "S1: hips flat, pad low on the calves, slow controlled negative. ANY medial-thigh sensation = rack it and move on.",
-      "S2: last set. Same control, no jerking. Stop instantly on any medial-thigh sensation."
-    ]
+      "S1: chest tall, pull to the waist, squeeze the blades.",
+      "S2: full rest, elbows close, no torso heave.",
+      "S3: controlled return, full stretch at the front.",
+      "S4: drive the elbows back, clean reps.",
+      "S5: last set -- the Phase 2B set. Empty it, no torso heave."
+    ],
+    trigger: [12, 12, 12, 12, 12],
+    triggerWeight: "130 lbs"
   },
   {
-    name: "Leg Extension",
-    short: "LEG EXT",
-    sets: 3,
+    name: "Incline Press",
+    ss: "A1",
+    short: "INCLINE",
+    sets: 2,
     reps: "8-12",
     weight: "70 lbs",
     backoff: "60 lbs",
-    rest: 90,
-    note: "Holding 70 -- last clean session was 11/9/7, need all three sets at the top of the range before it climbs. Running STRAIGHT now, not supersetted: the RDL that used to pair with it is gone. Squeeze the quads hard at the top, control the negative, no swinging or kicking the weight up. Backoff is 60.",
+    rest: 120,
+    note: "Incline press MACHINE at 70. Seat at the incline setting, lower to the UPPER chest, elbows ~45 deg, press up and slightly back, controlled negative. Still staged at 2 sets until clean 12s. STOP on ANY rotator-cuff pain -- French-press history, nothing gets pushed through.",
     setNotes: [
-      "S1: full extension, hard quad squeeze at the top.",
-      "S2: control the negative, no kicking or swinging.",
-      "S3: last set, pause the top contraction, clean reps."
+      "S1: machine incline -- lower to the upper chest, elbows ~45, controlled.",
+      "S2: same groove, controlled negative. Stop on any cuff signal."
     ],
-    trigger: [12, 12, 12],
+    trigger: [12, 12],
     triggerWeight: "80 lbs"
   },
   {
-    name: "Cable Face Pulls",
-    short: "FACE PULL",
-    sets: 2,
-    reps: "15-20",
-    weight: "40 lbs",
-    backoff: "35 lbs",
+    name: "Cable Tricep Pushdown",
+    ss: "B1",
+    short: "PUSHDOWN",
+    sets: 3,
+    reps: "12-15",
+    weight: "25 lbs",
+    backoff: "20 lbs",
     rest: 90,
-    note: "Reverted to 40 -- 45 was too heavy (12 reps, under the 15-20 range). Chase 18/18 clean at 40 before re-earning 45. Groover: shoulder health, not to failure. Pull to the forehead, elbows high, squeeze the rear delts, slow controlled return, at or below parallel. Backoff is 35.",
+    note: "Hold 25. Elbows pinned to the sides, full lockout at the bottom, control the negative -- no leaning into it or flaring the elbows. If the cable station is taken, FRENCH PRESS at 40 is the proven fallback (zero cuff pain).",
     setNotes: [
-      "S1: elbows high, pull to the forehead, squeeze the rear delts.",
-      "S2: last set, slow controlled return, no heaving the weight."
+      "S1: elbows pinned, full lockout at the bottom.",
+      "S2: control the negative, no body english.",
+      "S3: last set, squeeze the lockout, clean reps."
     ],
-    trigger: [18, 18],
-    triggerWeight: "45 lbs"
+    trigger: [15, 15, 15],
+    triggerWeight: "30 lbs"
+  },
+  {
+    name: "DB Lateral Raise",
+    ss: "B2",
+    short: "LAT RAISE",
+    sets: 4,
+    reps: "12-15",
+    weight: "15 lbs",
+    backoff: "10 lbs",
+    rest: 90,
+    note: "Strict 15s, range 12-15, 4 SETS (Phase 2B). Lead with the elbows, raise to parallel -- no higher (L-shoulder clicks above parallel), no swinging or momentum.",
+    setNotes: [
+      "S1: strict, lead with the elbows, raise to parallel.",
+      "S2: no swing, slow controlled negative.",
+      "S3: keep it strict, stop at parallel.",
+      "S4: last set -- the Phase 2B set. Strict to the end."
+    ],
+    trigger: [15, 15, 15, 15],
+    triggerWeight: "17.5 lbs"
+  },
+  {
+    name: "DB Curls (supinated)",
+    ss: "B1",
+    short: "CURLS",
+    sets: 3,
+    reps: "8-12",
+    weight: "25 lbs",
+    backoff: "20 lbs",
+    rest: 90,
+    note: "Hold 25, SUPINATED grip only (hammer twangs the nerve). Supinated is nerve-safe, so you CAN push these to failure -- the only stop is an actual nerve twang, not a rep count. Controlled, no swinging.",
+    setNotes: [
+      "S1: supinated grip, controlled, no swing.",
+      "S2: squeeze the top, slow negative.",
+      "S3: last set, push it -- failure is fine supinated, stop only on a nerve twang."
+    ],
+    trigger: [12, 12, 12],
+    triggerWeight: "30 lbs"
   },
 ];
 // ======================== CONFIG END ========================
@@ -4081,6 +4108,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism · 2026-07-26 2B-lower SS v7a</div>
+<div class="build-stamp">prism · 2026-07-28 2B-upper SS v7a</div>
 </body>
 </html>
