@@ -1178,130 +1178,121 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // ======================= CONFIG START =======================
 // The daily flip splices ONLY the fenced block (dayType + build note +
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
-const dayType = "Upper";
+const dayType = "Lower";
 
-// UPPER session (next in rotation after the Tue 7/28 Lower). PHASE 2B VOLUME BLOCK, 21 sets. ALL 6 WEIGHTS HOLD -- carried unchanged from the 7/24 Upper. *** THE 7/28 LOWER WAS CONTAMINATED READ #7 (12 of 12 rated sets MAX) BUT THE CAUSE CHANGED: HE WAS FED. *** 1,877 cal in before the bar, vs literal zero on 7/23. The fuel showed up exactly where fuel shows up -- LEG PRESS S1 = 10 reps at 250, his best first set at that weight in the whole window (7/21 clean read was 9, 7/23 was 8, 7/18 was 8), with S2 = 9 also beating the clean session. Then it faded hard (S3 = 5) and calf, leg extension and the new leg curl all came in under their recent marks. Strong opener + sharp fade + universal MAX on a FED athlete = SLEEP, not fuel: he worked a full hyperbarics day 7:15-5, slept ~3 h, and lifted at 9 PM. NOTHING REBASES off it. (1) CHEST PRESS RUNS SLOT 1 -- settled. Take the machine when you walk in. (2) TRICEPS = Cable Pushdown 25; if the cable station is taken, FRENCH PRESS 40 is the proven fallback (zero cuff pain). (3) INCLINE stays the MACHINE at 70 (bo 60), staged at 2 sets until clean 12s. (4) FACE PULLS WERE LOGGED AT 0 REPS / 6 SECONDS ON 7/28 -- unexplained, cause not yet established. It is a Lower-day exercise so it does not touch this build, but if the reason was equipment or a timer bug it could recur here. ** TRUE-FAILURE RIR ANCHOR: STILL DEFERRED. ** It is Upper-only, so this session is eligible on paper, but the gate is REST and rest has still not happened -- seven straight near-universal-MAX reads ARE the evidence his effort perception is fatigue-saturated, which is the exact state in which the anchor teaches nothing. Run it on the first Upper that follows a real night of sleep, not a nap. The condition is rest, not a date. AUTO-DROP v5 + sticky (Soren 7/5): reactive = below floor at HARD/MAX, or AT floor while MAXED; predictive = three MAX sets, two declining steps, projecting under the floor (13->11->9 fires; 11->9 never). Once a drop materializes, every later set stays at the backoff. MOD/LIGHT never drop. setNotes = FORM/LOAD cues ONLY, never echo prior reps, never name a weight the auto-drop could contradict. Voice = ElevenLabs static bank, workout-agnostic, no regen.
-// SUPERSETS (standing default, Soren 7/6): ss:"A1" = group A slot 1 (ANCHOR chain
-// -- slot-1 exercises run in array order, e.g. flat press then incline);
-// ss:"A2" = the FILLER whose sets fire immediately after each anchor set.
-// Anchor->filler = instant GO (the walk is the transition); filler->anchor =
-// the anchor's full configured rest (150s compounds -- Soren's pick 7/6).
-// `short:` = the board tag / GO-label name. One-tap "unlink" on the board
-// dissolves a group mid-session (machine taken) back to straight sets.
-// FLIP-TIME RULE: every future build tags its pairs -- Upper: press+incline(A1)
-// vs row(A2), pushdown+curls(B1) vs lat raise(B2); Lower: leg press(A1) vs
-// LP calf raises(A2, same machine). RDL/LE/FP unpaired.
+// *** DELOAD SESSION -- 7 SETS, NOT 14. HALF VOLUME, SAME WEIGHTS. ***
+// Triggered 2026-07-29 on the program's own documented rule, not a whim. The
+// Deload Tracker still read "Last deload: N/A, weeks since: ~0.5 (started
+// Apr 7)" on 2026-07-29 -- that is ~16 WEEKS with none, against a 6-8 week
+// guideline, and every named fatigue symptom is present: stalled lifts across
+// multiple exercises (8 straight contaminated reads, nothing advanced in ~3
+// weeks), poor sleep, and low motivation ("not making progress", 7/23).
+// THE 7/29 UPPER SETTLED IT: 21 of 21 sets rated MAX and the auto-drop fired
+// on ALL SIX exercises -- the first time that has happened on an Upper.
+// Tonnage was NOT collapsing (11,315 lb, 3rd of the last six Uppers); the six
+// 21-set Uppers since 7/14 all landed 10,760-12,260 with no trend. That is a
+// PLATEAU, not weakness, and it has been one for 15 days.
+// WHY IT MATTERS: eight sessions of "hold and wait for a clean read" was the
+// mistake. Holding is right for ONE bad session; after eight it stops being
+// autoregulation and becomes drift, because the rested read being waited for
+// cannot arrive while accumulated fatigue is never discharged. The deload is
+// how you MANUFACTURE the clean read.
+// (1) EVERY `trigger` IS DELIBERATELY STRIPPED from this build. A deload must
+//     not be able to fire an advance -- rebasing off an intentionally easy
+//     session is the same error as rebasing off a contaminated one.
+// (2) BACKOFFS ARE KEPT. If a weight genuinely cannot be held, dropping is
+//     still correct. Nothing rebases off this session in either direction.
+// (3) EFFORT IS THE OTHER HALF OF THE DELOAD. Cutting sets while still going
+//     to failure is not a deload. Every setNote says stop ~3-4 reps shy. The
+//     LOAD stays to preserve the strength signal; FATIGUE is what is shed.
+// (4) NEW THIS BUILD: an ungraded set now defaults to MAX (see DEFAULT_DIFF).
+//     Previously a set he forgot to grade silently disabled the auto-drop.
+// (5) LYING LEG CURL cleared its nerve diagnostic 7/28 (zero medial-thigh
+//     sensation at 40x2) and holds a permanent slot. Still 40, 1 set here.
+//     The hard stop on ANY medial-thigh sensation is permanent, not a deload
+//     rule, and does not relax when the session gets easier.
+// (6) FACE PULLS moved EARLIER. The cable station was taken on 7/28 (0 reps,
+//     6 seconds) and this sat LAST in the array -- the worst slot for a
+//     contested shared machine, since a busy cable at minute 5 is still busy
+//     at minute 24. Not a timer bug; a scheduling one. Fixed here.
+// AUTO-DROP v5 + sticky (Soren 7/5): reactive = below floor at HARD/MAX, or AT
+// floor while MAXED; predictive = three MAX sets, two declining steps,
+// projecting under the floor (13->11->9 fires; 11->9 never). Once a drop
+// materializes, every later set stays at the backoff. MOD/LIGHT never drop.
+// setNotes = FORM/LOAD cues ONLY, never echo prior reps, never name a weight
+// the auto-drop could contradict. Voice = ElevenLabs static bank, no regen.
+// SUPERSETS (standing default, Soren 7/6): ss:"A1" = anchor, ss:"A2" = the
+// filler firing after each anchor set. Lower pair: leg press(A1) vs LP calf
+// raises(A2, same machine). Face pulls, leg curl, leg extension run STRAIGHT.
 const workout = [
   {
-    name: "Chest Press Machine",
+    name: "Leg Press",
     ss: "A1",
-    short: "PRESS",
-    sets: 4,
-    reps: "8-12",
-    weight: "120 lbs",
-    backoff: "100 lbs",
-    rest: 150,
-    note: "Hold 120 -- and run it FIRST, while you are fresh. Slot 1 is settled: it delivered your best-ever opening set at this load last session. This is the priority lift, take the machine when you walk in. Full ROM, controlled descent to the chest, drive without slamming the elbows locked. Backoff is 100.",
-    setNotes: [
-      "S1: fresh -- full ROM, controlled descent to the chest.",
-      "S2: full 2.5-min rest first, same depth and tempo.",
-      "S3: drive through the mid-chest, no half reps.",
-      "S4: last set, empty the tank, controlled negative."
-    ],
-    trigger: [12, 12, 12, 12],
-    triggerWeight: "130 lbs"
-  },
-  {
-    name: "Cable Rope Row",
-    ss: "A2",
-    short: "ROW",
-    sets: 5,
-    reps: "8-12",
-    weight: "120 lbs",
-    backoff: "100 lbs",
-    rest: 150,
-    note: "Hold 120 -- 5 SETS (Phase 2B volume block). Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return -- no jerking with the low back.",
-    setNotes: [
-      "S1: chest tall, pull to the waist, squeeze the blades.",
-      "S2: full rest, elbows close, no torso heave.",
-      "S3: controlled return, full stretch at the front.",
-      "S4: drive the elbows back, clean reps.",
-      "S5: last set -- the Phase 2B set. Empty it, no torso heave."
-    ],
-    trigger: [12, 12, 12, 12, 12],
-    triggerWeight: "130 lbs"
-  },
-  {
-    name: "Incline Press",
-    ss: "A1",
-    short: "INCLINE",
+    short: "LEG PRESS",
     sets: 2,
+    reps: "8-12",
+    weight: "250 lbs",
+    backoff: "235 lbs",
+    rest: 150,
+    note: "DELOAD -- 2 sets, not 4. Same 250. Nothing to prove tonight; the point is to move the weight and leave. Stop 3-4 reps short of failure on BOTH sets. Full depth, controlled descent, drive through the heels, do not slam the knees straight. Backoff is 235.",
+    setNotes: [
+      "S1: deload -- full depth, controlled, stop 3-4 reps shy of failure.",
+      "S2: last press set. Same depth and tempo. Leave reps in the tank."
+    ]
+  },
+  {
+    name: "Leg Press Calf Raises",
+    ss: "A2",
+    short: "CALVES",
+    sets: 2,
+    reps: "12-15",
+    weight: "145 lbs",
+    backoff: "130 lbs",
+    rest: 90,
+    note: "DELOAD -- 2 sets at 145. Superset with the presses, you are already ON the machine: press set done, slide the feet low and go. Full stretch at the bottom, squeeze and pause at the top, no bouncing. Stop well short of failure.",
+    setNotes: [
+      "S1: full stretch, hard squeeze at the top, stop short of failure.",
+      "S2: last calf set. Controlled negative, no bouncing, leave reps."
+    ]
+  },
+  {
+    name: "Cable Face Pulls",
+    short: "FACE PULL",
+    sets: 1,
+    reps: "15-20",
+    weight: "40 lbs",
+    backoff: "35 lbs",
+    rest: 90,
+    note: "MOVED EARLIER on purpose -- the cable station was taken on 7/28 and this sat last in the array, the worst slot for a contested shared machine. Take it while it is free. 1 set on the deload. Groover: shoulder health, never to failure. Pull to the forehead, elbows high, squeeze the rear delts, slow controlled return, at or below parallel.",
+    setNotes: [
+      "S1: only set. Elbows high, pull to the forehead, slow controlled return."
+    ]
+  },
+  {
+    name: "Lying Leg Curl",
+    short: "LEG CURL",
+    sets: 1,
+    reps: "8-12",
+    weight: "40 lbs",
+    rest: 90,
+    noDropAdvice: true,
+    note: "CLEARED 7/28 -- zero medial-thigh sensation at 40x2, so it has a permanent slot as the only direct hamstring work. 1 set on the deload. The HARD STOP is permanent and is NOT a deload rule: ANY medial-thigh sensation -- not pain, ANY sensation -- rack it and move on, no negotiating. Pad low on the calves, hips flat on the bench, no jerking the weight up, slow controlled negative. No weight-drop prompts here; a short set means nerve, not load.",
+    setNotes: [
+      "S1: only set. Hips flat, pad low, slow negative. ANY medial-thigh sensation = rack it and move on."
+    ]
+  },
+  {
+    name: "Leg Extension",
+    short: "LEG EXT",
+    sets: 1,
     reps: "8-12",
     weight: "70 lbs",
     backoff: "60 lbs",
-    rest: 120,
-    note: "Incline press MACHINE at 70. Seat at the incline setting, lower to the UPPER chest, elbows ~45 deg, press up and slightly back, controlled negative. Still staged at 2 sets until clean 12s. STOP on ANY rotator-cuff pain -- French-press history, nothing gets pushed through.",
-    setNotes: [
-      "S1: machine incline -- lower to the upper chest, elbows ~45, controlled.",
-      "S2: same groove, controlled negative. Stop on any cuff signal."
-    ],
-    trigger: [12, 12],
-    triggerWeight: "80 lbs"
-  },
-  {
-    name: "Cable Tricep Pushdown",
-    ss: "B1",
-    short: "PUSHDOWN",
-    sets: 3,
-    reps: "12-15",
-    weight: "25 lbs",
-    backoff: "20 lbs",
     rest: 90,
-    note: "Hold 25. Elbows pinned to the sides, full lockout at the bottom, control the negative -- no leaning into it or flaring the elbows. If the cable station is taken, FRENCH PRESS at 40 is the proven fallback (zero cuff pain).",
+    note: "DELOAD -- 1 set at 70, and it is the last thing you do. Squeeze the quads hard at the top, control the negative, no swinging or kicking the weight up. Stop 3-4 reps shy. Backoff is 60.",
     setNotes: [
-      "S1: elbows pinned, full lockout at the bottom.",
-      "S2: control the negative, no body english.",
-      "S3: last set, squeeze the lockout, clean reps."
-    ],
-    trigger: [15, 15, 15],
-    triggerWeight: "30 lbs"
-  },
-  {
-    name: "DB Lateral Raise",
-    ss: "B2",
-    short: "LAT RAISE",
-    sets: 4,
-    reps: "12-15",
-    weight: "15 lbs",
-    backoff: "10 lbs",
-    rest: 90,
-    note: "Strict 15s, range 12-15, 4 SETS (Phase 2B). Lead with the elbows, raise to parallel -- no higher (L-shoulder clicks above parallel), no swinging or momentum.",
-    setNotes: [
-      "S1: strict, lead with the elbows, raise to parallel.",
-      "S2: no swing, slow controlled negative.",
-      "S3: keep it strict, stop at parallel.",
-      "S4: last set -- the Phase 2B set. Strict to the end."
-    ],
-    trigger: [15, 15, 15, 15],
-    triggerWeight: "17.5 lbs"
-  },
-  {
-    name: "DB Curls (supinated)",
-    ss: "B1",
-    short: "CURLS",
-    sets: 3,
-    reps: "8-12",
-    weight: "25 lbs",
-    backoff: "20 lbs",
-    rest: 90,
-    note: "Hold 25, SUPINATED grip only (hammer twangs the nerve). Supinated is nerve-safe, so you CAN push these to failure -- the only stop is an actual nerve twang, not a rep count. Controlled, no swinging.",
-    setNotes: [
-      "S1: supinated grip, controlled, no swing.",
-      "S2: squeeze the top, slow negative.",
-      "S3: last set, push it -- failure is fine supinated, stop only on a nerve twang."
-    ],
-    trigger: [12, 12, 12],
-    triggerWeight: "30 lbs"
+      "S1: only set. Full extension, hard squeeze, controlled negative, leave reps in the tank."
+    ]
   },
 ];
 // ======================== CONFIG END ========================
@@ -2899,7 +2890,16 @@ function setDone() {
   const draftReps = repCount;
   const draftNote = elNotesInput.value || "";
   const selectedDiffBtn = elDifficultyRow.querySelector('.diff-btn.selected');
-  const draftDiff = selectedDiffBtn ? Number(selectedDiffBtn.dataset.diff) : null;
+  // No difficulty tapped => MAX (5). Soren's call 2026-07-29. An UNGRADED set was
+  // not neutral -- it silently DISABLED the load logic: the auto-drop predicate
+  // reads `+last.difficulty || 0` (never HARD/MAX, so it cannot fire) and
+  // computeSetNote's history walk BREAKS on `difficulty == null`. So a set he
+  // simply forgot to grade turned off the very mechanism meant to protect him.
+  // Defaulting to MAX fails SAFE: it assumes the set was maximal, so the drop
+  // fires rather than leaving him grinding a load he can no longer hold.
+  // The grade stays fully editable after the fact via the set pill.
+  const DEFAULT_DIFF = 5;
+  const draftDiff = selectedDiffBtn ? Number(selectedDiffBtn.dataset.diff) : DEFAULT_DIFF;
   captureLog();
 
   // Dedup: re-logging an already-logged (exercise,set) — e.g. after browsing
@@ -4108,6 +4108,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism · 2026-07-28 2B-upper SS v7a</div>
+<div class="build-stamp">prism &middot; 2026-07-30 2B-lower DELOAD SS v7a</div>
 </body>
 </html>
