@@ -1178,120 +1178,136 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // ======================= CONFIG START =======================
 // The daily flip splices ONLY the fenced block (dayType + build note +
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
-const dayType = "Lower";
+const dayType = "Upper";
 
-// *** DELOAD SESSION -- 7 SETS, NOT 14. HALF VOLUME, SAME WEIGHTS. ***
-// Triggered 2026-07-29 on the program's own documented rule, not a whim. The
-// Deload Tracker still read "Last deload: N/A, weeks since: ~0.5 (started
-// Apr 7)" on 2026-07-29 -- that is ~16 WEEKS with none, against a 6-8 week
-// guideline, and every named fatigue symptom is present: stalled lifts across
-// multiple exercises (8 straight contaminated reads, nothing advanced in ~3
-// weeks), poor sleep, and low motivation ("not making progress", 7/23).
-// THE 7/29 UPPER SETTLED IT: 21 of 21 sets rated MAX and the auto-drop fired
-// on ALL SIX exercises -- the first time that has happened on an Upper.
-// Tonnage was NOT collapsing (11,315 lb, 3rd of the last six Uppers); the six
-// 21-set Uppers since 7/14 all landed 10,760-12,260 with no trend. That is a
-// PLATEAU, not weakness, and it has been one for 15 days.
-// WHY IT MATTERS: eight sessions of "hold and wait for a clean read" was the
-// mistake. Holding is right for ONE bad session; after eight it stops being
-// autoregulation and becomes drift, because the rested read being waited for
-// cannot arrive while accumulated fatigue is never discharged. The deload is
-// how you MANUFACTURE the clean read.
-// (1) EVERY `trigger` IS DELIBERATELY STRIPPED from this build. A deload must
-//     not be able to fire an advance -- rebasing off an intentionally easy
-//     session is the same error as rebasing off a contaminated one.
+// *** DELOAD UPPER -- 11 SETS, NOT 21. HALF VOLUME, SAME WEIGHTS. ***
+// Companion to the 2026-07-30 Lower deload. Same rationale: ~16 weeks of
+// training with zero deloads, 8 consecutive contaminated reads, nothing
+// advanced in ~3 weeks. Set counts halved per exercise; every weight held.
+//
+// WHY THIS BUILD EXISTS EVEN THOUGH THE 7/30 LOWER ABORTED:
+// The 7/30 Lower stopped at 8m18s on NEW left knee pain (sharp, infra-medial,
+// medial to the patellar tendon, on the loaded descent). That is a knee
+// problem, not a fatigue problem, and it PARKS the Lower side entirely --
+// no loaded deep knee flexion until it is evaluated. UPPER LOADS THE KNEE
+// NOWHERE, so the Upper side continues untouched. The rotation advanced
+// (Lower was performed, however briefly), so next is Upper.
+//
+// (1) EVERY `trigger` IS DELIBERATELY STRIPPED. A deload must not be able to
+//     fire an advance -- rebasing off an intentionally easy session is the
+//     same error as rebasing off a contaminated one.
 // (2) BACKOFFS ARE KEPT. If a weight genuinely cannot be held, dropping is
 //     still correct. Nothing rebases off this session in either direction.
-// (3) EFFORT IS THE OTHER HALF OF THE DELOAD. Cutting sets while still going
-//     to failure is not a deload. Every setNote says stop ~3-4 reps shy. The
-//     LOAD stays to preserve the strength signal; FATIGUE is what is shed.
-// (4) NEW THIS BUILD: an ungraded set now defaults to MAX (see DEFAULT_DIFF).
-//     Previously a set he forgot to grade silently disabled the auto-drop.
-// (5) LYING LEG CURL cleared its nerve diagnostic 7/28 (zero medial-thigh
-//     sensation at 40x2) and holds a permanent slot. Still 40, 1 set here.
-//     The hard stop on ANY medial-thigh sensation is permanent, not a deload
-//     rule, and does not relax when the session gets easier.
-// (6) FACE PULLS moved EARLIER. The cable station was taken on 7/28 (0 reps,
-//     6 seconds) and this sat LAST in the array -- the worst slot for a
-//     contested shared machine, since a busy cable at minute 5 is still busy
-//     at minute 24. Not a timer bug; a scheduling one. Fixed here.
+// (3) EFFORT IS THE OTHER HALF OF THE DELOAD. Every setNote says stop ~3-4
+//     reps shy. The LOAD stays to preserve the strength signal; FATIGUE is
+//     what is being shed.
+// (4) TRUE-FAILURE RIR ANCHOR: STILL DEFERRED. It is Upper-only and therefore
+//     eligible on paper, but the gate is a RESTED read and a deload session is
+//     by construction not a maximal one. Run it on the first NORMAL-volume
+//     Upper after a real night of sleep, on a MACHINE COMPOUND (chest press or
+//     row), never on curls.
+// (5) CHEST PRESS RUNS SLOT 1. A crowded gym bumped it to 4th on 7/10 and it
+//     ran pre-fatigued. Protect the first slot.
+// (6) If the cable station is taken, French Press 40 is the proven pushdown
+//     fallback (7/10: 16/11/10, zero cuff pain).
+//
 // AUTO-DROP v5 + sticky (Soren 7/5): reactive = below floor at HARD/MAX, or AT
 // floor while MAXED; predictive = three MAX sets, two declining steps,
-// projecting under the floor (13->11->9 fires; 11->9 never). Once a drop
-// materializes, every later set stays at the backoff. MOD/LIGHT never drop.
+// projecting under the floor. Once a drop materializes, every later set stays
+// at the backoff. MOD/LIGHT never drop. An UNGRADED set now defaults to MAX
+// (DEFAULT_DIFF, shipped 7/29) -- it fails safe, but it also means drops fire
+// more readily on sets he forgets to grade.
 // setNotes = FORM/LOAD cues ONLY, never echo prior reps, never name a weight
 // the auto-drop could contradict. Voice = ElevenLabs static bank, no regen.
-// SUPERSETS (standing default, Soren 7/6): ss:"A1" = anchor, ss:"A2" = the
-// filler firing after each anchor set. Lower pair: leg press(A1) vs LP calf
-// raises(A2, same machine). Face pulls, leg curl, leg extension run STRAIGHT.
+// SUPERSETS: CP + Incline (A1) <-> Row (A2); Pushdown + Curls (B1) <-> LR (B2).
 const workout = [
   {
-    name: "Leg Press",
+    name: "Chest Press Machine",
     ss: "A1",
-    short: "LEG PRESS",
+    short: "PRESS",
     sets: 2,
     reps: "8-12",
-    weight: "250 lbs",
-    backoff: "235 lbs",
+    weight: "120 lbs",
+    backoff: "100 lbs",
     rest: 150,
-    note: "DELOAD -- 2 sets, not 4. Same 250. Nothing to prove tonight; the point is to move the weight and leave. Stop 3-4 reps short of failure on BOTH sets. Full depth, controlled descent, drive through the heels, do not slam the knees straight. Backoff is 235.",
+    note: "DELOAD -- 2 sets, not 4. Same 120. Take this machine the moment you walk in; it runs first for a reason. Stop 3-4 reps short of failure on BOTH sets. Controlled tempo, full range, no bouncing off the chest. Backoff is 100.",
     setNotes: [
-      "S1: deload -- full depth, controlled, stop 3-4 reps shy of failure.",
-      "S2: last press set. Same depth and tempo. Leave reps in the tank."
+      "S1: deload -- full range, controlled, stop 3-4 reps shy of failure.",
+      "S2: last press set. Same tempo. Leave reps in the tank."
     ]
   },
   {
-    name: "Leg Press Calf Raises",
+    name: "Cable Rope Row",
     ss: "A2",
-    short: "CALVES",
+    short: "ROW",
     sets: 2,
-    reps: "12-15",
-    weight: "145 lbs",
-    backoff: "130 lbs",
-    rest: 90,
-    note: "DELOAD -- 2 sets at 145. Superset with the presses, you are already ON the machine: press set done, slide the feet low and go. Full stretch at the bottom, squeeze and pause at the top, no bouncing. Stop well short of failure.",
-    setNotes: [
-      "S1: full stretch, hard squeeze at the top, stop short of failure.",
-      "S2: last calf set. Controlled negative, no bouncing, leave reps."
-    ]
-  },
-  {
-    name: "Cable Face Pulls",
-    short: "FACE PULL",
-    sets: 1,
-    reps: "15-20",
-    weight: "40 lbs",
-    backoff: "35 lbs",
-    rest: 90,
-    note: "MOVED EARLIER on purpose -- the cable station was taken on 7/28 and this sat last in the array, the worst slot for a contested shared machine. Take it while it is free. 1 set on the deload. Groover: shoulder health, never to failure. Pull to the forehead, elbows high, squeeze the rear delts, slow controlled return, at or below parallel.",
-    setNotes: [
-      "S1: only set. Elbows high, pull to the forehead, slow controlled return."
-    ]
-  },
-  {
-    name: "Lying Leg Curl",
-    short: "LEG CURL",
-    sets: 1,
     reps: "8-12",
-    weight: "40 lbs",
-    rest: 90,
-    noDropAdvice: true,
-    note: "CLEARED 7/28 -- zero medial-thigh sensation at 40x2, so it has a permanent slot as the only direct hamstring work. 1 set on the deload. The HARD STOP is permanent and is NOT a deload rule: ANY medial-thigh sensation -- not pain, ANY sensation -- rack it and move on, no negotiating. Pad low on the calves, hips flat on the bench, no jerking the weight up, slow controlled negative. No weight-drop prompts here; a short set means nerve, not load.",
+    weight: "120 lbs",
+    backoff: "100 lbs",
+    rest: 150,
+    note: "DELOAD -- 2 sets, not 5. Same 120. Supersets with the press. Drive the elbows back, squeeze the shoulder blades, control the return, no torso swing. Stop 3-4 reps short. Backoff is 100.",
     setNotes: [
-      "S1: only set. Hips flat, pad low, slow negative. ANY medial-thigh sensation = rack it and move on."
+      "S1: deload -- elbows back, hard squeeze, controlled return, leave reps.",
+      "S2: last row set. No body english. Stop well short of failure."
     ]
   },
   {
-    name: "Leg Extension",
-    short: "LEG EXT",
+    name: "Incline Press",
+    ss: "A1",
+    short: "INCLINE",
     sets: 1,
     reps: "8-12",
     weight: "70 lbs",
     backoff: "60 lbs",
-    rest: 90,
-    note: "DELOAD -- 1 set at 70, and it is the last thing you do. Squeeze the quads hard at the top, control the negative, no swinging or kicking the weight up. Stop 3-4 reps shy. Backoff is 60.",
+    rest: 120,
+    note: "DELOAD -- 1 set at 70. MACHINE, not dumbbells. Staged at low volume until clean 12s on both sets, and a deload is not the session that earns that. STOP ON ANY CUFF PAIN -- the French-press history is why this is staged at all. Stop 3-4 reps shy.",
     setNotes: [
-      "S1: only set. Full extension, hard squeeze, controlled negative, leave reps in the tank."
+      "S1: only set. Controlled, full range, stop on ANY cuff pain, leave reps in the tank."
+    ]
+  },
+  {
+    name: "Cable Tricep Pushdown",
+    ss: "B1",
+    short: "PUSHDOWN",
+    sets: 2,
+    reps: "12-15",
+    weight: "25 lbs",
+    backoff: "20 lbs",
+    rest: 90,
+    note: "DELOAD -- 2 sets, not 3. Same 25. Elbows pinned to the sides, full lockout, slow return, no leaning into it. Stop 3-4 reps short. If the cable station is taken, French Press 40 is the proven fallback. Backoff is 20.",
+    setNotes: [
+      "S1: deload -- elbows pinned, full lockout, controlled return, leave reps.",
+      "S2: last pushdown set. No leaning. Stop short of failure."
+    ]
+  },
+  {
+    name: "DB Lateral Raise",
+    ss: "B2",
+    short: "LAT RAISE",
+    sets: 2,
+    reps: "12-15",
+    weight: "15 lbs",
+    backoff: "10 lbs",
+    rest: 90,
+    note: "DELOAD -- 2 sets, not 4. Same 15s. Lead with the elbows, stop AT or BELOW parallel, no shrugging or swinging. This one is a groover; stop 3-4 reps short. Backoff is 10.",
+    setNotes: [
+      "S1: deload -- lead with elbows, at or below parallel, no swing, leave reps.",
+      "S2: last raise set. Strict form beats another rep here."
+    ]
+  },
+  {
+    name: "DB Curls (supinated)",
+    ss: "B1",
+    short: "CURLS",
+    sets: 2,
+    reps: "8-12",
+    weight: "25 lbs",
+    backoff: "20 lbs",
+    rest: 90,
+    note: "DELOAD -- 2 sets, not 3. Same 25s. SUPINATED only, never hammer -- hammer curls twang the right musculocutaneous nerve. The stop signal is a nerve twang, not a rep count. Stop 3-4 reps shy on a deload. Backoff is 20.",
+    setNotes: [
+      "S1: deload -- supinated grip, no swing, stop 3-4 reps shy. Any nerve twang = rack it.",
+      "S2: last set of the session. Controlled negative, leave reps in the tank."
     ]
   },
 ];
@@ -4108,6 +4124,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-07-30 2B-lower DELOAD SS v7a</div>
+<div class="build-stamp">prism &middot; 2026-07-31 2B-upper DELOAD SS v7a</div>
 </body>
 </html>
