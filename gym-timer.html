@@ -1178,136 +1178,109 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // ======================= CONFIG START =======================
 // The daily flip splices ONLY the fenced block (dayType + build note +
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
-const dayType = "Upper";
+const dayType = "Lower";
 
-// *** DELOAD UPPER -- 11 SETS, NOT 21. HALF VOLUME, SAME WEIGHTS. ***
-// Companion to the 2026-07-30 Lower deload. Same rationale: ~16 weeks of
-// training with zero deloads, 8 consecutive contaminated reads, nothing
-// advanced in ~3 weeks. Set counts halved per exercise; every weight held.
+// *** LOWER -- KNEE RE-ENTRY, 8 SETS. THIS IS NOT A DELOAD. ***
+// The Lower side already got its rest week by accident: the 7/30 deload aborted
+// at 8m18s on new left knee pain, so almost no Lower volume was performed.
+// Fatigue is discharged. What this session tests is a POSITION, not a load and
+// not a capacity.
 //
-// WHY THIS BUILD EXISTS EVEN THOUGH THE 7/30 LOWER ABORTED:
-// The 7/30 Lower stopped at 8m18s on NEW left knee pain (sharp, infra-medial,
-// medial to the patellar tendon, on the loaded descent). That is a knee
-// problem, not a fatigue problem, and it PARKS the Lower side entirely --
-// no loaded deep knee flexion until it is evaluated. UPPER LOADS THE KNEE
-// NOWHERE, so the Upper side continues untouched. The rotation advanced
-// (Lower was performed, however briefly), so next is Upper.
+// (1) *** THE 90-DEGREE LEG PRESS CAP IS THE ENTIRE POINT OF THIS BUILD. ***
+//     It was set 2026-04-23 after a 4/15 left-knee complaint, and it then
+//     appeared in ZERO of 25 gym-timer builds. By 7/30 the leg-press note read
+//     "Full depth, controlled descent" -- the exact opposite of the rule -- and
+//     he aborted on sharp left infra-medial pain in precisely the
+//     knees-to-chest depth the cap existed to prevent. The cap is now in the
+//     note AND in every setNote. If it is not in the text he reads at the
+//     machine, it does not exist.
+// (2) LOAD DROPS 250 -> 190 (backoff 175). 190 is a pin he has used before, so
+//     this is a documented setting rather than an invented one. The session has
+//     to test the CAPPED POSITION while the load is unambiguously submaximal;
+//     a hard set would confound "does the cap protect the knee" with "is 250
+//     simply too much."
+// (3) LEG-PRESS CALF RAISES ARE OUT THIS SESSION, deliberately. They did also
+//     provoke pain on 7/30 -- but four seconds after the leg press did, on the
+//     same sled, which reads as residual irritation rather than an independent
+//     provocation. Running both makes a clean leg-press read impossible.
+//     Reintroduce them next Lower if this one comes back clean.
+// (4) THE THREE THAT RAN CLEAN ON 7/30 CARRY THE SESSION: Face Pulls 40 = 20
+//     reps (top of band), Lying Leg Curl 40 = 9 with ZERO medial-thigh
+//     sensation, Leg Extension 70 = 8 with no knee pain. Leg extension is the
+//     important negative -- a diffusely irritated knee hurts on open-chain
+//     extension too, and his did not. Closed-chain deep flexion under
+//     compression is the specific problem.
+// (5) EVERY `trigger` IS STRIPPED. Reps at 190 with a capped ROM are not
+//     comparable to reps at 250 at full depth, so nothing may rebase off this
+//     session in either direction. Backoffs are kept.
+// (6) LYING LEG CURL HARD STOP IS PERMANENT AND IS NOT A SESSION RULE: ANY
+//     medial-thigh sensation -- not pain, ANY sensation -- rack it and move on.
+//     This is a SEPARATE problem from the knee (medial thigh, different
+//     exercise, sensory rather than sharp-mechanical). Do not conflate them.
+// (7) STOP THE SESSION on any recurrence of the sharp infra-medial pain. Do not
+//     work around it and do not drop a notch and continue. He stopped at 4 reps
+//     on 7/30 and that was the correct call.
+// (8) NO SUPERSETS this session. Each exercise runs straight so that a pain
+//     report can be attributed to one movement without ambiguity.
 //
-// (1) EVERY `trigger` IS DELIBERATELY STRIPPED. A deload must not be able to
-//     fire an advance -- rebasing off an intentionally easy session is the
-//     same error as rebasing off a contaminated one.
-// (2) BACKOFFS ARE KEPT. If a weight genuinely cannot be held, dropping is
-//     still correct. Nothing rebases off this session in either direction.
-// (3) EFFORT IS THE OTHER HALF OF THE DELOAD. Every setNote says stop ~3-4
-//     reps shy. The LOAD stays to preserve the strength signal; FATIGUE is
-//     what is being shed.
-// (4) TRUE-FAILURE RIR ANCHOR: STILL DEFERRED. It is Upper-only and therefore
-//     eligible on paper, but the gate is a RESTED read and a deload session is
-//     by construction not a maximal one. Run it on the first NORMAL-volume
-//     Upper after a real night of sleep, on a MACHINE COMPOUND (chest press or
-//     row), never on curls.
-// (5) CHEST PRESS RUNS SLOT 1. A crowded gym bumped it to 4th on 7/10 and it
-//     ran pre-fatigued. Protect the first slot.
-// (6) If the cable station is taken, French Press 40 is the proven pushdown
-//     fallback (7/10: 16/11/10, zero cuff pain).
-//
-// AUTO-DROP v5 + sticky (Soren 7/5): reactive = below floor at HARD/MAX, or AT
-// floor while MAXED; predictive = three MAX sets, two declining steps,
-// projecting under the floor. Once a drop materializes, every later set stays
-// at the backoff. MOD/LIGHT never drop. An UNGRADED set now defaults to MAX
-// (DEFAULT_DIFF, shipped 7/29) -- it fails safe, but it also means drops fire
-// more readily on sets he forgets to grade.
-// setNotes = FORM/LOAD cues ONLY, never echo prior reps, never name a weight
-// the auto-drop could contradict. Voice = ElevenLabs static bank, no regen.
-// SUPERSETS: CP + Incline (A1) <-> Row (A2); Pushdown + Curls (B1) <-> LR (B2).
+// AUTO-DROP v5 + sticky. DEFAULT_DIFF = 5, so an UNGRADED set records as MAX --
+// that fails safe on load but it has now muddied two consecutive session reads,
+// so grade the sets.
 const workout = [
   {
-    name: "Chest Press Machine",
-    ss: "A1",
-    short: "PRESS",
+    name: "Leg Press",
+    short: "LEG PRESS",
     sets: 2,
     reps: "8-12",
-    weight: "120 lbs",
-    backoff: "100 lbs",
+    weight: "190 lbs",
+    backoff: "175 lbs",
     rest: 150,
-    note: "DELOAD -- 2 sets, not 4. Same 120. Take this machine the moment you walk in; it runs first for a reason. Stop 3-4 reps short of failure on BOTH sets. Controlled tempo, full range, no bouncing off the chest. Backoff is 100.",
+    note: "90 DEGREE KNEE ANGLE, NOT KNEES-TO-CHEST. Stop the descent at 90. The load is down from 250 on purpose -- this tests the capped position, not your strength. Drive through the heels, do not slam the knees straight. STOP THE SESSION on any sharp pain medial to the kneecap. Backoff is 175.",
     setNotes: [
-      "S1: deload -- full range, controlled, stop 3-4 reps shy of failure.",
-      "S2: last press set. Same tempo. Leave reps in the tank."
+      "S1: 90 degree knee angle, NOT knees-to-chest. Stop the descent at 90. Any sharp infra-medial pain and you rack it -- that ends the session, no working around it.",
+      "S2: same 90 degree stop. Controlled descent. If S1 was clean this is confirmation, not an invitation to chase depth."
     ]
   },
   {
-    name: "Cable Rope Row",
-    ss: "A2",
-    short: "ROW",
+    name: "Leg Extension",
+    short: "LEG EXT",
     sets: 2,
-    reps: "8-12",
-    weight: "120 lbs",
-    backoff: "100 lbs",
-    rest: 150,
-    note: "DELOAD -- 2 sets, not 5. Same 120. Supersets with the press. Drive the elbows back, squeeze the shoulder blades, control the return, no torso swing. Stop 3-4 reps short. Backoff is 100.",
-    setNotes: [
-      "S1: deload -- elbows back, hard squeeze, controlled return, leave reps.",
-      "S2: last row set. No body english. Stop well short of failure."
-    ]
-  },
-  {
-    name: "Incline Press",
-    ss: "A1",
-    short: "INCLINE",
-    sets: 1,
     reps: "8-12",
     weight: "70 lbs",
     backoff: "60 lbs",
     rest: 120,
-    note: "DELOAD -- 1 set at 70. MACHINE, not dumbbells. Staged at low volume until clean 12s on both sets, and a deload is not the session that earns that. STOP ON ANY CUFF PAIN -- the French-press history is why this is staged at all. Stop 3-4 reps shy.",
+    note: "Ran clean at 70 on 7/30 with zero knee pain -- open-chain extension was the movement that did NOT hurt, which is why it keeps full range here. Controlled up, slow down, no swinging the weight. Backoff is 60.",
     setNotes: [
-      "S1: only set. Controlled, full range, stop on ANY cuff pain, leave reps in the tank."
+      "S1: controlled through the full range, squeeze at the top.",
+      "S2: same. Slow the negative rather than chasing an extra rep."
     ]
   },
   {
-    name: "Cable Tricep Pushdown",
-    ss: "B1",
-    short: "PUSHDOWN",
-    sets: 2,
-    reps: "12-15",
-    weight: "25 lbs",
-    backoff: "20 lbs",
-    rest: 90,
-    note: "DELOAD -- 2 sets, not 3. Same 25. Elbows pinned to the sides, full lockout, slow return, no leaning into it. Stop 3-4 reps short. If the cable station is taken, French Press 40 is the proven fallback. Backoff is 20.",
-    setNotes: [
-      "S1: deload -- elbows pinned, full lockout, controlled return, leave reps.",
-      "S2: last pushdown set. No leaning. Stop short of failure."
-    ]
-  },
-  {
-    name: "DB Lateral Raise",
-    ss: "B2",
-    short: "LAT RAISE",
-    sets: 2,
-    reps: "12-15",
-    weight: "15 lbs",
-    backoff: "10 lbs",
-    rest: 90,
-    note: "DELOAD -- 2 sets, not 4. Same 15s. Lead with the elbows, stop AT or BELOW parallel, no shrugging or swinging. This one is a groover; stop 3-4 reps short. Backoff is 10.",
-    setNotes: [
-      "S1: deload -- lead with elbows, at or below parallel, no swing, leave reps.",
-      "S2: last raise set. Strict form beats another rep here."
-    ]
-  },
-  {
-    name: "DB Curls (supinated)",
-    ss: "B1",
-    short: "CURLS",
+    name: "Lying Leg Curl",
+    short: "LEG CURL",
     sets: 2,
     reps: "8-12",
-    weight: "25 lbs",
-    backoff: "20 lbs",
-    rest: 90,
-    note: "DELOAD -- 2 sets, not 3. Same 25s. SUPINATED only, never hammer -- hammer curls twang the right musculocutaneous nerve. The stop signal is a nerve twang, not a rep count. Stop 3-4 reps shy on a deload. Backoff is 20.",
+    weight: "40 lbs",
+    rest: 120,
+    noDropAdvice: true,
+    note: "HARD STOP ON ANY MEDIAL-THIGH SENSATION -- not pain, ANY sensation. Rack it and move on, no negotiating. This is a diagnostic, not a progression. Cleared 40x2 on 7/28 and ran 9 clean reps on 7/30 with zero sensation. Pad low on the calves, hips flat on the bench, no jerking the weight up. No weight-drop prompts here; a short set means nerve, not load.",
     setNotes: [
-      "S1: deload -- supinated grip, no swing, stop 3-4 reps shy. Any nerve twang = rack it.",
-      "S2: last set of the session. Controlled negative, leave reps in the tank."
+      "S1: hips flat, pad low, slow negative. ANY medial-thigh sensation = rack it immediately.",
+      "S2: same. Still a diagnostic -- no chasing reps."
+    ]
+  },
+  {
+    name: "Cable Face Pulls",
+    short: "FACE PULL",
+    sets: 2,
+    reps: "15-20",
+    weight: "40 lbs",
+    backoff: "35 lbs",
+    rest: 90,
+    note: "Hit 20 on 7/30, the top of the band -- but NO advance to 45, because nothing rebases off an aborted or modified session. Take the cable station while it is free. Groover: shoulder health, never to failure. Elbows high, pull to the forehead, squeeze the rear delts, slow controlled return. Backoff is 35.",
+    setNotes: [
+      "S1: elbows high, pull to the forehead, hard squeeze at the back, slow return.",
+      "S2: strict form beats another rep here."
     ]
   },
 ];
@@ -4124,6 +4097,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-07-31 2B-upper DELOAD SS v7a</div>
+<div class="build-stamp">prism &middot; 2026-08-01 2B-lower KNEE RE-ENTRY v7a</div>
 </body>
 </html>
