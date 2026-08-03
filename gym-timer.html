@@ -1180,11 +1180,21 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
 const dayType = "Lower";
 
-// *** LOWER -- NORMAL VOLUME, 13 WORKING SETS. SOREN'S CALL, 8/3. ***
+// *** LOWER -- NORMAL VOLUME, 14 WORKING SETS. SOREN'S CALL, 8/3. ***
 // This REPLACES the 8-set knee re-entry build (2d28c97). He was given the
 // re-entry rationale and chose normal volume anyway. That is his decision and
 // it is recorded here, not argued with. What did NOT change is a single safety
 // constraint -- none of those were volume decisions.
+//
+// *** CORRECTED 16:25: LEG PRESS IS 4 SETS, NOT 3. TOTAL IS 14, NOT 13. ***
+// The first 8/3 build shipped 3/13. That was derived from the 7/28 LOG TABLE
+// ("10 / 9 / 5 -> 7"), reading the bolded 4th entry as a backoff set the engine
+// adds at runtime. It is not -- it is a CONFIGURED set that happened to run at
+// the backoff weight after the auto-drop fired. Soren caught it. The build
+// 545595a (7/26, the canonical "14 sets" Lower) has `sets: 4` on Leg Press.
+// LESSON: read set counts from the previous BUILD's config, never from a log
+// table -- a log records what was performed, including dynamic sets, and cannot
+// distinguish those from configured ones.
 //
 // (1) *** THE 90-DEGREE LEG PRESS CAP SURVIVES UNCHANGED. NON-NEGOTIABLE. ***
 //     Set 2026-04-23 after a 4/15 left-knee complaint, then absent from 25
@@ -1229,7 +1239,7 @@ const workout = [
   {
     name: "Leg Press",
     short: "LEG PRESS",
-    sets: 3,
+    sets: 4,
     reps: "8-12",
     weight: "190 lbs",
     backoff: "175 lbs",
@@ -1238,7 +1248,8 @@ const workout = [
     setNotes: [
       "S1: 90 degree knee angle, NOT knees-to-chest. Stop the descent at 90. Any sharp infra-medial pain and you rack it -- that ends the session, no working around it.",
       "S2: same 90 degree stop, controlled descent. If S1 was clean this is confirmation, not an invitation to chase depth.",
-      "S3: still stopping at 90. Three clean sets is the result we want tonight -- do not go hunting for depth on the last one."
+      "S3: still stopping at 90. Form holds or the set ends.",
+      "S4: last one, still stopping at 90. Four clean sets is the result tonight -- do not go hunting for depth on the final set."
     ]
   },
   {
