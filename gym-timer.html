@@ -1169,6 +1169,9 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
   #rest-ring-head { transition: none !important; filter: none !important; }
 }
 
+/* A demoted trigger must not read like a banked one. Same row, different
+   voice: amber-ish gray, no red. */
+.sum-trigger.sum-verify { color: #8a8a72; }
 .build-stamp {
   position: fixed;
   left: 8px;
@@ -2494,6 +2497,11 @@ function dropPredicate(prevLogs, lo) {
 // any latch means we can't evaluate (no drop); an ungraded set after the
 // latch changes nothing (the drop already happened on the machine).
 // Returns { dropped, firedAt } -- firedAt = first set index loaded at the backoff.
+// Walks the PERFORMED PREFIX of the exercise in set order. Contiguity is
+// structural now (nextSetOf makes holes unrepresentable), so the old
+// "ungraded gap -> bail" branch collapses to walking what is there. A `skip`
+// entry contributes nothing and does not break the walk: advice for S4 after a
+// skipped S3 keys off S2, which is the only honest answer -- S3 has no reps.
 function stickyDropState(exIdx, setIdx) {
   const ex = workout[exIdx];
   if (!ex || !ex.backoff || setIdx < 1) return { dropped: false, firedAt: null };
@@ -2501,11 +2509,12 @@ function stickyDropState(exIdx, setIdx) {
   if (!rng) return { dropped: false, firedAt: null };
   const lo = +rng[1];
   const prevLogs = [];
-  for (let i = 0; i < setIdx; i++) {
-    const lg = logAt(exIdx, i);
-    if (!lg || lg.difficulty == null) break; // ungraded gap: can't evaluate further
-    prevLogs.push({ reps: lg.reps, difficulty: lg.difficulty });
-    if (dropPredicate(prevLogs, lo)) return { dropped: true, firedAt: i + 1 };
+  const perf = performedOf(ex.id).slice().sort((a, b) => a.set - b.set);
+  for (const e of perf) {
+    if (e.set > setIdx) break;
+    if (e.difficulty == null) continue;
+    prevLogs.push({ reps: e.reps, difficulty: e.difficulty });
+    if (dropPredicate(prevLogs, lo)) return { dropped: true, firedAt: e.set };
   }
   return { dropped: false, firedAt: null };
 }
@@ -2634,18 +2643,15 @@ function computeSetNoteInfo(exIdx, setIdx) {
   // Build prev-set logs in order. A prior set counts as "logged" only when
   // BOTH reps and difficulty are committed -- keeps dynamic advice from
   // firing off default reps before the user actually graded the set.
+  // The performed prefix, in set order. A skipped set is absent rather than
+  // "ungraded", so it neither contributes reps nor stops the walk.
   const prevLogs = [];
-  let allLogged = true;
-  for (let i = 0; i < setIdx; i++) {
-    const log = logAt(exIdx, i);
-    if (log && log.difficulty != null) {
-      prevLogs.push({ reps: log.reps, difficulty: log.difficulty });
-    } else {
-      allLogged = false;
-      break;
+  performedOf(ex.id).slice().sort((a, b) => a.set - b.set).forEach(e => {
+    if (e.set <= setIdx && e.difficulty != null) {
+      prevLogs.push({ reps: e.reps, difficulty: e.difficulty });
     }
-  }
-  if (allLogged && prevLogs.length === setIdx && setIdx > 0) {
+  });
+  if (prevLogs.length > 0 && setIdx > 0) {
     if (typeof ex.adviceFor === 'function') {
       const dynamic = ex.adviceFor(setIdx, prevLogs, ex);
       if (dynamic) return { text: dynamic, advisor: true };
@@ -2663,18 +2669,79 @@ function computeSetNote(exIdx, setIdx) {
   return computeSetNoteInfo(exIdx, setIdx).text;
 }
 
-// Did this exercise bank its advance trigger? Every set's logged reps must
-// meet the trigger row AT THE PRESCRIBED WEIGHT -- a materialized auto-drop
-// voids the bank (numbers hit at the backoff aren't the trigger).
+// THE TRIGGER GATE. A weight advance is a claim that he got stronger, and the
+// timer must not make that claim off perturbed data. Free navigation created
+// the perturbation: he can now wander to another machine mid-exercise, so the
+// gap between two sets is no longer bounded by the prescription.
+//
+// Three verdicts, and the asymmetry between them is the whole design:
+//   VOID    the evidence does not exist -- a skip, an incomplete exercise, a
+//           backoff weight, or a set that missed its rep row.
+//   VERIFY  the evidence exists but is INFLATED. Over-rest (deferral,
+//           wandering off) makes reps easier, so it demotes to a
+//           machine-greppable line the nightly rebuild adjudicates.
+//   HIT     clean. If it happened while paired, say so -- under-rest makes reps
+//           HARDER, so a trigger beaten while supersetting is STRONGER
+//           evidence, not weaker. It annotates; it never voids.
+//
+// The rule that matters: the timer never silently advances weight off reps it
+// has reason to doubt. It hands the doubt to a human instead.
+function triggerStateFor(exId) {
+  const ex = exById(exId);
+  if (!ex || !Array.isArray(ex.trigger) || ex.trigger.length !== ex.sets) return { state: "none" };
+  const all = entriesOf(exId);
+  const perf = performedOf(exId).slice().sort((a, b) => a.set - b.set);
+  if (all.some(e => e.kind === "skip")) return { state: "void", why: "skipped set" };
+  if (perf.length !== ex.sets)          return { state: "void", why: "incomplete" };
+  if (perf.some(e => e.dropped))        return { state: "void", why: "backoff weight" };
+  if (perf.some((e, i) => Number(e.reps) < ex.trigger[i])) return { state: "void", why: "reps" };
+  const overRested = perf.filter(e => e.restActualSec != null && e.restPlannedSec &&
+                                      e.restActualSec > 2 * e.restPlannedSec);
+  if (overRested.length) {
+    return { state: "verify",
+             why: overRested.map(e => "S" + e.set + " rest " + fmtRest(e.restActualSec) +
+                                      " vs " + fmtRest(e.restPlannedSec)) };
+  }
+  return { state: "hit", paired: perf.some(e => e.pairId) };
+}
+function fmtRest(sec) {
+  const t = Math.max(0, Math.round(Number(sec) || 0));
+  const m = Math.floor(t / 60), r = t % 60;
+  return m ? (m + "m" + String(r).padStart(2, "0") + "s") : (r + "s");
+}
+// The name a pair had, for the summary annotation.
+function pairPartnerNameFor(exId) {
+  const e = performedOf(exId).find(x => x.pairId);
+  if (!e) return null;
+  const p = pairs.find(x => x.id === e.pairId);
+  if (!p) return null;
+  const otherId = (p.a === exId) ? p.b : p.a;
+  const other = exById(otherId);
+  return other ? (other.short || other.name) : null;
+}
+// The celebration predicate keeps its old boolean shape for the dot pulse and
+// the voice cue -- both of which should only fire on a clean bank.
 function exerciseTriggerHit(exIdx) {
   const ex = workout[exIdx];
-  if (!ex || !Array.isArray(ex.trigger) || ex.trigger.length !== ex.sets) return false;
-  if (ex.backoff && stickyDropState(exIdx, ex.sets - 1).dropped) return false;
-  for (let i = 0; i < ex.sets; i++) {
-    const log = logAt(exIdx, i);
-    if (!log || Number(log.reps) < ex.trigger[i]) return false;
+  return !!ex && triggerStateFor(ex.id).state === "hit";
+}
+// The summary line, and it is the TRANSPORT: the nightly rebuild greps this.
+// A VERIFY line carries the exact context that demoted it so the rebuild can
+// adjudicate, instead of the timer advancing weight off inflated reps.
+function triggerSummaryLine(exId) {
+  const ex = exById(exId);
+  const t = triggerStateFor(exId);
+  const target = (ex && ex.triggerWeight) || "advance";
+  if (t.state === "hit") {
+    const partner = t.paired ? pairPartnerNameFor(exId) : null;
+    const tag = t.paired ? (" (paired" + (partner ? " w/ " + partner : "") + ")") : "";
+    return "TRIGGER HIT" + tag + " -> " + target + " next session";
   }
-  return true;
+  if (t.state === "verify") {
+    return "TRIGGER MET* VERIFY (" + t.why.join("; ") + ") -> hold " +
+           ((ex.weight || "").replace(/\s*lbs?\s*$/i, "") || "current") + ", decide at rebuild";
+  }
+  return null;
 }
 
 // One-shot celebration pulse on the exercise's dots row when its final set
@@ -2717,6 +2784,20 @@ function effectiveWeight(exIdx, setIdx) {
 }
 function setInfoHTML(exIdx, setIdx) {
   const ex = workout[exIdx];
+  // A PERFORMED set reports the weight it was FROZEN at, not a recomputed one.
+  // This line is also the browse view, so without the branch, opening a
+  // finished set after editing an earlier set's reps could re-run the drop
+  // predicate and display a weight that set was never done at -- the
+  // invented-tonnage defect, wearing the header instead of the summary.
+  const done = ledger.find(e => e.kind === "set" && e.exId === ex.id && e.set === setIdx + 1);
+  if (done) {
+    const w = (done.weightLbs != null) ? done.weightLbs : null;
+    const html = done.dropped && w != null
+      ? '<span class="wt-now">&#9660; ' + w + ' lbs</span><span class="wt-was">from ' +
+        (done.prescribedLbs != null ? done.prescribedLbs : "") + '</span>'
+      : ((w != null ? w + " lbs" : String(ex.weight || "")));
+    return html + "  ·  Set " + (setIdx + 1) + "/" + ex.sets + "  ·  " + ex.reps + " reps";
+  }
   return effectiveWeight(exIdx, setIdx).html + "  ·  Set " + (setIdx + 1) + "/" + ex.sets + "  ·  " + ex.reps + " reps";
 }
 
@@ -4501,9 +4582,8 @@ function buildSummary() {
     if (exLogs.length) {
       text += "  total " + exLogs.reduce((a, l) => a + (Number(l.reps) || 0), 0) + " reps\n";
     }
-    if (exerciseTriggerHit(i)) {
-      text += "  TRIGGER HIT -> " + (ex.triggerWeight || "advance") + " next session\n";
-    }
+    const trigLine = triggerSummaryLine(exId);
+    if (trigLine) text += "  " + trigLine + "\n";
     if (bi < boardOrder.length - 1) text += "\n";
   });
   const totalLine = totalLineText();
@@ -4539,8 +4619,11 @@ function buildSummaryHTML() {
     if (exLogs.length) {
       html += '<div class="sum-reps">total ' + exLogs.reduce((a, l) => a + (Number(l.reps) || 0), 0) + ' reps</div>';
     }
-    if (exerciseTriggerHit(i)) {
-      html += '<div class="sum-trigger">TRIGGER HIT &rarr; ' + escapeHTML(ex.triggerWeight || 'advance') + ' next session</div>';
+    const trigLineH = triggerSummaryLine(exId);
+    if (trigLineH) {
+      const verify = trigLineH.indexOf("VERIFY") >= 0;
+      html += '<div class="sum-trigger' + (verify ? ' sum-verify' : '') + '">' +
+              escapeHTML(trigLineH).replace(' -&gt; ', ' &rarr; ') + '</div>';
     }
     if (bi < boardOrder.length - 1) html += '<br>';
   });
@@ -5325,6 +5408,95 @@ function runSelfTest() {
       resetPairs();
     }
 
+    // --- 9. THE TRIGGER GATE (spec 5.3) ---
+    // A weight advance is a claim that he got stronger. Free navigation lets
+    // him wander off mid-exercise, so the gap between two sets is no longer
+    // bounded by the prescription -- and reps taken after eight idle minutes
+    // are not the same evidence as reps taken on 150s. These assert that the
+    // gate can tell those apart.
+    const trig = workout.find(ex => Array.isArray(ex.trigger) && ex.trigger.length === ex.sets);
+    if (trig) {
+      const seedClean = (opts) => {
+        opts = opts || {};
+        ledger.length = 0; ledgerSeq = 0; pairs = []; pairSeq = 0;
+        for (let o = 1; o <= trig.sets; o++) {
+          ledger.push({
+            kind: "set", n: ++ledgerSeq, exId: trig.id, set: o,
+            reps: trig.trigger[o - 1] + (opts.short && o === opts.short ? -1 : 0),
+            difficulty: 4, note: "",
+            weightLbs: opts.dropped && o >= opts.dropped ? 1 : 100,
+            prescribedLbs: 100, dropped: !!(opts.dropped && o >= opts.dropped),
+            pairId: opts.pairId || null,
+            restPlannedSec: trig.rest || 150,
+            restActualSec: (o === 1) ? null
+              : ((opts.overRestAt === o) ? (trig.rest || 150) * 4 : (trig.rest || 150)),
+            pausedCumMs: 0, at: 1000 * o, editedAt: null
+          });
+        }
+      };
+
+      seedClean();
+      let t = triggerStateFor(trig.id);
+      assert(t.state === "hit", "clean rows at the prescribed weight bank the trigger (got " + t.state + ")");
+      assert(t.paired === false, "an unpaired clean bank is not annotated as paired");
+      assert(/^TRIGGER HIT ->/.test(triggerSummaryLine(trig.id)),
+             "a clean bank prints the plain HIT line: " + triggerSummaryLine(trig.id));
+
+      // OVER-REST DEMOTES, it does not void. The evidence exists; it is inflated.
+      seedClean({ overRestAt: 3 });
+      t = triggerStateFor(trig.id);
+      assert(t.state === "verify", "a set rested >2x its prescription demotes to VERIFY (got " + t.state + ")");
+      const vline = triggerSummaryLine(trig.id);
+      assert(vline.indexOf("VERIFY") >= 0 && vline.indexOf("S3") >= 0,
+             "the VERIFY line NAMES the inflated set so the rebuild can adjudicate: " + vline);
+      assert(vline.indexOf("hold") >= 0, "the VERIFY line says hold, not advance: " + vline);
+
+      // PAIRING ANNOTATES. Under-rest makes reps HARDER, so a trigger beaten
+      // while supersetting is stronger evidence -- never a reason to void.
+      seedClean({ pairId: "P1" });
+      pairs.push({ id: "P1", a: trig.id, b: (workout.find(e => e.id !== trig.id) || {}).id,
+                   createdAt: 1, dissolvedAt: null, dissolvedWhy: null });
+      t = triggerStateFor(trig.id);
+      assert(t.state === "hit", "pairing does NOT void a trigger (got " + t.state + ")");
+      assert(t.paired === true, "a paired bank is flagged as paired");
+      assert(/TRIGGER HIT \(paired/.test(triggerSummaryLine(trig.id)),
+             "the paired bank is annotated in the summary: " + triggerSummaryLine(trig.id));
+      pairs = [];
+
+      // VOIDS. Each of these means the evidence does not exist.
+      seedClean({ short: 2 });
+      assert(triggerStateFor(trig.id).state === "void", "a missed rep row voids");
+      seedClean({ dropped: 2 });
+      assert(triggerStateFor(trig.id).state === "void", "reps hit at the BACKOFF weight void");
+      seedClean();
+      ledger.pop();
+      assert(triggerStateFor(trig.id).state === "void", "an incomplete exercise voids");
+      seedClean();
+      ledger.push({ kind: "skip", n: ++ledgerSeq, exId: trig.id, set: 1, at: 1, reason: "user" });
+      assert(triggerStateFor(trig.id).state === "void", "any skipped set voids");
+      assert(triggerSummaryLine(trig.id) === null, "a void trigger prints NO line at all");
+
+      // A SKIPPED SET DOES NOT BREAK THE ADVISOR WALK. Advice for the set after
+      // a skip keys off the last set that actually happened.
+      ledger.length = 0; ledgerSeq = 0;
+      ledger.push({ kind: "set", n: ++ledgerSeq, exId: trig.id, set: 1, reps: 11, difficulty: 3,
+        note: "", weightLbs: 100, prescribedLbs: 100, dropped: false, pairId: null,
+        restPlannedSec: trig.rest, restActualSec: null, pausedCumMs: 0, at: 1, editedAt: null });
+      ledger.push({ kind: "set", n: ++ledgerSeq, exId: trig.id, set: 2, reps: 9, difficulty: 3,
+        note: "", weightLbs: 100, prescribedLbs: 100, dropped: false, pairId: null,
+        restPlannedSec: trig.rest, restActualSec: 150, pausedCumMs: 0, at: 2, editedAt: null });
+      ledger.push({ kind: "skip", n: ++ledgerSeq, exId: trig.id, set: 3, at: 3, reason: "user" });
+      assert(nextSetOf(trig.id) === 4, "a skip consumes its ordinal, so the next set is S4");
+      const noteAfterSkip = computeSetNoteInfo(exIdxOf(trig.id), 3);
+      assert(typeof noteAfterSkip.text === "string" && noteAfterSkip.text.length > 0,
+             "the set after a skip still gets a note");
+      assert(noteAfterSkip.text.indexOf("9") >= 0,
+             "advice after a skipped S3 keys off S2's reps, the last set that happened: " +
+             noteAfterSkip.text);
+
+      ledger.length = 0; ledgerSeq = 0; pairs = [];
+    }
+
   } catch (e) {
     failures.push("selftest threw: " + (e && e.message ? e.message : String(e)));
   }
@@ -5456,6 +5628,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8E PAIR</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8F TRIGGER</div>
 </body>
 </html>
