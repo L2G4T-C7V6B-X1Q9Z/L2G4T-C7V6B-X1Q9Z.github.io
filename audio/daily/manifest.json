@@ -1,14 +1,14 @@
 {
   "planHash": "7b241c84",
   "dayType": "Lower",
-  "generatedAt": "2026-08-05T19:30",
+  "generatedAt": "2026-08-05T19:58",
   "source": "chatterbox JR announcer clone, composed + ASR verified",
   "entries": [
     {
       "exId": "leg-press",
       "set": 1,
       "file": "leg-press-s1.wav",
-      "durationMs": 13120,
+      "durationMs": 12900,
       "assumes": {
         "weightLbs": 190.0,
         "configOrder": true,
@@ -20,7 +20,7 @@
       "exId": "leg-press",
       "set": 2,
       "file": "leg-press-s2.wav",
-      "durationMs": 10400,
+      "durationMs": 9800,
       "assumes": {
         "weightLbs": 190.0,
         "configOrder": true,
@@ -32,7 +32,7 @@
       "exId": "leg-press",
       "set": 3,
       "file": "leg-press-s3.wav",
-      "durationMs": 8760,
+      "durationMs": 8500,
       "assumes": {
         "weightLbs": 190.0,
         "configOrder": true,
@@ -44,7 +44,7 @@
       "exId": "leg-press",
       "set": 4,
       "file": "leg-press-s4.wav",
-      "durationMs": 13200,
+      "durationMs": 12700,
       "assumes": {
         "weightLbs": 190.0,
         "configOrder": true,
@@ -56,7 +56,7 @@
       "exId": "leg-press-calf-raises",
       "set": 1,
       "file": "leg-press-calf-raises-s1.wav",
-      "durationMs": 14200,
+      "durationMs": 13580,
       "assumes": {
         "weightLbs": 145.0,
         "configOrder": true,
@@ -68,7 +68,7 @@
       "exId": "leg-press-calf-raises",
       "set": 2,
       "file": "leg-press-calf-raises-s2.wav",
-      "durationMs": 9080,
+      "durationMs": 8550,
       "assumes": {
         "weightLbs": 145.0,
         "configOrder": true,
@@ -80,7 +80,7 @@
       "exId": "leg-press-calf-raises",
       "set": 3,
       "file": "leg-press-calf-raises-s3.wav",
-      "durationMs": 12600,
+      "durationMs": 11980,
       "assumes": {
         "weightLbs": 145.0,
         "configOrder": true,
@@ -92,7 +92,7 @@
       "exId": "lying-leg-curl",
       "set": 1,
       "file": "lying-leg-curl-s1.wav",
-      "durationMs": 13560,
+      "durationMs": 12980,
       "assumes": {
         "weightLbs": 40.0,
         "configOrder": true,
@@ -104,7 +104,7 @@
       "exId": "lying-leg-curl",
       "set": 2,
       "file": "lying-leg-curl-s2.wav",
-      "durationMs": 9120,
+      "durationMs": 8520,
       "assumes": {
         "weightLbs": 40.0,
         "configOrder": true,
@@ -116,7 +116,7 @@
       "exId": "lying-leg-curl",
       "set": 3,
       "file": "lying-leg-curl-s3.wav",
-      "durationMs": 10880,
+      "durationMs": 10250,
       "assumes": {
         "weightLbs": 40.0,
         "configOrder": true,
@@ -128,7 +128,7 @@
       "exId": "leg-extension",
       "set": 1,
       "file": "leg-extension-s1.wav",
-      "durationMs": 11760,
+      "durationMs": 11200,
       "assumes": {
         "weightLbs": 70.0,
         "configOrder": true,
@@ -140,7 +140,7 @@
       "exId": "leg-extension",
       "set": 2,
       "file": "leg-extension-s2.wav",
-      "durationMs": 6720,
+      "durationMs": 6100,
       "assumes": {
         "weightLbs": 70.0,
         "configOrder": true,
@@ -152,7 +152,7 @@
       "exId": "leg-extension",
       "set": 3,
       "file": "leg-extension-s3.wav",
-      "durationMs": 10320,
+      "durationMs": 9850,
       "assumes": {
         "weightLbs": 70.0,
         "configOrder": true,
@@ -164,7 +164,7 @@
       "exId": "cable-face-pulls",
       "set": 1,
       "file": "cable-face-pulls-s1.wav",
-      "durationMs": 9560,
+      "durationMs": 9100,
       "assumes": {
         "weightLbs": 25.0,
         "configOrder": true,
@@ -176,7 +176,7 @@
       "exId": "cable-face-pulls",
       "set": 2,
       "file": "cable-face-pulls-s2.wav",
-      "durationMs": 8280,
+      "durationMs": 7940,
       "assumes": {
         "weightLbs": 25.0,
         "configOrder": true,

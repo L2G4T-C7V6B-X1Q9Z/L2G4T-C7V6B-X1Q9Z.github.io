@@ -2254,7 +2254,12 @@ const VoiceCue = (() => {
       try {
         const source = audioCtx.createBufferSource();
         const gain = audioCtx.createGain();
-        gain.gain.value = 1.0;
+        // Tiny attack for the same reason as the cancel ramp: playback starting
+        // on a non-zero sample is a step. The clips are trimmed and faded at
+        // build time too; this covers the ones that are not.
+        const t0 = audioCtx.currentTime;
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.linearRampToValueAtTime(1.0, t0 + 0.006);
         // Re-assert ambient right before playback -- iOS sometimes resets the
         // category between recovery and source.start(), causing ducking.
         try { if ('audioSession' in navigator) navigator.audioSession.type = 'ambient'; } catch(e) {}
@@ -2262,11 +2267,11 @@ const VoiceCue = (() => {
         source.connect(gain);
         gain.connect(audioCtx.destination);
         source.onended = () => {
-          const idx = currentSources.indexOf(source);
+          const idx = currentSources.findIndex(e => e.src === source);
           if (idx >= 0) currentSources.splice(idx, 1);
           resolve();
         };
-        currentSources.push(source);
+        currentSources.push({ src: source, gain: gain });
         source.start(0);
       } catch(e) { resolve(); }
     });
@@ -2284,12 +2289,39 @@ const VoiceCue = (() => {
     }), Promise.resolve());
   }
 
+  // THE CLICK. Stopping a BufferSource mid-word cuts the waveform at whatever
+  // sample it happened to reach, and a step from mid-amplitude to zero is a
+  // click -- which is what he heard skipping quickly between cues and on the
+  // pause/resume pair, both of which cancel() and immediately play something
+  // else. Ramp the gain to silence over ~18ms and stop AFTER it lands. Short
+  // enough to still feel instant, long enough that there is no step.
+  const CANCEL_FADE_S = 0.018;
   function cancel() {
     playGen++;
     if (currentChain) currentChain.cancelled = true;
     currentChain = null;
-    currentSources.forEach(s => {
-      try { s.stop(); s.disconnect(); } catch(e) {}
+    const now = (audioCtx && audioCtx.currentTime) || 0;
+    currentSources.forEach(entry => {
+      const src = entry.src || entry;
+      const g = entry.gain;
+      try {
+        if (g && audioCtx) {
+          // cancelScheduledValues + setValueAtTime pins the curve to the value
+          // it actually has right now; ramping from a stale scheduled value is
+          // its own discontinuity.
+          g.gain.cancelScheduledValues(now);
+          g.gain.setValueAtTime(g.gain.value, now);
+          g.gain.linearRampToValueAtTime(0.0001, now + CANCEL_FADE_S);
+          src.stop(now + CANCEL_FADE_S);
+        } else {
+          src.stop();
+        }
+      } catch (e) {
+        try { src.stop(); } catch (e2) {}
+      }
+      // Disconnect only once the ramp has finished; disconnecting immediately
+      // would cut the sound exactly the way this is trying to avoid.
+      setTimeout(() => { try { src.disconnect(); } catch (e) {} }, CANCEL_FADE_S * 1000 + 40);
     });
     currentSources = [];
   }
@@ -6231,6 +6263,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8J VOICE</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8K CLEAN</div>
 </body>
 </html>
