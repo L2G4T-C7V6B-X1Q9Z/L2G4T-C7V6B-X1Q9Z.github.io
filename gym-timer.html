@@ -2307,7 +2307,21 @@ const VoiceCue = (() => {
     if (fetchFailed.has(name)) return 'failed';
     return 'pending';
   }
-  return { init, unlock, play, playSequence, cancel, _afterContextRecreated, status,
+  // The daily bank is not known at build time, so its clips are registered
+  // after the manifest loads. Without this, play() would sit on a name that was
+  // never fetched for its full 3s decode wait and then give up -- silently, in
+  // the middle of a countdown.
+  function register(names) {
+    names.forEach(name => {
+      if (FILES.indexOf(name) >= 0) return;
+      FILES.push(name);
+      fetch(audioUrlFor(name))
+        .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+        .then(ab => { arrayBuffers.set(name, ab); decodeIfReady(name); })
+        .catch(() => { fetchFailed.add(name); });
+    });
+  }
+  return { init, unlock, play, playSequence, cancel, _afterContextRecreated, status, register,
            files: () => FILES.slice(),
            has: (name) => decodedBuffers.has(name) || arrayBuffers.has(name) };
 })();
@@ -2452,6 +2466,15 @@ function maybeFireCountdownCue(secCeil) {
   };
   const name = cues[secCeil];
   if (!name) return;
+  // A remaining-N cue that lands on top of the scripted line is worse than not
+  // having it -- the line is the one carrying the weight and the safety text.
+  if (name === '1min-remaining' || name === '30sec-remaining') {
+    const lineStart = bespokeLineStartMs();
+    if (lineStart != null && (secCeil * 1000) < lineStart + LINE_GUARD_MS) {
+      countdownFiredThresholds.add(secCeil);
+      return;
+    }
+  }
   // Skip remaining-N cues when total rest is at/below the threshold
   // (redundant with the rest-start announcement).
   const restTotalSeconds = readyPlanned[focusExId] || 0;
@@ -2475,7 +2498,10 @@ function maybeFireCountdownCue(secCeil) {
 function restEndCueSeq() {
   const seq = [SFX_GO];
   if (settings.autoStart) {
-    const setStart = setStartClipFor(exIdxOf(focusExId), nextSetOf(focusExId) - 1);
+    // The bespoke line already named the set ("set three, one ninety"), so the
+    // generic position clip after GO would say it a second time.
+    const spokeAlready = bespokeEpisode.fired;
+    const setStart = spokeAlready ? null : setStartClipFor(exIdxOf(focusExId), nextSetOf(focusExId) - 1);
     if (setStart) seq.push(setStart);
   } else {
     seq.push('tap-to-start');
@@ -2490,6 +2516,110 @@ function playOrQueue(seq) {
   } else {
     pendingPostGestureCues.push(seq);
   }
+}
+
+// ============ §8.5 BESPOKE DAILY LINES ============
+// A nightly job writes audio/daily/manifest.json plus one wav per (exercise,
+// set). Those lines are SCRIPTED: they name the weight, the set number and the
+// safety constraint, which means every one of them is a statement that can
+// become false. The whole design here is about making a stale line silent
+// rather than wrong.
+//
+// LEAD_OUT is the speech-free air between the coach's last syllable and the
+// lift. One number, one place. Shipping 1.5s; Soren has not lifted with it yet.
+const LINE_LEAD_OUT_MS = 1500;
+// A remaining-N cue this close to the line start would step on it.
+const LINE_GUARD_MS = 2000;
+
+let dailyManifest = null;
+// Per-readiness-episode line state, keyed by (exercise, set, the readyAt stamp)
+// so a new rest re-arms it and a re-render does not.
+let bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+
+function loadDailyManifest() {
+  try {
+    fetch('audio/daily/manifest.json')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(m => {
+        if (!m || !Array.isArray(m.entries)) return;
+        // THE WHOLE-BANK GATE. One plan hash covers the lot: if the plan the
+        // lines were written for is not the plan on screen, no individual entry
+        // can be trusted either, so the bank dies as a unit.
+        if (m.planHash !== planHash()) {
+          try { console.warn('gym-timer: daily line bank is for a different plan (' +
+                             m.planHash + ' vs ' + planHash() + ') - generic bank only'); } catch (e) {}
+          return;
+        }
+        dailyManifest = m;
+        VoiceCue.register(m.entries.map(e => 'daily/' + e.file));
+      })
+      .catch(() => { dailyManifest = null; });
+  } catch (e) { dailyManifest = null; }
+}
+
+// True once the session stops being the straight-line day the lines were
+// written for. Coarse and fail-closed BY INTENT: a line scripted for a default
+// day plays only on a default day. Being wrong in the cautious direction costs
+// a nice-to-have; being wrong the other way puts a confident voice on his phone
+// telling him the wrong weight.
+function sessionDeviated() {
+  if (pairs.length > 0) return true;
+  if (deferred.size > 0) return true;
+  if (ledger.some(e => e.kind === "skip")) return true;
+  const config = workout.map(ex => ex.id).join(",");
+  if (boardOrder.join(",") !== config) return true;
+  return false;
+}
+
+// The line for this exact (exercise, set), or null. Every gate compares an
+// ASSUMED VALUE against the live one rather than trusting a bare flag, so the
+// question is "is this still true" instead of "was this thought to matter".
+function bespokeLineFor(exId, setOrd) {
+  if (!dailyManifest || dailyManifest.planHash !== planHash()) return null;
+  const e = dailyManifest.entries.find(x => x.exId === exId && x.set === setOrd);
+  if (!e || !e.assumes || !e.durationMs) return null;   // missing flags = suppress
+  const a = e.assumes;
+  if (a.weightLbs != null) {
+    const eff = effectiveWeight(exIdxOf(exId), setOrd - 1);
+    if (Number(eff.num) !== Number(a.weightLbs)) return null;   // an auto-drop fired
+  }
+  if (a.configOrder && sessionDeviated()) return null;
+  if (a.unpaired && activePairOf(exId)) return null;
+  if (a.priorSetsPerformed && entriesOf(exId).some(x => x.kind === "skip")) return null;
+  return e;
+}
+
+// BACKWARD SCHEDULING. T=0 is the moment he lifts, so the line is placed by its
+// END, not its start: fire when remaining <= duration + LEAD_OUT. duration is
+// MEASURED AT GENERATION and carried in the manifest -- probing a decoded
+// buffer at runtime would need the clip already decoded, which is exactly what
+// is not guaranteed at the moment the decision has to be made.
+function maybeFireBespokeLine(exId, remainingMs) {
+  const ord = nextSetOf(exId);
+  const key = exId + ":" + ord + ":" + (readyAt[exId] || 0);
+  if (bespokeEpisode.key !== key) {
+    const entry = bespokeLineFor(exId, ord);
+    bespokeEpisode = { key: key, entry: entry, armed: !!entry, fired: false };
+    // Already inside the window when the episode began (he skipped most of the
+    // rest, or navigated in late): play nothing. A line talking over the last
+    // four seconds is worse than silence.
+    if (entry && remainingMs <= entry.durationMs + LINE_LEAD_OUT_MS) {
+      bespokeEpisode.armed = false;
+    }
+  }
+  if (!bespokeEpisode.armed || bespokeEpisode.fired || !bespokeEpisode.entry) return;
+  if (remainingMs > bespokeEpisode.entry.durationMs + LINE_LEAD_OUT_MS) return;
+  bespokeEpisode.fired = true;
+  // Chime first, then the line. If the line is missing the chime still fires --
+  // fail closed means silence instead of wrongness, not silence instead of
+  // everything.
+  VoiceCue.playSequence([SFX_CHIME, 'daily/' + bespokeEpisode.entry.file]);
+}
+
+// Where the line would start, in remaining-ms, or null when none is armed.
+function bespokeLineStartMs() {
+  if (!bespokeEpisode.armed || !bespokeEpisode.entry) return null;
+  return bespokeEpisode.entry.durationMs + LINE_LEAD_OUT_MS;
 }
 
 // ============ §9 ADVISOR (drops, triggers, set notes) ============
@@ -3222,7 +3352,9 @@ function startCountdown() {
   // change therefore just starts rendering a different exercise's number --
   // no teardown, no per-exercise clock objects, no chance of two timers.
   timerInterval = setInterval(() => {
-    const remaining = remainingMsOf(focusExId) / 1000;
+    const remainingMs = remainingMsOf(focusExId);
+    const remaining = remainingMs / 1000;
+    maybeFireBespokeLine(focusExId, remainingMs);
     if (remaining <= 0) {
       clearInterval(timerInterval);
       timerInterval = null;
@@ -3847,6 +3979,9 @@ function focusExercise(exId, opts) {
     // one. (Obs 164; spec 6.3.)
     VoiceCue.cancel();
     pendingPostGestureCues.length = 0;
+    // A line describing the machine he just walked away from is a WRONG
+    // instruction, not a late one. Un-arm it; the new focus arms fresh.
+    bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
   }
   // Landing on a machine that is already rested is not an event -- he chose to
   // walk here and can see the screen. No GO theatrics.
@@ -5020,6 +5155,7 @@ elSkip.style.display = "none";
 showRestRing(false);
 applySettingsToggles();
 VoiceCue.init();
+loadDailyManifest();
 // The cue bank fails silently BY DESIGN (a missing clip skips gap-free rather
 // than stalling the sequence three seconds). That is right for one missing
 // weight callout and wrong for the countdown, so the three sfx get one place
@@ -5598,6 +5734,119 @@ function runSelfTest() {
       // already-focused exercise.
     }
 
+    // --- 11. BESPOKE LINE GATES (spec 6.2) ---
+    // Every gate below is a case where the scripted line would say something
+    // FALSE. The line names the weight, the set and the safety constraint, so
+    // "wrong" here means a confident voice telling him to load a weight the
+    // screen is not showing. Fail-closed throughout: silence beats wrongness.
+    {
+      const savedManifest = dailyManifest;
+      const savedEpisode = bespokeEpisode;
+      const ex0 = workout[0];
+      const w0 = parseFloat(String(ex0.weight).match(/(\d+(?:\.\d+)?)/)[1]);
+      const mkManifest = (assumes) => ({
+        planHash: planHash(), dayType: dayType, generatedAt: "test",
+        entries: [{ exId: ex0.id, set: 1, file: ex0.id + "-s1.wav", durationMs: 7400,
+                    assumes: assumes }]
+      });
+      const clean = () => {
+        ledger.length = 0; ledgerSeq = 0; pairs = []; pairSeq = 0;
+        deferred = new Set(); boardOrder = workout.map(e => e.id);
+        focusExId = ex0.id; view = null;
+        bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+      };
+
+      clean();
+      dailyManifest = mkManifest({ weightLbs: w0, configOrder: true, unpaired: true, priorSetsPerformed: true });
+      assert(!!bespokeLineFor(ex0.id, 1), "a matching line is offered on a clean straight-line day");
+
+      // THE PLAN HASH IS A WHOLE-BANK GATE. If the plan the lines were written
+      // for is not the plan on screen, no individual entry is trustworthy.
+      dailyManifest = mkManifest({ weightLbs: w0 });
+      dailyManifest.planHash = "deadbeef";
+      assert(bespokeLineFor(ex0.id, 1) === null, "a planHash mismatch kills the WHOLE bank");
+
+      // A missing assumes block means the generator did not record what the
+      // line depends on -- which is not "no dependencies", it is "unknown".
+      dailyManifest = mkManifest(null);
+      assert(bespokeLineFor(ex0.id, 1) === null, "an entry with no assumes block is suppressed");
+      dailyManifest = mkManifest({ weightLbs: w0 });
+      delete dailyManifest.entries[0].durationMs;
+      assert(bespokeLineFor(ex0.id, 1) === null,
+             "an entry with no measured duration is suppressed - it cannot be scheduled backwards");
+
+      // THE WEIGHT GATE. This is the one that matters most: a line saying
+      // "one ninety" over a screen showing 175 after an auto-drop.
+      dailyManifest = mkManifest({ weightLbs: w0 + 15 });
+      assert(bespokeLineFor(ex0.id, 1) === null,
+             "a line assuming a different weight than the screen shows is suppressed");
+
+      // DEVIATION. A line scripted for a default day plays only on a default day.
+      dailyManifest = mkManifest({ weightLbs: w0, configOrder: true });
+      clean();
+      assert(sessionDeviated() === false, "a clean straight-line session has not deviated");
+      assert(!!bespokeLineFor(ex0.id, 1), "and the line survives");
+
+      const other = workout[1];
+      deferred.add(other.id);
+      assert(sessionDeviated() === true, "deferring a machine counts as deviation");
+      assert(bespokeLineFor(ex0.id, 1) === null, "and the line is suppressed");
+      clean();
+
+      pairs.push({ id: "PX", a: ex0.id, b: other.id, createdAt: 1, dissolvedAt: null });
+      assert(sessionDeviated() === true, "creating a pair counts as deviation");
+      assert(bespokeLineFor(ex0.id, 1) === null, "and the line is suppressed");
+      // The unpaired flag suppresses independently of the coarse deviation test.
+      dailyManifest = mkManifest({ weightLbs: w0, unpaired: true });
+      assert(bespokeLineFor(ex0.id, 1) === null, "an unpaired-only line is suppressed once paired");
+      clean();
+
+      boardOrder = workout.map(e => e.id).slice().reverse();
+      assert(sessionDeviated() === true, "reordering the board counts as deviation");
+      clean();
+
+      ledger.push({ kind: "skip", n: ++ledgerSeq, exId: other.id, set: 1, at: 1, reason: "user" });
+      assert(sessionDeviated() === true, "any skip counts as deviation");
+      clean();
+
+      // BACKWARD SCHEDULING. The line is placed by its END so the last syllable
+      // lands LEAD_OUT before the lift, not by its start.
+      dailyManifest = mkManifest({ weightLbs: w0 });
+      readyAt[ex0.id] = Date.now() + 150000;
+      bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+      maybeFireBespokeLine(ex0.id, 150000);
+      assert(bespokeEpisode.armed === true, "a line arms at the start of a long rest");
+      assert(bespokeEpisode.fired === false, "and does not fire at the top of the rest");
+      assert(bespokeLineStartMs() === 7400 + LINE_LEAD_OUT_MS,
+             "the line is scheduled to END " + LINE_LEAD_OUT_MS + "ms before the lift (got " +
+             bespokeLineStartMs() + ")");
+      maybeFireBespokeLine(ex0.id, 7400 + LINE_LEAD_OUT_MS + 500);
+      assert(bespokeEpisode.fired === false, "it does not fire before its window");
+      maybeFireBespokeLine(ex0.id, 7400 + LINE_LEAD_OUT_MS - 10);
+      assert(bespokeEpisode.fired === true, "it fires when the window opens");
+
+      // ALREADY INSIDE THE WINDOW at episode start -> play nothing at all.
+      readyAt[ex0.id] = Date.now() + 4000;
+      bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+      maybeFireBespokeLine(ex0.id, 4000);
+      assert(bespokeEpisode.armed === false,
+             "a line is NOT started when the episode begins inside its own window");
+      assert(bespokeEpisode.fired === false, "and it never fires");
+
+      // NO MANIFEST AT ALL = commit G behaviour, which is what makes this
+      // commit stop-here-safe.
+      dailyManifest = null;
+      assert(bespokeLineFor(ex0.id, 1) === null, "no manifest means no bespoke lines, no errors");
+      const gseq = restEndCueSeq();
+      assert(gseq[0] === SFX_GO, "the generic rest-end sequence is unchanged without a manifest");
+
+      dailyManifest = savedManifest;
+      bespokeEpisode = savedEpisode;
+      clean();
+      ledger.length = 0; ledgerSeq = 0; pairs = []; deferred = new Set();
+      boardOrder = workout.map(e => e.id);
+    }
+
   } catch (e) {
     failures.push("selftest threw: " + (e && e.message ? e.message : String(e)));
   }
@@ -5759,6 +6008,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8G TONES</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8H LINES</div>
 </body>
 </html>
