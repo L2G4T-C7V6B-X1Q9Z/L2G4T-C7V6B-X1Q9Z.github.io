@@ -568,7 +568,7 @@ h1:empty { display: none; }
   z-index: 40;
   pointer-events: none;
 }
-#return-pill, #occupied-pill, #skip-ex-pill {
+#return-pill, #occupied-pill, #skip-ex-pill, #pair-pill {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 1.5px;
@@ -587,16 +587,29 @@ h1:empty { display: none; }
   transform: translateX(-8px);
   transition: opacity 280ms var(--ease), transform 280ms var(--ease);
 }
-#return-pill.visible, #occupied-pill.visible, #skip-ex-pill.visible {
+#return-pill.visible, #occupied-pill.visible, #skip-ex-pill.visible, #pair-pill.visible {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
 }
 /* Neutral until they mean something: OCCUPIED and SKIP EX are navigation, not
    alarms. Only the armed SKIP EX confirm earns the red. */
-#occupied-pill, #skip-ex-pill {
+#occupied-pill, #skip-ex-pill, #pair-pill {
   color: var(--ink-3);
   border-color: var(--line-hi);
+}
+#pair-pill.selecting {
+  color: var(--red-hot);
+  border-color: var(--red);
+  background: rgba(224, 88, 74, 0.1);
+}
+#pair-pill.disabled { opacity: 0.35; pointer-events: none; }
+/* Partner-selection mode: only the rows he can actually pair with respond. */
+.exercise-group.pair-candidate { animation: pair-candidate-pulse 1.5s var(--ease) infinite; }
+.exercise-group.pair-inert { opacity: 0.3; pointer-events: none; }
+@keyframes pair-candidate-pulse {
+  0%, 100% { opacity: 0.62; }
+  50%      { opacity: 1; }
 }
 #skip-ex-pill.armed {
   color: var(--red-hot);
@@ -652,7 +665,8 @@ h1:empty { display: none; }
   touch-action: manipulation;
   transition: transform 150ms var(--ease), opacity 150ms var(--ease);
 }
-/* live superset members: red linkage rail; first member carries the unlink */
+/* live pair members: red linkage rail; first member in board order carries
+   the unlink chip */
 .exercise-group.ss-linked {
   border-bottom: 2px solid rgba(192, 57, 43, 0.55);
   padding-bottom: 3px;
@@ -1233,6 +1247,11 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
       <!-- Abandon the rest of this exercise. Two taps: the second confirms.
            Recovery is per-dot (tap a skipped dot to restore that set). -->
       <div id="skip-ex-pill" role="button" aria-label="Skip the rest of this exercise">&#8213; SKIP EX</div>
+      <!-- Pair this machine with another one, ON THE SPOT. Explicit, never
+           inferred from alternation: alternating between two machines can mean
+           deliberate density, or that one was busy, or nothing at all, and rest
+           policy and progression validity depend on which. -->
+      <div id="pair-pill" role="button" aria-label="Superset this exercise with another">&#8646; PAIR</div>
     </div>
     <div id="progress"></div>
   </div>
@@ -1648,6 +1667,16 @@ let focusExId = workout[0].id;
 let view = null;            // null | { exId, set }  (set is 1-based)
 let deferred = new Set();
 let boardOrder = workout.map(ex => ex.id);
+// EXPLICIT PAIRS (v8E). Never inferred from observed alternation, and that was
+// argued: alternation cannot distinguish deliberate density from machine
+// contention from aimless wandering, and rest policy, audio suppression and
+// progression validity all need that distinction. So he says so, in one tap.
+// Dissolved pairs are kept, not deleted -- a set logged inside a pair carries
+// its pairId forever, and the trigger gate reads that to know the reps were
+// earned under-rested.
+let pairs = [];
+let pairSelectMode = false;
+let pairSeq = 0;
 
 const isBrowsing = () => view !== null;
 const nextSetOf = (exId) => 1 + entriesOf(exId).length;
@@ -1666,6 +1695,16 @@ const totalRemaining = () => boardOrder.reduce((a, id) => a + Math.max(0, remain
 // exercises remain, surface the earliest anyway -- refusing to show him
 // anything would be worse than showing him a machine he flagged as busy.
 function advanceFocusFrom(exId) {
+  // RULE 1 -- alternate with the partner if there is a live pair. Deferral is
+  // per-exercise, so a parked partner is simply skipped and alternation resumes
+  // by itself when he un-parks it. There is no suspended-pair state to manage.
+  if (typeof activePairOf === "function") {
+    const p = activePairOf(exId);
+    if (p) {
+      const partner = (p.a === exId ? p.b : p.a);
+      if (remainingOf(partner) > 0 && !deferred.has(partner)) return partner;
+    }
+  }
   if (remainingOf(exId) > 0 && !deferred.has(exId)) return exId;
   const order = boardOrder.filter(id => remainingOf(id) > 0);
   return order.find(id => !deferred.has(id)) || order[0] || null;
@@ -1754,6 +1793,7 @@ const elToggleVoice = document.getElementById("toggle-voice");
 const elReturnPill = document.getElementById("return-pill");
 const elOccupiedPill = document.getElementById("occupied-pill");
 const elSkipExPill = document.getElementById("skip-ex-pill");
+const elPairPill = document.getElementById("pair-pill");
 const elToast = document.getElementById("toast");
 const elPillsStack = document.querySelector(".pills-stack");
 const elDifficultyRow = document.getElementById("difficulty-row");
@@ -3306,6 +3346,7 @@ function setDone() {
 
   const finishedExId = ex.id;
   const bankedTrigger = (setOrd === ex.sets) && exerciseTriggerHit(exIdxOf(ex.id));
+  reapCompletedPairs();
   clearTimerModes();
   showLogArea();
 
@@ -3673,6 +3714,7 @@ function focusExercise(exId, opts) {
   const changed = (exId !== focusExId) || isBrowsing();
   view = null;
   focusExId = exId;
+  if (typeof pairSelectMode !== 'undefined') pairSelectMode = false;
   // Returning to a parked machine clears the park -- he is standing at it.
   if (deferred.has(exId)) { deferred.delete(exId); }
   disarmSkipEx();
@@ -3817,6 +3859,165 @@ function unskipSet(exId, setOrd) {
     renderExercise();
   }
   saveState();
+}
+
+// ---- PAIRS ----
+const MAX_ACTIVE_PAIRS = 2;
+const activePairs = () => pairs.filter(p => !p.dissolvedAt);
+function activePairOf(exId) {
+  return activePairs().find(p => p.a === exId || p.b === exId) || null;
+}
+const pairPartner = (p, exId) => (p.a === exId ? p.b : p.a);
+
+// Can this exercise start a pair right now?
+function canPair(exId) {
+  if (!exId || remainingOf(exId) <= 0) return false;
+  if (activePairOf(exId)) return false;
+  if (activePairs().length >= MAX_ACTIVE_PAIRS) return false;
+  return pairCandidates(exId).length > 0;
+}
+const pairCandidates = (exId) =>
+  boardOrder.filter(id => id !== exId && remainingOf(id) > 0 && !activePairOf(id));
+
+function updatePairPill(actionable, browsing) {
+  if (!elPairPill) return;
+  const existing = activePairOf(focusExId);
+  // While paired, the pill is not the unlink -- the unlink chip lives on the
+  // rail, where the pair is. Hide it rather than overloading one control.
+  const show = actionable && !browsing && !existing;
+  elPairPill.classList.toggle('visible', show || pairSelectMode);
+  elPairPill.classList.toggle('selecting', pairSelectMode);
+  elPairPill.classList.toggle('disabled', !pairSelectMode && show && !canPair(focusExId));
+  elPairPill.innerHTML = pairSelectMode ? "CANCEL" : "&#8646; PAIR";
+}
+
+function enterPairSelect() {
+  if (!canPair(focusExId)) return;
+  pairSelectMode = true;
+  renderExercise();
+  toast("pick a partner");
+}
+function exitPairSelect() {
+  pairSelectMode = false;
+  renderExercise();
+}
+function pairPillTapped() {
+  if (pairSelectMode) { exitPairSelect(); return; }
+  enterPairSelect();
+}
+
+// Returns true if the tap was consumed by partner selection.
+function handlePairSelectTap(exId) {
+  if (!pairSelectMode) return false;
+  if (exId === focusExId || !pairCandidates(focusExId).includes(exId)) {
+    exitPairSelect();
+    return true;
+  }
+  pairs.push({
+    id: "P" + (++pairSeq),
+    a: focusExId, b: exId,
+    createdAt: Date.now(), dissolvedAt: null, dissolvedWhy: null
+  });
+  pairSelectMode = false;
+  const aEx = exById(focusExId), bEx = exById(exId);
+  toast((aEx.short || aEx.name) + " + " + (bEx.short || bEx.name));
+  renderExercise();
+  saveState();
+  return true;
+}
+
+function dissolvePair(pairId, why) {
+  const p = pairs.find(x => x.id === pairId && !x.dissolvedAt);
+  if (!p) return;
+  p.dissolvedAt = Date.now();
+  p.dissolvedWhy = why || "user";
+  // Both members KEEP their readyAt. Unlinking is a scheduling decision, not a
+  // recovery event -- their muscles do not care that the pairing ended.
+  renderExercise();
+  saveState();
+}
+
+// Auto-dissolve when both members are done. Cosmetic only: the pairId already
+// stamped on each logged set is what the trigger gate reads, and that survives.
+function reapCompletedPairs() {
+  activePairs().forEach(p => {
+    if (remainingOf(p.a) <= 0 && remainingOf(p.b) <= 0) {
+      p.dissolvedAt = Date.now();
+      p.dissolvedWhy = "complete";
+    }
+  });
+}
+
+// Did focus just hop to the pair partner? Drives the SUPERSET label and the
+// tighter audio.
+function pairPartnerHop(fromExId, toExId) {
+  if (fromExId === toExId) return false;
+  const p = activePairOf(fromExId);
+  return !!p && pairPartner(p, fromExId) === toExId;
+}
+
+function decorateGroupForPair(group, exId) {
+  const p = activePairOf(exId);
+  if (p) {
+    group.classList.add("ss-linked");
+    group.dataset.pairId = p.id;
+  }
+  if (pairSelectMode) {
+    if (exId === focusExId) group.classList.add("pair-candidate");
+    else if (pairCandidates(focusExId).includes(exId)) group.classList.add("pair-candidate");
+    else group.classList.add("pair-inert");
+  }
+}
+
+function appendPairChip(group, exId) {
+  const p = activePairOf(exId);
+  if (!p) return;
+  // One chip per pair, on whichever member comes first in BOARD order -- so a
+  // drag cannot produce two unlinks or none.
+  const first = boardOrder.find(id => id === p.a || id === p.b);
+  if (first !== exId) return;
+  const un = document.createElement("button");
+  un.className = "ss-unlink";
+  un.type = "button";
+  un.textContent = "unlink";
+  un.setAttribute("aria-label", "Dissolve this superset");
+  un.addEventListener("pointerdown", ev => ev.stopPropagation());
+  un.addEventListener("pointerup", ev => ev.stopPropagation());
+  un.addEventListener("click", ev => { ev.stopPropagation(); dissolvePair(p.id, "user"); });
+  group.appendChild(un);
+}
+
+// Config `ss` tags are retired from the engine, but a config that still ships
+// them must not silently lose its pairing. Converted at load into ordinary
+// runtime pairs -- same objects, same behaviour, no separate code path.
+function shimConfigSupersets() {
+  const groups = {};
+  workout.forEach(ex => {
+    const m = ex.ss && String(ex.ss).match(/^([A-Za-z])([12])$/);
+    if (!m) return;
+    (groups[m[1]] = groups[m[1]] || []).push(ex.id);
+  });
+  Object.keys(groups).forEach(g => {
+    const members = groups[g];
+    if (members.length !== 2) return;          // pairs are 2-exercise, full stop
+    if (activePairs().length >= MAX_ACTIVE_PAIRS) return;
+    pairs.push({ id: "P" + (++pairSeq), a: members[0], b: members[1],
+                 createdAt: Date.now(), dissolvedAt: null, dissolvedWhy: null, fromConfig: true });
+  });
+}
+
+function restorePairs(saved) {
+  pairs = [];
+  pairSeq = 0;
+  if (!Array.isArray(saved)) { shimConfigSupersets(); return; }
+  saved.forEach(p => {
+    if (!p || !exById(p.a) || !exById(p.b)) return;
+    pairs.push({ id: p.id, a: p.a, b: p.b, createdAt: p.createdAt,
+                 dissolvedAt: p.dissolvedAt || null, dissolvedWhy: p.dissolvedWhy || null,
+                 fromConfig: !!p.fromConfig });
+    const n = parseInt(String(p.id).replace(/^P/, ""), 10);
+    if (isFinite(n) && n > pairSeq) pairSeq = n;
+  });
 }
 
 // ============ §13 REORDER + BOARD TAPS ============
@@ -4141,6 +4342,7 @@ elDifficultyRow.addEventListener("click", (e) => {
 elReturnPill.addEventListener("click", returnToWorking);
 elOccupiedPill.addEventListener("click", (e) => { e.stopPropagation(); deferFocused(); });
 elSkipExPill.addEventListener("click", (e) => { e.stopPropagation(); skipExercisePill(); });
+elPairPill.addEventListener("click", (e) => { e.stopPropagation(); pairPillTapped(); });
 elCopy.addEventListener("click", () => {
   const text = buildSummary();
   const revert = () => setTimeout(() => {
@@ -4374,6 +4576,7 @@ function saveState() {
     focusExId: focusExId,
     deferred: [...deferred],
     boardOrder: [...boardOrder],
+    pairs: pairs.map(p => ({ ...p })),
     state,
     readyAt: { ...readyAt },
     readyPlanned: { ...readyPlanned },
@@ -4572,6 +4775,8 @@ function restoreState() {
     focusExId = landId || boardOrder[boardOrder.length - 1];
     view = null;
     deferred = new Set();
+    pairs = []; pairSelectMode = false; pairSeq = 0;
+    shimConfigSupersets();
     repCount = getMaxReps(exById(focusExId).reps);
     state = noneLeft ? "finishing" : "ready";
     readyAt = {};
@@ -4690,6 +4895,7 @@ applySettingsToggles();
 VoiceCue.init();
 attachGlobalAudioRecovery();
 if (!restoreState()) {
+  shimConfigSupersets();
   // Fresh load (no saved state, or TTL expired): pre-start. The Start tap
   // unlocks audio on iOS, plays the day cue, and records workoutStartTime.
   state = "pre-start";
@@ -4721,6 +4927,14 @@ const SAFETY_REQUIRED = ["leg-press", "lying-leg-curl", "leg-press-calf-raises"]
 // session, so ?selftest=1 simply does not save. He is testing, not training.
 let selftestRunning = false;
 
+// Selftest helper: form a pair without going through the pill, so the
+// auto-dissolve case does not depend on select-mode plumbing it is not testing.
+function handlePairSelectTapForTest(aId, bId) {
+  focusExId = aId;
+  pairSelectMode = true;
+  handlePairSelectTap(bId);
+}
+
 function runSelfTest() {
   selftestRunning = true;
   const failures = [];
@@ -4732,6 +4946,7 @@ function runSelfTest() {
   const savedSeq = ledgerSeq;
   const saved = { focusExId, view, state, deferred: new Set(deferred),
                   boardOrder: [...boardOrder],
+                  pairs: pairs.map(x => ({ ...x })), pairSeq, pairSelectMode,
                   readyAt: { ...readyAt }, readyPlanned: { ...readyPlanned },
                   pauseStartedAt, pausedCumMs };
 
@@ -5008,6 +5223,108 @@ function runSelfTest() {
              "with nothing left anywhere, focus advance returns null -> finishing");
     }
 
+    // --- 8. EXPLICIT PAIRS (spec 3) ---
+    if (workout.length >= 3) {
+      const A = workout[0], B = workout[1], C = workout[2];
+      const resetPairs = () => {
+        ledger.length = 0; ledgerSeq = 0;
+        readyAt = {}; readyPlanned = {}; deferred = new Set();
+        pairs = []; pairSeq = 0; pairSelectMode = false;
+        boardOrder = workout.map(e => e.id);
+        focusExId = A.id; view = null; state = "ready";
+      };
+
+      resetPairs();
+      assert(canPair(A.id), "PAIR is offered when another exercise has work left");
+      pairPillTapped();
+      assert(pairSelectMode === true, "the PAIR tap enters partner-select mode");
+      renderProgress();
+      const inert = document.querySelector('.exercise-group[data-ex-id="' + A.id + '"].pair-inert');
+      assert(!inert, "the focused row is not inert during partner select");
+      handlePairSelectTap(B.id);
+      assert(pairSelectMode === false, "picking a partner leaves select mode");
+      const pr = activePairOf(A.id);
+      assert(!!pr && pairPartner(pr, A.id) === B.id, "the pair links exactly the two chosen exercises");
+      assert(activePairOf(B.id) === pr, "both members see the same pair");
+
+      // CAPS. Pairs are two exercises, one pair per exercise, two pairs max.
+      assert(!canPair(A.id), "an exercise already in a pair cannot start another");
+      assert(pairCandidates(C.id).indexOf(B.id) < 0, "an already-paired exercise is not offerable as a partner");
+
+      // ALTERNATION. Logging A hands focus to B, and back again.
+      const hopTo = advanceFocusFrom(A.id);
+      assert(hopTo === B.id, "after a set on A, focus hops to the partner");
+      assert(pairPartnerHop(A.id, B.id) === true, "the hop is recognised as a pair hop");
+
+      // EVERY SET LOGGED INSIDE A PAIR CARRIES ITS pairId. That stamp is how
+      // commit F knows the reps were earned UNDER-rested, which is stronger
+      // evidence rather than weaker -- so it annotates instead of voiding.
+      focusExId = A.id; view = null; state = "ready";
+      setDone();
+      const aEntry = performedOf(A.id).slice(-1)[0];
+      assert(aEntry && aEntry.pairId === pr.id,
+             "a set logged inside a pair records the pairId (got " + (aEntry && aEntry.pairId) + ")");
+
+      // REST RECONCILIATION NEEDS NO RULE. A runs on rest(A) from A's own log;
+      // returning to A after 45s of work on B shows the REMAINDER. The old
+      // engine handed back a fresh full rest here and silently over-rested
+      // every pair.
+      readyAt[A.id] -= 45000;
+      const remA = remainingMsOf(A.id) / 1000;
+      assert(Math.abs(remA - (A.rest - 45)) <= 3,
+             "returning to the anchor shows rest(A) minus the filler time (got " +
+             remA.toFixed(1) + "s, want " + (A.rest - 45) + "s)");
+
+      // DEFERRING A MEMBER KEEPS THE PAIR ALIVE. There is no suspended-pair
+      // state: alternation simply skips the parked member and resumes when he
+      // returns. Driven through the REAL deferFocused()/focusExercise() -- an
+      // inline deferred.add() would pass against a deferFocused that dissolves
+      // the pair, which is precisely the design that was rejected.
+      focusExId = B.id;
+      deferFocused();
+      assert(deferred.has(B.id), "deferFocused parks the focused member");
+      assert(!!activePairOf(A.id), "parking a member does NOT dissolve the pair");
+      assert(advanceFocusFrom(A.id) !== B.id, "alternation skips a parked partner");
+      focusExercise(B.id);
+      assert(!deferred.has(B.id), "returning to the parked member un-parks it");
+      assert(advanceFocusFrom(A.id) === B.id, "un-parking resumes alternation with no extra taps");
+
+      // UNLINK. Both keep their readiness -- unlinking is a scheduling
+      // decision, not a recovery event.
+      const readyABefore = readyAt[A.id];
+      dissolvePair(pr.id, "user");
+      assert(!activePairOf(A.id) && !activePairOf(B.id), "unlink dissolves the pair for both");
+      assert(readyAt[A.id] === readyABefore, "unlink does not touch readiness");
+      assert(advanceFocusFrom(A.id) === A.id, "after unlink, focus stays on the same exercise");
+      // The historical record survives the dissolve.
+      assert(performedOf(A.id).slice(-1)[0].pairId === pr.id,
+             "a dissolved pair does not erase the pairId on sets already logged inside it");
+
+      // AUTO-DISSOLVE when both members are finished. Cosmetic only.
+      resetPairs();
+      handlePairSelectTapForTest(A.id, B.id);
+      workout.forEach(ex => {
+        if (ex.id !== A.id && ex.id !== B.id) return;
+        for (let o = 1; o <= ex.sets; o++) {
+          ledger.push({ kind: "skip", n: ++ledgerSeq, exId: ex.id, set: o, at: 1, reason: "user" });
+        }
+      });
+      reapCompletedPairs();
+      assert(!activePairOf(A.id), "a pair auto-dissolves once both members are done");
+
+      // THE CONFIG SHIM. A build still shipping ss tags must not lose its
+      // pairing just because the engine stopped reading them.
+      resetPairs();
+      const hasSs = workout.some(ex => ex.ss);
+      shimConfigSupersets();
+      if (hasSs) {
+        assert(activePairs().length > 0, "config ss tags are shimmed into runtime pairs");
+      } else {
+        assert(activePairs().length === 0, "a config with no ss tags creates no pairs");
+      }
+      resetPairs();
+    }
+
   } catch (e) {
     failures.push("selftest threw: " + (e && e.message ? e.message : String(e)));
   }
@@ -5024,6 +5341,8 @@ function runSelfTest() {
   ledgerSeq = savedSeq;
   focusExId = saved.focusExId; view = saved.view;
   deferred = new Set(saved.deferred); boardOrder = [...saved.boardOrder];
+  pairs = saved.pairs.map(x => ({ ...x })); pairSeq = saved.pairSeq;
+  pairSelectMode = saved.pairSelectMode;
   state = saved.state;
   readyAt = { ...saved.readyAt }; readyPlanned = { ...saved.readyPlanned };
   pauseStartedAt = saved.pauseStartedAt; pausedCumMs = saved.pausedCumMs;
@@ -5137,6 +5456,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8D FREENAV</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8E PAIR</div>
 </body>
 </html>
