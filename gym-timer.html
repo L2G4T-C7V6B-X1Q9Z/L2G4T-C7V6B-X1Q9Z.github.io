@@ -638,6 +638,42 @@ body.dragging-exercise {
   touch-action: none;
 }
 .exercise-dots { display: flex; gap: 6px; align-items: center; }
+/* READINESS CHIP (v8C): every unfinished row that is NOT the focused one shows
+   when its machine comes back. Uncapped and unprioritised -- a 5-exercise day
+   renders at most 4 of these. The focused row has no chip because the big dial
+   IS its chip; two displays of the same number is one too many. */
+.ready-chip {
+  font-size: 10px;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+  color: #63636a;
+  height: 11px;
+  line-height: 11px;
+  white-space: nowrap;
+  text-align: center;
+}
+/* Reserve the row height even when a chip is absent, so a row flipping to
+   ready cannot jog the whole board sideways mid-set. */
+.ready-chip:empty::after { content: "\00a0"; }
+.ready-chip.is-ready {
+  color: var(--red-hot);
+  font-size: 0;               /* the dot is the whole message */
+}
+.ready-chip.is-ready::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red-hot);
+  animation: chip-ready-pulse 1.9s var(--ease) infinite;
+}
+.ready-chip.is-held { color: #55555a; letter-spacing: 0.6px; }
+@keyframes chip-ready-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.86); }
+  50%      { opacity: 1;    transform: scale(1); }
+}
 .exercise-label {
   writing-mode: vertical-rl;
   text-orientation: mixed;
@@ -1037,7 +1073,12 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
   #safety-banner:not(:empty) + #exercise-note { height: 42px; }
   #timer-display { font-size: 58px; letter-spacing: -2px; }
   #timer-label { margin-bottom: 6px; }
-  #progress { padding: 8px 12px 10px; }
+  /* v8C: the readiness chip adds an 11px row to every board column, and the
+     board lives inside the FIXED bottom bar -- so its height comes straight
+     out of the dial's slot. Paid for out of the board's own padding and the
+     inter-row gaps, not out of the dial. */
+  #progress { padding: 6px 12px 3px; }
+  .exercise-group { gap: 5px; }
   .diff-btn { min-height: 31px; }
 }
 
@@ -1513,6 +1554,28 @@ function markEdited(entry) {
   if (entry && entry !== currentLogEntry) entry.editedAt = Date.now();
 }
 
+// ---- READINESS HELPERS ----
+// The dial always shows the FOCUSED exercise. In C the cursor is still the
+// focus; commit D renames the concept, not the behaviour.
+const focusExId = () => exIdAt(currentExercise);
+function remainingMsOf(exId) {
+  const t = readyAt[exId];
+  if (!t) return 0;
+  // Paused: freeze at the instant of the pause. closePauseWindow() shifts every
+  // timestamp forward by the gap on resume, so the frozen reading and the
+  // resumed reading are the same number and nothing drifts across a pause.
+  const nowRef = (state === "paused" && pauseStartedAt != null) ? pauseStartedAt : Date.now();
+  return Math.max(0, t - nowRef);
+}
+const isReady = (exId) => remainingMsOf(exId) <= 0;
+// The ONE place readiness is written, plus skipRest's explicit override.
+function stampReady(exId, seconds, anchorMs) {
+  if (!exId) return;
+  if (!seconds || seconds <= 0) { delete readyAt[exId]; delete readyPlanned[exId]; return; }
+  readyAt[exId] = (anchorMs || Date.now()) + seconds * 1000;
+  readyPlanned[exId] = seconds;
+}
+
 let currentExercise = 0;
 let currentSet = 0;
 let viewingExercise = 0;
@@ -1526,9 +1589,21 @@ let state = "ready";   // pre-start | ready | resting | paused | alert | finishi
 // the summary's total duration (set 1's time is real, not extrapolated).
 let workoutStartTime = null;
 let timerInterval = null;
-let restRemaining = 0;
-let restTotalSeconds = 0;
-let restEndTime = null;
+// ---- READINESS AS TIMESTAMPS (v8C) ----
+// One map replaces the restEndTime / restRemaining / restTotalSeconds triplet.
+// A rest is not a clock owned by "the session"; it is a property of an
+// EXERCISE -- when is this machine ready again. Three consequences:
+//   - Absolute timestamps, so a reload mid-rest restores the identical number
+//     with no arithmetic and no drift.
+//   - Every exercise rests at once. Walking to another machine no longer
+//     destroys the first one's rest, because nothing was ever counting down
+//     "the" rest. That is what commit D's free navigation stands on.
+//   - The superset over-rest bug is deleted structurally rather than fixed:
+//     there is no "grant the anchor its full rest on return" branch to get
+//     wrong, only the anchor's own timestamp, which has been running the whole
+//     time the filler set took.
+let readyAt = {};       // exId -> epoch ms. Absent or <= now => ready.
+let readyPlanned = {};  // exId -> seconds. The episode's planned length; ring denominator.
 let currentLogEntry = null;
 let repCount = 10;
 
@@ -2272,6 +2347,7 @@ function maybeFireCountdownCue(secCeil) {
   if (!name) return;
   // Skip remaining-N cues when total rest is at/below the threshold
   // (redundant with the rest-start announcement).
+  const restTotalSeconds = readyPlanned[focusExId()] || 0;
   if ((secCeil === 60 && restTotalSeconds <= 60) ||
       (secCeil === 30 && restTotalSeconds <= 30) ||
       (secCeil === 10 && restTotalSeconds <= 10)) {
@@ -2723,6 +2799,10 @@ function renderProgress() {
     label.textContent = workout[i].name;
     group.appendChild(label);
     group.appendChild(dotsRow);
+    const chip = document.createElement("div");
+    chip.className = "ready-chip";
+    chip.dataset.chipExId = workout[i].id;
+    group.appendChild(chip);
     if (gid) {
       if (firstMemberOfGroup(gid) === i) {
         const un = document.createElement("button");
@@ -2750,6 +2830,42 @@ function renderSafety(exId) {
   if (!elSafety) return;
   const ex = exById(exId);
   elSafety.textContent = (ex && ex.safety) ? ex.safety : "";
+}
+
+// Repaint the readiness chips WITHOUT rebuilding the board. Runs on the
+// existing 1s interval; renderProgress is a full innerHTML rebuild and doing
+// that every second would fight SortableJS and drop taps.
+// State per row: counting -> mono time; ready -> red dot; deferred -> HELD;
+// focused / complete / fully-skipped -> nothing.
+function updateReadyChips() {
+  if (!elProgress) return;
+  const focus = focusExId();
+  const chips = elProgress.querySelectorAll('.ready-chip');
+  for (let k = 0; k < chips.length; k++) {
+    const chip = chips[k];
+    const id = chip.dataset.chipExId;
+    chip.classList.remove('is-ready', 'is-held');
+    if (!id || id === focus || remainingOf(id) <= 0 ||
+        state === 'pre-start' || state === 'finished') {
+      chip.textContent = "";
+      continue;
+    }
+    if (typeof deferred !== 'undefined' && deferred && deferred.has && deferred.has(id)) {
+      chip.textContent = "HELD";
+      chip.classList.add('is-held');
+      continue;
+    }
+    const ms = remainingMsOf(id);
+    if (ms <= 0) {
+      // Ready, and SILENT -- a non-focused exercise reaching readiness gets no
+      // voice cue (§6.4). "Rest complete" with three machines in flight names
+      // none of them, and an ambiguous instruction is a wrong instruction.
+      chip.textContent = "";
+      chip.classList.add('is-ready');
+    } else {
+      chip.textContent = formatTime(ms / 1000);
+    }
+  }
 }
 
 // Re-render JUST the note + weight line. Cheaper than renderExercise() and
@@ -2787,6 +2903,7 @@ function renderExercise() {
   elNote.classList.toggle("advisor", noteInfo.advisor);
   fitNoteToBox();
   renderProgress();
+  updateReadyChips();   // renderProgress rebuilds empty chips; fill them now
   requestAnimationFrame(centerMainButton);
 }
 
@@ -2828,20 +2945,18 @@ function stopFlash() {
 
 // Rest ring: arc + comet head track the remaining fraction.
 function updateRestRing() {
-  // While paused, restEndTime is frozen in the past -- the live value is the
-  // captured restRemaining. Without this branch, a reload while paused
-  // rendered the ring EMPTY instead of the paused fraction.
-  let remaining;
-  if (state === "paused" && restTotalSeconds) {
-    remaining = Math.max(0, restRemaining);
-  } else if (restEndTime && restTotalSeconds) {
-    remaining = Math.max(0, (restEndTime - Date.now()) / 1000);
-  } else {
+  // Both the pause freeze and the live countdown come out of remainingMsOf(),
+  // which knows about the pause -- so there is no separate paused branch to
+  // get wrong (the old one rendered an EMPTY ring after a reload-while-paused).
+  const id = focusExId();
+  const total = readyPlanned[id] || 0;
+  if (!total || !readyAt[id]) {
     elRingBar.setAttribute("stroke-dashoffset", RING_CIRCUMFERENCE);
     if (elRingHead) elRingHead.setAttribute("r", "0");
     return;
   }
-  const fraction = Math.max(0, Math.min(1, remaining / restTotalSeconds));
+  const remaining = remainingMsOf(id) / 1000;
+  const fraction = Math.max(0, Math.min(1, remaining / total));
   const offset = RING_CIRCUMFERENCE * (1 - fraction);
   elRingBar.setAttribute("stroke-dashoffset", offset);
   if (elRingHead) {
@@ -2876,7 +2991,7 @@ function updateElapsedDisplay() {
     }
   }
 }
-setInterval(updateElapsedDisplay, 1000);
+setInterval(() => { updateElapsedDisplay(); updateReadyChips(); }, 1000);
 
 // Pre-start footer: "21 SETS · ~35 MIN" -- walks the interleaved sequence and
 // prices each transition the way the engine will run it (superset GO = free,
@@ -2951,15 +3066,17 @@ function startCountdown() {
   if (timerInterval) clearInterval(timerInterval);
   updateRestRing();
   // 100ms updates = smooth ring without CSS transitions.
+  // Re-reads the FOCUS every tick instead of a captured end-time. A focus
+  // change therefore just starts rendering a different exercise's number --
+  // no teardown, no per-exercise clock objects, no chance of two timers.
   timerInterval = setInterval(() => {
-    const remaining = Math.max(0, (restEndTime - Date.now()) / 1000);
+    const remaining = remainingMsOf(focusExId()) / 1000;
     if (remaining <= 0) {
       clearInterval(timerInterval);
       timerInterval = null;
       updateRestRing();
       restDone();
     } else {
-      restRemaining = remaining;
       const secCeil = Math.ceil(remaining);
       maybeFireCountdownCue(secCeil);
       elTimer.textContent = formatTime(secCeil);
@@ -2976,11 +3093,10 @@ function applyState(notesValue) {
   showRestRing(false, false);
   clearTimerModes();
 
-  if (state === "resting" && restEndTime) {
-    const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
+  if (state === "resting" && readyAt[focusExId()]) {
+    const remaining = Math.ceil(remainingMsOf(focusExId()) / 1000);
     if (remaining <= 0) {
       state = "alert";
-      restEndTime = null;
       renderExercise();
       elTimer.textContent = "0:00";
       elTimerLabel.textContent = "GO";
@@ -2994,7 +3110,6 @@ function applyState(notesValue) {
       // play now would silent-fail -- queue for the first real tap.
       playOrQueue(restEndCueSeq());
     } else {
-      restRemaining = remaining;
       renderExercise();
       elTimer.textContent = formatTime(remaining);
       elTimerLabel.textContent = "REST";
@@ -3022,7 +3137,7 @@ function applyState(notesValue) {
     triggerAlertFeedback();
   } else if (state === "paused") {
     renderExercise();
-    elTimer.textContent = formatTime(restRemaining);
+    elTimer.textContent = formatTime(remainingMsOf(focusExId()) / 1000);
     elTimerLabel.textContent = "PAUSED";
     elBtn.textContent = "Resume";
     elBtn.className = "paused";
@@ -3190,6 +3305,10 @@ function setDone() {
       editedAt: null
     };
     ledger.push(logEntry);
+    // THE ONE PLACE READINESS IS WRITTEN. Anchored to the log time, not to
+    // "now at the end of this function", so the rest he sees is the rest he
+    // actually gets.
+    stampReady(exNow.id, exNow.rest, at);
   }
   currentLogEntry = logEntry;
 
@@ -3250,13 +3369,24 @@ function setDone() {
   // Filler → anchor: the REAL pair rest (the upcoming anchor's full rest).
   const supersetReturn = supersetHop && !supersetGo;
 
-  // IMMEDIATE hops: a superset GO (always), or an exercise boundary with the
-  // skip-rest setting ON (Soren 7/5): no countdown, the voice announces the walk.
-  if (supersetGo || (switchingExercise && !supersetHop && settings.skipExerciseRest)) {
+  // THE TRANSITION IS NOW DERIVED, NOT BRANCHED. The old code decided
+  // rest-vs-GO from a tree of superset flags and then computed a duration to
+  // count down. It now asks one question of the exercise he is walking to: is
+  // it ready? Every previous branch falls out of that, and the superset
+  // over-rest defect falls out with it -- there is no "grant the anchor its
+  // full rest on return" case, only the anchor's own timestamp, which has been
+  // running the whole time the filler set took.
+  const focusId = focusExId();
+  // Skip-exercise-rest OFF: a never-performed machine gets the 60s walk-over,
+  // stamped once. ON (his setting) leaves it unstamped, hence ready, hence the
+  // immediate GO he already has.
+  if (switchingExercise && !supersetHop && !settings.skipExerciseRest && !readyAt[focusId]) {
+    stampReady(focusId, 60);
+  }
+  const restRemaining = Math.ceil(remainingMsOf(focusId) / 1000);
+
+  if (restRemaining <= 0) {
     state = "ready";
-    restEndTime = null;
-    restRemaining = 0;
-    restTotalSeconds = 0;
     // The old UP NEXT rest was an accidental double-tap guard at exercise
     // boundaries. Without it, a bounce-tap on Set Done would instantly log a
     // phantom S1 -- brief lockout instead.
@@ -3310,11 +3440,11 @@ function setDone() {
   elSkip.style.display = "flex";
   elSkip.style.pointerEvents = "auto";
   state = "resting";
-  restRemaining = supersetReturn ? workout[currentExercise].rest
-                : switchingExercise ? 60
-                : workout[finishedExercise].rest;
-  restTotalSeconds = restRemaining;
-  restEndTime = Date.now() + restRemaining * 1000;
+  // No duration is computed here any more -- restRemaining was read off the
+  // focus's timestamp above. On a superset return that is the anchor's rest
+  // MINUS the time the filler set took, which is the true anchor-to-anchor
+  // gap; the old branch handed back a FULL fresh rest and quietly turned a
+  // 150s pair into filler-set + walk + 150s.
   elTimer.textContent = formatTime(restRemaining);
   elTimerLabel.textContent = (switchingExercise && !supersetReturn) ? "UP NEXT" : "REST";
   elBtn.textContent = "Pause";
@@ -3370,7 +3500,7 @@ function setDone() {
     initAudio();
     requestWakeLock();
     ensureNotifPermission();
-    scheduleRestNotif(Math.max(0, restEndTime - Date.now()));
+    scheduleRestNotif(remainingMsOf(focusExId()));
     saveState();
   });
 }
@@ -3418,8 +3548,9 @@ function pauseRest() {
   pendingPostGestureCues.length = 0;
   cancelRestNotif();
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  // Capture EXACT remaining (float seconds) so resume doesn't round-up jump.
-  restRemaining = Math.max(0, (restEndTime - Date.now()) / 1000);
+  // Nothing to capture: readyAt is absolute and remainingMsOf() freezes itself
+  // against pauseStartedAt, so the paused reading and the resumed reading are
+  // the same number by construction rather than by careful float arithmetic.
   state = "paused";
   // Paused wall-clock is excluded from restActualSec: a rest he deliberately
   // froze is not the same evidence as a rest he wandered away from, and only
@@ -3441,7 +3572,13 @@ function pauseRest() {
 // keep accruing into the next set's restActualSec forever.
 function closePauseWindow() {
   if (pauseStartedAt == null) return;
-  pausedCumMs += Math.max(0, Date.now() - pauseStartedAt);
+  const delta = Math.max(0, Date.now() - pauseStartedAt);
+  pausedCumMs += delta;
+  // Shift EVERY pending readiness, not just the focused one. A paused session
+  // is paused for the whole board -- he is not resting on the other machines
+  // either. Missing this would silently make every non-focused exercise ready
+  // early by exactly the length of the pause.
+  for (const id in readyAt) readyAt[id] += delta;
   pauseStartedAt = null;
 }
 
@@ -3454,12 +3591,11 @@ function resumeRest() {
   elTimerLabel.textContent = "REST";
   showRestRing(true, false);
   renderProgress();
-  // Restart the clock IMMEDIATELY -- the old code deferred restEndTime until
-  // the 'resumed' cue finished, and pausing again inside that window read the
-  // stale (expired) restEndTime and zeroed the rest. The cue plays over the
-  // running countdown.
-  restEndTime = Date.now() + restRemaining * 1000;
-  scheduleRestNotif(restRemaining * 1000);
+  // closePauseWindow() above already shifted every readyAt forward by the pause
+  // duration, so the clock is already correct here -- there is no end-time to
+  // recompute, and therefore no window in which a second pause could read a
+  // stale expired one and zero the rest (the bug this comment used to describe).
+  scheduleRestNotif(remainingMsOf(focusExId()));
   saveState();
   startCountdown();
   VoiceCue.cancel();
@@ -3479,6 +3615,11 @@ function skipRest() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   captureLog();
   showRestRing(false);
+  // THE FOCUSED EXERCISE ONLY. Skipping the leg press's rest must not un-rest
+  // the leg curl -- under the old single-clock model there was only one rest
+  // to skip, so this distinction did not exist and could not be got wrong.
+  // It exists now.
+  readyAt[focusExId()] = Date.now();
   state = "ready";
   clearTimerModes();
   elTimer.textContent = "-:--";
@@ -4146,6 +4287,8 @@ function buildSummaryHTML() {
 
 // ============ §16 PERSISTENCE ============
 function saveState() {
+  // ?selftest=1 drives real state transitions; none of them may reach storage.
+  if (typeof selftestRunning !== 'undefined' && selftestRunning) return;
   // A finished session must never persist: a save deferred past
   // finishWorkout's wipe (rAF race) would resurrect a dead state on reload.
   if (state === "finished") {
@@ -4168,7 +4311,9 @@ function saveState() {
     workoutStartTime: workoutStartTime,
     // --- cursor engine: retired by commit D, still the nav model in A ---
     currentExercise, currentSet, viewingExercise, viewingSet,
-    state, restEndTime, restRemaining, restTotalSeconds,
+    state,
+    readyAt: { ...readyAt },
+    readyPlanned: { ...readyPlanned },
     repCount,
     notes: elNotesInput.value,
     countdownFiredThresholds: [...countdownFiredThresholds],
@@ -4331,9 +4476,19 @@ function restoreState() {
       viewingSet = (typeof s.viewingSet === 'number') ? s.viewingSet : currentSet;
       repCount = s.repCount || 10;
       state = s.state;
-      restEndTime = s.restEndTime;
-      restRemaining = s.restRemaining;
-      restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
+      // v8C readiness. A v8A/v8B blob has the old restEndTime triplet instead;
+      // convert it onto the focused exercise so a push landing mid-rest keeps
+      // his actual countdown rather than dropping him to GO.
+      if (s.readyAt && typeof s.readyAt === 'object') {
+        readyAt = { ...s.readyAt };
+        readyPlanned = { ...(s.readyPlanned || {}) };
+      } else if (s.restEndTime) {
+        const fid = exIdAt(currentExercise);
+        if (fid) {
+          readyAt[fid] = s.restEndTime;
+          readyPlanned[fid] = s.restTotalSeconds || s.restRemaining || 0;
+        }
+      }
       countdownFiredThresholds = new Set(s.countdownFiredThresholds || []);
       dissolvedGroups = new Set(Array.isArray(s.dissolvedGroups) ? s.dissolvedGroups : []);
       rebuildSequence();
@@ -4357,9 +4512,8 @@ function restoreState() {
     viewingSet = currentSet;
     repCount = getMaxReps(workout[landIdx].reps);
     state = noneLeft ? "finishing" : "ready";
-    restEndTime = null;
-    restRemaining = 0;
-    restTotalSeconds = 0;
+    readyAt = {};
+    readyPlanned = {};
     countdownFiredThresholds = new Set();
     dissolvedGroups = new Set();
     pauseStartedAt = null;
@@ -4423,13 +4577,12 @@ function cancelRestNotif() {
 // re-decoding; by the time the user looks at the timer and taps, it's done.
 function handleResumeFromBackground() {
   recoverAudioCtx();
-  if (state === "resting" && restEndTime) {
-    const remaining = Math.ceil((restEndTime - Date.now()) / 1000);
+  if (state === "resting" && readyAt[focusExId()]) {
+    const remaining = Math.ceil(remainingMsOf(focusExId()) / 1000);
     if (remaining <= 0) {
       if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
       restDone();
     } else {
-      restRemaining = remaining;
       elTimer.textContent = formatTime(remaining);
       updateRestRing();
       // Threshold catch-up: cues whose trigger second passed while
@@ -4501,7 +4654,15 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 // It restores whatever it disturbed and never writes localStorage.
 const SAFETY_REQUIRED = ["leg-press", "lying-leg-curl", "leg-press-calf-raises"];
 
+// Latched ON for the whole page life, never cleared. The selftest drives the
+// REAL setDone()/skipRest(), which persist -- and those calls are also queued
+// behind requestAnimationFrame, so they land after any "restore" we could do.
+// A diagnostic load must not be able to write a fake ledger over a live
+// session, so ?selftest=1 simply does not save. He is testing, not training.
+let selftestRunning = false;
+
 function runSelfTest() {
+  selftestRunning = true;
   const failures = [];
   const checks = [];
   function assert(ok, label) { checks.push(label); if (!ok) failures.push(label); }
@@ -4509,7 +4670,9 @@ function runSelfTest() {
   // Snapshot everything the run mutates.
   const savedLedger = ledger.map(e => ({ ...e }));
   const savedSeq = ledgerSeq;
-  const saved = { currentExercise, currentSet, viewingExercise, viewingSet, state };
+  const saved = { currentExercise, currentSet, viewingExercise, viewingSet, state,
+                  readyAt: { ...readyAt }, readyPlanned: { ...readyPlanned },
+                  pauseStartedAt, pausedCumMs };
 
   function seedFakeLedger(exId, count, grade) {
     ledger.length = 0;
@@ -4600,17 +4763,112 @@ function runSelfTest() {
            "frozen weight moved under a rep edit (got '" + setDropTag(0, 1) + "')");
     assert(chronologyLine().indexOf("Order:") === 0, "chronology line renders");
 
+    // --- 6. READINESS TIMESTAMPS ---
+    if (workout.length >= 2) {
+      const A = workout[0], B = workout[1];
+      const near = (a, b, tol) => Math.abs(a - b) <= (tol == null ? 2 : tol);
+
+      readyAt = {}; readyPlanned = {}; pauseStartedAt = null; state = "resting";
+      const t0 = Date.now();
+      stampReady(A.id, A.rest, t0);
+      assert(near(remainingMsOf(A.id) / 1000, A.rest), "stamped rest counts from the log time");
+      assert(isReady(B.id), "an unstamped exercise is ready (no clock, no wait)");
+
+      // EVERY EXERCISE RESTS AT ONCE. Focus B; A must keep counting on the board.
+      currentExercise = exIdxOf(B.id); currentSet = 0;
+      viewingExercise = currentExercise; viewingSet = 0;
+      renderProgress(); updateReadyChips();
+      const chipA = document.querySelector('.ready-chip[data-chip-ex-id="' + A.id + '"]');
+      const chipB = document.querySelector('.ready-chip[data-chip-ex-id="' + B.id + '"]');
+      assert(!!chipA && /^\d+:\d\d$/.test(chipA.textContent),
+             "non-focused resting row shows a live chip (got '" + (chipA && chipA.textContent) + "')");
+      assert(!!chipA && !chipA.classList.contains('is-ready'), "a counting chip is not marked ready");
+      assert(!!chipB && chipB.textContent === "" && !chipB.classList.contains('is-ready'),
+             "the FOCUSED row shows no chip (the dial is its display)");
+
+      // A ready non-focused row shows the dot.
+      readyAt[A.id] = Date.now() - 1000;
+      updateReadyChips();
+      assert(chipA.classList.contains('is-ready') && chipA.textContent === "",
+             "a ready non-focused row flips to the red dot, no text");
+
+      // PAUSE FREEZES THE WHOLE BOARD, not just the dial.
+      stampReady(A.id, 150, t0);
+      state = "paused"; pauseStartedAt = t0 + 10000;   // 10s into the rest
+      assert(near(remainingMsOf(A.id) / 1000, 140),
+             "paused reading is frozen at the pause instant (got " + (remainingMsOf(A.id) / 1000).toFixed(1) + ")");
+      const twice = [remainingMsOf(A.id), remainingMsOf(A.id)];
+      assert(twice[0] === twice[1], "a paused reading does not drift between reads");
+
+      // RESUME SHIFTS EVERY TIMESTAMP, not only the focused one.
+      readyAt = {}; readyPlanned = {};
+      stampReady(A.id, 150, Date.now());
+      stampReady(B.id, 120, Date.now());
+      const beforeA = readyAt[A.id], beforeB = readyAt[B.id];
+      pauseStartedAt = Date.now() - 5000;              // a 5s pause
+      state = "resting";
+      closePauseWindow();
+      assert(near(readyAt[A.id] - beforeA, 5000, 60) && near(readyAt[B.id] - beforeB, 5000, 60),
+             "resume shifts every readyAt by the pause, not just the focus " +
+             "(A+" + (readyAt[A.id] - beforeA) + " B+" + (readyAt[B.id] - beforeB) + ")");
+
+      // SKIP REST IS SCOPED TO ONE EXERCISE.
+      // Calls the REAL skipRest(). Asserting an inline copy of what skipRest is
+      // supposed to do would pass no matter what skipRest actually does, which
+      // is a test that cannot fail.
+      readyAt = {}; readyPlanned = {};
+      stampReady(A.id, 150, Date.now());
+      stampReady(B.id, 120, Date.now());
+      currentExercise = exIdxOf(A.id); currentSet = 0;
+      viewingExercise = currentExercise; viewingSet = 0;
+      state = "resting";
+      skipRest();
+      assert(isReady(A.id), "skipRest() makes the focused exercise ready");
+      assert(!isReady(B.id), "skipRest() does NOT un-rest the other machines");
+
+      // setDone() STAMPS READINESS FROM THE LOG TIME.
+      // Also driven through the real function: this is where the superset
+      // over-rest defect used to live (the old code handed the anchor a fresh
+      // full rest on return instead of its running remainder), so the stamp's
+      // anchor is the thing that has to be right.
+      ledger.length = 0; ledgerSeq = 0;
+      readyAt = {}; readyPlanned = {};
+      currentExercise = exIdxOf(A.id); currentSet = 0;
+      viewingExercise = currentExercise; viewingSet = 0;
+      state = "ready";
+      const beforeDone = Date.now();
+      setDone();
+      assert(near((readyAt[A.id] - beforeDone) / 1000, A.rest, 3),
+             "setDone stamps readyAt at logTime + rest (got +" +
+             ((readyAt[A.id] - beforeDone) / 1000).toFixed(1) + "s, want +" + A.rest + "s)");
+      assert(readyPlanned[A.id] === A.rest, "setDone records the planned rest for the ring");
+      // The remainder, not a fresh rest: 45s of other work goes by, and the
+      // number he comes back to must be smaller.
+      readyAt[A.id] -= 45000;
+      assert(near(remainingMsOf(A.id) / 1000, A.rest - 45, 3),
+             "returning to an anchor shows its remainder, not a fresh full rest (got " +
+             (remainingMsOf(A.id) / 1000).toFixed(1) + "s)");
+    }
+
   } catch (e) {
     failures.push("selftest threw: " + (e && e.message ? e.message : String(e)));
   }
 
   // Restore. The selftest must leave no trace -- he may be mid-workout.
+  // Driving real transitions can leave a countdown interval and a queued
+  // notification running; kill both before handing the screen back.
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  try { cancelRestNotif(); } catch (e) {}
+  try { VoiceCue.cancel(); } catch (e) {}
+  pendingPostGestureCues.length = 0;
   ledger.length = 0;
   savedLedger.forEach(e => ledger.push(e));
   ledgerSeq = savedSeq;
   currentExercise = saved.currentExercise; currentSet = saved.currentSet;
   viewingExercise = saved.viewingExercise; viewingSet = saved.viewingSet;
   state = saved.state;
+  readyAt = { ...saved.readyAt }; readyPlanned = { ...saved.readyPlanned };
+  pauseStartedAt = saved.pauseStartedAt; pausedCumMs = saved.pausedCumMs;
   try { renderExercise(); } catch (e) {}
 
   showSelfTestOverlay(failures, checks.length);
@@ -4721,6 +4979,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8B SAFETY</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8C READY</div>
 </body>
 </html>
