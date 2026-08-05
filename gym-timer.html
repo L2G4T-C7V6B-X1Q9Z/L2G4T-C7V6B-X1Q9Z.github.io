@@ -111,6 +111,33 @@ h1:empty { display: none; }
 #set-info .wt-now { color: var(--red-hot); font-weight: 700; letter-spacing: 0.35px; }
 #set-info .wt-was { color: var(--ink-3); font-size: 0.85em; margin-left: 4px; }
 
+/* ---- 3.5 SAFETY BANNER (injury constraints, own channel) ----
+   Deliberately NOT part of the note card. The note card is the advisor's, and
+   the advisor won: once a prior set was graded, dynamicRepAdvice returned a
+   string on essentially every path and the leg-curl medial-thigh hard stop
+   vanished from the screen for every set after the first. Separating the
+   channel is what fixes that -- the advisor has no code path to this element.
+   Font size is FIXED at 11px and never auto-shrinks: fitNoteToBox eats into
+   the note, never into this. A safety line rendered at 8px is worse than one
+   that pushed the layout. */
+#safety-banner {
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--red-hot);
+  text-align: left;
+  width: 100%;
+  max-width: 340px;
+  margin-bottom: 7px;
+  padding: 6px 11px;
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  background: rgba(224, 88, 74, 0.07);
+  box-sizing: border-box;
+}
+#safety-banner:empty { display: none; }
+
 /* ---- 4 NOTE CARD (coach voice) ---- */
 #exercise-note {
   font-size: 12px;
@@ -988,12 +1015,28 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
    ~70px so the dial gets a real slot. fitNoteToBox + centerMainButton read
    live geometry and adapt on their own. */
 @media (max-height: 740px) {
-  body { padding-top: 12px; }
-  h1 { margin-bottom: 8px; }
-  #exercise-name { font-size: 19px; }
+  /* v8B: the safety banner spends ~44px of a budget that had ~110px of dial
+     slot left. Recovered from MARGINS between the fixed-height blocks, not
+     from type size -- every number here is read at arm's length mid-set, and
+     the banner's 11px is a hard floor. */
+  body { padding-top: 8px; }
+  h1 { margin-bottom: 5px; }
+  #exercise-name { font-size: 19px; margin-bottom: 4px; }
+  #set-info { margin-bottom: 5px; }
   #exercise-note { height: 58px; }
+  /* Tighten the banner's BOX (padding/margin), never its font -- 11px is a
+     floor, not a starting point. */
+  #safety-banner { padding: 5px 9px; margin-bottom: 5px; line-height: 1.25; }
+  /* THE BUDGET RULE, in CSS: when a safety banner is present at a compact
+     height, the NOTE card gives up the space, not the dial and not the banner.
+     Measured 2026-08-05 at 375x667: the banner costs ~43px, which drove the
+     dial from 109.6px onto its 104px floor exactly -- clamped, with zero
+     headroom, so one longer constraint string would have pushed it through the
+     floor and into the difficulty row. fitNoteToBox shrinks the advisor prose
+     to fit; the injury constraint is the thing that must not shrink. */
+  #safety-banner:not(:empty) + #exercise-note { height: 42px; }
   #timer-display { font-size: 58px; letter-spacing: -2px; }
-  #timer-label { margin-bottom: 10px; }
+  #timer-label { margin-bottom: 6px; }
   #progress { padding: 8px 12px 10px; }
   .diff-btn { min-height: 31px; }
 }
@@ -1048,6 +1091,11 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 <h1 id="day-title"></h1>
 <div id="exercise-name"></div>
 <div id="set-info"></div>
+<!-- The safety channel. Its own element, above the note card, written ONLY by
+     renderSafety() from ex.safety. No advisor function can reach it, which is
+     what makes an injury constraint structurally un-overwritable rather than
+     dependent on which branch of computeSetNoteInfo happened to win. -->
+<div id="safety-banner" role="alert"></div>
 <div id="exercise-note"></div>
 <div id="timer-display" role="timer" aria-live="polite" aria-atomic="true"></div>
 <div id="timer-label"></div>
@@ -1259,6 +1307,7 @@ const workout = [
     weight: "145 lbs",
     backoff: "130 lbs",
     rest: 90,
+    safety: "Anything sharp in the KNEE here is a knee signal, not calf burn. Stop the session.",
     note: "Same sled as the leg press, so stay on the machine. Push through the ball of the foot, full stretch at the bottom, hard squeeze at the top, no bouncing. NOTE: these provoked pain seconds after the leg press did on 7/30, so anything sharp here is a KNEE signal -- stop, do not push through it.",
     setNotes: [
       "S1: full stretch at the bottom, controlled. Anything sharp in the knee and you stop the session.",
@@ -1581,6 +1630,7 @@ const elDayTitle = document.getElementById("day-title");
 const elName = document.getElementById("exercise-name");
 const elSet = document.getElementById("set-info");
 const elNote = document.getElementById("exercise-note");
+const elSafety = document.getElementById("safety-banner");
 const elTimer = document.getElementById("timer-display");
 const elTimerLabel = document.getElementById("timer-label");
 const elBtn = document.getElementById("main-btn");
@@ -2424,24 +2474,20 @@ function defaultAdvice(setIdx, prev, ex) {
 // Returns { text, advisor } -- advisor=true when the note is a LIVE computed
 // call (adviceFor / dynamicRepAdvice / trigger advice), false for the canned
 // setNotes/note fallback. The note card styles the two differently.
-// SAFETY PREFIX -- unconditional, survives every advisor branch.
-// An injury constraint used to live only in setNotes, which computeSetNoteInfo
-// returns as a FALLBACK. Once the prior set is graded, dynamicRepAdvice
-// essentially always returns a string (it ends in two unconditional catch-alls),
-// so the advisor text won and the constraint vanished from the screen for every
-// set after the first. Verified 2026-08-05 on the live Lower build: after
-// grading Leg Curl S1, S2's card read "S1 was 9 with room. Push 9-11 here, hold
-// 40 lbs." with the medial-thigh hard stop nowhere on it.
-// The existing guard (CLAUDE.md Obs 389) checks with a grep of the built file,
-// which PASSES here -- the text is present in setNotes. The failure is at render
-// time, so a file-level check is structurally blind to it. Hence: ex.safety is
-// prefixed at the single chokepoint every consumer reads through, not stored in
-// prose that a later branch can outrank.
-function withSafety(ex, out) {
-  if (!ex || !ex.safety) return out;
-  return { text: ex.safety + "  " + out.text, advisor: out.advisor, safety: true };
-}
-
+//
+// SAFETY IS NOT IN HERE, AND THAT IS THE POINT (v8B, superseding the v7b
+// withSafety() prefix). An injury constraint used to live only in setNotes,
+// which this function returns as a FALLBACK -- so once the prior set was graded
+// and dynamicRepAdvice returned a string (it ends in two unconditional
+// catch-alls), the advisor won and the constraint vanished. Verified 2026-08-05
+// on the live Lower build: after grading Leg Curl S1, S2's card read "S1 was 9
+// with room. Push 9-11 here, hold 40 lbs." with the medial-thigh hard stop
+// nowhere on it.
+// v7b prefixed ex.safety onto whatever this returned, which worked but left the
+// constraint inside a string the advisor also owns. v8 moves it to its own DOM
+// element written by renderSafety(). Survival is now STRUCTURAL: this function
+// has no reference to #safety-banner and renderSafety has no reference to the
+// advisor, so neither can overwrite the other regardless of which branch fires.
 function computeSetNoteInfo(exIdx, setIdx) {
   const ex = workout[exIdx];
   if (!ex) return { text: "", advisor: false };
@@ -2462,16 +2508,16 @@ function computeSetNoteInfo(exIdx, setIdx) {
   if (allLogged && prevLogs.length === setIdx && setIdx > 0) {
     if (typeof ex.adviceFor === 'function') {
       const dynamic = ex.adviceFor(setIdx, prevLogs, ex);
-      if (dynamic) return withSafety(ex, { text: dynamic, advisor: true });
+      if (dynamic) return { text: dynamic, advisor: true };
     }
     const reactive = dynamicRepAdvice(setIdx, prevLogs, ex);
-    if (reactive) return withSafety(ex, { text: reactive, advisor: true });
+    if (reactive) return { text: reactive, advisor: true };
     const generic = defaultAdvice(setIdx, prevLogs, ex);
-    if (generic) return withSafety(ex, { text: generic, advisor: true });
+    if (generic) return { text: generic, advisor: true };
   }
   // Static fallback (S1 always lands here; later sets land here pre-grading).
-  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) return withSafety(ex, { text: ex.setNotes[setIdx], advisor: false });
-  return withSafety(ex, { text: ex.note || "", advisor: false });
+  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) return { text: ex.setNotes[setIdx], advisor: false };
+  return { text: ex.note || "", advisor: false };
 }
 function computeSetNote(exIdx, setIdx) {
   return computeSetNoteInfo(exIdx, setIdx).text;
@@ -2695,6 +2741,17 @@ function renderProgress() {
   }
 }
 
+// THE SAFETY CHANNEL. One function, two call sites (renderExercise and
+// refreshSetNote), one input: exById(exId).safety. It reads nothing else and
+// nothing else writes #safety-banner. That is the whole design -- an advisor
+// cannot overwrite a field it has no code path to.
+// textContent, not innerHTML: config prose is not markup.
+function renderSafety(exId) {
+  if (!elSafety) return;
+  const ex = exById(exId);
+  elSafety.textContent = (ex && ex.safety) ? ex.safety : "";
+}
+
 // Re-render JUST the note + weight line. Cheaper than renderExercise() and
 // non-disruptive to layout. Called from rep-picker onChange + the difficulty
 // handler so set N's advice updates live as the user grades set N-1.
@@ -2704,6 +2761,7 @@ function refreshSetNote() {
   // Weight refreshes too: grading the prior set can flip the upcoming set to
   // a reactive drop, and the loaded weight must track that live.
   elSet.innerHTML = setInfoHTML(exIdx, setIdx);
+  renderSafety(exIdAt(exIdx));
   const info = computeSetNoteInfo(exIdx, setIdx);
   elNote.textContent = info.text;
   elNote.classList.toggle("advisor", info.advisor);
@@ -2721,6 +2779,9 @@ function renderExercise() {
   if (state === "finishing" && setIdx >= ex.sets) setIdx = ex.sets - 1;
   elName.textContent = ex.name;
   elSet.innerHTML = setInfoHTML(exIdx, setIdx);
+  // Every display path funnels through here, so the banner tracks whichever
+  // exercise is on screen -- including a browse of another machine's set.
+  renderSafety(ex.id);
   const noteInfo = computeSetNoteInfo(exIdx, setIdx);
   elNote.textContent = noteInfo.text;
   elNote.classList.toggle("advisor", noteInfo.advisor);
@@ -2850,8 +2911,17 @@ function centerMainButton() {
   const barRect = elBottomBar ? elBottomBar.getBoundingClientRect() : null;
   const anchorTop = (diffRect.height > 0) ? diffRect.top : (barRect ? barRect.top : 0);
   if (!anchorTop) return;
-  const CLEAR_ABOVE = 24;
-  const CLEAR_BELOW = 24;
+  // 24px of air above and below the dial is a luxury on an SE-class screen, and
+  // v8's safety banner spends ~28px of the same budget. Measured 2026-08-05 at
+  // 375x667 mid-rest: the slot fell to 81px while btnH clamped to its 104px
+  // floor, so the dial OVERFLOWED its own slot by ~11px each way -- it still
+  // cleared the difficulty row, but only because the 24px clearance absorbed
+  // the overflow, which means the clearance was never really 24px. Spending it
+  // deliberately at compact heights is honest; letting the clamp silently eat
+  // it is not. Roomy screens keep the full 24.
+  const compact = (window.innerHeight <= 740);
+  const CLEAR_ABOVE = compact ? 14 : 24;
+  const CLEAR_BELOW = compact ? 14 : 24;
   const MAX_BTN = 184;
   const MIN_BTN = 104;
   const slotTop = labelRect.bottom + CLEAR_ABOVE;
@@ -3453,6 +3523,7 @@ function finishWorkout() {
   elDayTitle.style.display = "none";
   elName.style.display = "none";
   elSet.style.display = "none";
+  if (elSafety) { elSafety.textContent = ""; elSafety.style.display = "none"; }
   elNote.style.display = "none";
   elTimer.style.display = "none";
   elTimerLabel.style.display = "none";
@@ -4417,6 +4488,167 @@ setTimeout(centerMainButton, 50);
 window.addEventListener("resize", centerMainButton);
 window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 100));
 
+// ============ §17.5 SELFTEST (?selftest=1) ============
+// WHY THIS EXISTS AND WHY IT ASSERTS THE DOM.
+// The standing guard for injury constraints (CLAUDE.md Obs 389) greps the built
+// file for the safety text. That check PASSED for the entire life of the bug it
+// was written to catch: the text was present in setNotes the whole time. The
+// failure was at RENDER time -- advisor output outranked the static note once
+// the prior set was graded -- and a file-level grep is structurally blind to
+// that. So this renders into the LIVE DOM, with the advisor branches actually
+// firing, and reads back what is on the screen.
+//
+// It restores whatever it disturbed and never writes localStorage.
+const SAFETY_REQUIRED = ["leg-press", "lying-leg-curl", "leg-press-calf-raises"];
+
+function runSelfTest() {
+  const failures = [];
+  const checks = [];
+  function assert(ok, label) { checks.push(label); if (!ok) failures.push(label); }
+
+  // Snapshot everything the run mutates.
+  const savedLedger = ledger.map(e => ({ ...e }));
+  const savedSeq = ledgerSeq;
+  const saved = { currentExercise, currentSet, viewingExercise, viewingSet, state };
+
+  function seedFakeLedger(exId, count, grade) {
+    ledger.length = 0;
+    const ex = exById(exId);
+    const lo = parseInt((String(ex.reps || "").match(/(\d+)/) || [])[1], 10) || 8;
+    for (let i = 0; i < count; i++) {
+      ledger.push({
+        kind: "set", n: i + 1, exId: exId, set: i + 1, reps: lo, difficulty: grade,
+        note: "", weightLbs: 100, prescribedLbs: 100, dropped: false, pairId: null,
+        restPlannedSec: ex.rest || null, restActualSec: null, pausedCumMs: 0,
+        at: 1000 * (i + 1), editedAt: null
+      });
+    }
+  }
+
+  try {
+    state = "ready";
+    // --- 1. SAFETY SURVIVES EVERY ADVISOR BRANCH, IN THE DOM ---
+    // grade 5 = MAX at the rep floor -> the drop branch fires.
+    // grade 2 = LIGHT -> the room-left branch fires.
+    // Both make the advisor own #exercise-note, which is the state the bug lived in.
+    for (const ex of workout) {
+      const exIdx = exIdxOf(ex.id);
+      for (let s = 1; s <= ex.sets; s++) {
+        for (const grade of [5, 2]) {
+          seedFakeLedger(ex.id, s - 1, grade);
+          currentExercise = exIdx; currentSet = s - 1;
+          viewingExercise = exIdx; viewingSet = s - 1;
+          renderExercise();
+          const bannerTxt = elSafety ? elSafety.textContent : "";
+          const noteTxt = elNote ? elNote.textContent : "";
+          if (ex.safety) {
+            assert(bannerTxt.indexOf(ex.safety) >= 0,
+                   ex.id + " S" + s + " grade=" + grade + ": safety missing from DOM");
+            // Double-print check: the v7b prefix must be gone, or he reads the
+            // same hard stop twice and the note card shrinks to fit it.
+            assert(noteTxt.indexOf(ex.safety) < 0,
+                   ex.id + " S" + s + " grade=" + grade + ": safety duplicated into note card");
+          } else {
+            assert(bannerTxt === "", ex.id + " S" + s + ": banner not cleared for a safety-free exercise");
+          }
+        }
+      }
+    }
+
+    // --- 2. THE CONSTRAINTS THAT MUST EXIST AT ALL ---
+    // A build that quietly drops the 90-degree cap or the medial-thigh hard
+    // stop passes every render assert above, because there is nothing to render.
+    for (const id of SAFETY_REQUIRED) {
+      const ex = exById(id);
+      if (!ex) continue;   // not in today's config (e.g. an Upper day)
+      assert(!!ex.safety && String(ex.safety).trim().length > 0,
+             id + ": is in SAFETY_REQUIRED but has an empty safety field");
+    }
+
+    // --- 3. IDENTITY + PLAN HASH ---
+    const ids = workout.map(ex => ex.id);
+    assert(ids.every(Boolean), "every exercise has an id");
+    assert(new Set(ids).size === ids.length, "exercise ids are unique: " + ids.join(","));
+    assert(planHashGoldenOK === true, "planHash golden vector drifted");
+
+    // --- 4. AUDIO CLIP RESOLUTION ---
+    // A missing alias fails SILENTLY by design (null clip, cue skipped), which
+    // is how the ONE exercise with a nerve history went unannounced for ~10
+    // builds. Silence is fine; unnoticed silence is not.
+    for (const ex of workout) {
+      assert(!!(ex.clip || exerciseClipName(ex.name)),
+             ex.id + ': no audio clip resolves for "' + ex.name + '"');
+    }
+
+    // --- 5. LEDGER INVARIANTS ---
+    ledger.length = 0;
+    ledgerSeq = 0;
+    const a = workout[0];
+    ledger.push({ kind: "set", n: 1, exId: a.id, set: 1, reps: 10, difficulty: 5, note: "",
+      weightLbs: 190, prescribedLbs: 190, dropped: false, pairId: null,
+      restPlannedSec: a.rest, restActualSec: null, pausedCumMs: 0, at: 1, editedAt: null });
+    ledger.push({ kind: "set", n: 2, exId: a.id, set: 2, reps: 8, difficulty: 5, note: "",
+      weightLbs: 175, prescribedLbs: 190, dropped: true, pairId: null,
+      restPlannedSec: a.rest, restActualSec: 160, pausedCumMs: 0, at: 2, editedAt: null });
+    const handSum = 10 * 190 + 8 * 175;
+    assert(sessionTotals().volume === handSum,
+           "sessionTotals tonnage " + sessionTotals().volume + " != hand sum " + handSum);
+    assert(sessionTotals().sets === 2, "sessionTotals set count");
+    // The freeze itself: editing reps must not move the weight the set was done at.
+    ledger[0].reps = 20;
+    assert(setDropTag(0, 1) === " @ 175",
+           "frozen weight moved under a rep edit (got '" + setDropTag(0, 1) + "')");
+    assert(chronologyLine().indexOf("Order:") === 0, "chronology line renders");
+
+  } catch (e) {
+    failures.push("selftest threw: " + (e && e.message ? e.message : String(e)));
+  }
+
+  // Restore. The selftest must leave no trace -- he may be mid-workout.
+  ledger.length = 0;
+  savedLedger.forEach(e => ledger.push(e));
+  ledgerSeq = savedSeq;
+  currentExercise = saved.currentExercise; currentSet = saved.currentSet;
+  viewingExercise = saved.viewingExercise; viewingSet = saved.viewingSet;
+  state = saved.state;
+  try { renderExercise(); } catch (e) {}
+
+  showSelfTestOverlay(failures, checks.length);
+}
+
+function showSelfTestOverlay(failures, total) {
+  const pass = (failures.length === 0);
+  const box = document.createElement("div");
+  box.id = "selftest-overlay";
+  box.setAttribute("data-selftest", pass ? "PASS" : "FAIL");
+  box.style.cssText =
+    "position:fixed;inset:0;z-index:9999;overflow:auto;padding:16px;" +
+    "background:rgba(11,11,12,0.97);color:#f0efec;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;";
+  const head = document.createElement("div");
+  head.style.cssText = "font-size:15px;font-weight:700;margin-bottom:10px;letter-spacing:1px;color:" +
+    (pass ? "#f0efec" : "#e0584a") + ";";
+  head.textContent = pass ? ("SELFTEST PASS  (" + total + " asserts)")
+                          : ("SELFTEST FAIL  " + failures.length + "/" + total);
+  box.appendChild(head);
+  (pass ? ["all asserts green"] : failures).forEach(line => {
+    const d = document.createElement("div");
+    d.style.cssText = "margin-bottom:5px;padding-left:10px;border-left:2px solid " +
+      (pass ? "#2a2a2e" : "#e0584a") + ";";
+    d.textContent = line;
+    box.appendChild(d);
+  });
+  const hint = document.createElement("div");
+  hint.style.cssText = "margin-top:14px;color:#6a6a6e;";
+  hint.textContent = "tap to dismiss";
+  box.appendChild(hint);
+  box.addEventListener("click", () => { try { box.remove(); } catch (e) {} });
+  document.body.appendChild(box);
+}
+
+try {
+  if (new URLSearchParams(location.search).has('selftest')) runSelfTest();
+} catch (e) {}
+
 // ============ §18 VISUAL FX OBSERVER ============
 // Presentation only: watches text/class changes and pulses fx-* classes.
 // Never reads or changes workout state, timing, audio, storage, or controls.
@@ -4489,6 +4721,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8A LEDGER</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8B SAFETY</div>
 </body>
 </html>
