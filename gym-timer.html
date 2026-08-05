@@ -592,6 +592,11 @@ h1:empty { display: none; }
   pointer-events: auto;
   transform: translateX(0);
 }
+/* A hidden pill leaves the LAYOUT, not just the paint. Otherwise the stack
+   reserves a slot for every pill that could ever show and grows past the dial
+   into the difficulty row underneath it. */
+#return-pill:not(.visible), #occupied-pill:not(.visible),
+#skip-ex-pill:not(.visible), #pair-pill:not(.visible) { display: none; }
 /* Neutral until they mean something: OCCUPIED and SKIP EX are navigation, not
    alarms. Only the armed SKIP EX confirm earns the red. */
 #occupied-pill, #skip-ex-pill, #pair-pill {
@@ -606,7 +611,10 @@ h1:empty { display: none; }
 #pair-pill.disabled { opacity: 0.35; pointer-events: none; }
 /* Partner-selection mode: only the rows he can actually pair with respond. */
 .exercise-group.pair-candidate { animation: pair-candidate-pulse 1.5s var(--ease) infinite; }
-.exercise-group.pair-inert { opacity: 0.3; pointer-events: none; }
+/* Dimmed, NOT dead. pointer-events:none made partner-select a mode with no way
+   out except finding CANCEL -- taps on most of the board would do nothing at
+   all. Any tap now cancels. */
+.exercise-group.pair-inert { opacity: 0.3; }
 @keyframes pair-candidate-pulse {
   0%, 100% { opacity: 0.62; }
   50%      { opacity: 1; }
@@ -671,17 +679,26 @@ h1:empty { display: none; }
   border-bottom: 2px solid rgba(192, 57, 43, 0.55);
   padding-bottom: 3px;
 }
+/* Measured at 33 x 13 px, which is a third of a fingertip -- "super
+   superfinnicky", and he was right. The visible chip stays small (it must not
+   dominate a board row) but its HIT AREA is padded out to ~44px tall. */
 .ss-unlink {
-  font-size: 7px;
+  font-size: 8px;
   letter-spacing: 0.5px;
   color: var(--ink-3);
   background: none;
   border: 1px solid var(--line-hi);
-  border-radius: 3px;
-  padding: 2px 5px;
-  margin-top: 2px;
+  border-radius: 4px;
+  padding: 4px 10px;
+  margin-top: 3px;
   cursor: pointer;
+  position: relative;
   -webkit-tap-highlight-color: transparent;
+}
+.ss-unlink::before {
+  content: "";
+  position: absolute;
+  inset: -12px -10px;
 }
 /* SortableJS: .sortable-chosen = held item; .sortable-drag = hidden clone
    (the ghost placeholder + items animating around it are the drag cue) */
@@ -719,24 +736,9 @@ body.dragging-exercise {
 /* Reserve the row height even when a chip is absent, so a row flipping to
    ready cannot jog the whole board sideways mid-set. */
 .ready-chip:empty::after { content: "\00a0"; }
-.ready-chip.is-ready {
-  color: var(--red-hot);
-  font-size: 0;               /* the dot is the whole message */
-}
-.ready-chip.is-ready::after {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--red-hot);
-  animation: chip-ready-pulse 1.9s var(--ease) infinite;
-}
+.ready-chip.is-ready { color: var(--red-hot); font-weight: 700; }
 .ready-chip.is-held { color: #55555a; letter-spacing: 0.6px; }
-@keyframes chip-ready-pulse {
-  0%, 100% { opacity: 0.45; transform: scale(0.86); }
-  50%      { opacity: 1;    transform: scale(1); }
-}
+.ready-chip.is-skipped { color: #55555a; letter-spacing: 0.6px; }
 .exercise-label {
   writing-mode: vertical-rl;
   text-orientation: mixed;
@@ -762,12 +764,14 @@ body.dragging-exercise {
   box-sizing: border-box;
   will-change: transform, opacity;
 }
-/* fat-finger pad: invisible ~20px hit area per 8px dot (::after is the echo) */
+/* Fat-finger pad. HORIZONTAL inset must stay under half the flex gap (6px) or
+   neighbouring pads overlap and the wrong dot eats the tap. Vertical is free --
+   the row above and below belong to the same exercise, so a tall pad cannot
+   mis-target. 14 x 30 per 8px dot. */
 .dot::before {
   content: "";
   position: absolute;
-  inset: -6px;
-  border-radius: 50%;
+  inset: -11px -3px;
 }
 .dot.active {
   background: var(--red);
@@ -3129,11 +3133,23 @@ function updateReadyChips() {
     const chip = chips[k];
     const id = chip.dataset.chipExId;
     chip.classList.remove('is-ready', 'is-held');
-    if (!id || id === focus || remainingOf(id) <= 0 ||
-        state === 'pre-start' || state === 'finished') {
+    if (!id || state === 'pre-start' || state === 'finished') {
       chip.textContent = "";
       continue;
     }
+    // A fully-skipped exercise says so, and says it on the row he taps to undo
+    // it. Before this the row went blank and read as gone for good.
+    if (remainingOf(id) <= 0) {
+      const ents = entriesOf(id);
+      if (ents.length && ents.every(e => e.kind === "skip")) {
+        chip.textContent = "SKIPPED";
+        chip.classList.add('is-skipped');
+      } else {
+        chip.textContent = "";
+      }
+      continue;
+    }
+    if (id === focus) { chip.textContent = ""; continue; }
     if (typeof deferred !== 'undefined' && deferred && deferred.has && deferred.has(id)) {
       chip.textContent = "HELD";
       chip.classList.add('is-held');
@@ -3144,7 +3160,9 @@ function updateReadyChips() {
       // Ready, and SILENT -- a non-focused exercise reaching readiness gets no
       // voice cue (§6.4). "Rest complete" with three machines in flight names
       // none of them, and an ambiguous instruction is a wrong instruction.
-      chip.textContent = "";
+      // The word, not a pulsing dot: the board should not have ambient motion
+      // that means something only the author knows.
+      chip.textContent = "READY";
       chip.classList.add('is-ready');
     } else {
       chip.textContent = formatTime(ms / 1000);
@@ -3469,7 +3487,9 @@ function applyState(notesValue) {
   // Disable the dial while browsing; updatePills owns pill visibility.
   if (isBrowsing()) {
     elBtn.style.opacity = '0.35';
-    elBtn.style.pointerEvents = 'none';
+    // NOT pointer-events:none. A dead control reads as a frozen app; the dial
+    // still takes the tap and uses it to leave the browse.
+    elBtn.style.pointerEvents = '';
     elBtn.classList.add('browsing');
     elLogArea.style.display = 'flex';
   } else {
@@ -3967,6 +3987,7 @@ function focusExercise(exId, opts) {
   const ex = exById(exId);
   if (!ex) return;
   const changed = (exId !== focusExId) || isBrowsing();
+  const changedExercise = (exId !== focusExId);
   view = null;
   focusExId = exId;
   if (typeof pairSelectMode !== 'undefined') pairSelectMode = false;
@@ -3982,6 +4003,23 @@ function focusExercise(exId, opts) {
     // A line describing the machine he just walked away from is a WRONG
     // instruction, not a late one. Un-arm it; the new focus arms fresh.
     bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+    // ...and then say where he IS. Silencing the stale line is correct;
+    // silence afterwards is not -- it left him at a machine with the weight
+    // never called out. This is a statement of fact about the exercise in
+    // front of him, not a countdown, so it is not the user-initiated-actions-
+    // are-silent case.
+    if (changedExercise && remainingOf(exId) > 0) {
+      const arriveSeq = [];
+      const arriveClip = clipForExercise(ex);
+      if (arriveClip) arriveSeq.push(arriveClip);
+      if (nextSetOf(exId) === 1) {
+        arriveSeq.push(...weightClipsFor(ex));
+        const rc = repRangeClipFor(ex.reps);
+        if (rc) arriveSeq.push(rc);
+      }
+      arriveSeq.push(...dropAnnounceClips(exIdxOf(exId), nextSetOf(exId) - 1));
+      if (arriveSeq.length) VoiceCue.playSequence(arriveSeq);
+    }
   }
   // Landing on a machine that is already rested is not an event -- he chose to
   // walk here and can see the screen. No GO theatrics.
@@ -4029,7 +4067,7 @@ function browseSet(exId, setOrd) {
   view = { exId: exId, set: setOrd };
   renderExercise();
   elBtn.style.opacity = '0.35';
-  elBtn.style.pointerEvents = 'none';
+  elBtn.style.pointerEvents = '';
   elBtn.classList.add('browsing');
   elLogArea.style.display = 'flex';
   syncLogArea();
@@ -4384,8 +4422,16 @@ function handleTap(target) {
   if (state === "pre-start") { focusExId = exId; view = null; renderExercise(); saveState(); return true; }
   if (exId === focusExId && !isBrowsing()) return true;   // already here: no-op
   if (remainingOf(exId) <= 0) {
-    // Nothing left to do on this machine; show its last set rather than
-    // pretending the tap did nothing.
+    // A fully SKIPPED exercise is undoable, and the row is the obvious place to
+    // undo it -- an 8px dot is not a discoverable affordance for "I changed my
+    // mind about this whole exercise".
+    const ents = entriesOf(exId);
+    if (ents.length && ents.every(e => e.kind === "skip")) {
+      unskipSet(exId, 1);
+      return true;
+    }
+    // Otherwise it is finished work: show its last set rather than pretending
+    // the tap did nothing.
     const last = performedOf(exId).slice(-1)[0];
     if (last) { browseSet(exId, last.set); return true; }
     return true;
@@ -4437,12 +4483,14 @@ elProgress.addEventListener("click", (e) => {
 elProgress.addEventListener("contextmenu", (e) => e.preventDefault());
 
 // ============ §14 MODALS + INPUT HANDLERS ============
-function openEditModal(exerciseIdx, setIdx) {
-  const log = logAt(exerciseIdx, setIdx);
-  if (!log) return;
+function openEditModal(exId, setOrd) {
+  const ex = exById(exId);
+  const log = ex ? ledger.find(e => e.kind === "set" && e.exId === exId && e.set === setOrd) : null;
+  if (!ex || !log) return;
+  const setIdx = setOrd - 1;
   editingLog = log;
   editRepCount = log.reps;
-  elEditExercise.textContent = workout[exerciseIdx].name;
+  elEditExercise.textContent = ex.name;
   // The weight THIS set was actually done at, read from the FROZEN ledger
   // value. It used to be recomputed by effectiveWeight() here, which meant
   // editing the reps in this very modal could change the weight the modal
@@ -4450,7 +4498,7 @@ function openEditModal(exerciseIdx, setIdx) {
   elEditSet.textContent = "Set " + (setIdx + 1) + " · " +
     (log.dropped && log.weightLbs != null
       ? log.weightLbs + " lbs (dropped)"
-      : (log.weightLbs != null ? log.weightLbs + " lbs" : workout[exerciseIdx].weight));
+      : (log.weightLbs != null ? log.weightLbs + " lbs" : ex.weight));
   elEditNotes.value = log.note || "";
   elEditModal.classList.add("show");
   // Picker scrollLeft only behaves once the modal is laid out (display:none →
@@ -4529,6 +4577,9 @@ elBtn.addEventListener("click", () => {
   recoverAudioCtx();
   VoiceCue.unlock();
   startAudioKeepalive();
+  // Browsing is a read, and the dial is how he gets out of it. Without this the
+  // disabled dial is indistinguishable from a hung app.
+  if (isBrowsing()) { returnToWorking(); return; }
   if (state === "pre-start") startWorkout();
   else if (state === "ready") {
     if (Date.now() < setDoneLockUntil) return; // bounce-tap after a skip-rest transition
@@ -5336,8 +5387,8 @@ function runSelfTest() {
       // A ready non-focused row shows the dot.
       readyAt[A.id] = Date.now() - 1000;
       updateReadyChips();
-      assert(chipA.classList.contains('is-ready') && chipA.textContent === "",
-             "a ready non-focused row flips to the red dot, no text");
+      assert(chipA.classList.contains('is-ready') && chipA.textContent === "READY",
+             "a ready non-focused row SAYS so (a bare pulsing dot meant nothing to him)");
 
       // PAUSE FREEZES THE WHOLE BOARD, not just the dial.
       stampReady(A.id, 150, t0);
@@ -5847,6 +5898,91 @@ function runSelfTest() {
       boardOrder = workout.map(e => e.id);
     }
 
+    // --- 12. THE THINGS HE HIT AT THE GYM (2026-08-05) ---
+    // Every assert here corresponds to something he reported after actually
+    // using the build. They exist so these specific regressions cannot come
+    // back quietly.
+    if (workout.length >= 3) {
+      const A = workout[0], C = workout[2];
+      const reset = () => {
+        ledger.length = 0; ledgerSeq = 0; pairs = []; pairSeq = 0;
+        deferred = new Set(); boardOrder = workout.map(e => e.id);
+        focusExId = A.id; view = null; state = "ready"; pairSelectMode = false;
+      };
+
+      // "i should be able to undo skipping, no?" -- yes, and the ROW does it.
+      reset();
+      focusExId = C.id;
+      skipExercisePill(); skipExercisePill();
+      assert(remainingOf(C.id) === 0, "precondition: the exercise is fully skipped");
+      renderProgress(); updateReadyChips();
+      const cChip = document.querySelector('.ready-chip[data-chip-ex-id="' + C.id + '"]');
+      assert(!!cChip && cChip.textContent === "SKIPPED",
+             "a fully skipped row SAYS it is skipped (it used to go blank and read as gone)");
+      const consumed = handleTap(document.querySelector('.exercise-group[data-ex-id="' + C.id + '"]'));
+      assert(consumed === true, "tapping a skipped row is handled");
+      assert(remainingOf(C.id) === C.sets,
+             "tapping the ROW of a skipped exercise restores it (an 8px dot is not discoverable)");
+
+      // The edit modal. This was BROKEN from v8D to v8H: handleTap passed
+      // (exId, ordinal) into a function still expecting (index, 0-based), so
+      // there was no way at all to correct a logged set.
+      reset();
+      setDone();
+      const perf = performedOf(A.id)[0];
+      assert(!!perf, "precondition: a set is logged");
+      browseSet(A.id, 1);
+      const dotEl = document.querySelector('.dot[data-ex-id="' + A.id + '"][data-set-ord="1"]');
+      assert(!!dotEl, "the performed dot is on the board");
+      handleTap(dotEl);   // second tap on the viewed dot
+      assert(elEditModal.classList.contains("show"),
+             "a second tap on a browsed set OPENS THE EDITOR (it silently did nothing before)");
+      closeEditModal();
+
+      // Browsing must not look like a hung app.
+      assert(elBtn.style.pointerEvents !== 'none',
+             "the dial still accepts taps while browsing, so it can be used to leave");
+      returnToWorking();
+      assert(!isBrowsing(), "and leaving works");
+
+      // Partner-select must always be escapable.
+      reset();
+      pairPillTapped();
+      assert(pairSelectMode === true, "precondition: in partner select");
+      const inertCss = "pointer-events";
+      const anyRow = document.querySelector('.exercise-group');
+      assert(getComputedStyle(anyRow)[inertCss] !== 'none',
+             "no board row is made untappable during partner select -- that was a mode with no exit");
+      handlePairSelectTap(A.id);   // tapping the focused row cancels
+      assert(pairSelectMode === false, "tapping a non-partner row cancels partner select");
+
+      // Hidden pills must leave the LAYOUT, or the stack grows past the dial
+      // and lands on the difficulty row (he hit PAIR overlapping LIGHT).
+      reset();
+      renderExercise();
+      const hidden = [elReturnPill].filter(el => el && !el.classList.contains('visible'));
+      hidden.forEach(el => assert(getComputedStyle(el).display === 'none',
+        "a hidden pill is display:none, not just transparent (it was reserving its slot)"));
+
+      // "there has been no pre-exercise voices" -- walking to a machine went
+      // silent. Cancelling the STALE line was right; saying nothing afterwards
+      // left him at a machine with the weight never called. Spy on the cue
+      // queue rather than trusting that the code path exists.
+      reset();
+      const realPlaySeq = VoiceCue.playSequence;
+      let spoken = null;
+      VoiceCue.playSequence = function (names) { spoken = names; return Promise.resolve(); };
+      try {
+        focusExercise(C.id);
+      } finally { VoiceCue.playSequence = realPlaySeq; }
+      assert(Array.isArray(spoken) && spoken.length > 0,
+             "arriving at a machine announces it (it was silent)");
+      assert(spoken.indexOf(clipForExercise(C)) >= 0,
+             "and it announces THAT machine by name: " + JSON.stringify(spoken));
+
+      reset();
+    }
+
   } catch (e) {
     failures.push("selftest threw: " + (e && e.message ? e.message : String(e)));
   }
@@ -6008,6 +6144,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8H LINES</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8I FIXES</div>
 </body>
 </html>
