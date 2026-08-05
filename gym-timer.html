@@ -2102,13 +2102,35 @@ function triggerAlertFeedback() {
 // returns, restore that machinery from git (985b4d1) + gym-voice-system.md.
 // Effort/RIR position cues were killed 2026-06-13 (Soren: "useless to me")
 // -- do not re-add them to the announce builders.
+// The sfx are .wav; the ElevenLabs bank is .mp3. A FILES entry that carries its
+// own extension is used verbatim, everything else gets .mp3 appended.
+// This matters more than it looks: play() bails INSTANTLY and SILENTLY on a
+// name that failed to fetch (that is what makes a missing clip skip gap-free),
+// so appending .mp3 to a .wav asset would 404 and then never mention it again.
+// A silent countdown is the single most noticeable regression this build could
+// ship, so the failure is surfaced explicitly below instead.
+const SFX_CHIME = 'sfx/chime.wav';
+const SFX_TICK  = 'sfx/tick.wav';
+const SFX_GO    = 'sfx/go.wav';
+const REQUIRED_SFX = [SFX_CHIME, SFX_TICK, SFX_GO];
+function audioUrlFor(name) {
+  return 'audio/' + (String(name).indexOf('.') >= 0 ? name : name + '.mp3');
+}
+
 const VoiceCue = (() => {
   const FILES = [
     'start-upper', 'start-lower', 'received', 'set-2', 'set-3', 'set-4', 'final-set',
     'rest-3min', 'rest-2min', 'rest-150sec', 'rest-90sec', 'rest-60sec',
-    '1min-remaining', '30sec-remaining', '10sec-remaining',
-    'countdown-5', 'countdown-4', 'countdown-3', 'countdown-2', 'countdown-1',
-    'rest-complete', 'tap-to-start',
+    '1min-remaining', '30sec-remaining',
+    // NO SPOKEN COUNTDOWN. Soren's call 2026-08-05: the last three seconds are
+    // tones, not a voice. 'countdown-5'..'countdown-1' and '10sec-remaining'
+    // are deleted rather than left unreferenced -- an unused clip in FILES is
+    // a fetch on every load and an invitation to wire it back in.
+    SFX_CHIME, SFX_TICK, SFX_GO,
+    // 'rest-complete' retired with the spoken countdown: the GO TONE is the
+    // go signal now, and it lands on the beat where a phrase lands whenever it
+    // happens to finish.
+    'tap-to-start',
     'exercise-complete', 'up-next', 'final-exercise',
     'ex-chest-press', 'ex-lat-pulldown', 'ex-db-lat-raise', 'ex-db-curls',
     'ex-leg-press', 'ex-leg-curl', 'ex-calf-raises', 'ex-face-pulls',
@@ -2149,7 +2171,7 @@ const VoiceCue = (() => {
     if (initialized) return;
     initialized = true;
     FILES.forEach(name => {
-      fetch('audio/' + name + '.mp3')
+      fetch(audioUrlFor(name))
         .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
         .then(ab => { arrayBuffers.set(name, ab); decodeIfReady(name); })
         .catch(() => { fetchFailed.add(name); });
@@ -2277,7 +2299,16 @@ const VoiceCue = (() => {
     arrayBuffers.forEach((ab, name) => decodeIfReady(name));
   }
 
-  return { init, unlock, play, playSequence, cancel, _afterContextRecreated,
+  // 'ok' once the bytes are in hand, 'failed' on a 404/offline, 'pending'
+  // while in flight. Used by the load-time sfx check and the selftest -- a cue
+  // bank that fails silently by design needs one place that asks out loud.
+  function status(name) {
+    if (arrayBuffers.has(name) || decodedBuffers.has(name)) return 'ok';
+    if (fetchFailed.has(name)) return 'failed';
+    return 'pending';
+  }
+  return { init, unlock, play, playSequence, cancel, _afterContextRecreated, status,
+           files: () => FILES.slice(),
            has: (name) => decodedBuffers.has(name) || arrayBuffers.has(name) };
 })();
 
@@ -2285,6 +2316,15 @@ const VoiceCue = (() => {
 // every name a config might use MUST have a row here or its cue is silent
 // (the missing "DB Curls (supinated)" alias cost the curls announcement on
 // every Upper build 7/6-7/9 -- caught in the v7 audit).
+// An exercise may name its own clip in the config (`clip: "ex-leg-press"`),
+// which is the only way a NEW exercise can be announced without editing the
+// engine. The name map stays as the fallback, since every existing build
+// relies on it.
+function clipForExercise(ex) {
+  if (!ex) return null;
+  if (ex.clip) return ex.clip;
+  return exerciseClipName(ex.name);
+}
 function exerciseClipName(name) {
   if (!name) return null;
   const map = {
@@ -2400,15 +2440,15 @@ function repRangeClipFor(repsStr) {
 // threshold fires once per rest; reset when a new rest begins.
 function maybeFireCountdownCue(secCeil) {
   if (countdownFiredThresholds.has(secCeil)) return;
+  // THE COUNTDOWN IS TONES. T-3 / T-2 / T-1 are the Halo respawn tick; T-0 is
+  // the GO tone (restEndCueSeq). Nothing is spoken -- a voice counting down is
+  // slower than the thing it is counting, and he decided against it.
   const cues = {
     60: '1min-remaining',
     30: '30sec-remaining',
-    10: '10sec-remaining',
-    5: 'countdown-5',
-    4: 'countdown-4',
-    3: 'countdown-3',
-    2: 'countdown-2',
-    1: 'countdown-1'
+    3: SFX_TICK,
+    2: SFX_TICK,
+    1: SFX_TICK
   };
   const name = cues[secCeil];
   if (!name) return;
@@ -2416,8 +2456,7 @@ function maybeFireCountdownCue(secCeil) {
   // (redundant with the rest-start announcement).
   const restTotalSeconds = readyPlanned[focusExId] || 0;
   if ((secCeil === 60 && restTotalSeconds <= 60) ||
-      (secCeil === 30 && restTotalSeconds <= 30) ||
-      (secCeil === 10 && restTotalSeconds <= 10)) {
+      (secCeil === 30 && restTotalSeconds <= 30)) {
     countdownFiredThresholds.add(secCeil);
     return;
   }
@@ -2430,8 +2469,11 @@ function maybeFireCountdownCue(secCeil) {
 }
 
 // The rest-expiry announcement (restDone + the expired-restore path share it).
+// T-0. The GO tone, then the set-position clip. 'rest-complete' is retired as
+// the head of this sequence: the tone IS the go signal and it lands on the beat,
+// where a spoken phrase lands whenever it finishes.
 function restEndCueSeq() {
-  const seq = ['rest-complete'];
+  const seq = [SFX_GO];
   if (settings.autoStart) {
     const setStart = setStartClipFor(exIdxOf(focusExId), nextSetOf(focusExId) - 1);
     if (setStart) seq.push(setStart);
@@ -3326,7 +3368,7 @@ function startWorkout() {
   // First exercise = the sequence head (with supersets still the first
   // anchor, but a slot-2-first config would start elsewhere than workout[0]).
   const firstEx = exById(focusExId) || workout[0];
-  const firstExClip = exerciseClipName(firstEx && firstEx.name);
+  const firstExClip = clipForExercise(firstEx);
   const seq = [startClip, firstExClip].filter(Boolean);
   if (firstEx) {
     seq.push(...weightClipsFor(firstEx));
@@ -3477,7 +3519,7 @@ function setDone() {
     captureLog();
     syncLogArea();
     {
-      const exClip = exerciseClipName(nextEx.name);
+      const exClip = clipForExercise(nextEx);
       // A pair hop leaves the finished exercise unfinished, so no
       // 'exercise-complete' -- keep the cue tight.
       const seq = (pairHop || !switchingExercise) ? ['received'] : ['received', 'exercise-complete'];
@@ -3529,7 +3571,7 @@ function setDone() {
 
   {
     let seq;
-    const exClip = exerciseClipName(nextEx.name);
+    const exClip = clipForExercise(nextEx);
     if (pairHop) {
       seq = ['received', 'up-next'];
       if (exClip) seq.push(exClip);
@@ -3820,6 +3862,8 @@ function focusExercise(exId, opts) {
       elBtn.textContent = "Set Done";
       elBtn.className = "";
       elSkip.style.display = "none";
+      // New readiness episode: the tick thresholds re-arm for this exercise.
+      countdownFiredThresholds = new Set();
     } else {
       state = "resting";
       elBtn.textContent = "Pause";
@@ -4976,6 +5020,17 @@ elSkip.style.display = "none";
 showRestRing(false);
 applySettingsToggles();
 VoiceCue.init();
+// The cue bank fails silently BY DESIGN (a missing clip skips gap-free rather
+// than stalling the sequence three seconds). That is right for one missing
+// weight callout and wrong for the countdown, so the three sfx get one place
+// that asks out loud. Console only -- this must never block a workout.
+setTimeout(() => {
+  const bad = REQUIRED_SFX.filter(n => VoiceCue.status(n) === 'failed');
+  if (bad.length) {
+    try { console.error('gym-timer: countdown sfx failed to load: ' + bad.join(', ') +
+                        ' -- the countdown will be SILENT'); } catch (e) {}
+  }
+}, 4000);
 attachGlobalAudioRecovery();
 if (!restoreState()) {
   shimConfigSupersets();
@@ -5497,6 +5552,52 @@ function runSelfTest() {
       ledger.length = 0; ledgerSeq = 0; pairs = [];
     }
 
+    // --- 10. AUDIO (spec 6) ---
+    {
+      const files = VoiceCue.files();
+      // NO SPOKEN COUNTDOWN. Deleted, not merely unreferenced -- an unused clip
+      // in FILES is a fetch on every load and an invitation to wire it back in.
+      const spoken = ['countdown-5', 'countdown-4', 'countdown-3', 'countdown-2',
+                      'countdown-1', '10sec-remaining', 'rest-complete'];
+      spoken.forEach(n => assert(files.indexOf(n) < 0,
+        "the retired spoken cue '" + n + "' is still in the cue bank"));
+
+      REQUIRED_SFX.forEach(n => assert(files.indexOf(n) >= 0,
+        "sfx '" + n + "' is missing from the cue bank"));
+
+      // THE .mp3 TRAP. init() used to hardcode the extension, so a .wav asset
+      // would 404, land in fetchFailed, and then fail SILENTLY forever -- which
+      // is by design for a missing weight callout and catastrophic for the
+      // countdown.
+      assert(audioUrlFor(SFX_CHIME) === 'audio/sfx/chime.wav',
+             "sfx resolve to their real .wav path (got " + audioUrlFor(SFX_CHIME) + ")");
+      assert(audioUrlFor('received') === 'audio/received.mp3',
+             "bank clips still resolve to .mp3 (got " + audioUrlFor('received') + ")");
+
+      // The countdown fires tones at T-3/T-2/T-1 and the GO tone at T-0.
+      const endSeq = restEndCueSeq();
+      assert(endSeq[0] === SFX_GO, "the rest-end sequence leads with the GO TONE");
+      assert(endSeq.every(n => spoken.indexOf(n) < 0), "nothing spoken survives in the rest-end sequence");
+
+      // Every exercise must resolve to a clip -- a missing alias fails silently
+      // by design, which is how the ONE exercise with a nerve history went
+      // unannounced for about ten builds.
+      workout.forEach(ex => assert(!!clipForExercise(ex),
+        ex.id + ': no audio clip resolves for "' + ex.name + '"'));
+
+      // A config `clip` overrides the name map, which is the only way a NEW
+      // exercise gets announced without editing the engine.
+      assert(clipForExercise({ name: "Something The Map Has Never Heard Of", clip: "ex-leg-press" })
+             === "ex-leg-press", "an explicit config clip wins over the name map");
+      assert(clipForExercise({ name: "Something The Map Has Never Heard Of" }) === null,
+             "an unmapped exercise with no clip resolves to null, not to a wrong clip");
+
+      // Whether the three sfx actually FETCH is checked on a delay, below --
+      // asserting it here would run before a single fetch had resolved and pass
+      // for free, which is the same vacuous-test trap as browsing the
+      // already-focused exercise.
+    }
+
   } catch (e) {
     failures.push("selftest threw: " + (e && e.message ? e.message : String(e)));
   }
@@ -5521,6 +5622,36 @@ function runSelfTest() {
   try { renderExercise(); } catch (e) {}
 
   showSelfTestOverlay(failures, checks.length);
+
+  // THE DEFERRED CHECK. The cue bank fails silently by design, so the one
+  // failure that would actually ruin a session -- a countdown that makes no
+  // sound -- gets an explicit, late, DOM-visible verdict. Late on purpose: a
+  // fetch takes as long as it takes, and a check that runs before the answer
+  // exists is not a check.
+  setTimeout(() => {
+    const bad = REQUIRED_SFX.filter(n => VoiceCue.status(n) === 'failed');
+    const pending = REQUIRED_SFX.filter(n => VoiceCue.status(n) === 'pending');
+    const box = document.getElementById('selftest-overlay');
+    if (!box) return;
+    const line = document.createElement('div');
+    line.style.cssText = 'margin-top:10px;padding-left:10px;border-left:2px solid ';
+    if (bad.length) {
+      box.setAttribute('data-selftest', 'FAIL');
+      box.style.borderTop = '2px solid #e0584a';
+      line.style.cssText += '#e0584a;color:#e0584a;';
+      line.textContent = 'countdown sfx FAILED to load: ' + bad.join(', ') +
+                         ' - the countdown would be SILENT';
+      const head = box.firstChild;
+      if (head) { head.textContent = 'SELFTEST FAIL  (audio)'; head.style.color = '#e0584a'; }
+    } else if (pending.length) {
+      line.style.cssText += '#8a8a72;color:#8a8a72;';
+      line.textContent = 'countdown sfx still pending (no file access?): ' + pending.join(', ');
+    } else {
+      line.style.cssText += '#2a2a2e;color:#6a6a6e;';
+      line.textContent = 'countdown sfx loaded: ' + REQUIRED_SFX.join(', ');
+    }
+    box.appendChild(line);
+  }, 2500);
 }
 
 function showSelfTestOverlay(failures, total) {
@@ -5628,6 +5759,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8F TRIGGER</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8G TONES</div>
 </body>
 </html>
