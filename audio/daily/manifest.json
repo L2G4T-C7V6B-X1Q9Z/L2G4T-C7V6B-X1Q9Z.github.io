@@ -1,0 +1,104 @@
+{
+  "planHash": "7b241c84",
+  "dayType": "Lower",
+  "generatedAt": "2026-08-05T19:10",
+  "source": "01-chatterbox-default (ASR-verified, loudness-matched)",
+  "entries": [
+    {
+      "exId": "leg-press",
+      "set": 1,
+      "file": "leg-press-s1.wav",
+      "durationMs": 14120,
+      "assumes": {
+        "weightLbs": 190,
+        "configOrder": true,
+        "unpaired": true,
+        "priorSetsPerformed": true
+      }
+    },
+    {
+      "exId": "leg-press",
+      "set": 2,
+      "file": "leg-press-s2.wav",
+      "durationMs": 7320,
+      "assumes": {
+        "weightLbs": 190,
+        "configOrder": true,
+        "unpaired": true,
+        "priorSetsPerformed": true
+      }
+    },
+    {
+      "exId": "leg-press",
+      "set": 4,
+      "file": "leg-press-s4.wav",
+      "durationMs": 9040,
+      "assumes": {
+        "weightLbs": 190,
+        "configOrder": true,
+        "unpaired": true,
+        "priorSetsPerformed": true
+      }
+    },
+    {
+      "exId": "lying-leg-curl",
+      "set": 1,
+      "file": "lying-leg-curl-s1.wav",
+      "durationMs": 11160,
+      "assumes": {
+        "weightLbs": 40,
+        "configOrder": true,
+        "unpaired": true,
+        "priorSetsPerformed": true
+      }
+    },
+    {
+      "exId": "lying-leg-curl",
+      "set": 3,
+      "file": "lying-leg-curl-s3.wav",
+      "durationMs": 10680,
+      "assumes": {
+        "weightLbs": 40,
+        "configOrder": true,
+        "unpaired": true,
+        "priorSetsPerformed": true
+      }
+    },
+    {
+      "exId": "leg-press-calf-raises",
+      "set": 1,
+      "file": "leg-press-calf-raises-s1.wav",
+      "durationMs": 10520,
+      "assumes": {
+        "weightLbs": 145,
+        "configOrder": true,
+        "unpaired": true,
+        "priorSetsPerformed": true
+      }
+    },
+    {
+      "exId": "leg-extension",
+      "set": 3,
+      "file": "leg-extension-s3.wav",
+      "durationMs": 8320,
+      "assumes": {
+        "weightLbs": 70,
+        "configOrder": true,
+        "unpaired": true,
+        "priorSetsPerformed": true
+      }
+    },
+    {
+      "exId": "cable-face-pulls",
+      "set": 1,
+      "file": "cable-face-pulls-s1.wav",
+      "durationMs": 10560,
+      "assumes": {
+        "weightLbs": 25,
+        "configOrder": true,
+        "unpaired": true,
+        "priorSetsPerformed": true
+      }
+    }
+  ]
+}

@@ -2620,6 +2620,47 @@ function maybeFireBespokeLine(exId, remainingMs) {
   VoiceCue.playSequence([SFX_CHIME, 'daily/' + bespokeEpisode.entry.file]);
 }
 
+// THE ARRIVAL LINE (deviation from spec 6.3, stated deliberately).
+//
+// Spec 6.3 gives immediate transitions generic cues and NO bespoke line, on the
+// grounds that the line's T-0 anchor -- the moment he lifts -- does not exist
+// without a countdown. That reasoning is about BACKWARD SCHEDULING, and it is
+// right for a line that has to END 1.5s before the lift.
+//
+// But S1 of an exercise never has a preceding rest, so it never gets a
+// countdown, so under the rule as written every S1 line is unplayable: written,
+// ASR-verified, loudness-matched, and dead. Four of the eight lines in the
+// current bank are S1s, and they are the ones carrying the machine's safety
+// rule ("any feeling in the inner thigh, not pain, any feeling").
+//
+// An arrival line does not need a T-0 anchor because it is not scheduled: he is
+// walking up and setting the pin, and that is when it should talk. So the rule
+// becomes: RESTING on arrival -> the countdown schedules it backwards.
+// READY on arrival -> play it now, in place of the generic name/weight cues.
+function arrivalCueSeq(exId) {
+  const ex = exById(exId);
+  if (!ex || remainingOf(exId) <= 0) return [];
+  const ord = nextSetOf(exId);
+  const line = isReady(exId) ? bespokeLineFor(exId, ord) : null;
+  if (line) {
+    // Mark the episode fired so the generic set-position clip is suppressed
+    // and a later countdown cannot replay the same line.
+    bespokeEpisode = { key: exId + ":" + ord + ":" + (readyAt[exId] || 0),
+                       entry: line, armed: false, fired: true };
+    return [SFX_CHIME, 'daily/' + line.file];
+  }
+  const seq = [];
+  const clip = clipForExercise(ex);
+  if (clip) seq.push(clip);
+  if (ord === 1) {
+    seq.push(...weightClipsFor(ex));
+    const rc = repRangeClipFor(ex.reps);
+    if (rc) seq.push(rc);
+  }
+  seq.push(...dropAnnounceClips(exIdxOf(exId), ord - 1));
+  return seq;
+}
+
 // Where the line would start, in remaining-ms, or null when none is armed.
 function bespokeLineStartMs() {
   if (!bespokeEpisode.armed || !bespokeEpisode.entry) return null;
@@ -3517,16 +3558,9 @@ function startWorkout() {
   applyState("");
   saveState();
   const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
-  // First exercise = the sequence head (with supersets still the first
-  // anchor, but a slot-2-first config would start elsewhere than workout[0]).
-  const firstEx = exById(focusExId) || workout[0];
-  const firstExClip = clipForExercise(firstEx);
-  const seq = [startClip, firstExClip].filter(Boolean);
-  if (firstEx) {
-    seq.push(...weightClipsFor(firstEx));
-    const repClip = repRangeClipFor(firstEx.reps);
-    if (repClip) seq.push(repClip);
-  }
+  // The day cue, then whatever the first machine has to say -- its scripted S1
+  // line if one survives the gates, else the generic name/weight/reps cues.
+  const seq = [startClip].concat(arrivalCueSeq(focusExId));
   if (seq.length) VoiceCue.playSequence(seq);
 }
 
@@ -3671,23 +3705,13 @@ function setDone() {
     captureLog();
     syncLogArea();
     {
-      const exClip = clipForExercise(nextEx);
       // A pair hop leaves the finished exercise unfinished, so no
       // 'exercise-complete' -- keep the cue tight.
       const seq = (pairHop || !switchingExercise) ? ['received'] : ['received', 'exercise-complete'];
       if (bankedTrigger) seq.splice(1, 0, 'cue-trigger-hit');
-      if (switchingExercise) {
-        seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
-        if (exClip) seq.push(exClip);
-      }
-      // Weight/reps announce only on an exercise's FIRST set; re-announcing on
-      // every hop is noise.
-      if (nextSetOf(nextFocus) === 1) {
-        seq.push(...weightClipsFor(nextEx));
-        const repClipSkip = repRangeClipFor(nextEx.reps);
-        if (repClipSkip) seq.push(repClipSkip);
-      }
-      seq.push(...dropAnnounceClips(exIdxOf(nextFocus), nextSetOf(nextFocus) - 1));
+      if (switchingExercise) seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
+      // Then the machine's own line (or the generic name/weight cues).
+      seq.push(...arrivalCueSeq(nextFocus));
       VoiceCue.playSequence(seq);
     }
     if (bankedTrigger) pulseTriggerHit(finishedExId);
@@ -4008,18 +4032,8 @@ function focusExercise(exId, opts) {
     // never called out. This is a statement of fact about the exercise in
     // front of him, not a countdown, so it is not the user-initiated-actions-
     // are-silent case.
-    if (changedExercise && remainingOf(exId) > 0) {
-      const arriveSeq = [];
-      const arriveClip = clipForExercise(ex);
-      if (arriveClip) arriveSeq.push(arriveClip);
-      if (nextSetOf(exId) === 1) {
-        arriveSeq.push(...weightClipsFor(ex));
-        const rc = repRangeClipFor(ex.reps);
-        if (rc) arriveSeq.push(rc);
-      }
-      arriveSeq.push(...dropAnnounceClips(exIdxOf(exId), nextSetOf(exId) - 1));
-      if (arriveSeq.length) VoiceCue.playSequence(arriveSeq);
-    }
+    const arriveSeq = arrivalCueSeq(exId);
+    if (changedExercise && arriveSeq.length) VoiceCue.playSequence(arriveSeq);
   }
   // Landing on a machine that is already rested is not an event -- he chose to
   // walk here and can see the screen. No GO theatrics.
@@ -6036,6 +6050,79 @@ function runSelfTest() {
       line.textContent = 'countdown sfx loaded: ' + REQUIRED_SFX.join(', ');
     }
     box.appendChild(line);
+
+    // ---- IS EVERY GENERATED LINE ACTUALLY REACHABLE? ----
+    // The bank is expensive: each line is scripted against the day's numbers,
+    // synthesized, ASR-verified for dropped safety words, and loudness-matched.
+    // A line that no code path can ever play is all of that cost for silence,
+    // and it does not announce itself -- which is exactly what happened to the
+    // four S1 lines, unplayable because S1 has no preceding rest to schedule
+    // against. So: walk a whole session and see which entries actually fire.
+    if (!dailyManifest || !Array.isArray(dailyManifest.entries)) {
+      const none = document.createElement('div');
+      none.style.cssText = 'margin-top:6px;padding-left:10px;border-left:2px solid #2a2a2e;color:#6a6a6e;';
+      none.textContent = 'no daily line bank on this build (generic cues only)';
+      box.appendChild(none);
+      return;
+    }
+    const snap = {
+      ledger: ledger.map(e => ({ ...e })), seq: ledgerSeq, focus: focusExId, view: view,
+      state: state, ready: { ...readyAt }, planned: { ...readyPlanned },
+      deferred: new Set(deferred), order: [...boardOrder], pairs: pairs.map(x => ({ ...x })),
+      ep: bespokeEpisode
+    };
+    const played = new Set();
+    const realSeq = VoiceCue.playSequence;
+    VoiceCue.playSequence = function (names) {
+      (names || []).forEach(n => {
+        if (String(n).indexOf('daily/') === 0) played.add(String(n).slice(6));
+      });
+      return Promise.resolve();
+    };
+    try {
+      ledger.length = 0; ledgerSeq = 0; deferred = new Set(); pairs = [];
+      boardOrder = workout.map(e => e.id);
+      readyAt = {}; readyPlanned = {};
+      focusExId = boardOrder[0]; view = null; state = "pre-start";
+      bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+      startWorkout();
+      for (let guard = 0; guard < 60 && totalRemaining() > 0; guard++) {
+        const id = focusExId;
+        // Give the countdown its chance: a scheduled line fires from the tick,
+        // so drive the window directly rather than waiting real seconds.
+        if (!isReady(id)) {
+          maybeFireBespokeLine(id, remainingMsOf(id));
+          const st = bespokeLineStartMs();
+          if (st != null) maybeFireBespokeLine(id, st - 10);
+          readyAt[id] = Date.now();
+        }
+        setDone();
+      }
+    } catch (e) {
+      failures.push('coverage walk threw: ' + (e && e.message));
+    } finally {
+      VoiceCue.playSequence = realSeq;
+      ledger.length = 0; snap.ledger.forEach(e => ledger.push(e));
+      ledgerSeq = snap.seq; focusExId = snap.focus; view = snap.view; state = snap.state;
+      readyAt = snap.ready; readyPlanned = snap.planned; deferred = snap.deferred;
+      boardOrder = snap.order; pairs = snap.pairs; bespokeEpisode = snap.ep;
+      try { renderExercise(); } catch (e) {}
+    }
+    const want = dailyManifest.entries.map(e => e.file);
+    const dead = want.filter(f => !played.has(f));
+    const cov = document.createElement('div');
+    cov.style.cssText = 'margin-top:6px;padding-left:10px;border-left:2px solid ' +
+      (dead.length ? '#e0584a;color:#e0584a;' : '#2a2a2e;color:#6a6a6e;');
+    cov.textContent = dead.length
+      ? ('UNREACHABLE lines (' + dead.length + '/' + want.length + '): ' + dead.join(', ') +
+         ' - generated and verified, but no code path plays them')
+      : ('daily lines reachable: ' + played.size + '/' + want.length);
+    box.appendChild(cov);
+    if (dead.length) {
+      box.setAttribute('data-selftest', 'FAIL');
+      const head = box.firstChild;
+      if (head) { head.textContent = 'SELFTEST FAIL  (unreachable lines)'; head.style.color = '#e0584a'; }
+    }
   }, 2500);
 }
 
@@ -6144,6 +6231,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8I FIXES</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8J VOICE</div>
 </body>
 </html>
