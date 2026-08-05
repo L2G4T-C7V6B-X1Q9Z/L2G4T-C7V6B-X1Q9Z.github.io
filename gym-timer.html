@@ -1222,6 +1222,10 @@ const dayType = "Lower";
 
 const workout = [
   {
+    // `id` is the stable identity every v8 layer keys on (ledger entries,
+    // readiness, the audio manifest, the restore guard). It must survive a
+    // reorder and a nightly weight tweak, which an array index does not.
+    id: "leg-press",
     name: "Leg Press",
     short: "LEG PRESS",
     sets: 4,
@@ -1247,6 +1251,7 @@ const workout = [
     triggerWeight: "205 lbs"
   },
   {
+    id: "leg-press-calf-raises",
     name: "Leg Press Calf Raises",
     short: "CALF",
     sets: 3,
@@ -1264,6 +1269,7 @@ const workout = [
     triggerWeight: "160 lbs"
   },
   {
+    id: "lying-leg-curl",
     name: "Lying Leg Curl",
     short: "LEG CURL",
     sets: 3,
@@ -1285,6 +1291,7 @@ const workout = [
     ]
   },
   {
+    id: "leg-extension",
     name: "Leg Extension",
     short: "LEG EXT",
     sets: 3,
@@ -1302,6 +1309,7 @@ const workout = [
     triggerWeight: "80 lbs"
   },
   {
+    id: "cable-face-pulls",
     name: "Cable Face Pulls",
     short: "FACE PULL",
     sets: 2,
@@ -1318,13 +1326,75 @@ const workout = [
 ];
 // ======================== CONFIG END ========================
 
+// ============ §1.5 IDENTITY + PLAN HASH (v8) ============
+// Everything below CONFIG END keys on ex.id, never on the array index. An
+// index is a POSITION, and position changes: a drag-reorder splices the array,
+// and (from commit D) free navigation makes board order purely cosmetic. A
+// logged set that remembers "exercise 2" is one reorder away from claiming it
+// happened on a different machine.
+function kebabId(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+// Authored ids are preferred (renaming an exercise then doesn't orphan its
+// history), but a daily flip that forgets one still works: derive from `name`,
+// and de-collide rather than letting two exercises share a ledger key.
+(function assignExerciseIds() {
+  const seen = new Set();
+  workout.forEach((ex, i) => {
+    let id = ex.id || kebabId(ex.name) || ("exercise-" + (i + 1));
+    if (seen.has(id)) {
+      let n = 2;
+      while (seen.has(id + "-" + n)) n++;
+      try { console.warn("gym-timer: duplicate exercise id '" + id + "' -> '" + id + "-" + n + "'"); } catch (e) {}
+      id = id + "-" + n;
+    }
+    seen.add(id);
+    ex.id = id;
+  });
+})();
+
+// Config order, snapshotted before a drag-reorder can splice `workout`. Also
+// what a drag-reorder is restored against, by id (name is the v7 fallback).
+// Commit D freezes the prescription and makes reorder display-only, at which
+// point this and `workout` are permanently identical.
+const originalWorkout = workout.slice();
+
+const exById  = (id)  => workout.find(ex => ex.id === id) || null;
+const exIdAt  = (idx) => (workout[idx] ? workout[idx].id : null);
+const exIdxOf = (id)  => workout.findIndex(ex => ex.id === id);
+
+// PLAN HASH -- replaces dayKey as the restore guard, and (commit H) keys the
+// nightly audio manifest so a bank generated for a different plan self-disables
+// instead of announcing the wrong weight. FNV-1a 32-bit over a canonical
+// projection of exactly the fields a restored ledger or a generated line
+// depends on. It is computed from the CONFIG order, not the live array, so a
+// mid-session drag-reorder cannot invalidate his own saved state.
+function fnv1a32(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+  return h.toString(16);
+}
+function planCanon(dt, plan) {
+  return JSON.stringify([dt, plan.map(ex =>
+    [ex.id, ex.sets, ex.weight, ex.reps, ex.rest, ex.backoff || null, ex.dropLastSet || false])]);
+}
+function planHash() { return fnv1a32(planCanon(dayType, originalWorkout)); }
+
+// Golden vector. The nightly generator carries its own copy of fnv1a32 and must
+// produce byte-identical output; if the two ever drift, the manifest would key
+// to a plan that isn't this one and the gate would pass on the wrong day. Both
+// sides assert the same fixed sample, so drift is loud instead of silent.
+const PLAN_HASH_GOLDEN_INPUT =
+  '["Lower",[["leg-press",4,"190 lbs","8-12",150,"175 lbs",false],["leg-extension",3,"70 lbs","8-12",120,"60 lbs",false]]]';
+const PLAN_HASH_GOLDEN = "6d4a3166";
+const planHashGoldenOK = (fnv1a32(PLAN_HASH_GOLDEN_INPUT) === PLAN_HASH_GOLDEN);
+if (!planHashGoldenOK) {
+  try { console.error("gym-timer: planHash GOLDEN VECTOR FAILED - the hash implementation drifted"); } catch (e) {}
+}
+
 // ============ §2 CONSTANTS + SETTINGS ============
 const STATE_TTL_MS = 4 * 60 * 60 * 1000;
 const RING_CIRCUMFERENCE = 2 * Math.PI * 88; // r=88 → ~552.92; must match the SVG circles
-
-// Snapshot the original workout order so a drag-reorder can be persisted and
-// restored by exercise name. Never mutated.
-const originalWorkout = workout.slice();
 
 const defaultSettings = {
   autoStart: true,
@@ -1354,7 +1424,46 @@ loadSettings();
 //     mutated only by setDone, reorderExercise, restoreState, the ↓SET pill.
 //   VIEWING (viewingExercise/viewingSet) = a read-only peek; hollow red ring;
 //     while browsing, Set Done is disabled and the return pills show.
-const setLogs = [];
+// ---- LAYER 2: THE PERFORMANCE LEDGER (v8) ----
+// Append-ordered, identity-keyed, and it STAMPS ITS CONTEXT AT LOG TIME.
+// Replaces setLogs, whose entries held only (exerciseIndex, 0-based set, reps,
+// difficulty, note) and left the WEIGHT to be reconstructed on every read by
+// effectiveWeight(). That reconstruction is the invented-tonnage defect: since
+// effectiveWeight re-runs the drop predicate over the editable logs, editing a
+// prior set's reps could retroactively turn a COMPLETED set from 190 into 175,
+// and sessionTotals() then reported tonnage he never lifted. A weight, once
+// performed, is a FACT -- so it is frozen into the entry and never recomputed.
+//
+//   kind:"set"   a performed set. reps/difficulty/note stay editable (stamp
+//                editedAt); weightLbs/prescribedLbs/dropped/pairId/rest*/at
+//                are never edited by any code path.
+//   kind:"skip"  an explicitly abandoned set. Arrives with commit D; the
+//                readers below already tolerate it.
+//
+// Ordinals are 1-BASED inside the ledger (`set: 1` is S1). The cursor engine
+// still speaks 0-based indices until commit D retires it, so exactly one
+// adapter -- logAt() -- translates, and nothing else does index math.
+const ledger = [];
+let ledgerSeq = 0;      // last assigned `n`, the global performance ordinal
+let pausedCumMs = 0;    // cumulative paused ms, so restActualSec excludes pauses
+let pauseStartedAt = null;
+
+const entriesOf   = (exId) => ledger.filter(e => e.exId === exId);
+const performedOf = (exId) => ledger.filter(e => e.kind === "set" && e.exId === exId);
+const remainingOf = (exId) => { const ex = exById(exId); return ex ? ex.sets - entriesOf(exId).length : 0; };
+function logAt(exIdx, setIdx0) {
+  const id = exIdAt(exIdx);
+  if (id == null) return null;
+  return ledger.find(e => e.kind === "set" && e.exId === id && e.set === setIdx0 + 1) || null;
+}
+// Stamp a POST-HOC edit. Grading the set you just finished, during its own
+// rest, is the normal flow and is not an edit -- only reaching back to some
+// other entry is. The distinction matters because commit F's trigger gate
+// treats an edited entry as weaker evidence than a live-logged one.
+function markEdited(entry) {
+  if (entry && entry !== currentLogEntry) entry.editedAt = Date.now();
+}
+
 let currentExercise = 0;
 let currentSet = 0;
 let viewingExercise = 0;
@@ -1594,6 +1703,7 @@ const repPicker = createRepPicker(document.getElementById("rep-picker-strip"), {
     const log = getActiveLogForEdit();
     if (log) {
       log.reps = newVal;
+      markEdited(log);
       if (log === currentLogEntry) repCount = newVal;
     } else {
       repCount = newVal;
@@ -2202,7 +2312,7 @@ function stickyDropState(exIdx, setIdx) {
   const lo = +rng[1];
   const prevLogs = [];
   for (let i = 0; i < setIdx; i++) {
-    const lg = setLogs.find(l => l.exercise === exIdx && l.set === i);
+    const lg = logAt(exIdx, i);
     if (!lg || lg.difficulty == null) break; // ungraded gap: can't evaluate further
     prevLogs.push({ reps: lg.reps, difficulty: lg.difficulty });
     if (dropPredicate(prevLogs, lo)) return { dropped: true, firedAt: i + 1 };
@@ -2341,7 +2451,7 @@ function computeSetNoteInfo(exIdx, setIdx) {
   const prevLogs = [];
   let allLogged = true;
   for (let i = 0; i < setIdx; i++) {
-    const log = setLogs.find(l => l.exercise === exIdx && l.set === i);
+    const log = logAt(exIdx, i);
     if (log && log.difficulty != null) {
       prevLogs.push({ reps: log.reps, difficulty: log.difficulty });
     } else {
@@ -2375,7 +2485,7 @@ function exerciseTriggerHit(exIdx) {
   if (!ex || !Array.isArray(ex.trigger) || ex.trigger.length !== ex.sets) return false;
   if (ex.backoff && stickyDropState(exIdx, ex.sets - 1).dropped) return false;
   for (let i = 0; i < ex.sets; i++) {
-    const log = setLogs.find(l => l.exercise === exIdx && l.set === i);
+    const log = logAt(exIdx, i);
     if (!log || Number(log.reps) < ex.trigger[i]) return false;
   }
   return true;
@@ -2430,7 +2540,7 @@ function setInfoHTML(exIdx, setIdx) {
 // working during rest → the just-completed set's log.
 function getActiveLogForEdit() {
   if (isBrowsing()) {
-    return setLogs.find(l => l.exercise === viewingExercise && l.set === viewingSet) || null;
+    return logAt(viewingExercise, viewingSet);
   }
   return currentLogEntry || null;
 }
@@ -2539,7 +2649,7 @@ function renderProgress() {
       // the most likely mechanism for the 7/28 face-pull disappearance.
       // Unperformed-but-passed sets now render as "missed" instead: visible,
       // tappable, and obviously not finished.
-      const isLogged = setLogs.some(l => l.exercise === exIdx && l.set === setIdx);
+      const isLogged = !!logAt(exIdx, setIdx);
       if (p < seqIndex && !isLogged) {
         dot.classList.add("missed");
         dot.setAttribute("role", "button");
@@ -2962,25 +3072,54 @@ function setDone() {
   captureLog();
 
   // Dedup: re-logging an already-logged (exercise,set) — e.g. after browsing
-  // back via the ↓SET pill — must UPDATE that log, not push a second one.
-  // Reads use setLogs.find (first match), so a duplicate would shadow the
-  // correction: stale reps in the summary, the fresh edit unreachable.
-  let logEntry = setLogs.find(l => l.exercise === currentExercise && l.set === currentSet);
+  // back via the ↓SET pill — must UPDATE that entry, not append a second one.
+  // Reads take the first match, so a duplicate would shadow the correction:
+  // stale reps in the summary, the fresh edit unreachable.
+  const exNow = workout[currentExercise];
+  let logEntry = logAt(currentExercise, currentSet);
   if (logEntry) {
+    // A re-log edits only the mutable fields. weightLbs/dropped/rest*/at stay
+    // exactly as they were stamped -- the set was already performed at that
+    // weight, and no later keystroke gets to change what happened.
     logEntry.reps = draftReps;
     logEntry.note = draftNote;
     logEntry.difficulty = draftDiff;
-    logEntry.timestamp = Date.now();
+    logEntry.editedAt = Date.now();
   } else {
+    const at = Date.now();
+    // FREEZE THE WEIGHT HERE, from the same effectiveWeight() the screen was
+    // showing while he stood at the machine. From this line on, every reader
+    // describing a PERFORMED set reads entry.weightLbs; effectiveWeight() is
+    // only ever asked about PENDING sets again.
+    const eff = effectiveWeight(currentExercise, currentSet);
+    const effNum = (eff.num == null) ? NaN : parseFloat(eff.num);
+    const prescribed = parseFloat((String(exNow.weight || "").match(/(\d+(?:\.\d+)?)/) || [])[1]);
+    // Actual rest = gap since the previous set OF THIS EXERCISE, minus any
+    // time the session spent paused. That number is what the commit-F trigger
+    // gate reads to catch a rep count inflated by an 8-minute wander.
+    const prev = performedOf(exNow.id).slice(-1)[0] || null;
+    const restActualSec = prev
+      ? Math.max(0, Math.round(((at - prev.at) - (pausedCumMs - (prev.pausedCumMs || 0))) / 1000))
+      : null;
     logEntry = {
-      exercise: currentExercise,
-      set: currentSet,
+      kind: "set",
+      n: ++ledgerSeq,
+      exId: exNow.id,
+      set: currentSet + 1,
       reps: draftReps,
-      note: draftNote,
       difficulty: draftDiff,
-      timestamp: Date.now()
+      note: draftNote,
+      weightLbs: isFinite(effNum) ? effNum : null,
+      prescribedLbs: isFinite(prescribed) ? prescribed : null,
+      dropped: !!eff.dropped,
+      pairId: null,                       // explicit pairs arrive in commit E
+      restPlannedSec: exNow.rest || null,
+      restActualSec: restActualSec,
+      pausedCumMs: pausedCumMs,
+      at: at,
+      editedAt: null
     };
-    setLogs.push(logEntry);
+    ledger.push(logEntry);
   }
   currentLogEntry = logEntry;
 
@@ -3212,6 +3351,10 @@ function pauseRest() {
   // Capture EXACT remaining (float seconds) so resume doesn't round-up jump.
   restRemaining = Math.max(0, (restEndTime - Date.now()) / 1000);
   state = "paused";
+  // Paused wall-clock is excluded from restActualSec: a rest he deliberately
+  // froze is not the same evidence as a rest he wandered away from, and only
+  // the second one should be able to demote a trigger (commit F).
+  if (pauseStartedAt == null) pauseStartedAt = Date.now();
   clearTimerModes();
   elBtn.textContent = "Resume";
   elBtn.className = "paused";
@@ -3223,8 +3366,18 @@ function pauseRest() {
   VoiceCue.play('paused');
 }
 
+// Close an open pause window and bank its duration. Called from EVERY exit out
+// of "paused" -- Resume and Skip Rest both -- because a window left open would
+// keep accruing into the next set's restActualSec forever.
+function closePauseWindow() {
+  if (pauseStartedAt == null) return;
+  pausedCumMs += Math.max(0, Date.now() - pauseStartedAt);
+  pauseStartedAt = null;
+}
+
 function resumeRest() {
   captureLog();
+  closePauseWindow();
   state = "resting";
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
@@ -3248,6 +3401,7 @@ function skipRest() {
   // animation, so a rapid double-tap queued TWO calls -- the second re-ran
   // the whole transition. State has already moved on; bail.
   if (state !== "resting" && state !== "paused") return;
+  closePauseWindow();
   VoiceCue.cancel();
   // A queued rest-expiry announcement is stale the moment he skips.
   pendingPostGestureCues.length = 0;
@@ -3340,8 +3494,7 @@ function finishWorkout() {
 function cycleView(exIdx, setIdx) {
   // Second tap on the already-viewed completed set opens the edit modal.
   if (viewingExercise === exIdx && viewingSet === setIdx && isBrowsing()) {
-    const log = setLogs.find(l => l.exercise === exIdx && l.set === setIdx);
-    if (log) { openEditModal(exIdx, setIdx); return; }
+    if (logAt(exIdx, setIdx)) { openEditModal(exIdx, setIdx); return; }
   }
   viewingExercise = exIdx;
   viewingSet = setIdx;
@@ -3399,19 +3552,21 @@ function reorderExercise(fromIdx, toIdx) {
 
   VoiceCue.cancel();
 
-  // The edit modal's editingLog reference survives a reorder (setLogs isn't
-  // reordered, only log.exercise values remap), but a displayed exercise NAME
-  // could go stale. Close to be safe.
+  // The edit modal's editingLog reference survives a reorder (ledger entries
+  // are identity-keyed, so a drag touches none of them), but a displayed
+  // exercise NAME could go stale. Close to be safe.
   if (elEditModal.classList.contains("show")) closeEditModal();
 
   const moved = workout.splice(fromIdx, 1)[0];
   workout.splice(toIdx, 0, moved);
 
-  // Remap every live exercise-index reference.
+  // Remap every live exercise-index reference. The LEDGER is deliberately not
+  // in this list: its entries key on ex.id, so a reorder cannot re-point a
+  // logged set at a different machine. That rewrite-every-log-on-every-drag
+  // pass is exactly the class of bug identity keys exist to delete.
   const remap = (ei) => transformExerciseIdx(ei, fromIdx, toIdx);
   currentExercise = remap(currentExercise);
   viewingExercise = remap(viewingExercise);
-  setLogs.forEach(l => { l.exercise = remap(l.exercise); });
 
   // Superset groups ride on the exercise objects (ss tags), which just moved:
   // re-derive the interleaved sequence and re-locate the working cursor.
@@ -3549,16 +3704,19 @@ elProgress.addEventListener("contextmenu", (e) => e.preventDefault());
 
 // ============ §14 MODALS + INPUT HANDLERS ============
 function openEditModal(exerciseIdx, setIdx) {
-  const log = setLogs.find(l => l.exercise === exerciseIdx && l.set === setIdx);
+  const log = logAt(exerciseIdx, setIdx);
   if (!log) return;
   editingLog = log;
   editRepCount = log.reps;
   elEditExercise.textContent = workout[exerciseIdx].name;
-  // Show the weight THIS set was actually done at -- a set done at the
-  // backoff used to display the header prescription here.
-  const editEff = effectiveWeight(exerciseIdx, setIdx);
+  // The weight THIS set was actually done at, read from the FROZEN ledger
+  // value. It used to be recomputed by effectiveWeight() here, which meant
+  // editing the reps in this very modal could change the weight the modal
+  // claimed the set was done at -- the header would move under his hands.
   elEditSet.textContent = "Set " + (setIdx + 1) + " · " +
-    (editEff.dropped ? editEff.num + " lbs (dropped)" : workout[exerciseIdx].weight);
+    (log.dropped && log.weightLbs != null
+      ? log.weightLbs + " lbs (dropped)"
+      : (log.weightLbs != null ? log.weightLbs + " lbs" : workout[exerciseIdx].weight));
   elEditNotes.value = log.note || "";
   elEditModal.classList.add("show");
   // Picker scrollLeft only behaves once the modal is laid out (display:none →
@@ -3574,6 +3732,7 @@ elEditSave.addEventListener("click", () => {
   if (editingLog) {
     editingLog.reps = editRepCount;
     editingLog.note = elEditNotes.value.trim();
+    editingLog.editedAt = Date.now();
     saveState();
   }
   closeEditModal();
@@ -3658,7 +3817,7 @@ elSkip.addEventListener("click", (e) => {
 });
 elNotesInput.addEventListener("input", () => {
   const log = getActiveLogForEdit();
-  if (log) log.note = elNotesInput.value;
+  if (log) { log.note = elNotesInput.value; markEdited(log); }
   saveState();
 });
 // Note modal — the inline field is read-only; tapping opens a real textarea
@@ -3691,6 +3850,7 @@ elDifficultyRow.addEventListener("click", (e) => {
   const log = getActiveLogForEdit();
   if (log) {
     log.difficulty = (log.difficulty === diff) ? null : diff;
+    markEdited(log);
     renderDifficulty(log);
   } else if (!isBrowsing()) {
     // Mid-set (no log entry yet): keep the tap as a visual DRAFT selection;
@@ -3753,35 +3913,33 @@ function formatDuration(ms) {
   return m + "m " + s.toString().padStart(2, "0") + "s";
 }
 function getExerciseDuration(exerciseIdx) {
-  const logs = setLogs.filter(l => l.exercise === exerciseIdx && l.timestamp);
+  const logs = performedOf(exIdAt(exerciseIdx)).filter(e => e.at);
   if (logs.length === 0) return null;
   if (logs.length === 1) return 0;
-  const first = Math.min(...logs.map(l => l.timestamp));
-  const last  = Math.max(...logs.map(l => l.timestamp));
+  const first = Math.min(...logs.map(e => e.at));
+  const last  = Math.max(...logs.map(e => e.at));
   return last - first;
 }
 function summaryDateStr() {
   return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 }
 function getTotalDuration() {
-  const ts = setLogs.filter(l => l.timestamp).map(l => l.timestamp);
-  if (ts.length === 0) return null;
-  const lastTs = Math.max(...ts);
+  const perf = ledger.filter(e => e.kind === "set" && e.at);
+  if (perf.length === 0) return null;
+  const lastTs = Math.max(...perf.map(e => e.at));
   // Preferred: the Start Workout tap recorded the real session start.
   if (workoutStartTime) return lastTs - workoutStartTime;
   // Fallback for sessions restored from before pre-start existed: estimate
   // set 1's duration from the average gap between that exercise's sets.
-  if (ts.length < 2) return null;
-  const raw = lastTs - Math.min(...ts);
-  const logsWithTs = setLogs.filter(l => l.timestamp).slice().sort((a, b) => a.timestamp - b.timestamp);
-  const firstExIdx = logsWithTs[0].exercise;
-  const firstExLogs = setLogs
-    .filter(l => l.exercise === firstExIdx && l.timestamp)
-    .sort((a, b) => a.set - b.set);
+  if (perf.length < 2) return null;
+  const raw = lastTs - Math.min(...perf.map(e => e.at));
+  const chron = perf.slice().sort((a, b) => a.at - b.at);
+  const firstExId = chron[0].exId;
+  const firstExLogs = perf.filter(e => e.exId === firstExId).sort((a, b) => a.set - b.set);
   if (firstExLogs.length < 2) return raw;
   let gapSum = 0;
   for (let i = 1; i < firstExLogs.length; i++) {
-    gapSum += firstExLogs[i].timestamp - firstExLogs[i - 1].timestamp;
+    gapSum += firstExLogs[i].at - firstExLogs[i - 1].at;
   }
   const avgGap = gapSum / (firstExLogs.length - 1);
   return raw + avgGap;
@@ -3798,22 +3956,42 @@ function escapeHTML(s) {
 // Weight tag for a set whose load differed from the header prescription
 // (auto-drop or structural drop) -- without it the summary claimed every set
 // was at the header weight (7/2's "were S3/S4 at 120 or 100?" ambiguity).
+// Weight tag for a set whose load differed from the header prescription. Reads
+// the FROZEN ledger value, so the tag reports the weight that set was actually
+// performed at and nothing he types afterwards can move it.
 function setDropTag(exIdx, setIdx) {
-  const eff = effectiveWeight(exIdx, setIdx);
-  return (eff.dropped && eff.num) ? " @ " + eff.num : "";
+  const e = logAt(exIdx, setIdx);
+  return (e && e.dropped && e.weightLbs != null) ? " @ " + e.weightLbs : "";
 }
-// Session totals: logged sets + tonnage at the weights actually lifted
-// (drops included via effectiveWeight) -- the two numbers a hypertrophy
-// block trends session-over-session.
+// Session totals: logged sets + tonnage at the weights actually lifted -- the
+// two numbers a hypertrophy block trends session-over-session. Tonnage is
+// summed from frozen per-entry weights, NOT recomputed: the old version called
+// effectiveWeight() per log, which re-ran the drop predicate over the editable
+// reps, so correcting one set's rep count could silently rewrite an earlier
+// set's weight and change a total for work already done.
 function sessionTotals() {
   let volume = 0;
   let anyWeight = false;
-  setLogs.forEach(l => {
-    const reps = Number(l.reps) || 0;
-    const w = parseFloat(effectiveWeight(l.exercise, l.set).num);
-    if (reps > 0 && isFinite(w)) { volume += reps * w; anyWeight = true; }
+  const perf = ledger.filter(e => e.kind === "set");
+  perf.forEach(e => {
+    const reps = Number(e.reps) || 0;
+    const w = Number(e.weightLbs);
+    if (reps > 0 && isFinite(w) && w > 0) { volume += reps * w; anyWeight = true; }
   });
-  return { sets: setLogs.length, volume: anyWeight ? Math.round(volume) : null };
+  return { sets: perf.length, volume: anyWeight ? Math.round(volume) : null };
+}
+// The ledger in performance order. The per-exercise block below is the shape
+// the tracker parses and it prints PRESCRIPTION order -- which after a reorder
+// (and, from commit D, after free navigation) is not the order he trained in.
+// One line fixes that without touching the parsed format.
+function chronologyLine() {
+  const perf = ledger.filter(e => e.kind === "set").slice().sort((a, b) => a.n - b.n);
+  if (perf.length < 2) return "";
+  return "Order: " + perf.map(e => {
+    const ex = exById(e.exId);
+    const tag = ex ? (ex.short || ex.name) : e.exId;
+    return String(tag).toUpperCase().replace(/\s+/g, "") + e.set;
+  }).join(" ");
 }
 function totalLineText() {
   const parts = [];
@@ -3825,7 +4003,10 @@ function totalLineText() {
   return parts.length ? "Total: " + parts.join(" · ") : "";
 }
 function buildSummary() {
-  let text = dayType + " -- " + summaryDateStr() + "\n\n";
+  let text = dayType + " -- " + summaryDateStr() + "\n";
+  const chron = chronologyLine();
+  if (chron) text += chron + "\n";
+  text += "\n";
   for (let i = 0; i < workout.length; i++) {
     const ex = workout[i];
     const dur = getExerciseDuration(i);
@@ -3833,7 +4014,7 @@ function buildSummary() {
     if (dur && dur > 0) text += "  (" + formatDuration(dur) + ")";
     text += "\n";
     for (let j = 0; j < ex.sets; j++) {
-      const log = setLogs.find(l => l.exercise === i && l.set === j);
+      const log = logAt(i, j);
       if (log) {
         const diff = formatDifficulty(log);
         const note = log.note ? " -- " + log.note : "";
@@ -3844,7 +4025,7 @@ function buildSummary() {
     }
     // Total-rep volume (the tracker's volume-PR currency) + a banked trigger
     // called out explicitly so the advance never rests on recall.
-    const exLogs = setLogs.filter(l => l.exercise === i);
+    const exLogs = performedOf(ex.id);
     if (exLogs.length) {
       text += "  total " + exLogs.reduce((a, l) => a + (Number(l.reps) || 0), 0) + " reps\n";
     }
@@ -3858,7 +4039,10 @@ function buildSummary() {
   return text;
 }
 function buildSummaryHTML() {
-  let html = '<div class="exercise-header">' + dayType + ' -- ' + summaryDateStr() + '</div><br>';
+  let html = '<div class="exercise-header">' + dayType + ' -- ' + summaryDateStr() + '</div>';
+  const chron = chronologyLine();
+  if (chron) html += '<div class="set-line">' + escapeHTML(chron) + '</div>';
+  html += '<br>';
   for (let i = 0; i < workout.length; i++) {
     const ex = workout[i];
     const dur = getExerciseDuration(i);
@@ -3866,7 +4050,7 @@ function buildSummaryHTML() {
     let durTag = (dur && dur > 0) ? ' <span class="duration-tag">(' + formatDuration(dur) + ')</span>' : '';
     html += '<div class="exercise-header">' + header + durTag + '</div>';
     for (let j = 0; j < ex.sets; j++) {
-      const log = setLogs.find(l => l.exercise === i && l.set === j);
+      const log = logAt(i, j);
       if (log) {
         const diff = formatDifficulty(log);
         const note = log.note ? ' -- ' + escapeHTML(log.note) : '';
@@ -3875,7 +4059,7 @@ function buildSummaryHTML() {
         html += '<div class="set-line">S' + (j + 1) + ': -</div>';
       }
     }
-    const exLogs = setLogs.filter(l => l.exercise === i);
+    const exLogs = performedOf(ex.id);
     if (exLogs.length) {
       html += '<div class="sum-reps">total ' + exLogs.reduce((a, l) => a + (Number(l.reps) || 0), 0) + ' reps</div>';
     }
@@ -3898,88 +4082,226 @@ function saveState() {
     return;
   }
   const s = {
+    v: 8,
     savedAt: Date.now(),
-    // Guards a saved session against restoring into a DIFFERENT day's build
-    // (the config flips at day-close; indexes would point at the wrong
-    // exercises). restoreState discards on mismatch.
-    dayKey: dayType,
-    currentExercise, currentSet, state, workoutStartTime, restEndTime, restRemaining, restTotalSeconds,
-    viewingExercise, viewingSet,
-    setLogs: setLogs.map(l => ({...l})),
+    // planHash is the tier-1 guard: it changes whenever any field a restored
+    // ledger depends on changes (sets, weight, reps, rest, backoff, ids). dayKey
+    // only ever caught a Lower->Upper flip, so a nightly weight tweak restored
+    // silently into a plan that no longer matched.
+    planHash: planHash(),
+    dayType: dayType,
+    ledger: ledger.map(e => ({ ...e })),
+    ledgerSeq: ledgerSeq,
+    pausedCumMs: pausedCumMs,
+    pauseStartedAt: pauseStartedAt,
+    workoutStartTime: workoutStartTime,
+    // --- cursor engine: retired by commit D, still the nav model in A ---
+    currentExercise, currentSet, viewingExercise, viewingSet,
+    state, restEndTime, restRemaining, restTotalSeconds,
     repCount,
     notes: elNotesInput.value,
     countdownFiredThresholds: [...countdownFiredThresholds],
     dissolvedGroups: [...dissolvedGroups],
-    // Persist any mid-session reorder so refreshes don't snap it back.
-    workoutOrder: workout.map(ex => ex.name)
+    // Persist any mid-session reorder so refreshes don't snap it back. By id
+    // now; restore still accepts the v7 name list.
+    workoutOrder: workout.map(ex => ex.id)
   };
   try { localStorage.setItem("gym-timer-state", JSON.stringify(s)); } catch(e) {}
 }
+
+// Tier 3. NEVER silently destroy a mid-session log: park the raw blob where it
+// can be recovered by hand, then start clean. A workout that cannot be restored
+// is still a workout that happened.
+function stashOrphanState(raw) {
+  try { localStorage.setItem("gym-timer-orphan-state", raw); } catch(e) {}
+  try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+}
+
+// Reapply a saved drag-reorder BEFORE anything reads workout[]. Accepts the v8
+// id list and the v7 name list.
+function applySavedOrder(order) {
+  if (!Array.isArray(order) || order.length !== workout.length) return;
+  const byId = new Map(originalWorkout.map(ex => [ex.id, ex]));
+  const byName = new Map(originalWorkout.map(ex => [ex.name, ex]));
+  const reordered = order.map(k => byId.get(k) || byName.get(k));
+  if (!reordered.every(ex => ex)) return;
+  if (new Set(reordered).size !== reordered.length) return;
+  workout.length = 0;
+  reordered.forEach(ex => workout.push(ex));
+}
+
+// v7 -> v8 migration. v7 stored (exerciseIndex, 0-based set, reps, difficulty,
+// note, timestamp) and no weight at all, so the weights are reconstructed ONCE,
+// here, by replaying effectiveWeight() in set order exactly as the v7 build
+// would have -- and then they are frozen like any other entry.
+// This exists because the alternative is orphaning a live workout the moment
+// this build lands on his phone mid-session, which is the one failure that
+// actually costs him something.
+function migrateV7Logs(oldLogs) {
+  ledger.length = 0;
+  ledgerSeq = 0;
+  const chronRank = new Map();
+  oldLogs.slice()
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+    .forEach((l, i) => chronRank.set(l, i + 1));
+  for (let i = 0; i < workout.length; i++) {
+    const ex = workout[i];
+    let prev = null;
+    for (let j = 0; j < ex.sets; j++) {
+      const old = oldLogs.find(l => l.exercise === i && l.set === j);
+      if (!old) continue;
+      // effectiveWeight reads the ledger for sets 0..j-1, which are already
+      // pushed, so the sticky-drop replay sees exactly the history v7 saw.
+      const eff = effectiveWeight(i, j);
+      const effNum = (eff.num == null) ? NaN : parseFloat(eff.num);
+      const prescribed = parseFloat((String(ex.weight || "").match(/(\d+(?:\.\d+)?)/) || [])[1]);
+      const at = old.timestamp || Date.now();
+      const entry = {
+        kind: "set",
+        n: chronRank.get(old) || (ledger.length + 1),
+        exId: ex.id,
+        set: j + 1,
+        reps: old.reps,
+        difficulty: (old.difficulty == null ? null : old.difficulty),
+        note: old.note || "",
+        weightLbs: isFinite(effNum) ? effNum : null,
+        prescribedLbs: isFinite(prescribed) ? prescribed : null,
+        dropped: !!eff.dropped,
+        pairId: null,
+        restPlannedSec: ex.rest || null,
+        restActualSec: (prev && prev.at && at) ? Math.max(0, Math.round((at - prev.at) / 1000)) : null,
+        pausedCumMs: 0,
+        at: at,
+        editedAt: null,
+        migratedFrom: "v7"
+      };
+      ledger.push(entry);
+      prev = entry;
+    }
+  }
+  ledgerSeq = ledger.reduce((m, e) => Math.max(m, e.n || 0), 0);
+}
+
+// Every entry must name an exercise this build has, at an ordinal this build
+// allows. Fails closed: a ledger that does not fit the plan is not restored.
+function ledgerFitsPlan() {
+  return ledger.every(e => {
+    const ex = exById(e.exId);
+    return !!ex && Number.isFinite(e.set) && e.set >= 1 && e.set <= ex.sets;
+  });
+}
+// THREE TIERS, fail-closed in order:
+//   1. v8 blob whose planHash matches -> full restore.
+//   2. Same dayType, ledger fits this plan -> LEDGER-ONLY restore. Safe
+//      precisely BECAUSE weights are frozen per entry: a nightly weight tweak
+//      cannot corrupt history, and identity keys mean order changes don't
+//      matter. Session furniture (rest clock, unlinks) is dropped.
+//   3. Anything else -> stash the raw blob and start fresh.
+// A legacy v7 blob for the same day is a special case of tier 1: its config is
+// this config (v8 only added ids), so it gets a full restore after migration.
 function restoreState() {
+  let raw = null;
+  try { raw = localStorage.getItem("gym-timer-state"); } catch(e) { return false; }
+  if (!raw) return false;
+
+  let s;
+  try { s = JSON.parse(raw); } catch(e) { stashOrphanState(raw); return false; }
+
+  if (s.savedAt && (Date.now() - s.savedAt > STATE_TTL_MS)) {
+    try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+    return false;
+  }
+  if (s.state === "finished") {
+    try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
+    return false;
+  }
+
+  const isV8 = (s.v === 8);
+  const isLegacyV7 = !isV8 && Array.isArray(s.setLogs) && s.dayKey === dayType;
+
+  // Tier 3 gate: this blob does not belong to today's plan at all.
+  if (!isV8 && !isLegacyV7) { stashOrphanState(raw); return false; }
+  if (isV8 && s.dayType !== dayType) { stashOrphanState(raw); return false; }
+
   try {
-    const raw = localStorage.getItem("gym-timer-state");
-    if (!raw) return false;
-    const s = JSON.parse(raw);
-    if (s.savedAt && (Date.now() - s.savedAt > STATE_TTL_MS)) {
-      try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
-      return false;
-    }
-    // Cross-build guards: a state saved under a different day's config, or
-    // one whose cursor doesn't fit this build's shape, must not restore.
-    if (s.state === "finished") {
-      try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
-      return false;
-    }
-    if (s.dayKey && s.dayKey !== dayType) {
-      try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
-      return false;
+    applySavedOrder(s.workoutOrder);
+
+    if (isV8) {
+      if (!Array.isArray(s.ledger)) { stashOrphanState(raw); return false; }
+      ledger.length = 0;
+      s.ledger.forEach(e => ledger.push({ ...e }));
+      ledgerSeq = (typeof s.ledgerSeq === 'number')
+        ? s.ledgerSeq
+        : ledger.reduce((m, e) => Math.max(m, e.n || 0), 0);
+      pausedCumMs = (typeof s.pausedCumMs === 'number') ? s.pausedCumMs : 0;
+      pauseStartedAt = (typeof s.pauseStartedAt === 'number') ? s.pauseStartedAt : null;
+    } else {
+      migrateV7Logs(s.setLogs);
+      pausedCumMs = 0;
+      pauseStartedAt = null;
     }
 
-    // Reapply a saved reorder BEFORE anything reads workout[].
-    if (Array.isArray(s.workoutOrder) && s.workoutOrder.length === workout.length) {
-      const byName = new Map(originalWorkout.map(ex => [ex.name, ex]));
-      const reordered = s.workoutOrder.map(name => byName.get(name));
-      if (reordered.every(ex => ex)) {
-        workout.length = 0;
-        reordered.forEach(ex => workout.push(ex));
-      }
-    }
+    if (!ledgerFitsPlan()) { ledger.length = 0; stashOrphanState(raw); return false; }
 
-    // Cursor-shape guard, AFTER the reorder so indexes are checked against
-    // the same exercise order they were saved under.
-    if (typeof s.currentExercise !== 'number' || s.currentExercise < 0 ||
-        s.currentExercise >= workout.length ||
-        typeof s.currentSet !== 'number' || s.currentSet < 0 ||
-        s.currentSet > workout[s.currentExercise].sets) {
-      try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
-      return false;
-    }
-
-    currentExercise = s.currentExercise;
-    currentSet = s.currentSet;
-    viewingExercise = (typeof s.viewingExercise === 'number') ? s.viewingExercise : currentExercise;
-    viewingSet = (typeof s.viewingSet === 'number') ? s.viewingSet : currentSet;
     workoutStartTime = (typeof s.workoutStartTime === 'number') ? s.workoutStartTime : null;
-    repCount = s.repCount || 10;
-    setLogs.length = 0;
-    s.setLogs.forEach(l => setLogs.push(l));
-    state = s.state;
-    restEndTime = s.restEndTime;
-    restRemaining = s.restRemaining;
-    restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
-    countdownFiredThresholds = new Set(s.countdownFiredThresholds || []);
-    // Superset linkage: restore mid-session unlinks, then re-derive the
-    // sequence from the (possibly reordered) workout and re-locate the cursor.
-    dissolvedGroups = new Set(Array.isArray(s.dissolvedGroups) ? s.dissolvedGroups : []);
-    rebuildSequence();
 
-    if (state === "resting" || state === "paused" || state === "finishing") {
-      const lastLog = setLogs[setLogs.length - 1];
-      if (lastLog) currentLogEntry = lastLog;
+    const cursorOK =
+      typeof s.currentExercise === 'number' && s.currentExercise >= 0 &&
+      s.currentExercise < workout.length &&
+      typeof s.currentSet === 'number' && s.currentSet >= 0 &&
+      s.currentSet <= workout[s.currentExercise].sets;
+
+    const fullRestore = cursorOK && (isLegacyV7 || s.planHash === planHash());
+
+    if (fullRestore) {
+      currentExercise = s.currentExercise;
+      currentSet = s.currentSet;
+      viewingExercise = (typeof s.viewingExercise === 'number') ? s.viewingExercise : currentExercise;
+      viewingSet = (typeof s.viewingSet === 'number') ? s.viewingSet : currentSet;
+      repCount = s.repCount || 10;
+      state = s.state;
+      restEndTime = s.restEndTime;
+      restRemaining = s.restRemaining;
+      restTotalSeconds = s.restTotalSeconds || s.restRemaining || 0;
+      countdownFiredThresholds = new Set(s.countdownFiredThresholds || []);
+      dissolvedGroups = new Set(Array.isArray(s.dissolvedGroups) ? s.dissolvedGroups : []);
+      rebuildSequence();
+      if (state === "resting" || state === "paused" || state === "finishing") {
+        const lastLog = ledger.filter(e => e.kind === "set").slice(-1)[0];
+        if (lastLog) currentLogEntry = lastLog;
+      }
+      applyState(s.notes || "");
+      return true;
     }
-    applyState(s.notes || "");
+
+    // TIER 2 -- the plan moved under a live session. Keep every logged set,
+    // drop the session furniture, and put him back on the first machine that
+    // still owes work.
+    let landIdx = workout.findIndex(ex => remainingOf(ex.id) > 0);
+    const noneLeft = (landIdx < 0);
+    if (noneLeft) landIdx = workout.length - 1;
+    currentExercise = landIdx;
+    currentSet = noneLeft ? workout[landIdx].sets : entriesOf(workout[landIdx].id).length;
+    viewingExercise = currentExercise;
+    viewingSet = currentSet;
+    repCount = getMaxReps(workout[landIdx].reps);
+    state = noneLeft ? "finishing" : "ready";
+    restEndTime = null;
+    restRemaining = 0;
+    restTotalSeconds = 0;
+    countdownFiredThresholds = new Set();
+    dissolvedGroups = new Set();
+    pauseStartedAt = null;
+    currentLogEntry = null;
+    rebuildSequence();
+    applyState("");
+    try { console.warn("gym-timer: plan changed under a saved session - ledger restored, timer state reset"); } catch(e) {}
     return true;
-  } catch(e) { return false; }
+  } catch(e) {
+    ledger.length = 0;
+    stashOrphanState(raw);
+    return false;
+  }
 }
 
 // ============ §17 LIFECYCLE + INIT ============
@@ -4167,6 +4489,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower SAFETY-PREFIX v7b</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8A LEDGER</div>
 </body>
 </html>
