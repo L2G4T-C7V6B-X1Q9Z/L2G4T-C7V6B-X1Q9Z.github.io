@@ -648,6 +648,14 @@ body.dragging-exercise {
   box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.12);
 }
 .dot.completed { background: #ece9e2; cursor: pointer; }
+/* Passed by the sequence but never logged. Hollow with a red edge so it reads
+   as unfinished at a glance rather than quietly blending into the done dots. */
+.dot.missed {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--red);
+  opacity: .75;
+  cursor: pointer;
+}
 .dot.cursor { border: 2px solid var(--red); background: transparent; }
 /* active dot blinking — hollow red edge, snap on / fade off (Mazda pattern) */
 .dot.active.blinking {
@@ -1221,12 +1229,19 @@ const workout = [
     weight: "190 lbs",
     backoff: "175 lbs",
     rest: 150,
+    // Prefixed to EVERY set's note text, on every code path. Keep it short --
+    // it is read at the machine, before anything else on the card.
+    safety: "STOP AT 90 DEGREES. Sharp pain medial to the kneecap = rack it, session over.",
     note: "90 DEGREE KNEE ANGLE, NOT KNEES-TO-CHEST. Stop the descent at 90. The cap is PERMANENT -- you confirmed on 8/4 that the position feels good, so this is how you press now, not a restriction you are working back from. Drive through the heels, do not slam the knees straight. STOP THE SESSION on any sharp pain medial to the kneecap.",
     setNotes: [
-      "S1: 90 degree knee angle, NOT knees-to-chest. Stop the descent at 90. Any sharp infra-medial pain and you rack it -- that ends the session.",
-      "S2: same 90 degree stop, controlled descent. Last time 190 gave you 9 then 7 here -- bottom of the band, so there is room.",
-      "S3: still stopping at 90. Last session your BEST sets were the last two. Do not pace for a fade that has not happened.",
-      "S4: last one, still stopping at 90. Four clean capped sets is the result -- never go hunting for depth on the final set."
+      // The 90-degree cap and the stop-the-session rule now live in `safety`
+      // above, which is prefixed to every one of these unconditionally. Repeating
+      // them here made the card ~57% longer and fitNoteToBox shrank the type to
+      // compensate -- a safety line rendered at 8px is worse than one at 18px.
+      "S1: controlled descent, drive through the heels, do not slam the knees straight.",
+      "S2: controlled descent. Last time 190 gave you 9 then 7 here -- bottom of the band, so there is room.",
+      "S3: last session your BEST sets were the last two. Do not pace for a fade that has not happened.",
+      "S4: last one. Four clean capped sets is the result -- never go hunting for depth on the final set."
     ],
     trigger: [12, 12, 12, 12],
     triggerWeight: "205 lbs"
@@ -1256,11 +1271,17 @@ const workout = [
     weight: "40 lbs",
     rest: 120,
     noDropAdvice: true,
+    safety: "ANY medial-thigh sensation -- not pain, ANY sensation -- rack it immediately.",
     note: "HARD STOP ON ANY MEDIAL-THIGH SENSATION -- not pain, ANY sensation. Rack it and move on, no negotiating. THIRD SET ADDED: you earned it -- three straight clean sessions and 19 reps on 8/3 vs 16 on 7/28. It is real hamstring work now, not just a diagnostic. The hard stop does not change. Pad low on the calves, hips flat on the bench, no jerking the weight up. No weight-drop prompts here; a short set means nerve, not load.",
     setNotes: [
-      "S1: hips flat, pad low, slow negative. ANY medial-thigh sensation = rack it immediately.",
+      // Hard stop lives in `safety` above and prefixes all three. Note that S2
+      // previously carried NO hard-stop language at all, contradicting the
+      // standing rule that the medial-thigh warning stays on every set of this
+      // exercise -- the safety field is what makes that structural instead of
+      // dependent on whoever wrote the note.
+      "S1: hips flat, pad low, slow negative.",
       "S2: same. You hit 9 then 10 last time -- the second set was your better one.",
-      "S3: the new set. First time at 3. Same hard stop, and if anything feels off in the medial thigh this set is the one to drop, not push."
+      "S3: the new set. First time at 3. If anything feels off, this set is the one to drop, not push."
     ]
   },
   {
@@ -1977,6 +1998,12 @@ function exerciseClipName(name) {
     "Leg Press": "ex-leg-press",
     "Leg Curl": "ex-leg-curl",
     "Leg Curl Machine": "ex-leg-curl",
+    // The live config has called this "Lying Leg Curl" since the 7/26 build and
+    // the alias was never added, so the ONE exercise with a nerve history was
+    // also the one the timer never announced by name. A missing alias fails
+    // silently by design (exerciseClipName returns null, the cue is skipped),
+    // which is why it survived ~10 builds unnoticed.
+    "Lying Leg Curl": "ex-leg-curl",
     "Leg Press Calf Raises": "ex-calf-raises",
     "Calf Raises": "ex-calf-raises",
     "Cable Face Pulls": "ex-face-pulls",
@@ -2287,6 +2314,24 @@ function defaultAdvice(setIdx, prev, ex) {
 // Returns { text, advisor } -- advisor=true when the note is a LIVE computed
 // call (adviceFor / dynamicRepAdvice / trigger advice), false for the canned
 // setNotes/note fallback. The note card styles the two differently.
+// SAFETY PREFIX -- unconditional, survives every advisor branch.
+// An injury constraint used to live only in setNotes, which computeSetNoteInfo
+// returns as a FALLBACK. Once the prior set is graded, dynamicRepAdvice
+// essentially always returns a string (it ends in two unconditional catch-alls),
+// so the advisor text won and the constraint vanished from the screen for every
+// set after the first. Verified 2026-08-05 on the live Lower build: after
+// grading Leg Curl S1, S2's card read "S1 was 9 with room. Push 9-11 here, hold
+// 40 lbs." with the medial-thigh hard stop nowhere on it.
+// The existing guard (CLAUDE.md Obs 389) checks with a grep of the built file,
+// which PASSES here -- the text is present in setNotes. The failure is at render
+// time, so a file-level check is structurally blind to it. Hence: ex.safety is
+// prefixed at the single chokepoint every consumer reads through, not stored in
+// prose that a later branch can outrank.
+function withSafety(ex, out) {
+  if (!ex || !ex.safety) return out;
+  return { text: ex.safety + "  " + out.text, advisor: out.advisor, safety: true };
+}
+
 function computeSetNoteInfo(exIdx, setIdx) {
   const ex = workout[exIdx];
   if (!ex) return { text: "", advisor: false };
@@ -2307,16 +2352,16 @@ function computeSetNoteInfo(exIdx, setIdx) {
   if (allLogged && prevLogs.length === setIdx && setIdx > 0) {
     if (typeof ex.adviceFor === 'function') {
       const dynamic = ex.adviceFor(setIdx, prevLogs, ex);
-      if (dynamic) return { text: dynamic, advisor: true };
+      if (dynamic) return withSafety(ex, { text: dynamic, advisor: true });
     }
     const reactive = dynamicRepAdvice(setIdx, prevLogs, ex);
-    if (reactive) return { text: reactive, advisor: true };
+    if (reactive) return withSafety(ex, { text: reactive, advisor: true });
     const generic = defaultAdvice(setIdx, prevLogs, ex);
-    if (generic) return { text: generic, advisor: true };
+    if (generic) return withSafety(ex, { text: generic, advisor: true });
   }
   // Static fallback (S1 always lands here; later sets land here pre-grading).
-  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) return { text: ex.setNotes[setIdx], advisor: false };
-  return { text: ex.note || "", advisor: false };
+  if (Array.isArray(ex.setNotes) && ex.setNotes[setIdx]) return withSafety(ex, { text: ex.setNotes[setIdx], advisor: false });
+  return withSafety(ex, { text: ex.note || "", advisor: false });
 }
 function computeSetNote(exIdx, setIdx) {
   return computeSetNoteInfo(exIdx, setIdx).text;
@@ -2485,7 +2530,21 @@ function renderProgress() {
       const key = exIdx + ":" + setIdx;
       const p = pos.has(key) ? pos.get(key) : 0;
       if (p > maxPos) maxPos = p;
-      if (p < seqIndex) {
+      // A dot is "completed" only if a set was actually LOGGED for it. Position
+      // alone is a lie after a reorder: reorderExercise splices the prescription
+      // and rebuilds the sequence, so dragging an exercise from later to earlier
+      // drops all of its unperformed sets below seqIndex, and the old
+      // `p < seqIndex` test rendered every one of them as done. They then sat
+      // behind the cursor and were never offered again -- silent set loss, and
+      // the most likely mechanism for the 7/28 face-pull disappearance.
+      // Unperformed-but-passed sets now render as "missed" instead: visible,
+      // tappable, and obviously not finished.
+      const isLogged = setLogs.some(l => l.exercise === exIdx && l.set === setIdx);
+      if (p < seqIndex && !isLogged) {
+        dot.classList.add("missed");
+        dot.setAttribute("role", "button");
+        dot.setAttribute("aria-label", "Missed " + workout[i].name + " set " + (j + 1));
+      } else if (p < seqIndex) {
         dot.classList.add("completed");
         if (p === seqIndex - 1 && isResting) {
           dot.classList.add("echoing");
@@ -4108,6 +4167,6 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower CAP-CONFIRMED v7a</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower SAFETY-PREFIX v7b</div>
 </body>
 </html>
