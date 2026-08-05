@@ -568,7 +568,7 @@ h1:empty { display: none; }
   z-index: 40;
   pointer-events: none;
 }
-#return-pill, #set-current-btn {
+#return-pill, #occupied-pill, #skip-ex-pill {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 1.5px;
@@ -587,10 +587,59 @@ h1:empty { display: none; }
   transform: translateX(-8px);
   transition: opacity 280ms var(--ease), transform 280ms var(--ease);
 }
-#return-pill.visible, #set-current-btn.visible {
+#return-pill.visible, #occupied-pill.visible, #skip-ex-pill.visible {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
+}
+/* Neutral until they mean something: OCCUPIED and SKIP EX are navigation, not
+   alarms. Only the armed SKIP EX confirm earns the red. */
+#occupied-pill, #skip-ex-pill {
+  color: var(--ink-3);
+  border-color: var(--line-hi);
+}
+#skip-ex-pill.armed {
+  color: var(--red-hot);
+  border-color: var(--red);
+  background: rgba(224, 88, 74, 0.1);
+}
+/* Transient confirmation for a WRITE with no other visible feedback -- an
+   un-skip restores a set the board may not even be showing. */
+#toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 210px);
+  z-index: 60;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: rgba(21, 21, 23, 0.96);
+  border: 1px solid var(--line-hi);
+  border-radius: 999px;
+  padding: 7px 14px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms var(--ease), transform 200ms var(--ease);
+  white-space: nowrap;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* Deferred rows read as parked, not as finished. */
+.exercise-group.is-held .exercise-label { color: #4a4a4f; }
+.dot.skipped {
+  background: transparent;
+  border: 1px solid #55555a;
+  position: relative;
+}
+.dot.skipped::after {
+  content: "";
+  position: absolute;
+  left: 1px; right: 1px; top: 50%;
+  height: 1px;
+  background: #55555a;
+  transform: rotate(-45deg);
 }
 .exercise-group {
   display: flex;
@@ -1173,10 +1222,17 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
       </div>
     </div>
   </div>
+  <div id="toast" role="status" aria-live="polite"></div>
   <div class="progress-area">
     <div class="pills-stack">
-      <div id="return-pill" role="button" aria-label="Back to current set">&larr; NOW</div>
-      <div id="set-current-btn" role="button" aria-label="Set this as current set">&darr; SET</div>
+      <div id="return-pill" role="button" aria-label="Back to the current set">&larr; NOW</div>
+      <!-- The machine is taken. One tap parks this exercise and moves to the
+           next one that owes work; tapping its row later comes back. No ledger
+           entry: a busy machine is not a set, and it does not reset his rest. -->
+      <div id="occupied-pill" role="button" aria-label="This machine is occupied">&times; OCCUPIED</div>
+      <!-- Abandon the rest of this exercise. Two taps: the second confirms.
+           Recovery is per-dot (tap a skipped dot to restore that set). -->
+      <div id="skip-ex-pill" role="button" aria-label="Skip the rest of this exercise">&#8213; SKIP EX</div>
     </div>
     <div id="progress"></div>
   </div>
@@ -1443,11 +1499,13 @@ function kebabId(s) {
   });
 })();
 
-// Config order, snapshotted before a drag-reorder can splice `workout`. Also
-// what a drag-reorder is restored against, by id (name is the v7 fallback).
-// Commit D freezes the prescription and makes reorder display-only, at which
-// point this and `workout` are permanently identical.
-const originalWorkout = workout.slice();
+// THE PRESCRIPTION IS IMMUTABLE (v8D). Nothing splices `workout` any more --
+// a drag-reorder moves boardOrder, which is display only. Freezing makes that
+// a guarantee rather than a convention: the class of bug where a reorder
+// rewrote the plan under a live session cannot recur.
+workout.forEach(Object.freeze);
+Object.freeze(workout);
+const originalWorkout = workout;   // kept as a name; they are the same array now
 
 const exById  = (id)  => workout.find(ex => ex.id === id) || null;
 const exIdAt  = (idx) => (workout[idx] ? workout[idx].id : null);
@@ -1509,11 +1567,6 @@ function saveSettings() {
 loadSettings();
 
 // ============ §3 STATE ============
-// Two independent cursors (v3 model — do not conflate):
-//   WORKING (currentExercise/currentSet) = the set being trained; solid red dot;
-//     mutated only by setDone, reorderExercise, restoreState, the ↓SET pill.
-//   VIEWING (viewingExercise/viewingSet) = a read-only peek; hollow red ring;
-//     while browsing, Set Done is disabled and the return pills show.
 // ---- LAYER 2: THE PERFORMANCE LEDGER (v8) ----
 // Append-ordered, identity-keyed, and it STAMPS ITS CONTEXT AT LOG TIME.
 // Replaces setLogs, whose entries held only (exerciseIndex, 0-based set, reps,
@@ -1555,9 +1608,6 @@ function markEdited(entry) {
 }
 
 // ---- READINESS HELPERS ----
-// The dial always shows the FOCUSED exercise. In C the cursor is still the
-// focus; commit D renames the concept, not the behaviour.
-const focusExId = () => exIdAt(currentExercise);
 function remainingMsOf(exId) {
   const t = readyAt[exId];
   if (!t) return 0;
@@ -1576,12 +1626,49 @@ function stampReady(exId, seconds, anchorMs) {
   readyPlanned[exId] = seconds;
 }
 
-let currentExercise = 0;
-let currentSet = 0;
-let viewingExercise = 0;
-let viewingSet = 0;
-function isBrowsing() {
-  return viewingExercise !== currentExercise || viewingSet !== currentSet;
+// ---- LAYER 3: SESSION STATE (v8D) ----
+// The two cursors and the sequence engine are gone. They encoded "where the
+// workout is", which is a fiction: the workout is wherever he is standing, and
+// that is a fact about the room, not about an array index.
+//
+//   focusExId  the exercise the dial acts on. Set by tapping a row. That is
+//              the whole navigation model.
+//   view       a READ. Non-null means he is looking at a performed set; it
+//              never moves focus and never writes anything.
+//   deferred   exercises held OCCUPIED. Not a ledger fact -- a busy machine is
+//              not a set, and it does not reset his muscles.
+//   boardOrder display order only. Dragging a row reorders THIS, never the
+//              prescription, so a drag can no longer strand unperformed sets
+//              behind a cursor (the suspected 7/28 face-pull disappearance).
+//
+// The no-holes guarantee is structural: nextSetOf() is the only way to name a
+// set to perform, and it always returns "the next unperformed one". There is no
+// expressible way to skip S2 and log S3, so a hole cannot be created.
+let focusExId = workout[0].id;
+let view = null;            // null | { exId, set }  (set is 1-based)
+let deferred = new Set();
+let boardOrder = workout.map(ex => ex.id);
+
+const isBrowsing = () => view !== null;
+const nextSetOf = (exId) => 1 + entriesOf(exId).length;
+// What the header / note / dial are describing right now.
+function displayTarget() {
+  if (view) return { exId: view.exId, set: view.set };
+  const ex = exById(focusExId);
+  if (!ex) return { exId: workout[0].id, set: 1 };
+  return { exId: focusExId, set: Math.min(nextSetOf(focusExId), ex.sets) };
+}
+const totalRemaining = () => boardOrder.reduce((a, id) => a + Math.max(0, remainingOf(id)), 0);
+
+// Where focus goes after a set is logged or an exercise is abandoned.
+// Stay put if this exercise still owes work; otherwise the earliest row in
+// BOARD order that does, preferring one he has not parked. If only parked
+// exercises remain, surface the earliest anyway -- refusing to show him
+// anything would be worse than showing him a machine he flagged as busy.
+function advanceFocusFrom(exId) {
+  if (remainingOf(exId) > 0 && !deferred.has(exId)) return exId;
+  const order = boardOrder.filter(id => remainingOf(id) > 0);
+  return order.find(id => !deferred.has(id)) || order[0] || null;
 }
 
 let state = "ready";   // pre-start | ready | resting | paused | alert | finishing | finished
@@ -1617,88 +1704,23 @@ let setDoneLockUntil = 0;
 let editingLog = null;
 let editRepCount = 0;
 
-// ============ §4 SUPERSET SEQUENCE ENGINE (2026-07-06) ============
-// The working cursor walks `sequence` (the interleaved set order) instead of
-// (exercise, set++). Logs, dots, advice, and auto-drop still key on
-// (exercise, set) -- per-exercise set order is preserved inside the
-// interleave, so none of that machinery changes. `dissolvedGroups` holds
-// groups unlinked mid-session (machine taken); members fall back to straight sets.
-let dissolvedGroups = new Set();
-
-function parseSS(ex) {
-  if (!ex || !ex.ss) return null;
-  const m = String(ex.ss).match(/^([A-Za-z])([12])$/);
-  if (!m) return null;
-  if (dissolvedGroups.has(m[1])) return null;
-  return { g: m[1], slot: +m[2] };
-}
-function groupIdOf(exIdx) {
-  const t = parseSS(workout[exIdx]);
-  return t ? t.g : null;
-}
-function slotOf(exIdx) {
-  const t = parseSS(workout[exIdx]);
-  return t ? t.slot : null;
-}
-function firstMemberOfGroup(g) {
-  for (let i = 0; i < workout.length; i++) if (groupIdOf(i) === g) return i;
-  return -1;
-}
-function buildSequence() {
-  const seq = [];
-  const emitted = new Set();
-  for (let i = 0; i < workout.length; i++) {
-    if (emitted.has(i)) continue;
-    const tag = parseSS(workout[i]);
-    if (!tag) {
-      for (let s = 0; s < workout[i].sets; s++) seq.push({ ex: i, set: s });
-      emitted.add(i);
-      continue;
-    }
-    // Whole group emits at its first member's board position: build both slot
-    // queues in array order, interleave anchor-first; an unequal queue drains
-    // its remainder linearly (6 presses vs 5 rows ends ...I1 R5 I2).
-    const q1 = [], q2 = [];
-    for (let k = 0; k < workout.length; k++) {
-      const tk = parseSS(workout[k]);
-      if (!tk || tk.g !== tag.g) continue;
-      const dst = (tk.slot === 1) ? q1 : q2;
-      for (let s = 0; s < workout[k].sets; s++) dst.push({ ex: k, set: s });
-      emitted.add(k);
-    }
-    let a = 0, b = 0;
-    while (a < q1.length || b < q2.length) {
-      if (a < q1.length) seq.push(q1[a++]);
-      if (b < q2.length) seq.push(q2[b++]);
-    }
-  }
-  return seq;
-}
-let sequence = buildSequence();
-let seqIndex = 0;
-function seqPosOf(exIdx, setIdx) {
-  const p = sequence.findIndex(e => e.ex === exIdx && e.set === setIdx);
-  return p >= 0 ? p : 0;
-}
-function syncSeqIndex() { seqIndex = seqPosOf(currentExercise, currentSet); }
-function rebuildSequence() {
-  sequence = buildSequence();
-  syncSeqIndex();
-}
-function dissolveGroup(g) {
-  dissolvedGroups.add(g);
-  rebuildSequence();
-  renderExercise(); // rerenders the board (rail + unlink drop off)
-  saveState();
-}
-// A config whose sequence doesn't start at workout[0] S1 (e.g. a slot-2
-// member listed first) still starts the workout at the sequence head.
-if (sequence.length && (sequence[0].ex !== currentExercise || sequence[0].set !== currentSet)) {
-  currentExercise = sequence[0].ex;
-  currentSet = sequence[0].set;
-  viewingExercise = currentExercise;
-  viewingSet = currentSet;
-}
+// ============ §4 (RETIRED) SUPERSET SEQUENCE ENGINE ============
+// DELETED in v8D. The engine flattened the workout into an interleaved list of
+// (exercise, set) pairs and walked it with an index, which made "where am I"
+// a position in a derived array. Three problems that were structural, not bugs:
+//
+//   - A drag-reorder spliced the prescription and rebuilt the list, so any
+//     unperformed set of the moved exercise could land BEHIND the index and
+//     never be offered again. Silent set loss; the most likely mechanism for
+//     the 7/28 face-pull disappearance.
+//   - Supersets had to be declared in the config (ss: "A1"/"A2") because the
+//     interleave was computed up front. He could not pair two machines on the
+//     spot, which is when he actually decides to.
+//   - There was exactly one path through the workout, so "this machine is
+//     taken" had no representation at all.
+//
+// Replaced by: focusExId (where he is), the ledger (what he has done), and
+// nextSetOf (what is left). Config `ss` tags are honoured by a shim in commit E.
 
 // ============ §5 DOM REFS ============
 const elDayTitle = document.getElementById("day-title");
@@ -1730,7 +1752,9 @@ const elToggleAutoStart = document.getElementById("toggle-autostart");
 const elToggleSkipRest = document.getElementById("toggle-skiprest");
 const elToggleVoice = document.getElementById("toggle-voice");
 const elReturnPill = document.getElementById("return-pill");
-const elSetCurrentBtn = document.getElementById("set-current-btn");
+const elOccupiedPill = document.getElementById("occupied-pill");
+const elSkipExPill = document.getElementById("skip-ex-pill");
+const elToast = document.getElementById("toast");
 const elPillsStack = document.querySelector(".pills-stack");
 const elDifficultyRow = document.getElementById("difficulty-row");
 const elBottomBar = document.getElementById("bottom-bar");
@@ -2347,7 +2371,7 @@ function maybeFireCountdownCue(secCeil) {
   if (!name) return;
   // Skip remaining-N cues when total rest is at/below the threshold
   // (redundant with the rest-start announcement).
-  const restTotalSeconds = readyPlanned[focusExId()] || 0;
+  const restTotalSeconds = readyPlanned[focusExId] || 0;
   if ((secCeil === 60 && restTotalSeconds <= 60) ||
       (secCeil === 30 && restTotalSeconds <= 30) ||
       (secCeil === 10 && restTotalSeconds <= 10)) {
@@ -2366,7 +2390,7 @@ function maybeFireCountdownCue(secCeil) {
 function restEndCueSeq() {
   const seq = ['rest-complete'];
   if (settings.autoStart) {
-    const setStart = setStartClipFor(currentExercise, currentSet);
+    const setStart = setStartClipFor(exIdxOf(focusExId), nextSetOf(focusExId) - 1);
     if (setStart) seq.push(setStart);
   } else {
     seq.push('tap-to-start');
@@ -2615,9 +2639,9 @@ function exerciseTriggerHit(exIdx) {
 
 // One-shot celebration pulse on the exercise's dots row when its final set
 // banks the trigger. Re-renders during the window simply drop the class early.
-function pulseTriggerHit(exIdx) {
+function pulseTriggerHit(exId) {
   requestAnimationFrame(() => {
-    const row = elProgress.querySelector('.exercise-group[data-exercise-idx="' + exIdx + '"] .exercise-dots');
+    const row = elProgress.querySelector('.exercise-group[data-ex-id="' + exId + '"] .exercise-dots');
     if (!row) return;
     row.classList.add('trigger-hit');
     setTimeout(() => row.classList.remove('trigger-hit'), 1200);
@@ -2661,9 +2685,7 @@ function setInfoHTML(exIdx, setIdx) {
 // browsing → the viewed set's log (may be null for future sets);
 // working during rest → the just-completed set's log.
 function getActiveLogForEdit() {
-  if (isBrowsing()) {
-    return logAt(viewingExercise, viewingSet);
-  }
+  if (isBrowsing()) return ledger.find(e => e.kind === "set" && e.exId === view.exId && e.set === view.set) || null;
   return currentLogEntry || null;
 }
 function renderDifficulty(log) {
@@ -2675,23 +2697,20 @@ function renderDifficulty(log) {
 }
 function renderSetLabel() {
   if (!elSetLabelText) return;
-  // Show the set# of whatever log is actively being edited, not the cursor
-  // position: during rest the cursor already points at the upcoming set while
-  // the log-area fields hold the set just completed.
+  // The label names the set the FIELDS are editing, which during a rest is the
+  // set just completed while the header already shows the next one. With free
+  // navigation those can be different EXERCISES too, so name the exercise
+  // whenever they differ -- a bare "S2" would otherwise read as the wrong
+  // machine's set.
   const activeLog = getActiveLogForEdit();
-  const setIdx = activeLog
-    ? activeLog.set
-    : (isBrowsing() ? viewingSet : currentSet);
-  // Superset ambiguity: mid-pair rest, the header shows the UPCOMING exercise
-  // while the log area edits the partner's just-done set -- a bare "S2" reads
-  // as the wrong exercise's set. Name the exercise when they differ.
-  const shownEx = isBrowsing() ? viewingExercise : currentExercise;
-  if (activeLog && activeLog.exercise !== shownEx && workout[activeLog.exercise]) {
-    const tag = workout[activeLog.exercise].short || workout[activeLog.exercise].name;
-    elSetLabelText.textContent = tag + " S" + (setIdx + 1);
+  const shown = displayTarget();
+  const setOrd = activeLog ? activeLog.set : shown.set;
+  if (activeLog && activeLog.exId !== shown.exId) {
+    const ex = exById(activeLog.exId);
+    elSetLabelText.textContent = ((ex && (ex.short || ex.name)) || activeLog.exId) + " S" + setOrd;
     elSetLabelText.classList.add("ctx");
   } else {
-    elSetLabelText.textContent = "S" + (setIdx + 1);
+    elSetLabelText.textContent = "S" + setOrd;
     elSetLabelText.classList.remove("ctx");
   }
 }
@@ -2702,10 +2721,9 @@ function syncLogArea() {
     repPicker.setValue(log.reps);
     elNotesInput.value = log.note || "";
   } else {
-    // No active log (pre-first-Set-Done, or browsing a future set) — show
-    // the displayed exercise's default reps so the row isn't empty.
-    const exIdx = isBrowsing() ? viewingExercise : currentExercise;
-    const ex = workout[exIdx];
+    // No active log (pre-first Set Done, or browsing something unperformed):
+    // show the displayed exercise's default reps so the row isn't empty.
+    const ex = exById(displayTarget().exId);
     repCount = ex ? getMaxReps(ex.reps) : 0;
     repPicker.setValue(repCount);
     elNotesInput.value = "";
@@ -2727,98 +2745,71 @@ function captureLog() {
   currentLogEntry = null;
 }
 
-// Sequence position of every (exercise,set) — dot completed/active semantics
-// follow PERFORMED order (the interleave), not linear order, so a finished
-// row S1 reads completed while press S2-S4 are still pending.
-function seqPosMap() {
-  const m = new Map();
-  sequence.forEach((e, i) => m.set(e.ex + ":" + e.set, i));
-  return m;
-}
+// THE BOARD. Iterates boardOrder (display order), and every dot's state is
+// DERIVED FROM THE LEDGER -- never from a position in a list. The old version
+// compared each dot's sequence position against seqIndex, which is a claim
+// about where a cursor is rather than about what happened, and after a reorder
+// it rendered unperformed sets as done.
+//   performed -> completed        (a set entry exists)
+//   skipped   -> hollow + slash   (a skip entry exists; tap restores it)
+//   next up   -> active           (focused exercise, ordinal === nextSetOf)
+//   pending   -> plain
 function renderProgress() {
   elProgress.innerHTML = "";
-  const pos = seqPosMap();
   const isResting = (state === "resting" || state === "paused");
   const isDoingSet = (state === "ready" || state === "alert" || state === "finishing");
-  for (let i = 0; i < workout.length; i++) {
+  const shown = displayTarget();
+  const lastLogged = ledger.filter(e => e.kind === "set").slice(-1)[0] || null;
+
+  boardOrder.forEach(exId => {
+    const ex = exById(exId);
+    if (!ex) return;
     const group = document.createElement("div");
     group.className = "exercise-group";
-    group.dataset.exerciseIdx = i;
-    const gid = groupIdOf(i);
-    if (gid) {
-      group.classList.add("ss-linked");
-      group.dataset.ssGroup = gid;
-    }
+    group.dataset.exId = exId;
+    if (deferred.has(exId)) group.classList.add("is-held");
+    if (typeof decorateGroupForPair === "function") decorateGroupForPair(group, exId);
+
     const dotsRow = document.createElement("div");
     dotsRow.className = "exercise-dots";
-    let maxPos = -1;
-    for (let j = 0; j < workout[i].sets; j++) {
+    const nextOrd = nextSetOf(exId);
+    for (let ord = 1; ord <= ex.sets; ord++) {
       const dot = document.createElement("div");
       dot.className = "dot";
-      const exIdx = i, setIdx = j;
-      // Dataset drives the unified tap handler on #progress.
-      dot.dataset.exerciseIdx = exIdx;
-      dot.dataset.setIdx = setIdx;
-      const key = exIdx + ":" + setIdx;
-      const p = pos.has(key) ? pos.get(key) : 0;
-      if (p > maxPos) maxPos = p;
-      // A dot is "completed" only if a set was actually LOGGED for it. Position
-      // alone is a lie after a reorder: reorderExercise splices the prescription
-      // and rebuilds the sequence, so dragging an exercise from later to earlier
-      // drops all of its unperformed sets below seqIndex, and the old
-      // `p < seqIndex` test rendered every one of them as done. They then sat
-      // behind the cursor and were never offered again -- silent set loss, and
-      // the most likely mechanism for the 7/28 face-pull disappearance.
-      // Unperformed-but-passed sets now render as "missed" instead: visible,
-      // tappable, and obviously not finished.
-      const isLogged = !!logAt(exIdx, setIdx);
-      if (p < seqIndex && !isLogged) {
-        dot.classList.add("missed");
-        dot.setAttribute("role", "button");
-        dot.setAttribute("aria-label", "Missed " + workout[i].name + " set " + (j + 1));
-      } else if (p < seqIndex) {
+      dot.dataset.exId = exId;
+      dot.dataset.setOrd = ord;
+      const entry = ledger.find(e => e.exId === exId && e.set === ord);
+      if (entry && entry.kind === "set") {
         dot.classList.add("completed");
-        if (p === seqIndex - 1 && isResting) {
-          dot.classList.add("echoing");
-        }
+        if (isResting && entry === lastLogged) dot.classList.add("echoing");
         dot.setAttribute("role", "button");
-        dot.setAttribute("aria-label", "View " + workout[i].name + " set " + (j + 1));
-      } else if (p === seqIndex) {
+        dot.setAttribute("aria-label", "View " + ex.name + " set " + ord);
+      } else if (entry && entry.kind === "skip") {
+        dot.classList.add("skipped");
+        dot.setAttribute("role", "button");
+        dot.setAttribute("aria-label", "Restore skipped " + ex.name + " set " + ord);
+      } else if (exId === focusExId && ord === nextOrd && !isBrowsing()) {
         dot.classList.add("active");
         if (isDoingSet) dot.classList.add("blinking");
       }
-      if (exIdx === viewingExercise && setIdx === viewingSet && isBrowsing()) {
-        dot.classList.add("cursor");
-      }
+      if (isBrowsing() && exId === shown.exId && ord === shown.set) dot.classList.add("cursor");
       dotsRow.appendChild(dot);
     }
+
     const label = document.createElement("div");
     label.className = "exercise-label";
-    if (i === currentExercise) label.classList.add("active");
-    else if (maxPos < seqIndex) label.classList.add("completed");
-    label.textContent = workout[i].name;
+    if (exId === focusExId) label.classList.add("active");
+    else if (remainingOf(exId) <= 0) label.classList.add("completed");
+    label.textContent = ex.name;
     group.appendChild(label);
     group.appendChild(dotsRow);
     const chip = document.createElement("div");
     chip.className = "ready-chip";
-    chip.dataset.chipExId = workout[i].id;
+    chip.dataset.chipExId = exId;
     group.appendChild(chip);
-    if (gid) {
-      if (firstMemberOfGroup(gid) === i) {
-        const un = document.createElement("button");
-        un.className = "ss-unlink";
-        un.type = "button";
-        un.textContent = "unlink";
-        un.setAttribute("aria-label", "Dissolve superset " + gid);
-        // Keep the tap out of the drag-reorder + dot-tap delegation.
-        un.addEventListener("pointerdown", ev => ev.stopPropagation());
-        un.addEventListener("pointerup", ev => ev.stopPropagation());
-        un.addEventListener("click", ev => { ev.stopPropagation(); dissolveGroup(gid); });
-        group.appendChild(un);
-      }
-    }
+    if (typeof appendPairChip === "function") appendPairChip(group, exId);
     elProgress.appendChild(group);
-  }
+  });
 }
 
 // THE SAFETY CHANNEL. One function, two call sites (renderExercise and
@@ -2839,7 +2830,7 @@ function renderSafety(exId) {
 // focused / complete / fully-skipped -> nothing.
 function updateReadyChips() {
   if (!elProgress) return;
-  const focus = focusExId();
+  const focus = focusExId;
   const chips = elProgress.querySelectorAll('.ready-chip');
   for (let k = 0; k < chips.length; k++) {
     const chip = chips[k];
@@ -2868,42 +2859,43 @@ function updateReadyChips() {
   }
 }
 
+// The advisor still speaks (exerciseIndex, 0-based set); these three adapters
+// are the only place that translation happens. Commit F re-keys the advisor
+// itself and deletes them.
+const noteInfoFor    = (exId, setOrd) => computeSetNoteInfo(exIdxOf(exId), setOrd - 1);
+const setInfoHTMLFor = (exId, setOrd) => setInfoHTML(exIdxOf(exId), setOrd - 1);
+
 // Re-render JUST the note + weight line. Cheaper than renderExercise() and
 // non-disruptive to layout. Called from rep-picker onChange + the difficulty
 // handler so set N's advice updates live as the user grades set N-1.
 function refreshSetNote() {
-  const exIdx = isBrowsing() ? viewingExercise : currentExercise;
-  const setIdx = isBrowsing() ? viewingSet : currentSet;
+  const t = displayTarget();
   // Weight refreshes too: grading the prior set can flip the upcoming set to
   // a reactive drop, and the loaded weight must track that live.
-  elSet.innerHTML = setInfoHTML(exIdx, setIdx);
-  renderSafety(exIdAt(exIdx));
-  const info = computeSetNoteInfo(exIdx, setIdx);
+  elSet.innerHTML = setInfoHTMLFor(t.exId, t.set);
+  renderSafety(t.exId);
+  const info = noteInfoFor(t.exId, t.set);
   elNote.textContent = info.text;
   elNote.classList.toggle("advisor", info.advisor);
   fitNoteToBox();
 }
 
 function renderExercise() {
-  // Browsing shows the viewed set's context; otherwise the working set's.
-  const exIdx = isBrowsing() ? viewingExercise : currentExercise;
-  let setIdx = isBrowsing() ? viewingSet : currentSet;
-  const ex = workout[exIdx];
-  // Finishing state: currentSet already ran past the last index (setDone
-  // increments before detecting the end) -- unclamped, a browse-and-return
-  // on the finish screen renders "Set 5/4".
-  if (state === "finishing" && setIdx >= ex.sets) setIdx = ex.sets - 1;
+  const t = displayTarget();
+  const ex = exById(t.exId);
+  if (!ex) return;
   elName.textContent = ex.name;
-  elSet.innerHTML = setInfoHTML(exIdx, setIdx);
+  elSet.innerHTML = setInfoHTMLFor(t.exId, t.set);
   // Every display path funnels through here, so the banner tracks whichever
   // exercise is on screen -- including a browse of another machine's set.
-  renderSafety(ex.id);
-  const noteInfo = computeSetNoteInfo(exIdx, setIdx);
+  renderSafety(t.exId);
+  const noteInfo = noteInfoFor(t.exId, t.set);
   elNote.textContent = noteInfo.text;
   elNote.classList.toggle("advisor", noteInfo.advisor);
   fitNoteToBox();
   renderProgress();
   updateReadyChips();   // renderProgress rebuilds empty chips; fill them now
+  updatePills();
   requestAnimationFrame(centerMainButton);
 }
 
@@ -2948,7 +2940,7 @@ function updateRestRing() {
   // Both the pause freeze and the live countdown come out of remainingMsOf(),
   // which knows about the pause -- so there is no separate paused branch to
   // get wrong (the old one rendered an EMPTY ring after a reload-while-paused).
-  const id = focusExId();
+  const id = focusExId;
   const total = readyPlanned[id] || 0;
   if (!total || !readyAt[id]) {
     elRingBar.setAttribute("stroke-dashoffset", RING_CIRCUMFERENCE);
@@ -2993,21 +2985,18 @@ function updateElapsedDisplay() {
 }
 setInterval(() => { updateElapsedDisplay(); updateReadyChips(); }, 1000);
 
-// Pre-start footer: "21 SETS · ~35 MIN" -- walks the interleaved sequence and
-// prices each transition the way the engine will run it (superset GO = free,
-// filler→anchor = pair rest, boundary = 0/60s by the skip-rest setting).
+// Pre-start footer: "15 SETS · ~31 MIN". There is no sequence to walk any
+// more, and pricing a route he has not chosen yet would be a guess dressed as
+// a number -- so this prices the STRAIGHT-LINE plan, which is what the config
+// actually prescribes. Pairing or wandering makes the real session shorter,
+// never longer, so the estimate stays an honest ceiling.
 function sessionPlanLabel() {
-  const setCount = sequence.length;
-  let restSum = 0;
-  for (let i = 0; i < sequence.length - 1; i++) {
-    const cur = sequence[i], nxt = sequence[i + 1];
-    if (cur.ex === nxt.ex) { restSum += workout[cur.ex].rest || 0; continue; }
-    const g = groupIdOf(cur.ex);
-    const hop = g && groupIdOf(nxt.ex) === g;
-    if (hop && slotOf(cur.ex) === 1) continue;
-    if (hop) { restSum += workout[nxt.ex].rest || 0; continue; }
-    if (!settings.skipExerciseRest) restSum += 60;
-  }
+  let setCount = 0, restSum = 0;
+  workout.forEach(ex => {
+    setCount += ex.sets;
+    restSum += Math.max(0, ex.sets - 1) * (ex.rest || 0);
+  });
+  if (!settings.skipExerciseRest) restSum += Math.max(0, workout.length - 1) * 60;
   const est = Math.round((setCount * 45 + restSum) / 60);
   return setCount + " SETS · ~" + est + " MIN";
 }
@@ -3070,7 +3059,7 @@ function startCountdown() {
   // change therefore just starts rendering a different exercise's number --
   // no teardown, no per-exercise clock objects, no chance of two timers.
   timerInterval = setInterval(() => {
-    const remaining = remainingMsOf(focusExId()) / 1000;
+    const remaining = remainingMsOf(focusExId) / 1000;
     if (remaining <= 0) {
       clearInterval(timerInterval);
       timerInterval = null;
@@ -3093,8 +3082,8 @@ function applyState(notesValue) {
   showRestRing(false, false);
   clearTimerModes();
 
-  if (state === "resting" && readyAt[focusExId()]) {
-    const remaining = Math.ceil(remainingMsOf(focusExId()) / 1000);
+  if (state === "resting" && readyAt[focusExId]) {
+    const remaining = Math.ceil(remainingMsOf(focusExId) / 1000);
     if (remaining <= 0) {
       state = "alert";
       renderExercise();
@@ -3137,7 +3126,7 @@ function applyState(notesValue) {
     triggerAlertFeedback();
   } else if (state === "paused") {
     renderExercise();
-    elTimer.textContent = formatTime(remainingMsOf(focusExId()) / 1000);
+    elTimer.textContent = formatTime(remainingMsOf(focusExId) / 1000);
     elTimerLabel.textContent = "PAUSED";
     elBtn.textContent = "Resume";
     elBtn.className = "paused";
@@ -3182,19 +3171,15 @@ function applyState(notesValue) {
   } else {
     renderExercise();
   }
-  // Disable the dial + show the return pills while browsing.
+  // Disable the dial while browsing; updatePills owns pill visibility.
   if (isBrowsing()) {
     elBtn.style.opacity = '0.35';
     elBtn.style.pointerEvents = 'none';
-    elReturnPill.classList.add('visible');
-    elSetCurrentBtn.classList.add('visible');
     elBtn.classList.add('browsing');
     elLogArea.style.display = 'flex';
   } else {
     elBtn.style.opacity = '';
     elBtn.style.pointerEvents = '';
-    elReturnPill.classList.remove('visible');
-    elSetCurrentBtn.classList.remove('visible');
     elBtn.classList.remove('browsing');
     // Log area stays visible in non-finished states. Pre-start is excluded:
     // nothing exists to log yet, and an unconditional re-show would override
@@ -3219,8 +3204,7 @@ function startWorkout() {
   const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
   // First exercise = the sequence head (with supersets still the first
   // anchor, but a slot-2-first config would start elsewhere than workout[0]).
-  const first = sequence[0] || { ex: 0, set: 0 };
-  const firstEx = workout[first.ex];
+  const firstEx = exById(focusExId) || workout[0];
   const firstExClip = exerciseClipName(firstEx && firstEx.name);
   const seq = [startClip, firstExClip].filter(Boolean);
   if (firstEx) {
@@ -3231,119 +3215,104 @@ function startWorkout() {
   if (seq.length) VoiceCue.playSequence(seq);
 }
 
+// Enter the finishing screen. Reached when NOTHING is left across the whole
+// board -- not when a linear sequence ran out, which was a claim about a list
+// rather than about the work.
+function enterFinishing() {
+  state = "finishing";
+  view = null;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  cancelRestNotif();
+  elBtn.textContent = "Finish";
+  elBtn.className = "go";
+  elTimer.textContent = "-:--";
+  elTimerLabel.textContent = "LOG YOUR LAST SET";
+  elSkip.style.display = "none";
+  showRestRing(false);
+  renderExercise();
+  updateElapsedDisplay();
+}
+
 function setDone() {
   stopFlash();
   // Any announcement queued while audio was suspended (e.g. the rest-expiry
   // cue from a phone-in-pocket rest) is STALE -- the user just acted on the
-  // state it described. Without this clear, the first tap after returning to
-  // the tab replayed "rest complete, set N..." over the new "received" cue.
+  // state it described.
   pendingPostGestureCues.length = 0;
-  // Read in-progress inputs BEFORE creating the new log entry so reps/
-  // difficulty/notes set DURING the set carry over instead of getting
-  // clobbered by defaults.
+  if (isBrowsing()) return;                 // the dial is disabled while reading
+  const ex = exById(focusExId);
+  if (!ex) return;
+  const setOrd = nextSetOf(focusExId);
+  // THE NO-HOLES INVARIANT, guarded at the only place a set entry is born.
+  // nextSetOf is the sole way to name a set to perform, so this can only fire
+  // if some later edit invents another path -- which is exactly when it should
+  // fire, instead of silently writing an S4 over a missing S3.
+  if (setOrd > ex.sets) return;
+
+  // Read in-progress inputs BEFORE creating the entry so reps/difficulty/notes
+  // set DURING the set carry over instead of getting clobbered by defaults.
   const draftReps = repCount;
   const draftNote = elNotesInput.value || "";
   const selectedDiffBtn = elDifficultyRow.querySelector('.diff-btn.selected');
   // No difficulty tapped => MAX (5). Soren's call 2026-07-29. An UNGRADED set was
   // not neutral -- it silently DISABLED the load logic: the auto-drop predicate
-  // reads `+last.difficulty || 0` (never HARD/MAX, so it cannot fire) and
-  // computeSetNote's history walk BREAKS on `difficulty == null`. So a set he
-  // simply forgot to grade turned off the very mechanism meant to protect him.
-  // Defaulting to MAX fails SAFE: it assumes the set was maximal, so the drop
-  // fires rather than leaving him grinding a load he can no longer hold.
-  // The grade stays fully editable after the fact via the set pill.
+  // reads `+last.difficulty || 0` (never HARD/MAX, so it cannot fire) and the
+  // note history walk BREAKS on `difficulty == null`. So a set he simply forgot
+  // to grade turned off the very mechanism meant to protect him. Defaulting to
+  // MAX fails SAFE: it assumes the set was maximal, so the drop fires rather
+  // than leaving him grinding a load he can no longer hold. Still editable
+  // afterwards via the progress dots.
   const DEFAULT_DIFF = 5;
   const draftDiff = selectedDiffBtn ? Number(selectedDiffBtn.dataset.diff) : DEFAULT_DIFF;
   captureLog();
 
-  // Dedup: re-logging an already-logged (exercise,set) — e.g. after browsing
-  // back via the ↓SET pill — must UPDATE that entry, not append a second one.
-  // Reads take the first match, so a duplicate would shadow the correction:
-  // stale reps in the summary, the fresh edit unreachable.
-  const exNow = workout[currentExercise];
-  let logEntry = logAt(currentExercise, currentSet);
-  if (logEntry) {
-    // A re-log edits only the mutable fields. weightLbs/dropped/rest*/at stay
-    // exactly as they were stamped -- the set was already performed at that
-    // weight, and no later keystroke gets to change what happened.
-    logEntry.reps = draftReps;
-    logEntry.note = draftNote;
-    logEntry.difficulty = draftDiff;
-    logEntry.editedAt = Date.now();
-  } else {
-    const at = Date.now();
-    // FREEZE THE WEIGHT HERE, from the same effectiveWeight() the screen was
-    // showing while he stood at the machine. From this line on, every reader
-    // describing a PERFORMED set reads entry.weightLbs; effectiveWeight() is
-    // only ever asked about PENDING sets again.
-    const eff = effectiveWeight(currentExercise, currentSet);
-    const effNum = (eff.num == null) ? NaN : parseFloat(eff.num);
-    const prescribed = parseFloat((String(exNow.weight || "").match(/(\d+(?:\.\d+)?)/) || [])[1]);
-    // Actual rest = gap since the previous set OF THIS EXERCISE, minus any
-    // time the session spent paused. That number is what the commit-F trigger
-    // gate reads to catch a rep count inflated by an 8-minute wander.
-    const prev = performedOf(exNow.id).slice(-1)[0] || null;
-    const restActualSec = prev
-      ? Math.max(0, Math.round(((at - prev.at) - (pausedCumMs - (prev.pausedCumMs || 0))) / 1000))
-      : null;
-    logEntry = {
-      kind: "set",
-      n: ++ledgerSeq,
-      exId: exNow.id,
-      set: currentSet + 1,
-      reps: draftReps,
-      difficulty: draftDiff,
-      note: draftNote,
-      weightLbs: isFinite(effNum) ? effNum : null,
-      prescribedLbs: isFinite(prescribed) ? prescribed : null,
-      dropped: !!eff.dropped,
-      pairId: null,                       // explicit pairs arrive in commit E
-      restPlannedSec: exNow.rest || null,
-      restActualSec: restActualSec,
-      pausedCumMs: pausedCumMs,
-      at: at,
-      editedAt: null
-    };
-    ledger.push(logEntry);
-    // THE ONE PLACE READINESS IS WRITTEN. Anchored to the log time, not to
-    // "now at the end of this function", so the rest he sees is the rest he
-    // actually gets.
-    stampReady(exNow.id, exNow.rest, at);
-  }
+  const at = Date.now();
+  // FREEZE THE WEIGHT HERE, from the same effectiveWeight() the screen showed
+  // while he stood at the machine. Every later reader of a PERFORMED set reads
+  // entry.weightLbs; effectiveWeight is only ever asked about PENDING sets.
+  const eff = effectiveWeight(exIdxOf(ex.id), setOrd - 1);
+  const effNum = (eff.num == null) ? NaN : parseFloat(eff.num);
+  const prescribed = parseFloat((String(ex.weight || "").match(/(\d+(?:\.\d+)?)/) || [])[1]);
+  // Actual rest = gap since the previous set OF THIS EXERCISE, minus paused
+  // time. That number is what commit F's trigger gate reads to catch a rep
+  // count inflated by an 8-minute wander to another machine.
+  const prev = performedOf(ex.id).slice(-1)[0] || null;
+  const restActualSec = prev
+    ? Math.max(0, Math.round(((at - prev.at) - (pausedCumMs - (prev.pausedCumMs || 0))) / 1000))
+    : null;
+  const activePair = (typeof activePairOf === "function") ? activePairOf(ex.id) : null;
+  const logEntry = {
+    kind: "set",
+    n: ++ledgerSeq,
+    exId: ex.id,
+    set: setOrd,
+    reps: draftReps,
+    difficulty: draftDiff,
+    note: draftNote,
+    weightLbs: isFinite(effNum) ? effNum : null,
+    prescribedLbs: isFinite(prescribed) ? prescribed : null,
+    dropped: !!eff.dropped,
+    pairId: activePair ? activePair.id : null,
+    restPlannedSec: ex.rest || null,
+    restActualSec: restActualSec,
+    pausedCumMs: pausedCumMs,
+    at: at,
+    editedAt: null
+  };
+  ledger.push(logEntry);
   currentLogEntry = logEntry;
+  // THE ONE PLACE READINESS IS WRITTEN, anchored to the log time.
+  stampReady(ex.id, ex.rest, at);
 
-  const finishedExercise = currentExercise;
-  const finishedSet = currentSet;
-  // Exercise just completed its final set with the advance trigger banked →
-  // celebrate (voice + dots pulse); the summary flags the advance.
-  const bankedTrigger = (finishedSet === workout[finishedExercise].sets - 1) &&
-    exerciseTriggerHit(finishedExercise);
+  const finishedExId = ex.id;
+  const bankedTrigger = (setOrd === ex.sets) && exerciseTriggerHit(exIdxOf(ex.id));
   clearTimerModes();
-  // SUPERSET ENGINE: advancement walks `sequence` (interleaved order), not
-  // (exercise, set++). Sync first in case an external path (jump-to-set,
-  // restore) moved the cursor without updating seqIndex.
-  if (!sequence[seqIndex] || sequence[seqIndex].ex !== finishedExercise || sequence[seqIndex].set !== finishedSet) {
-    syncSeqIndex();
-  }
-  const nextEntry = sequence[seqIndex + 1] || null;
-  currentSet++;
-
   showLogArea();
 
-  const isLastSet = !nextEntry;
-  if (isLastSet) {
-    viewingExercise = currentExercise;
-    viewingSet = currentSet - 1;
-    elBtn.textContent = "Finish";
-    elBtn.className = "go";
-    state = "finishing";
-    elTimer.textContent = "-:--";
-    elTimerLabel.textContent = "LOG YOUR LAST SET";
-    elSkip.style.display = "none";
-    showRestRing(false);
-    renderProgress();
-    if (bankedTrigger) pulseTriggerHit(finishedExercise);
-    updateElapsedDisplay();
+  const nextFocus = advanceFocusFrom(finishedExId);
+  if (nextFocus === null) {
+    enterFinishing();
+    if (bankedTrigger) pulseTriggerHit(finishedExId);
     VoiceCue.playSequence(bankedTrigger
       ? ['received', 'cue-trigger-hit', 'final-set-logged']
       : ['received', 'final-set-logged']);
@@ -3351,83 +3320,61 @@ function setDone() {
     return;
   }
 
-  // Advance along the interleaved sequence.
-  seqIndex++;
-  currentExercise = nextEntry.ex;
-  currentSet = nextEntry.set;
+  const pairHop = (typeof pairPartnerHop === "function") ? pairPartnerHop(finishedExId, nextFocus) : false;
+  const switchingExercise = (nextFocus !== finishedExId);
+  focusExId = nextFocus;
+  view = null;
 
-  // Keep the viewing cursor pinned to the working position.
-  viewingExercise = currentExercise;
-  viewingSet = currentSet;
-
-  const switchingExercise = (finishedExercise !== currentExercise);
-  const gFin = groupIdOf(finishedExercise);
-  const supersetHop = switchingExercise && !!gFin && groupIdOf(currentExercise) === gFin;
-  // Anchor (slot 1) → filler (slot 2): GO immediately -- the walk between
-  // machines IS the transition (Soren's superset spec 7/6).
-  const supersetGo = supersetHop && slotOf(finishedExercise) === 1;
-  // Filler → anchor: the REAL pair rest (the upcoming anchor's full rest).
-  const supersetReturn = supersetHop && !supersetGo;
-
-  // THE TRANSITION IS NOW DERIVED, NOT BRANCHED. The old code decided
-  // rest-vs-GO from a tree of superset flags and then computed a duration to
-  // count down. It now asks one question of the exercise he is walking to: is
-  // it ready? Every previous branch falls out of that, and the superset
-  // over-rest defect falls out with it -- there is no "grant the anchor its
-  // full rest on return" case, only the anchor's own timestamp, which has been
-  // running the whole time the filler set took.
-  const focusId = focusExId();
-  // Skip-exercise-rest OFF: a never-performed machine gets the 60s walk-over,
-  // stamped once. ON (his setting) leaves it unstamped, hence ready, hence the
-  // immediate GO he already has.
-  if (switchingExercise && !supersetHop && !settings.skipExerciseRest && !readyAt[focusId]) {
-    stampReady(focusId, 60);
+  // THE TRANSITION IS DERIVED, NOT BRANCHED. One question about the machine he
+  // is walking to: is it ready? Rest-vs-GO, the pair hop and the
+  // skip-exercise-rest setting all fall out of that single answer.
+  if (switchingExercise && !pairHop && !settings.skipExerciseRest && !readyAt[nextFocus]) {
+    stampReady(nextFocus, 60);
   }
-  const restRemaining = Math.ceil(remainingMsOf(focusId) / 1000);
+  const restRemaining = Math.ceil(remainingMsOf(nextFocus) / 1000);
+  const nextEx = exById(nextFocus);
+  const isFinalExercise = boardOrder.filter(id => remainingOf(id) > 0).every(id => id === nextFocus);
 
   if (restRemaining <= 0) {
     state = "ready";
     // The old UP NEXT rest was an accidental double-tap guard at exercise
-    // boundaries. Without it, a bounce-tap on Set Done would instantly log a
+    // boundaries. Without it a bounce-tap on Set Done instantly logged a
     // phantom S1 -- brief lockout instead.
     setDoneLockUntil = Date.now() + 900;
     elTimer.textContent = "-:--";
-    elTimerLabel.textContent = supersetGo
-      ? ("SUPERSET → " + (workout[currentExercise].short || workout[currentExercise].name).toUpperCase())
+    elTimerLabel.textContent = pairHop
+      ? ("SUPERSET -> " + (nextEx.short || nextEx.name).toUpperCase())
       : "";
     elBtn.textContent = "Set Done";
     elBtn.className = "";
     elSkip.style.display = "none";
     renderExercise();
     showRestRing(false);
-    // Reset the log area to the NEW exercise's upcoming-set defaults (the
-    // rested path does this at rest-end) -- otherwise the previous exercise's
-    // just-logged set carried onto the next machine's screen (7/5 hunt).
-    // Last-set corrections still work via the progress-dot edit modal.
+    // Reset the log area to the NEW exercise's upcoming-set defaults -- else
+    // the previous machine's just-logged set carries onto this screen.
     captureLog();
     syncLogArea();
     {
-      const isFinalExercise = !sequence.slice(seqIndex + 1).some(e => e.ex !== currentExercise);
-      const exClip = exerciseClipName(workout[currentExercise].name);
-      // supersetGo: the finished exercise is NOT complete (more of its sets
-      // pend in the interleave) -- no 'exercise-complete', keep the cue tight.
-      const seq = supersetGo ? ['received'] : ['received', 'exercise-complete'];
+      const exClip = exerciseClipName(nextEx.name);
+      // A pair hop leaves the finished exercise unfinished, so no
+      // 'exercise-complete' -- keep the cue tight.
+      const seq = (pairHop || !switchingExercise) ? ['received'] : ['received', 'exercise-complete'];
       if (bankedTrigger) seq.splice(1, 0, 'cue-trigger-hit');
-      seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
-      if (exClip) seq.push(exClip);
-      // Weight/reps announce only on the exercise's FIRST set; re-announcing
-      // every superset hop is noise.
-      if (currentSet === 0) {
-        seq.push(...weightClipsFor(workout[currentExercise]));
-        const repClipSkip = repRangeClipFor(workout[currentExercise].reps);
+      if (switchingExercise) {
+        seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
+        if (exClip) seq.push(exClip);
+      }
+      // Weight/reps announce only on an exercise's FIRST set; re-announcing on
+      // every hop is noise.
+      if (nextSetOf(nextFocus) === 1) {
+        seq.push(...weightClipsFor(nextEx));
+        const repClipSkip = repRangeClipFor(nextEx.reps);
         if (repClipSkip) seq.push(repClipSkip);
       }
-      // A drop that just materialized for the upcoming set: state the new
-      // weight now, while he's at the machine setting the pin.
-      seq.push(...dropAnnounceClips(currentExercise, currentSet));
+      seq.push(...dropAnnounceClips(exIdxOf(nextFocus), nextSetOf(nextFocus) - 1));
       VoiceCue.playSequence(seq);
     }
-    if (bankedTrigger) pulseTriggerHit(finishedExercise);
+    if (bankedTrigger) pulseTriggerHit(finishedExId);
     updateElapsedDisplay();
     requestAnimationFrame(() => {
       initAudio();
@@ -3440,67 +3387,56 @@ function setDone() {
   elSkip.style.display = "flex";
   elSkip.style.pointerEvents = "auto";
   state = "resting";
-  // No duration is computed here any more -- restRemaining was read off the
-  // focus's timestamp above. On a superset return that is the anchor's rest
-  // MINUS the time the filler set took, which is the true anchor-to-anchor
-  // gap; the old branch handed back a FULL fresh rest and quietly turned a
-  // 150s pair into filler-set + walk + 150s.
+  // No duration is computed here -- restRemaining came off the focus's own
+  // timestamp. On a pair return that is the anchor's rest MINUS the time the
+  // filler set took, which is the true anchor-to-anchor gap.
   elTimer.textContent = formatTime(restRemaining);
-  elTimerLabel.textContent = (switchingExercise && !supersetReturn) ? "UP NEXT" : "REST";
+  elTimerLabel.textContent = (switchingExercise && !pairHop) ? "UP NEXT" : "REST";
   elBtn.textContent = "Pause";
   elBtn.className = "resting";
   renderExercise();
-  // Re-render the set label AFTER the cursor advanced: the pre-advancement
-  // showLogArea render can't know the header now shows a different exercise
-  // than the log being edited (the superset-return "CALVES S1" tag case).
+  // Re-render the set label AFTER focus moved: the pre-advance showLogArea
+  // render cannot know the header now shows a different exercise than the log
+  // being edited.
   renderSetLabel();
   showRestRing(true, false);
   countdownFiredThresholds = new Set();
   startCountdown();
 
-  if (bankedTrigger) pulseTriggerHit(finishedExercise);
+  if (bankedTrigger) pulseTriggerHit(finishedExId);
 
-  // Voice: "Received" then branch (superset return / exercise switch / in-exercise rest).
   {
     let seq;
-    if (supersetReturn) {
-      // Back to the anchor after the filler set: where we're headed + the
-      // pair rest. No 'exercise-complete' (the pair is mid-flight), no weight
-      // re-announce (same weight all sets; announced at the anchor's S1).
-      const exClip = exerciseClipName(workout[currentExercise].name);
+    const exClip = exerciseClipName(nextEx.name);
+    if (pairHop) {
       seq = ['received', 'up-next'];
       if (exClip) seq.push(exClip);
-      seq.push(...dropAnnounceClips(currentExercise, currentSet));
+      seq.push(...dropAnnounceClips(exIdxOf(nextFocus), nextSetOf(nextFocus) - 1));
       const pairRestClip = restClipForDuration(restRemaining);
       if (pairRestClip) seq.push(pairRestClip);
     } else if (switchingExercise) {
-      const isFinalExercise = !sequence.slice(seqIndex + 1).some(e => e.ex !== currentExercise);
-      const exClip = exerciseClipName(workout[currentExercise].name);
       seq = ['received', 'exercise-complete'];
       seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
       if (exClip) seq.push(exClip);
-      seq.push(...weightClipsFor(workout[currentExercise]));
-      const repClipSwitch = repRangeClipFor(workout[currentExercise].reps);
+      seq.push(...weightClipsFor(nextEx));
+      const repClipSwitch = repRangeClipFor(nextEx.reps);
       if (repClipSwitch) seq.push(repClipSwitch);
       const switchRestClip = restClipForDuration(restRemaining);
       if (switchRestClip) seq.push(switchRestClip);
     } else {
-      const restClip = restClipForDuration(workout[finishedExercise].rest);
+      const restClip = restClipForDuration(nextEx.rest);
       seq = restClip ? ['received', restClip] : ['received'];
-      // In-exercise rest: the drop the just-logged set may have triggered
-      // applies to the very next set -- announce the backoff weight once.
-      seq.push(...dropAnnounceClips(currentExercise, currentSet));
+      seq.push(...dropAnnounceClips(exIdxOf(nextFocus), nextSetOf(nextFocus) - 1));
     }
     if (bankedTrigger) seq.splice(1, 0, 'cue-trigger-hit');
     VoiceCue.playSequence(seq);
   }
 
-  // Defer non-critical work a frame so the UI updates immediately.
   requestAnimationFrame(() => {
     initAudio();
     requestWakeLock();
     ensureNotifPermission();
-    scheduleRestNotif(remainingMsOf(focusExId()));
+    scheduleRestNotif(remainingMsOf(focusExId));
     saveState();
   });
 }
@@ -3595,7 +3531,7 @@ function resumeRest() {
   // duration, so the clock is already correct here -- there is no end-time to
   // recompute, and therefore no window in which a second pause could read a
   // stale expired one and zero the rest (the bug this comment used to describe).
-  scheduleRestNotif(remainingMsOf(focusExId()));
+  scheduleRestNotif(remainingMsOf(focusExId));
   saveState();
   startCountdown();
   VoiceCue.cancel();
@@ -3619,7 +3555,7 @@ function skipRest() {
   // the leg curl -- under the old single-clock model there was only one rest
   // to skip, so this distinction did not exist and could not be got wrong.
   // It exists now.
-  readyAt[focusExId()] = Date.now();
+  readyAt[focusExId] = Date.now();
   state = "ready";
   clearTimerModes();
   elTimer.textContent = "-:--";
@@ -3672,7 +3608,9 @@ function finishWorkout() {
   elSkip.style.display = "none";
   elProgress.style.display = "none";
   elReturnPill.classList.remove('visible');
-  elSetCurrentBtn.classList.remove('visible');
+  elOccupiedPill.classList.remove('visible');
+  elSkipExPill.classList.remove('visible');
+  if (typeof elPairPill !== 'undefined' && elPairPill) elPairPill.classList.remove('visible');
   elSettingsBtn.style.display = "none";
   elDone.style.display = "block";
   document.body.classList.add('finished');
@@ -3702,89 +3640,198 @@ function finishWorkout() {
   }
 }
 
-// ============ §12 BROWSING CURSOR (tap-to-cycle) ============
-function cycleView(exIdx, setIdx) {
-  // Second tap on the already-viewed completed set opens the edit modal.
-  if (viewingExercise === exIdx && viewingSet === setIdx && isBrowsing()) {
-    if (logAt(exIdx, setIdx)) { openEditModal(exIdx, setIdx); return; }
-  }
-  viewingExercise = exIdx;
-  viewingSet = setIdx;
-  renderExercise();
-  elReturnPill.classList.toggle('visible', isBrowsing());
-  elSetCurrentBtn.classList.toggle('visible', isBrowsing());
-  if (isBrowsing()) {
-    elBtn.style.opacity = '0.35';
-    elBtn.style.pointerEvents = 'none';
-    // Log area stays visible so the viewed set's reps/notes/diff are editable.
-    elLogArea.style.display = 'flex';
-    // Diagonal slash signals Set Done is inaccessible in view mode; the rest
-    // timer keeps running internally.
-    elBtn.classList.add('browsing');
-  } else {
-    elBtn.style.opacity = '';
-    elBtn.style.pointerEvents = '';
-    elBtn.classList.remove('browsing');
-  }
-  syncLogArea();
-  saveState();
+// ============ §12 NAVIGATION: FOCUS, BROWSE, DEFER, SKIP ============
+
+let toastTimer = null;
+function toast(msg) {
+  if (!elToast) return;
+  elToast.textContent = msg;
+  elToast.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => elToast.classList.remove('show'), 1900);
 }
 
-function returnToWorking() {
-  viewingExercise = currentExercise;
-  viewingSet = currentSet;
+// Which pills are live. OCCUPIED and SKIP EX are about the exercise he is
+// standing at, so they hide while browsing (a read) and in every state where
+// there is nothing to act on.
+function updatePills() {
+  const browsing = isBrowsing();
+  const actionable = (state === "ready" || state === "resting" || state === "alert" || state === "paused") &&
+                     !browsing && remainingOf(focusExId) > 0;
+  elReturnPill.classList.toggle('visible', browsing);
+  elOccupiedPill.classList.toggle('visible', actionable);
+  elSkipExPill.classList.toggle('visible', actionable);
+  if (!actionable) disarmSkipEx();
+  if (typeof updatePairPill === "function") updatePairPill(actionable, browsing);
+}
+
+// FOCUS(E). The entire navigation model: one tap says "I am going to this
+// machine", and the queued set is always its next unperformed one.
+function focusExercise(exId, opts) {
+  const ex = exById(exId);
+  if (!ex) return;
+  const changed = (exId !== focusExId) || isBrowsing();
+  view = null;
+  focusExId = exId;
+  // Returning to a parked machine clears the park -- he is standing at it.
+  if (deferred.has(exId)) { deferred.delete(exId); }
+  disarmSkipEx();
+  if (changed) {
+    // User-initiated navigation is SILENT, and an in-flight line describing
+    // the machine he just walked away from is a wrong instruction, not a late
+    // one. (Obs 164; spec 6.3.)
+    VoiceCue.cancel();
+    pendingPostGestureCues.length = 0;
+  }
+  // Landing on a machine that is already rested is not an event -- he chose to
+  // walk here and can see the screen. No GO theatrics.
+  if (remainingOf(exId) > 0 && state !== "pre-start" && state !== "finished") {
+    if (isReady(exId)) {
+      state = "ready";
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      showRestRing(false);
+      clearTimerModes();
+      stopFlash();
+      elTimer.textContent = "-:--";
+      elTimerLabel.textContent = "";
+      elBtn.textContent = "Set Done";
+      elBtn.className = "";
+      elSkip.style.display = "none";
+    } else {
+      state = "resting";
+      elBtn.textContent = "Pause";
+      elBtn.className = "resting";
+      elTimerLabel.textContent = "REST";
+      elSkip.style.display = "flex";
+      elSkip.style.pointerEvents = "auto";
+      showRestRing(true, false);
+      countdownFiredThresholds = new Set();
+      startCountdown();
+    }
+    cancelRestNotif();
+    scheduleRestNotif(remainingMsOf(exId));
+  }
+  captureLog();
   renderExercise();
-  elReturnPill.classList.remove('visible');
-  elSetCurrentBtn.classList.remove('visible');
   elBtn.style.opacity = '';
   elBtn.style.pointerEvents = '';
   elBtn.classList.remove('browsing');
-  if (state !== 'finished') {
-    elLogArea.style.display = 'flex';
-  } else {
-    elLogArea.style.display = 'none';
-  }
+  if (state !== 'finished' && state !== 'pre-start') elLogArea.style.display = 'flex';
   syncLogArea();
+  updateElapsedDisplay();
+  if (!(opts && opts.silentSave)) saveState();
+}
+
+// A READ. Never moves focus, never writes, never touches storage.
+function browseSet(exId, setOrd) {
+  view = { exId: exId, set: setOrd };
+  renderExercise();
+  elBtn.style.opacity = '0.35';
+  elBtn.style.pointerEvents = 'none';
+  elBtn.classList.add('browsing');
+  elLogArea.style.display = 'flex';
+  syncLogArea();
+}
+
+function returnToWorking() {
+  view = null;
+  renderExercise();
+  elBtn.style.opacity = '';
+  elBtn.style.pointerEvents = '';
+  elBtn.classList.remove('browsing');
+  elLogArea.style.display = (state !== 'finished') ? 'flex' : 'none';
+  syncLogArea();
+}
+
+// OCCUPIED. Park this machine and move on. No ledger entry and no readyAt
+// change: a busy machine is not a set, and it does not reset his muscles.
+// The deferral IS recorded, implicitly -- the next set of this exercise will
+// carry restActualSec >> restPlannedSec, which is exactly what commit F's
+// trigger gate reads. The ledger stores facts, not intentions.
+function deferFocused() {
+  const held = focusExId;
+  if (remainingOf(held) <= 0) return;
+  deferred.add(held);
+  const next = advanceFocusFrom(held);
+  if (next && next !== held) focusExercise(next, { silentSave: true });
+  else { renderExercise(); }
+  toast((exById(held).short || exById(held).name) + " held");
+  saveState();
+}
+
+let skipExArmed = false;
+let skipExTimer = null;
+function disarmSkipEx() {
+  skipExArmed = false;
+  if (skipExTimer) { clearTimeout(skipExTimer); skipExTimer = null; }
+  if (elSkipExPill) {
+    elSkipExPill.classList.remove('armed');
+    elSkipExPill.innerHTML = "&#8213; SKIP EX";
+  }
+}
+// Two taps. Abandoning the rest of an exercise is a WRITE that deletes work
+// from the plan, and the pill sits next to the dial he taps constantly.
+function skipExercisePill() {
+  if (!skipExArmed) {
+    skipExArmed = true;
+    elSkipExPill.classList.add('armed');
+    elSkipExPill.textContent = "CONFIRM ✕";
+    skipExTimer = setTimeout(disarmSkipEx, 3000);
+    return;
+  }
+  disarmSkipEx();
+  const exId = focusExId;
+  const ex = exById(exId);
+  if (!ex || remainingOf(exId) <= 0) return;
+  const from = nextSetOf(exId);
+  for (let ord = from; ord <= ex.sets; ord++) {
+    ledger.push({ kind: "skip", n: ++ledgerSeq, exId: exId, set: ord, at: Date.now(), reason: "user" });
+  }
+  delete readyAt[exId];
+  delete readyPlanned[exId];
+  toast((ex.short || ex.name) + " skipped");
+  const next = advanceFocusFrom(exId);
+  if (next === null) { enterFinishing(); saveState(); return; }
+  focusExercise(next, { silentSave: true });
+  saveState();
+}
+
+// Un-skip: the granular recovery path. Deleting the skip entry is enough --
+// every derived value (dots, remaining, nextSetOf, the trigger gate) reads the
+// ledger, so the set simply exists again.
+function unskipSet(exId, setOrd) {
+  const idx = ledger.findIndex(e => e.kind === "skip" && e.exId === exId && e.set === setOrd);
+  if (idx < 0) return;
+  // Ordinals must stay contiguous, so restoring a skip only makes sense from
+  // the LAST one backwards; restoring S2 while S3 is still skipped would leave
+  // nextSetOf pointing past a hole. Restore S2..end in one go instead.
+  const ex = exById(exId);
+  for (let ord = ex.sets; ord >= setOrd; ord--) {
+    const k = ledger.findIndex(e => e.kind === "skip" && e.exId === exId && e.set === ord);
+    if (k >= 0) ledger.splice(k, 1);
+  }
+  toast("S" + setOrd + " restored");
+  if (state === "finishing" && totalRemaining() > 0) {
+    focusExercise(exId, { silentSave: true });
+  } else {
+    renderExercise();
+  }
   saveState();
 }
 
 // ============ §13 REORDER + BOARD TAPS ============
-// Transform an exercise index across a splice(from,1) + splice(to,0,moved).
-function transformExerciseIdx(ei, fromIdx, toIdx) {
-  if (ei === fromIdx) return toIdx;
-  if (fromIdx < ei && ei <= toIdx) return ei - 1;
-  if (toIdx <= ei && ei < fromIdx) return ei + 1;
-  return ei;
-}
-
+// Drag-reorder moves the DISPLAY order and nothing else. The prescription is
+// frozen; there are no indices to remap and no sequence to rebuild, so the
+// class of bug where a drag stranded unperformed sets is gone by construction.
 function reorderExercise(fromIdx, toIdx) {
   if (fromIdx === toIdx) return;
-  if (fromIdx < 0 || fromIdx >= workout.length) return;
-  if (toIdx < 0 || toIdx >= workout.length) return;
-
+  if (fromIdx < 0 || fromIdx >= boardOrder.length) return;
+  if (toIdx < 0 || toIdx >= boardOrder.length) return;
   VoiceCue.cancel();
-
-  // The edit modal's editingLog reference survives a reorder (ledger entries
-  // are identity-keyed, so a drag touches none of them), but a displayed
-  // exercise NAME could go stale. Close to be safe.
   if (elEditModal.classList.contains("show")) closeEditModal();
-
-  const moved = workout.splice(fromIdx, 1)[0];
-  workout.splice(toIdx, 0, moved);
-
-  // Remap every live exercise-index reference. The LEDGER is deliberately not
-  // in this list: its entries key on ex.id, so a reorder cannot re-point a
-  // logged set at a different machine. That rewrite-every-log-on-every-drag
-  // pass is exactly the class of bug identity keys exist to delete.
-  const remap = (ei) => transformExerciseIdx(ei, fromIdx, toIdx);
-  currentExercise = remap(currentExercise);
-  viewingExercise = remap(viewingExercise);
-
-  // Superset groups ride on the exercise objects (ss tags), which just moved:
-  // re-derive the interleaved sequence and re-locate the working cursor.
-  rebuildSequence();
-
-  renderExercise();  // rerenders name/weight/reps + board
+  const moved = boardOrder.splice(fromIdx, 1)[0];
+  boardOrder.splice(toIdx, 0, moved);
+  renderExercise();
   saveState();
 }
 
@@ -3836,39 +3883,53 @@ try {
 let tapStart = null;
 let lastTouchTapTime = 0;
 
+// THE TAP TABLE (spec 2.1). Every tap on the board is one of two things:
+//   READ  -- a performed or skipped dot. Browsing never moves focus.
+//   WRITE -- anything on an unfinished exercise means "I am going to this
+//            machine", which queues its NEXT UNPERFORMED set. There is no way
+//            to select a future set, which is what makes holes unrepresentable.
 function handleTap(target) {
   if (!target) return false;
+  if (state === "finished") return false;
   if (document.body.classList.contains("dragging-exercise")) return false;
   if (elEditModal.classList.contains("show") || elSettingsModal.classList.contains("show")) return false;
 
-  // Dot tap → jump to that exact set (or return to working when tapping the
-  // active dot while browsing).
   const dotEl = (target.classList && target.classList.contains("dot"))
     ? target
     : (target.closest ? target.closest(".dot") : null);
-  if (dotEl && dotEl.dataset && dotEl.dataset.exerciseIdx != null) {
-    const exIdx = Number(dotEl.dataset.exerciseIdx);
-    const setIdx = Number(dotEl.dataset.setIdx);
-    if (!Number.isFinite(exIdx) || !Number.isFinite(setIdx)) return false;
-    if (exIdx === currentExercise && setIdx === currentSet && isBrowsing()) {
-      returnToWorking();
-    } else {
-      cycleView(exIdx, setIdx);
+  if (dotEl && dotEl.dataset && dotEl.dataset.exId) {
+    const exId = dotEl.dataset.exId;
+    const ord = Number(dotEl.dataset.setOrd);
+    if (!exById(exId) || !Number.isFinite(ord)) return false;
+    const entry = ledger.find(e => e.exId === exId && e.set === ord);
+    if (entry && entry.kind === "set") {
+      // Second tap on the dot already being viewed opens the editor.
+      if (view && view.exId === exId && view.set === ord) openEditModal(exId, ord);
+      else browseSet(exId, ord);
+      return true;
     }
+    if (entry && entry.kind === "skip") { unskipSet(exId, ord); return true; }
+    // A pending dot is not addressable as a set -- it just means this machine.
+    if (state === "pre-start") { focusExId = exId; view = null; renderExercise(); saveState(); return true; }
+    focusExercise(exId);
     return true;
   }
 
   const group = target.closest ? target.closest(".exercise-group") : null;
   if (!group || !elProgress.contains(group)) return false;
-  const exIdx = Number(group.dataset.exerciseIdx);
-  if (!Number.isFinite(exIdx)) return false;
-  if (exIdx === viewingExercise) {
-    const ex = workout[exIdx];
-    const nextSet = (viewingSet + 1) % ex.sets;
-    cycleView(exIdx, nextSet);
-  } else {
-    cycleView(exIdx, 0);
+  const exId = group.dataset.exId;
+  if (!exId || !exById(exId)) return false;
+  if (typeof handlePairSelectTap === "function" && handlePairSelectTap(exId)) return true;
+  if (state === "pre-start") { focusExId = exId; view = null; renderExercise(); saveState(); return true; }
+  if (exId === focusExId && !isBrowsing()) return true;   // already here: no-op
+  if (remainingOf(exId) <= 0) {
+    // Nothing left to do on this machine; show its last set rather than
+    // pretending the tap did nothing.
+    const last = performedOf(exId).slice(-1)[0];
+    if (last) { browseSet(exId, last.set); return true; }
+    return true;
   }
+  focusExercise(exId);
   return true;
 }
 
@@ -4078,21 +4139,8 @@ elDifficultyRow.addEventListener("click", (e) => {
   saveState();
 });
 elReturnPill.addEventListener("click", returnToWorking);
-elSetCurrentBtn.addEventListener("click", () => {
-  // Repoint the working position to the viewed set (browsing only).
-  if (!isBrowsing()) return;
-  currentExercise = viewingExercise;
-  currentSet = viewingSet;
-  syncSeqIndex();
-  elReturnPill.classList.remove('visible');
-  elSetCurrentBtn.classList.remove('visible');
-  elBtn.classList.remove('browsing');
-  elBtn.style.opacity = '';
-  elBtn.style.pointerEvents = '';
-  renderExercise();
-  syncLogArea();
-  saveState();
-});
+elOccupiedPill.addEventListener("click", (e) => { e.stopPropagation(); deferFocused(); });
+elSkipExPill.addEventListener("click", (e) => { e.stopPropagation(); skipExercisePill(); });
 elCopy.addEventListener("click", () => {
   const text = buildSummary();
   const revert = () => setTimeout(() => {
@@ -4219,18 +4267,28 @@ function buildSummary() {
   const chron = chronologyLine();
   if (chron) text += chron + "\n";
   text += "\n";
-  for (let i = 0; i < workout.length; i++) {
-    const ex = workout[i];
+  // BOARD order, not config order -- the board is what he arranged, and the
+  // tracker parses this per-exercise shape either way.
+  boardOrder.forEach((exId, bi) => {
+    const ex = exById(exId);
+    if (!ex) return;
+    const i = exIdxOf(exId);
     const dur = getExerciseDuration(i);
     text += ex.name + " @ " + ex.weight;
     if (dur && dur > 0) text += "  (" + formatDuration(dur) + ")";
     text += "\n";
     for (let j = 0; j < ex.sets; j++) {
-      const log = logAt(i, j);
-      if (log) {
-        const diff = formatDifficulty(log);
-        const note = log.note ? " -- " + log.note : "";
-        text += "  S" + (j + 1) + ": " + log.reps + " reps" + setDropTag(i, j) + diff + note + "\n";
+      const entry = ledger.find(e => e.exId === exId && e.set === j + 1);
+      if (entry && entry.kind === "set") {
+        const diff = formatDifficulty(entry);
+        const note = entry.note ? " -- " + entry.note : "";
+        text += "  S" + (j + 1) + ": " + entry.reps + " reps" + setDropTag(i, j) + diff + note + "\n";
+      } else if (entry && entry.kind === "skip") {
+        // A SKIP AND A HOLE ARE DIFFERENT FACTS. "-" means the session ended
+        // before this set; "skipped" means he decided against it. The nightly
+        // rebuild reads this line, and treating a deliberate skip as missing
+        // data is how volume silently drifts.
+        text += "  S" + (j + 1) + ": skipped\n";
       } else {
         text += "  S" + (j + 1) + ": -\n";
       }
@@ -4244,8 +4302,8 @@ function buildSummary() {
     if (exerciseTriggerHit(i)) {
       text += "  TRIGGER HIT -> " + (ex.triggerWeight || "advance") + " next session\n";
     }
-    if (i < workout.length - 1) text += "\n";
-  }
+    if (bi < boardOrder.length - 1) text += "\n";
+  });
   const totalLine = totalLineText();
   if (totalLine) text += "\n" + totalLine + "\n";
   return text;
@@ -4255,18 +4313,22 @@ function buildSummaryHTML() {
   const chron = chronologyLine();
   if (chron) html += '<div class="set-line">' + escapeHTML(chron) + '</div>';
   html += '<br>';
-  for (let i = 0; i < workout.length; i++) {
-    const ex = workout[i];
+  boardOrder.forEach((exId, bi) => {
+    const ex = exById(exId);
+    if (!ex) return;
+    const i = exIdxOf(exId);
     const dur = getExerciseDuration(i);
     let header = ex.name + ' @ ' + ex.weight;
     let durTag = (dur && dur > 0) ? ' <span class="duration-tag">(' + formatDuration(dur) + ')</span>' : '';
     html += '<div class="exercise-header">' + header + durTag + '</div>';
     for (let j = 0; j < ex.sets; j++) {
-      const log = logAt(i, j);
-      if (log) {
-        const diff = formatDifficulty(log);
-        const note = log.note ? ' -- ' + escapeHTML(log.note) : '';
-        html += '<div class="set-line">S' + (j + 1) + ': <span class="set-note">' + log.reps + ' reps' + setDropTag(i, j) + diff + note + '</span></div>';
+      const entry = ledger.find(e => e.exId === exId && e.set === j + 1);
+      if (entry && entry.kind === "set") {
+        const diff = formatDifficulty(entry);
+        const note = entry.note ? ' -- ' + escapeHTML(entry.note) : '';
+        html += '<div class="set-line">S' + (j + 1) + ': <span class="set-note">' + entry.reps + ' reps' + setDropTag(i, j) + diff + note + '</span></div>';
+      } else if (entry && entry.kind === "skip") {
+        html += '<div class="set-line">S' + (j + 1) + ': <span class="set-note">skipped</span></div>';
       } else {
         html += '<div class="set-line">S' + (j + 1) + ': -</div>';
       }
@@ -4278,8 +4340,8 @@ function buildSummaryHTML() {
     if (exerciseTriggerHit(i)) {
       html += '<div class="sum-trigger">TRIGGER HIT &rarr; ' + escapeHTML(ex.triggerWeight || 'advance') + ' next session</div>';
     }
-    if (i < workout.length - 1) html += '<br>';
-  }
+    if (bi < boardOrder.length - 1) html += '<br>';
+  });
   const totalLine = totalLineText();
   if (totalLine) html += '<div class="total-line">' + escapeHTML(totalLine) + '</div>';
   return html;
@@ -4309,18 +4371,18 @@ function saveState() {
     pausedCumMs: pausedCumMs,
     pauseStartedAt: pauseStartedAt,
     workoutStartTime: workoutStartTime,
-    // --- cursor engine: retired by commit D, still the nav model in A ---
-    currentExercise, currentSet, viewingExercise, viewingSet,
+    focusExId: focusExId,
+    deferred: [...deferred],
+    boardOrder: [...boardOrder],
     state,
     readyAt: { ...readyAt },
     readyPlanned: { ...readyPlanned },
     repCount,
     notes: elNotesInput.value,
-    countdownFiredThresholds: [...countdownFiredThresholds],
-    dissolvedGroups: [...dissolvedGroups],
-    // Persist any mid-session reorder so refreshes don't snap it back. By id
-    // now; restore still accepts the v7 name list.
-    workoutOrder: workout.map(ex => ex.id)
+    countdownFiredThresholds: [...countdownFiredThresholds]
+    // `view` is deliberately NOT persisted: a browse is a read, and a reload
+    // should land him on the machine he is standing at, not on whatever set he
+    // last glanced at. One fewer restore path.
   };
   try { localStorage.setItem("gym-timer-state", JSON.stringify(s)); } catch(e) {}
 }
@@ -4333,17 +4395,18 @@ function stashOrphanState(raw) {
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
 }
 
-// Reapply a saved drag-reorder BEFORE anything reads workout[]. Accepts the v8
-// id list and the v7 name list.
+// Reapply a saved drag-reorder. It now sets boardOrder and never touches the
+// prescription (which is frozen), so a bad or stale order can at worst show the
+// rows in the wrong order -- it can no longer corrupt the plan. Accepts a v8 id
+// list and a v7/v8A name list.
 function applySavedOrder(order) {
   if (!Array.isArray(order) || order.length !== workout.length) return;
-  const byId = new Map(originalWorkout.map(ex => [ex.id, ex]));
-  const byName = new Map(originalWorkout.map(ex => [ex.name, ex]));
-  const reordered = order.map(k => byId.get(k) || byName.get(k));
-  if (!reordered.every(ex => ex)) return;
-  if (new Set(reordered).size !== reordered.length) return;
-  workout.length = 0;
-  reordered.forEach(ex => workout.push(ex));
+  const byId = new Map(workout.map(ex => [ex.id, ex]));
+  const byName = new Map(workout.map(ex => [ex.name, ex]));
+  const resolved = order.map(k => byId.get(k) || byName.get(k));
+  if (!resolved.every(ex => ex)) return;
+  if (new Set(resolved).size !== resolved.length) return;
+  boardOrder = resolved.map(ex => ex.id);
 }
 
 // v7 -> v8 migration. v7 stored (exerciseIndex, 0-based set, reps, difficulty,
@@ -4461,19 +4524,24 @@ function restoreState() {
 
     workoutStartTime = (typeof s.workoutStartTime === 'number') ? s.workoutStartTime : null;
 
-    const cursorOK =
-      typeof s.currentExercise === 'number' && s.currentExercise >= 0 &&
-      s.currentExercise < workout.length &&
-      typeof s.currentSet === 'number' && s.currentSet >= 0 &&
-      s.currentSet <= workout[s.currentExercise].sets;
-
-    const fullRestore = cursorOK && (isLegacyV7 || s.planHash === planHash());
+    // Where was he standing? v8D saves focusExId; every earlier shape (v7 and
+    // v8A-C) saved a cursor index instead, so translate rather than orphan a
+    // live session on the push that lands this build.
+    let savedFocus = null;
+    if (typeof s.focusExId === 'string' && exById(s.focusExId)) {
+      savedFocus = s.focusExId;
+    } else if (typeof s.currentExercise === 'number' &&
+               s.currentExercise >= 0 && s.currentExercise < workout.length) {
+      savedFocus = exIdAt(s.currentExercise);
+    }
+    const focusOK = !!savedFocus;
+    const fullRestore = focusOK && (isLegacyV7 || s.planHash === planHash());
 
     if (fullRestore) {
-      currentExercise = s.currentExercise;
-      currentSet = s.currentSet;
-      viewingExercise = (typeof s.viewingExercise === 'number') ? s.viewingExercise : currentExercise;
-      viewingSet = (typeof s.viewingSet === 'number') ? s.viewingSet : currentSet;
+      focusExId = savedFocus;
+      view = null;
+      deferred = new Set(Array.isArray(s.deferred) ? s.deferred.filter(id => exById(id)) : []);
+      if (Array.isArray(s.boardOrder)) applySavedOrder(s.boardOrder);
       repCount = s.repCount || 10;
       state = s.state;
       // v8C readiness. A v8A/v8B blob has the old restEndTime triplet instead;
@@ -4483,15 +4551,11 @@ function restoreState() {
         readyAt = { ...s.readyAt };
         readyPlanned = { ...(s.readyPlanned || {}) };
       } else if (s.restEndTime) {
-        const fid = exIdAt(currentExercise);
-        if (fid) {
-          readyAt[fid] = s.restEndTime;
-          readyPlanned[fid] = s.restTotalSeconds || s.restRemaining || 0;
-        }
+        readyAt[focusExId] = s.restEndTime;
+        readyPlanned[focusExId] = s.restTotalSeconds || s.restRemaining || 0;
       }
       countdownFiredThresholds = new Set(s.countdownFiredThresholds || []);
-      dissolvedGroups = new Set(Array.isArray(s.dissolvedGroups) ? s.dissolvedGroups : []);
-      rebuildSequence();
+      if (typeof restorePairs === "function") restorePairs(s.pairs);
       if (state === "resting" || state === "paused" || state === "finishing") {
         const lastLog = ledger.filter(e => e.kind === "set").slice(-1)[0];
         if (lastLog) currentLogEntry = lastLog;
@@ -4503,22 +4567,18 @@ function restoreState() {
     // TIER 2 -- the plan moved under a live session. Keep every logged set,
     // drop the session furniture, and put him back on the first machine that
     // still owes work.
-    let landIdx = workout.findIndex(ex => remainingOf(ex.id) > 0);
-    const noneLeft = (landIdx < 0);
-    if (noneLeft) landIdx = workout.length - 1;
-    currentExercise = landIdx;
-    currentSet = noneLeft ? workout[landIdx].sets : entriesOf(workout[landIdx].id).length;
-    viewingExercise = currentExercise;
-    viewingSet = currentSet;
-    repCount = getMaxReps(workout[landIdx].reps);
+    const landId = boardOrder.find(id => remainingOf(id) > 0) || null;
+    const noneLeft = (landId === null);
+    focusExId = landId || boardOrder[boardOrder.length - 1];
+    view = null;
+    deferred = new Set();
+    repCount = getMaxReps(exById(focusExId).reps);
     state = noneLeft ? "finishing" : "ready";
     readyAt = {};
     readyPlanned = {};
     countdownFiredThresholds = new Set();
-    dissolvedGroups = new Set();
     pauseStartedAt = null;
     currentLogEntry = null;
-    rebuildSequence();
     applyState("");
     try { console.warn("gym-timer: plan changed under a saved session - ledger restored, timer state reset"); } catch(e) {}
     return true;
@@ -4560,7 +4620,7 @@ function scheduleRestNotif(ms) {
     if (document.visibilityState !== 'visible') {
       try {
         new Notification("Rest done -- GO!", {
-          body: workout[currentExercise].name + " set " + (currentSet + 1),
+          body: exById(focusExId).name + " set " + nextSetOf(focusExId),
           tag: "gym-rest"
         });
       } catch(e) {}
@@ -4577,8 +4637,8 @@ function cancelRestNotif() {
 // re-decoding; by the time the user looks at the timer and taps, it's done.
 function handleResumeFromBackground() {
   recoverAudioCtx();
-  if (state === "resting" && readyAt[focusExId()]) {
-    const remaining = Math.ceil(remainingMsOf(focusExId()) / 1000);
+  if (state === "resting" && readyAt[focusExId]) {
+    const remaining = Math.ceil(remainingMsOf(focusExId) / 1000);
     if (remaining <= 0) {
       if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
       restDone();
@@ -4670,7 +4730,8 @@ function runSelfTest() {
   // Snapshot everything the run mutates.
   const savedLedger = ledger.map(e => ({ ...e }));
   const savedSeq = ledgerSeq;
-  const saved = { currentExercise, currentSet, viewingExercise, viewingSet, state,
+  const saved = { focusExId, view, state, deferred: new Set(deferred),
+                  boardOrder: [...boardOrder],
                   readyAt: { ...readyAt }, readyPlanned: { ...readyPlanned },
                   pauseStartedAt, pausedCumMs };
 
@@ -4695,12 +4756,10 @@ function runSelfTest() {
     // grade 2 = LIGHT -> the room-left branch fires.
     // Both make the advisor own #exercise-note, which is the state the bug lived in.
     for (const ex of workout) {
-      const exIdx = exIdxOf(ex.id);
       for (let s = 1; s <= ex.sets; s++) {
         for (const grade of [5, 2]) {
           seedFakeLedger(ex.id, s - 1, grade);
-          currentExercise = exIdx; currentSet = s - 1;
-          viewingExercise = exIdx; viewingSet = s - 1;
+          focusExId = ex.id; view = null;
           renderExercise();
           const bannerTxt = elSafety ? elSafety.textContent : "";
           const noteTxt = elNote ? elNote.textContent : "";
@@ -4775,8 +4834,7 @@ function runSelfTest() {
       assert(isReady(B.id), "an unstamped exercise is ready (no clock, no wait)");
 
       // EVERY EXERCISE RESTS AT ONCE. Focus B; A must keep counting on the board.
-      currentExercise = exIdxOf(B.id); currentSet = 0;
-      viewingExercise = currentExercise; viewingSet = 0;
+      focusExId = B.id; view = null;
       renderProgress(); updateReadyChips();
       const chipA = document.querySelector('.ready-chip[data-chip-ex-id="' + A.id + '"]');
       const chipB = document.querySelector('.ready-chip[data-chip-ex-id="' + B.id + '"]');
@@ -4819,8 +4877,7 @@ function runSelfTest() {
       readyAt = {}; readyPlanned = {};
       stampReady(A.id, 150, Date.now());
       stampReady(B.id, 120, Date.now());
-      currentExercise = exIdxOf(A.id); currentSet = 0;
-      viewingExercise = currentExercise; viewingSet = 0;
+      focusExId = A.id; view = null;
       state = "resting";
       skipRest();
       assert(isReady(A.id), "skipRest() makes the focused exercise ready");
@@ -4833,8 +4890,7 @@ function runSelfTest() {
       // anchor is the thing that has to be right.
       ledger.length = 0; ledgerSeq = 0;
       readyAt = {}; readyPlanned = {};
-      currentExercise = exIdxOf(A.id); currentSet = 0;
-      viewingExercise = currentExercise; viewingSet = 0;
+      focusExId = A.id; view = null;
       state = "ready";
       const beforeDone = Date.now();
       setDone();
@@ -4848,6 +4904,108 @@ function runSelfTest() {
       assert(near(remainingMsOf(A.id) / 1000, A.rest - 45, 3),
              "returning to an anchor shows its remainder, not a fresh full rest (got " +
              (remainingMsOf(A.id) / 1000).toFixed(1) + "s)");
+    }
+
+    // --- 7. FREE NAVIGATION (spec 2.6) ---
+    // The acceptance scenario, driven through the real handlers: log LP S1,
+    // walk to another machine, log there, walk back, and land on LP S2 --
+    // not S1 (which would re-log) and not S3 (which would leave a hole).
+    if (workout.length >= 3) {
+      const LP = workout[0], EXT = workout[1], THIRD = workout[2];
+      ledger.length = 0; ledgerSeq = 0;
+      readyAt = {}; readyPlanned = {}; deferred = new Set();
+      boardOrder = workout.map(e => e.id);
+      focusExId = LP.id; view = null; state = "ready";
+
+      setDone();                                   // LP S1
+      assert(nextSetOf(LP.id) === 2, "after logging LP S1 the next LP set is S2");
+
+      focusExercise(EXT.id);
+      assert(focusExId === EXT.id, "tapping a row moves focus there");
+      assert(displayTarget().set === 1, "a fresh machine queues its S1");
+      assert(isReady(EXT.id), "a never-performed machine is ready on arrival");
+
+      setDone();                                   // EXT S1
+      focusExercise(LP.id);
+      assert(focusExId === LP.id, "walking back moves focus back");
+      assert(displayTarget().set === 2,
+             "walking back queues LP S2, not S1 and not S3 (got S" + displayTarget().set + ")");
+      assert(remainingMsOf(LP.id) > 0,
+             "LP is still resting -- its clock ran while he was at the other machine");
+
+      // NO HOLES. Every performed ordinal must be contiguous from 1.
+      const ords = performedOf(LP.id).map(e => e.set).sort((a, b) => a - b);
+      assert(ords.every((v, k) => v === k + 1), "LP ordinals are contiguous: " + ords.join(","));
+
+      // SKIP AN ENTIRE EXERCISE, then recover one set from it.
+      focusExId = THIRD.id; view = null; state = "ready";
+      skipExercisePill();                          // arms
+      assert(skipExArmed === true, "the first SKIP EX tap only ARMS (it is a destructive write)");
+      skipExercisePill();                          // confirms
+      assert(remainingOf(THIRD.id) === 0, "confirmed SKIP EX consumes every remaining set");
+      assert(entriesOf(THIRD.id).every(e => e.kind === "skip"),
+             "SKIP EX writes skip entries, never fake performed sets");
+      const sumTxt = buildSummary();
+      assert(sumTxt.indexOf("skipped") >= 0, "the summary distinguishes a skip from a hole");
+
+      renderProgress();
+      const skippedDots = document.querySelectorAll(
+        '.exercise-group[data-ex-id="' + THIRD.id + '"] .dot.skipped');
+      assert(skippedDots.length === THIRD.sets,
+             "every skipped set renders as a skipped dot (" + skippedDots.length + "/" + THIRD.sets + ")");
+
+      unskipSet(THIRD.id, 1);
+      assert(remainingOf(THIRD.id) === THIRD.sets,
+             "un-skipping the first set restores the exercise to the board");
+      assert(nextSetOf(THIRD.id) === 1, "a restored exercise queues S1 again");
+
+      // OCCUPIED parks without touching the ledger or the rest.
+      ledger.length = 0; ledgerSeq = 0;
+      readyAt = {}; readyPlanned = {}; deferred = new Set();
+      focusExId = LP.id; view = null; state = "ready";
+      setDone();                                   // LP S1, LP now resting
+      const restBefore = readyAt[LP.id];
+      const ledgerLenBefore = ledger.length;
+      focusExId = LP.id;
+      deferFocused();
+      assert(deferred.has(LP.id), "OCCUPIED parks the exercise");
+      assert(ledger.length === ledgerLenBefore, "OCCUPIED writes NO ledger entry -- it is not a set");
+      assert(readyAt[LP.id] === restBefore,
+             "OCCUPIED does not touch readiness -- a busy machine does not reset his muscles");
+      assert(focusExId !== LP.id, "OCCUPIED moves focus to something he can actually do");
+      renderProgress(); updateReadyChips();
+      const heldChip = document.querySelector('.ready-chip[data-chip-ex-id="' + LP.id + '"]');
+      assert(!!heldChip && heldChip.textContent === "HELD", "a parked row reads HELD");
+      focusExercise(LP.id);
+      assert(!deferred.has(LP.id), "returning to a parked machine clears the park");
+
+      // BROWSING IS A READ.
+      // Browse a set on a DIFFERENT machine than the focused one. Browsing the
+      // already-focused exercise would make a stray focus write invisible --
+      // the assert would pass against a browseSet that moves focus, which is
+      // exactly the bug it exists to catch.
+      focusExercise(EXT.id);
+      if (nextSetOf(EXT.id) <= EXT.sets) setDone();       // EXT has a performed dot
+      focusExercise(LP.id);
+      const focusBefore = focusExId;
+      browseSet(EXT.id, 1);
+      assert(isBrowsing(), "browsing a performed dot enters view mode");
+      assert(displayTarget().exId === EXT.id, "the browse shows the browsed exercise");
+      assert(focusExId === focusBefore,
+             "browsing does NOT move focus (focus stayed on " + focusExId + ")");
+      returnToWorking();
+      assert(!isBrowsing(), "NOW exits browse");
+      assert(displayTarget().exId === LP.id, "exiting browse returns to the focused machine");
+
+      // FINISHING triggers on nothing left anywhere, not on a list running out.
+      ledger.length = 0; ledgerSeq = 0;
+      workout.forEach(ex => {
+        for (let o = 1; o <= ex.sets; o++) {
+          ledger.push({ kind: "skip", n: ++ledgerSeq, exId: ex.id, set: o, at: 1, reason: "user" });
+        }
+      });
+      assert(totalRemaining() === 0 && advanceFocusFrom(LP.id) === null,
+             "with nothing left anywhere, focus advance returns null -> finishing");
     }
 
   } catch (e) {
@@ -4864,8 +5022,8 @@ function runSelfTest() {
   ledger.length = 0;
   savedLedger.forEach(e => ledger.push(e));
   ledgerSeq = savedSeq;
-  currentExercise = saved.currentExercise; currentSet = saved.currentSet;
-  viewingExercise = saved.viewingExercise; viewingSet = saved.viewingSet;
+  focusExId = saved.focusExId; view = saved.view;
+  deferred = new Set(saved.deferred); boardOrder = [...saved.boardOrder];
   state = saved.state;
   readyAt = { ...saved.readyAt }; readyPlanned = { ...saved.readyPlanned };
   pauseStartedAt = saved.pauseStartedAt; pausedCumMs = saved.pausedCumMs;
@@ -4979,6 +5137,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8C READY</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8D FREENAV</div>
 </body>
 </html>
