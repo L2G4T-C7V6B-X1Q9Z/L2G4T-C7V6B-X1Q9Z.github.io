@@ -6154,6 +6154,65 @@ function runSelfTest() {
       boardOrder = snap.order; pairs = snap.pairs; bespokeEpisode = snap.ep;
       try { renderExercise(); } catch (e) {}
     }
+    // ---- DOES THE REAL COUNTDOWN ACTUALLY FIRE A LINE? ----
+    // The walks above call maybeFireBespokeLine() directly, which proves the
+    // GATE opens but says nothing about whether anything calls it during an
+    // actual rest. Soren ran a whole workout and heard only the Halo beeps:
+    // every line was reachable by the walk and none of them played.
+    //
+    // So this one uses the real thing -- startCountdown(), the real 100ms
+    // interval, real elapsed time -- with a rest short enough to finish inside
+    // the test. If the tick is not wired to the scheduler, this is the only
+    // check here that notices.
+    (function tickCheck() {
+      const ex = workout[0];
+      const line = (dailyManifest.entries || []).find(e => e.exId === ex.id && e.set === 1);
+      if (!line) return;
+      const snap2 = {
+        ledger: ledger.map(e => ({ ...e })), seq: ledgerSeq, focus: focusExId,
+        state: state, ready: { ...readyAt }, planned: { ...readyPlanned },
+        ep: bespokeEpisode, pairs: pairs.map(x => ({ ...x }))
+      };
+      let fired = false;
+      const realSeq2 = VoiceCue.playSequence;
+      VoiceCue.playSequence = function (names) {
+        if ((names || []).some(n => String(n).indexOf('daily/') === 0)) fired = true;
+        return Promise.resolve();
+      };
+      ledger.length = 0; ledgerSeq = 0; pairs = []; deferred = new Set();
+      focusExId = ex.id; view = null; state = "resting";
+      bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+      // A rest that expires just past the line's scheduled start, so the tick
+      // has to both arm and fire it within the window.
+      const restMs = line.durationMs + LINE_LEAD_OUT_MS + 700;
+      readyAt[ex.id] = Date.now() + restMs;
+      readyPlanned[ex.id] = restMs / 1000;
+      startCountdown();
+      setTimeout(() => {
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        VoiceCue.playSequence = realSeq2;
+        ledger.length = 0; snap2.ledger.forEach(e => ledger.push(e));
+        ledgerSeq = snap2.seq; focusExId = snap2.focus; state = snap2.state;
+        readyAt = snap2.ready; readyPlanned = snap2.planned;
+        bespokeEpisode = snap2.ep; pairs = snap2.pairs;
+        try { renderExercise(); } catch (e) {}
+        const box2 = document.getElementById('selftest-overlay');
+        if (!box2) return;
+        const d2 = document.createElement('div');
+        d2.style.cssText = 'margin-top:6px;padding-left:10px;border-left:2px solid ' +
+          (fired ? '#2a2a2e;color:#6a6a6e;' : '#e0584a;color:#e0584a;');
+        d2.textContent = fired
+          ? 'live countdown fires the scheduled line'
+          : 'LIVE COUNTDOWN NEVER FIRED A LINE - the gate opens but the tick does not call it';
+        box2.appendChild(d2);
+        if (!fired) {
+          box2.setAttribute('data-selftest', 'FAIL');
+          const h2 = box2.firstChild;
+          if (h2) { h2.textContent = 'SELFTEST FAIL  (countdown never speaks)'; h2.style.color = '#e0584a'; }
+        }
+      }, 1400);
+    })();
+
     const want = dailyManifest.entries.map(e => e.file);
     const dead = want.filter(f => !played.has(f));
     const deadPaired = want.filter(f => !pairedPlayed.has(f));
@@ -6283,6 +6342,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8L PAIRAUDIO</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8M TICKGATE</div>
 </body>
 </html>
