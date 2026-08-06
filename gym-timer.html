@@ -6103,21 +6103,29 @@ function runSelfTest() {
       deferred: new Set(deferred), order: [...boardOrder], pairs: pairs.map(x => ({ ...x })),
       ep: bespokeEpisode
     };
-    const played = new Set();
     const realSeq = VoiceCue.playSequence;
-    VoiceCue.playSequence = function (names) {
-      (names || []).forEach(n => {
-        if (String(n).indexOf('daily/') === 0) played.add(String(n).slice(6));
-      });
-      return Promise.resolve();
-    };
-    try {
-      ledger.length = 0; ledgerSeq = 0; deferred = new Set(); pairs = [];
+    // TWO walks: a straight-line day, and one where he SUPERSETS. The straight
+    // walk alone could not see the bug he hit -- creating a single pair fired
+    // two independent manifest gates and silenced all fifteen lines for the
+    // whole session, which no amount of walking the default path reveals.
+    function walk(makePair) {
+      const seen = new Set();
+      VoiceCue.playSequence = function (names) {
+        (names || []).forEach(n => {
+          if (String(n).indexOf('daily/') === 0) seen.add(String(n).slice(6));
+        });
+        return Promise.resolve();
+      };
+      ledger.length = 0; ledgerSeq = 0; deferred = new Set(); pairs = []; pairSeq = 0;
       boardOrder = workout.map(e => e.id);
       readyAt = {}; readyPlanned = {};
       focusExId = boardOrder[0]; view = null; state = "pre-start";
       bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
       startWorkout();
+      if (makePair && workout.length >= 2) {
+        pairSelectMode = true;
+        handlePairSelectTap(boardOrder[1]);
+      }
       for (let guard = 0; guard < 60 && totalRemaining() > 0; guard++) {
         const id = focusExId;
         // Give the countdown its chance: a scheduled line fires from the tick,
@@ -6130,6 +6138,12 @@ function runSelfTest() {
         }
         setDone();
       }
+      return seen;
+    }
+    let played = new Set(), pairedPlayed = new Set();
+    try {
+      played = walk(false);
+      pairedPlayed = walk(true);
     } catch (e) {
       failures.push('coverage walk threw: ' + (e && e.message));
     } finally {
@@ -6142,15 +6156,21 @@ function runSelfTest() {
     }
     const want = dailyManifest.entries.map(e => e.file);
     const dead = want.filter(f => !played.has(f));
+    const deadPaired = want.filter(f => !pairedPlayed.has(f));
     const cov = document.createElement('div');
+    const anyDead = dead.length || deadPaired.length;
     cov.style.cssText = 'margin-top:6px;padding-left:10px;border-left:2px solid ' +
-      (dead.length ? '#e0584a;color:#e0584a;' : '#2a2a2e;color:#6a6a6e;');
+      (anyDead ? '#e0584a;color:#e0584a;' : '#2a2a2e;color:#6a6a6e;');
     cov.textContent = dead.length
       ? ('UNREACHABLE lines (' + dead.length + '/' + want.length + '): ' + dead.join(', ') +
          ' - generated and verified, but no code path plays them')
-      : ('daily lines reachable: ' + played.size + '/' + want.length);
+      : (deadPaired.length
+         ? ('lines LOST WHEN SUPERSETTING (' + deadPaired.length + '/' + want.length + '): ' +
+            deadPaired.slice(0, 6).join(', ') + ' - a manifest gate is firing on a condition the line does not depend on')
+         : ('daily lines reachable: ' + played.size + '/' + want.length +
+            ' straight, ' + pairedPlayed.size + '/' + want.length + ' supersetted'));
     box.appendChild(cov);
-    if (dead.length) {
+    if (anyDead) {
       box.setAttribute('data-selftest', 'FAIL');
       const head = box.firstChild;
       if (head) { head.textContent = 'SELFTEST FAIL  (unreachable lines)'; head.style.color = '#e0584a'; }
@@ -6263,6 +6283,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8K CLEAN</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8L PAIRAUDIO</div>
 </body>
 </html>
