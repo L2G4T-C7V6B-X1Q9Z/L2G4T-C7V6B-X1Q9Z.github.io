@@ -2326,6 +2326,32 @@ const VoiceCue = (() => {
     });
   }
 
+  // Play at an EXACT AudioContext time. setTimeout and a 100ms poll both carry
+  // tens of milliseconds of jitter; the Web Audio clock is sample-accurate, and
+  // for three beeps a second apart that is the difference between a metronome
+  // and something that sounds broken.
+  function playAt(name, when) {
+    if (!settings.voice) return false;
+    if (!audioCtx || !unlocked) return false;
+    const buffer = decodedBuffers.get(name);
+    if (!buffer) return false;              // not decoded yet: caller retries
+    try {
+      const source = audioCtx.createBufferSource();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 1.0;
+      source.buffer = buffer;
+      source.connect(gain);
+      gain.connect(audioCtx.destination);
+      source.onended = () => {
+        const idx = currentSources.findIndex(e => e.src === source);
+        if (idx >= 0) currentSources.splice(idx, 1);
+      };
+      currentSources.push({ src: source, gain: gain });
+      source.start(Math.max(when, audioCtx.currentTime));
+      return true;
+    } catch (e) { return false; }
+  }
+
   function playSequence(names, gapMs) {
     if (!settings.voice) return Promise.resolve();
     if (gapMs == null) gapMs = 80;
@@ -2406,7 +2432,7 @@ const VoiceCue = (() => {
         .catch(() => { fetchFailed.add(name); });
     });
   }
-  return { init, unlock, play, playSequence, cancel, _afterContextRecreated, status, register,
+  return { init, unlock, play, playAt, playSequence, cancel, _afterContextRecreated, status, register,
            files: () => FILES.slice(),
            has: (name) => decodedBuffers.has(name) || arrayBuffers.has(name) };
 })();
@@ -2535,6 +2561,44 @@ function repRangeClipFor(repsStr) {
   return map[key] || null;
 }
 
+// THE LAST FOUR SECONDS ARE SCHEDULED, NOT POLLED.
+//
+// The ticks used to fire from the 100ms countdown poll, each one when the loop
+// first noticed ceil(remaining) cross a boundary. Every tick therefore carried
+// up to 100ms of its own independent jitter, so the gaps between them ran
+// anywhere from 900ms to 1100ms. Soren: "the halo reach first three beeps are
+// unevenly spaced. Super annoying." A ~20% swing on a metronomic count is
+// obvious to anyone listening, and tightening the poll cannot fix it -- polling
+// is simply the wrong mechanism for something that has to be rhythmic.
+//
+// So the three ticks and the GO are handed to the Web Audio clock in one go, at
+// exact offsets from the real remaining time. Sample-accurate, scheduled once
+// per readiness episode.
+let countdownTailKey = null;
+function scheduleCountdownTail(exId, remainingMs) {
+  const key = exId + ":" + (readyAt[exId] || 0);
+  if (countdownTailKey === key) return;                    // already scheduled
+  if (remainingMs > 4600 || remainingMs <= 0) return;
+  if (!audioCtx || audioCtx.state !== 'running') return;   // retry next tick
+  const t0 = audioCtx.currentTime + (remainingMs / 1000);  // the moment he lifts
+  let ok = true;
+  [3, 2, 1].forEach(n => {
+    const when = t0 - n;
+    if (when < audioCtx.currentTime - 0.05) return;        // that beat has passed
+    if (!VoiceCue.playAt(SFX_TICK, when)) ok = false;
+  });
+  if (!VoiceCue.playAt(SFX_GO, t0)) ok = false;
+  if (!ok) return;                                          // buffers not ready
+  countdownTailKey = key;
+}
+
+// Any exit from a rest invalidates tones scheduled against its end time.
+function dropScheduledTail() {
+  if (countdownTailKey === null) return;
+  countdownTailKey = null;
+  VoiceCue.cancel();
+}
+
 // Threshold-based countdown announcements (from startCountdown). Each
 // threshold fires once per rest; reset when a new rest begins.
 function maybeFireCountdownCue(secCeil) {
@@ -2542,12 +2606,11 @@ function maybeFireCountdownCue(secCeil) {
   // THE COUNTDOWN IS TONES. T-3 / T-2 / T-1 are the Halo respawn tick; T-0 is
   // the GO tone (restEndCueSeq). Nothing is spoken -- a voice counting down is
   // slower than the thing it is counting, and he decided against it.
+  // 3 / 2 / 1 are NOT here any more -- scheduleCountdownTail owns them, on the
+  // audio clock, because they have to be evenly spaced.
   const cues = {
     60: '1min-remaining',
-    30: '30sec-remaining',
-    3: SFX_TICK,
-    2: SFX_TICK,
-    1: SFX_TICK
+    30: '30sec-remaining'
   };
   const name = cues[secCeil];
   if (!name) return;
@@ -2581,7 +2644,13 @@ function maybeFireCountdownCue(secCeil) {
 // the head of this sequence: the tone IS the go signal and it lands on the beat,
 // where a spoken phrase lands whenever it finishes.
 function restEndCueSeq() {
-  const seq = [SFX_GO];
+  // GO is pre-scheduled with the ticks whenever the countdown ran to its end,
+  // so replaying it here would double it milliseconds later. It stays in the
+  // sequence only for the paths that reach zero WITHOUT a countdown -- a
+  // restore into an already-expired rest, or a tab-return catch-up.
+  const goAlreadyScheduled =
+    (countdownTailKey === (focusExId + ":" + (readyAt[focusExId] || 0)));
+  const seq = goAlreadyScheduled ? [] : [SFX_GO];
   if (settings.autoStart) {
     // The bespoke line already named the set ("set three, one ninety"), so the
     // generic position clip after GO would say it a second time.
@@ -3495,6 +3564,7 @@ function startCountdown() {
     const remainingMs = remainingMsOf(focusExId);
     const remaining = remainingMs / 1000;
     maybeFireBespokeLine(focusExId, remainingMs);
+    scheduleCountdownTail(focusExId, remainingMs);
     if (remaining <= 0) {
       clearInterval(timerInterval);
       timerInterval = null;
@@ -3908,6 +3978,7 @@ function pauseRest() {
   // Nothing to capture: readyAt is absolute and remainingMsOf() freezes itself
   // against pauseStartedAt, so the paused reading and the resumed reading are
   // the same number by construction rather than by careful float arithmetic.
+  dropScheduledTail();
   state = "paused";
   // Paused wall-clock is excluded from restActualSec: a rest he deliberately
   // froze is not the same evidence as a rest he wandered away from, and only
@@ -3965,6 +4036,7 @@ function skipRest() {
   // the whole transition. State has already moved on; bail.
   if (state !== "resting" && state !== "paused") return;
   closePauseWindow();
+  dropScheduledTail();
   VoiceCue.cancel();
   // A queued rest-expiry announcement is stale the moment he skips.
   pendingPostGestureCues.length = 0;
@@ -4104,6 +4176,7 @@ function focusExercise(exId, opts) {
     // the machine he just walked away from is a wrong instruction, not a late
     // one. (Obs 164; spec 6.3.)
     VoiceCue.cancel();
+    dropScheduledTail();
     pendingPostGestureCues.length = 0;
     // A line describing the machine he just walked away from is a WRONG
     // instruction, not a late one. Un-arm it; the new focus arms fresh.
@@ -6445,6 +6518,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8N MUSCLES</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8O EVENBEEPS</div>
 </body>
 </html>
