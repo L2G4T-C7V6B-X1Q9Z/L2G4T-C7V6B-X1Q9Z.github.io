@@ -615,6 +615,11 @@ h1:empty { display: none; }
    out except finding CANCEL -- taps on most of the board would do nothing at
    all. Any tap now cancels. */
 .exercise-group.pair-inert { opacity: 0.3; }
+/* Shares a muscle with the focused exercise: pairable, but it will not save
+   time. Amber rather than red -- this is information, not a refusal. */
+.exercise-group.pair-overlap .exercise-label { color: #b8a24a; }
+.exercise-group.pair-overlap .exercise-label::after { content: " (same muscle)"; font-size: 0.8em; }
+.exercise-group.pair-overlap-live { border-bottom-color: rgba(184, 162, 74, 0.7); }
 @keyframes pair-candidate-pulse {
   0%, 100% { opacity: 0.62; }
   50%      { opacity: 1; }
@@ -1397,6 +1402,9 @@ const workout = [
     // readiness, the audio manifest, the restore guard). It must survive a
     // reorder and a nightly weight tweak, which an array index does not.
     id: "leg-press",
+    // `muscles` exists so the PAIR pill can tell him when a superset shares a
+    // muscle and therefore saves him nothing. Derived from the name if omitted.
+    muscles: ["quads", "glutes"],
     name: "Leg Press",
     short: "LEG PRESS",
     sets: 4,
@@ -1423,6 +1431,7 @@ const workout = [
   },
   {
     id: "leg-press-calf-raises",
+    muscles: ["calves"],
     name: "Leg Press Calf Raises",
     short: "CALF",
     sets: 3,
@@ -1442,6 +1451,7 @@ const workout = [
   },
   {
     id: "lying-leg-curl",
+    muscles: ["hamstrings"],
     name: "Lying Leg Curl",
     short: "LEG CURL",
     sets: 3,
@@ -1464,6 +1474,7 @@ const workout = [
   },
   {
     id: "leg-extension",
+    muscles: ["quads"],
     name: "Leg Extension",
     short: "LEG EXT",
     sets: 3,
@@ -1482,6 +1493,7 @@ const workout = [
   },
   {
     id: "cable-face-pulls",
+    muscles: ["rear-delts", "upper-back"],
     name: "Cable Face Pulls",
     short: "FACE PULL",
     sets: 2,
@@ -1532,6 +1544,43 @@ function kebabId(s) {
 workout.forEach(Object.freeze);
 Object.freeze(workout);
 const originalWorkout = workout;   // kept as a name; they are the same array now
+
+// MUSCLE TAGS. A superset only buys density when the two exercises do NOT share
+// a muscle: an antagonist pair (quads vs hamstrings) lets each recover while the
+// other works, whereas an agonist pair (leg press + leg extension, both quads)
+// adds fatigue to a muscle that is still short of ATP. Same rest owed, less
+// performance, no time saved. The timer cannot stop him -- an agonist superset
+// is a legitimate choice if metabolic stress is the point -- but it should say
+// so at the moment he picks, not ninety seconds later when the clock is still
+// running.
+const MUSCLE_KEYWORDS = [
+  [/leg press|hack squat|squat/i, ["quads", "glutes"]],
+  [/calf|calve/i,                 ["calves"]],
+  [/leg curl|hamstring|rdl|romanian|deadlift/i, ["hamstrings"]],
+  [/leg extension/i,              ["quads"]],
+  [/face pull|rear delt|reverse fly/i, ["rear-delts", "upper-back"]],
+  [/lat pulldown|pulldown|pull-up|chin/i, ["lats", "biceps"]],
+  [/row/i,                        ["upper-back", "biceps"]],
+  [/chest press|bench|incline|fly/i, ["chest", "triceps"]],
+  [/overhead press|shoulder press/i, ["front-delts", "triceps"]],
+  [/lateral raise|lat raise/i,    ["side-delts"]],
+  [/tricep|pushdown|skull/i,      ["triceps"]],
+  [/curl/i,                       ["biceps"]],
+];
+function musclesOf(ex) {
+  if (!ex) return [];
+  if (Array.isArray(ex.muscles) && ex.muscles.length) return ex.muscles;
+  const hay = (ex.name || "") + " " + (ex.short || "");
+  for (const [re, m] of MUSCLE_KEYWORDS) if (re.test(hay)) return m;
+  return [];
+}
+// The muscles two exercises have in common. Empty means a true antagonist (or
+// simply unrelated) pairing, which is the one that saves time.
+function sharedMuscles(aId, bId) {
+  const A = musclesOf(exById(aId)), B = musclesOf(exById(bId));
+  if (!A.length || !B.length) return [];      // unknown: never warn on a guess
+  return A.filter(m => B.indexOf(m) >= 0);
+}
 
 const exById  = (id)  => workout.find(ex => ex.id === id) || null;
 const exIdAt  = (idx) => (workout[idx] ? workout[idx].id : null);
@@ -4257,14 +4306,22 @@ function handlePairSelectTap(exId) {
     exitPairSelect();
     return true;
   }
+  const shared = sharedMuscles(focusExId, exId);
   pairs.push({
     id: "P" + (++pairSeq),
     a: focusExId, b: exId,
-    createdAt: Date.now(), dissolvedAt: null, dissolvedWhy: null
+    createdAt: Date.now(), dissolvedAt: null, dissolvedWhy: null,
+    sharedMuscles: shared
   });
   pairSelectMode = false;
   const aEx = exById(focusExId), bEx = exById(exId);
-  toast((aEx.short || aEx.name) + " + " + (bEx.short || bEx.name));
+  if (shared.length) {
+    // Not a refusal. He may want the agonist pair on purpose; he should just
+    // not expect it to shorten anything.
+    toast("BOTH HIT " + shared[0].toUpperCase() + " - no rest saved");
+  } else {
+    toast((aEx.short || aEx.name) + " + " + (bEx.short || bEx.name));
+  }
   renderExercise();
   saveState();
   return true;
@@ -4308,8 +4365,17 @@ function decorateGroupForPair(group, exId) {
   }
   if (pairSelectMode) {
     if (exId === focusExId) group.classList.add("pair-candidate");
-    else if (pairCandidates(focusExId).includes(exId)) group.classList.add("pair-candidate");
-    else group.classList.add("pair-inert");
+    else if (pairCandidates(focusExId).includes(exId)) {
+      group.classList.add("pair-candidate");
+      // Warn BEFORE the tap, not after: a row that shares a muscle with the
+      // focused exercise is marked, so the choice is informed rather than
+      // explained ninety seconds later.
+      if (sharedMuscles(focusExId, exId).length) group.classList.add("pair-overlap");
+    } else group.classList.add("pair-inert");
+  }
+  const livePair = activePairOf(exId);
+  if (livePair && livePair.sharedMuscles && livePair.sharedMuscles.length) {
+    group.classList.add("pair-overlap-live");
   }
 }
 
@@ -5671,6 +5737,43 @@ function runSelfTest() {
       assert(performedOf(A.id).slice(-1)[0].pairId === pr.id,
              "a dissolved pair does not erase the pairId on sets already logged inside it");
 
+      // SAME-MUSCLE PAIRING IS FLAGGED, NOT BLOCKED.
+      // A superset only buys density when the two exercises do not share a
+      // muscle. Leg press + leg extension are both quads: the second lift adds
+      // fatigue rather than allowing recovery, so the rest owed is unchanged
+      // and nothing is saved. He should hear that when he taps, not infer it
+      // from a clock that is still running.
+      {
+        const quadA = workout.find(ex => musclesOf(ex).indexOf("quads") >= 0);
+        const quadB = workout.filter(ex => musclesOf(ex).indexOf("quads") >= 0)[1];
+        const ham = workout.find(ex => musclesOf(ex).indexOf("hamstrings") >= 0);
+        workout.forEach(ex => assert(musclesOf(ex).length > 0,
+          ex.id + ": no muscle tags and no keyword match - pairing cannot warn about it"));
+        if (quadA && quadB) {
+          assert(sharedMuscles(quadA.id, quadB.id).indexOf("quads") >= 0,
+                 "two quad exercises are detected as sharing a muscle");
+        }
+        if (quadA && ham) {
+          assert(sharedMuscles(quadA.id, ham.id).length === 0,
+                 "quads and hamstrings are NOT flagged - that is the pairing that works");
+        }
+        // The flag rides on the pair, so the board can keep showing it.
+        if (quadA && quadB) {
+          resetPairs();
+          focusExId = quadA.id;
+          pairSelectMode = true;
+          handlePairSelectTap(quadB.id);
+          const pr2 = activePairOf(quadA.id);
+          assert(!!pr2 && (pr2.sharedMuscles || []).length > 0,
+                 "an overlapping pair records which muscle it shares");
+          renderProgress();
+          const marked = document.querySelectorAll('.exercise-group.pair-overlap-live');
+          assert(marked.length === 2, "both rows of an overlapping pair are marked on the board");
+          assert(!!activePairOf(quadA.id), "and it is still a real pair - flagged, not blocked");
+        }
+        resetPairs();
+      }
+
       // AUTO-DISSOLVE when both members are finished. Cosmetic only.
       resetPairs();
       handlePairSelectTapForTest(A.id, B.id);
@@ -6342,6 +6445,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8M TICKGATE</div>
+<div class="build-stamp">prism &middot; 2026-08-05 2B-lower v8N MUSCLES</div>
 </body>
 </html>
