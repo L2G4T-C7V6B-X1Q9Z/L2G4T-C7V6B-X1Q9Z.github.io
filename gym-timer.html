@@ -568,16 +568,24 @@ h1:empty { display: none; }
   z-index: 40;
   pointer-events: none;
 }
+/* The horizontal budget here is load-bearing. The pills are fixed at left:10px
+   and vertically centred, which is where the dial also lives, so the widest one
+   (OCCUPIED) is what decides whether the stack clears the dial's tap area. That
+   clearance used to come from the safety banner pushing the dial down -- which
+   meant it existed on Lower days and not on Upper ones, and on 2026-08-06 the
+   Upper build put OCCUPIED 4px inside #btn-wrap. Pills are live and sit at
+   z-index 40, so an overlap there is a mis-tap on the dial, the same shape as
+   the PAIR-on-LIGHT bug. Trimmed to hold the gap on its own. */
 #return-pill, #occupied-pill, #skip-ex-pill, #pair-pill {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 1.5px;
+  letter-spacing: 1.1px;
   color: var(--red);
   background: rgba(21, 21, 23, 0.94);
   border: 1px solid rgba(192, 57, 43, 0.55);
   border-radius: 999px;
   text-transform: uppercase;
-  padding: 6px 10px;
+  padding: 6px 8px;
   cursor: pointer;
   text-align: center;
   white-space: nowrap;
@@ -6533,6 +6541,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-06 2B-upper v8O ORDER-FIX</div>
+<div class="build-stamp">prism &middot; 2026-08-06 2B-upper v8P PILL-GAP</div>
 </body>
 </html>

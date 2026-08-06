@@ -1,26 +1,26 @@
 {
-  "planHash": "7b241c84",
-  "dayType": "Lower",
-  "generatedAt": "2026-08-05T21:11",
+  "planHash": "3911bf90",
+  "dayType": "Upper",
+  "generatedAt": "2026-08-06T12:42",
   "source": "chatterbox JR announcer clone, composed + ASR verified",
   "entries": [
     {
-      "exId": "leg-press",
+      "exId": "chest-press",
       "set": 1,
-      "file": "leg-press-s1.wav",
-      "durationMs": 12900,
+      "file": "chest-press-s1.wav",
+      "durationMs": 12030,
       "assumes": {
-        "weightLbs": null,
-        "priorSetsPerformed": false,
+        "weightLbs": 120.0,
+        "priorSetsPerformed": true,
         "configOrder": false,
         "unpaired": false
       }
     },
     {
-      "exId": "leg-press",
+      "exId": "chest-press",
       "set": 2,
-      "file": "leg-press-s2.wav",
-      "durationMs": 9800,
+      "file": "chest-press-s2.wav",
+      "durationMs": 5660,
       "assumes": {
         "weightLbs": null,
         "priorSetsPerformed": false,
@@ -29,10 +29,10 @@
       }
     },
     {
-      "exId": "leg-press",
+      "exId": "chest-press",
       "set": 3,
-      "file": "leg-press-s3.wav",
-      "durationMs": 8500,
+      "file": "chest-press-s3.wav",
+      "durationMs": 5080,
       "assumes": {
         "weightLbs": null,
         "priorSetsPerformed": false,
@@ -41,10 +41,10 @@
       }
     },
     {
-      "exId": "leg-press",
+      "exId": "chest-press",
       "set": 4,
-      "file": "leg-press-s4.wav",
-      "durationMs": 12700,
+      "file": "chest-press-s4.wav",
+      "durationMs": 10320,
       "assumes": {
         "weightLbs": null,
         "priorSetsPerformed": true,
@@ -53,22 +53,22 @@
       }
     },
     {
-      "exId": "leg-press-calf-raises",
+      "exId": "cable-rope-row",
       "set": 1,
-      "file": "leg-press-calf-raises-s1.wav",
-      "durationMs": 13580,
+      "file": "cable-rope-row-s1.wav",
+      "durationMs": 10390,
       "assumes": {
-        "weightLbs": null,
+        "weightLbs": 120.0,
         "priorSetsPerformed": false,
         "configOrder": false,
         "unpaired": false
       }
     },
     {
-      "exId": "leg-press-calf-raises",
+      "exId": "cable-rope-row",
       "set": 2,
-      "file": "leg-press-calf-raises-s2.wav",
-      "durationMs": 8550,
+      "file": "cable-rope-row-s2.wav",
+      "durationMs": 6030,
       "assumes": {
         "weightLbs": null,
         "priorSetsPerformed": false,
@@ -77,70 +77,58 @@
       }
     },
     {
-      "exId": "leg-press-calf-raises",
+      "exId": "cable-rope-row",
       "set": 3,
-      "file": "leg-press-calf-raises-s3.wav",
-      "durationMs": 11980,
+      "file": "cable-rope-row-s3.wav",
+      "durationMs": 4770,
       "assumes": {
         "weightLbs": null,
-        "priorSetsPerformed": true,
+        "priorSetsPerformed": false,
         "configOrder": false,
         "unpaired": false
       }
     },
     {
-      "exId": "lying-leg-curl",
+      "exId": "cable-rope-row",
+      "set": 4,
+      "file": "cable-rope-row-s4.wav",
+      "durationMs": 5370,
+      "assumes": {
+        "weightLbs": null,
+        "priorSetsPerformed": false,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "cable-rope-row",
+      "set": 5,
+      "file": "cable-rope-row-s5.wav",
+      "durationMs": 9300,
+      "assumes": {
+        "weightLbs": null,
+        "priorSetsPerformed": false,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "incline-press",
       "set": 1,
-      "file": "lying-leg-curl-s1.wav",
-      "durationMs": 12980,
-      "assumes": {
-        "weightLbs": 40.0,
-        "priorSetsPerformed": false,
-        "configOrder": false,
-        "unpaired": false
-      }
-    },
-    {
-      "exId": "lying-leg-curl",
-      "set": 2,
-      "file": "lying-leg-curl-s2.wav",
-      "durationMs": 8520,
-      "assumes": {
-        "weightLbs": null,
-        "priorSetsPerformed": false,
-        "configOrder": false,
-        "unpaired": false
-      }
-    },
-    {
-      "exId": "lying-leg-curl",
-      "set": 3,
-      "file": "lying-leg-curl-s3.wav",
-      "durationMs": 10250,
-      "assumes": {
-        "weightLbs": null,
-        "priorSetsPerformed": false,
-        "configOrder": false,
-        "unpaired": false
-      }
-    },
-    {
-      "exId": "leg-extension",
-      "set": 1,
-      "file": "leg-extension-s1.wav",
-      "durationMs": 11200,
+      "file": "incline-press-s1.wav",
+      "durationMs": 13130,
       "assumes": {
         "weightLbs": 70.0,
-        "priorSetsPerformed": true,
+        "priorSetsPerformed": false,
         "configOrder": false,
         "unpaired": false
       }
     },
     {
-      "exId": "leg-extension",
+      "exId": "incline-press",
       "set": 2,
-      "file": "leg-extension-s2.wav",
-      "durationMs": 6100,
+      "file": "incline-press-s2.wav",
+      "durationMs": 12320,
       "assumes": {
         "weightLbs": null,
         "priorSetsPerformed": false,
@@ -149,34 +137,118 @@
       }
     },
     {
-      "exId": "leg-extension",
-      "set": 3,
-      "file": "leg-extension-s3.wav",
-      "durationMs": 9850,
-      "assumes": {
-        "weightLbs": null,
-        "priorSetsPerformed": true,
-        "configOrder": false,
-        "unpaired": false
-      }
-    },
-    {
-      "exId": "cable-face-pulls",
+      "exId": "cable-tricep-pushdown",
       "set": 1,
-      "file": "cable-face-pulls-s1.wav",
-      "durationMs": 9100,
+      "file": "cable-tricep-pushdown-s1.wav",
+      "durationMs": 10840,
       "assumes": {
         "weightLbs": 25.0,
+        "priorSetsPerformed": true,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "cable-tricep-pushdown",
+      "set": 2,
+      "file": "cable-tricep-pushdown-s2.wav",
+      "durationMs": 5590,
+      "assumes": {
+        "weightLbs": null,
         "priorSetsPerformed": false,
         "configOrder": false,
         "unpaired": false
       }
     },
     {
-      "exId": "cable-face-pulls",
+      "exId": "cable-tricep-pushdown",
+      "set": 3,
+      "file": "cable-tricep-pushdown-s3.wav",
+      "durationMs": 12450,
+      "assumes": {
+        "weightLbs": null,
+        "priorSetsPerformed": true,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "db-lateral-raise",
+      "set": 1,
+      "file": "db-lateral-raise-s1.wav",
+      "durationMs": 11110,
+      "assumes": {
+        "weightLbs": 15.0,
+        "priorSetsPerformed": false,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "db-lateral-raise",
       "set": 2,
-      "file": "cable-face-pulls-s2.wav",
-      "durationMs": 7940,
+      "file": "db-lateral-raise-s2.wav",
+      "durationMs": 3710,
+      "assumes": {
+        "weightLbs": null,
+        "priorSetsPerformed": false,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "db-lateral-raise",
+      "set": 3,
+      "file": "db-lateral-raise-s3.wav",
+      "durationMs": 4580,
+      "assumes": {
+        "weightLbs": null,
+        "priorSetsPerformed": false,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "db-lateral-raise",
+      "set": 4,
+      "file": "db-lateral-raise-s4.wav",
+      "durationMs": 11520,
+      "assumes": {
+        "weightLbs": null,
+        "priorSetsPerformed": true,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "db-curls",
+      "set": 1,
+      "file": "db-curls-s1.wav",
+      "durationMs": 14280,
+      "assumes": {
+        "weightLbs": null,
+        "priorSetsPerformed": false,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "db-curls",
+      "set": 2,
+      "file": "db-curls-s2.wav",
+      "durationMs": 12740,
+      "assumes": {
+        "weightLbs": null,
+        "priorSetsPerformed": false,
+        "configOrder": false,
+        "unpaired": false
+      }
+    },
+    {
+      "exId": "db-curls",
+      "set": 3,
+      "file": "db-curls-s3.wav",
+      "durationMs": 11860,
       "assumes": {
         "weightLbs": null,
         "priorSetsPerformed": false,
