@@ -2141,28 +2141,23 @@ function startAudioKeepalive() {
     } catch(e) {}
   }, 15000);
 }
-function playAlertSound() {
-  try {
-    recoverAudioCtx();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    [0, 0.22].forEach(offset => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, now + offset);
-      gain.gain.setValueAtTime(0.0001, now + offset);
-      gain.gain.exponentialRampToValueAtTime(0.4, now + offset + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18);
-      osc.start(now + offset);
-      osc.stop(now + offset + 0.2);
-    });
-  } catch (e) {}
-}
+// THE DOUBLE 880Hz "BEEP BEEP" IS GONE (2026-08-09). Soren: "the final beep of
+// the halo reach thing is completely cut off by the original finish beep beep.
+// So get rid of that beep beep beep."
+//
+// It was the v1 rest-over alert and it was never retired when the tone
+// countdown landed. Measured on this build: two 200ms sine blips at t0+3ms and
+// t0+223ms, gain-ramped to 0.4 -- landing exactly on sfx/go.wav, whose audible
+// span is t0+10ms..t0+310ms and whose peak is 0.222. Louder than the go signal,
+// covering the go signal, and saying the same thing twice.
+//
+// THE GO TONE IS THE GO SIGNAL. There is nothing to replace this with, and a
+// synthesized beep must never be re-added here. triggerAlertFeedback() stays as
+// the named hook for its 3 call sites -- the visual startFlash() alert is
+// untouched, and this is where a haptic would go if one is ever wanted.
 function triggerAlertFeedback() {
-  playAlertSound();
+  recoverAudioCtx();   // the deleted playAlertSound() was this hook's only caller
+  // Audio-free by design -- see above.
 }
 
 // ============ §8 VOICE CUES ============
@@ -2239,6 +2234,14 @@ const VoiceCue = (() => {
   let initialized = false;
   let unlocked = false;
   let currentSources = [];
+  // Tones handed to the audio clock by scheduleCountdownTail() (the 3 ticks +
+  // the GO). They are NOT announcements: at t-0 the GO tone is still ringing
+  // when restDone() fires the rest-end sequence, and playSequence() opens by
+  // cancelling. Holding them in currentSources meant that sweep chopped the
+  // 403ms GO off at ~20-40ms -- "the final beep of the halo reach thing is
+  // completely cut off". cancel() still kills these; playSequence() no longer
+  // does.
+  let scheduledSources = [];
   let currentChain = null;
   // Bumped by cancel(). An in-flight play() awaiting decode/resume captures
   // the generation at entry and bails if it changed -- without this, a clip
@@ -2369,25 +2372,35 @@ const VoiceCue = (() => {
       source.connect(gain);
       gain.connect(audioCtx.destination);
       source.onended = () => {
-        const idx = currentSources.findIndex(e => e.src === source);
-        if (idx >= 0) currentSources.splice(idx, 1);
+        const idx = scheduledSources.findIndex(e => e.src === source);
+        if (idx >= 0) scheduledSources.splice(idx, 1);
       };
-      currentSources.push({ src: source, gain: gain });
+      scheduledSources.push({ src: source, gain: gain });
       source.start(Math.max(when, audioCtx.currentTime));
       return true;
     } catch (e) { return false; }
   }
 
-  function playSequence(names, gapMs) {
+  function playSequence(names, gapMs, leadMs) {
     if (!settings.voice) return Promise.resolve();
     if (gapMs == null) gapMs = 80;
-    cancel();
+    // NOT cancel(): the countdown tail is not a stale announcement, it is the
+    // countdown, and at t-0 its GO tone is mid-ring. This is the fix for the
+    // truncated final beep.
+    cancelAnnouncements();
     const chain = { cancelled: false };
     currentChain = chain;
+    // leadMs holds the FIRST clip back. Used at t-0, where the GO tone is
+    // already ringing off the audio clock and is logically the head of this
+    // sequence -- without it the set-position clip starts ~3ms after GO and
+    // talks straight over the tone this patch just made audible. The wait sits
+    // inside the same chain, so chain.cancelled / playGen already make a stale
+    // delayed cue impossible.
+    const head = leadMs ? new Promise(r => setTimeout(r, leadMs)) : Promise.resolve();
     return names.reduce((p, name) => p.then(() => {
       if (chain.cancelled) return;
       return play(name).then(() => new Promise(r => setTimeout(r, gapMs)));
-    }), Promise.resolve());
+    }), head);
   }
 
   // THE CLICK. Stopping a BufferSource mid-word cuts the waveform at whatever
@@ -2397,12 +2410,9 @@ const VoiceCue = (() => {
   // else. Ramp the gain to silence over ~18ms and stop AFTER it lands. Short
   // enough to still feel instant, long enough that there is no step.
   const CANCEL_FADE_S = 0.018;
-  function cancel() {
-    playGen++;
-    if (currentChain) currentChain.cancelled = true;
-    currentChain = null;
+  function fadeOutAndStop(list) {
     const now = (audioCtx && audioCtx.currentTime) || 0;
-    currentSources.forEach(entry => {
+    list.forEach(entry => {
       const src = entry.src || entry;
       const g = entry.gain;
       try {
@@ -2424,7 +2434,25 @@ const VoiceCue = (() => {
       // would cut the sound exactly the way this is trying to avoid.
       setTimeout(() => { try { src.disconnect(); } catch (e) {} }, CANCEL_FADE_S * 1000 + 40);
     });
+  }
+  // ANNOUNCEMENTS only. The pre-scheduled countdown tail survives this, which
+  // is the whole point: playSequence() calls it, and at t-0 restDone() fires
+  // the rest-end sequence while the GO tone is still ringing.
+  function cancelAnnouncements() {
+    playGen++;
+    if (currentChain) currentChain.cancelled = true;
+    currentChain = null;
+    fadeOutAndStop(currentSources);
     currentSources = [];
+  }
+  // cancel() is UNCHANGED for every external caller -- still "silence
+  // everything". Deliberate: dropScheduledTail, pauseRest, skipRest, focus
+  // change, the voice toggle, settings reset and workout-complete all call it
+  // and all still need the scheduled tail dead.
+  function cancel() {
+    cancelAnnouncements();
+    fadeOutAndStop(scheduledSources);
+    scheduledSources = [];
   }
 
   // Called by recoverAudioCtx() after a fresh AudioContext is built. Decoded
@@ -2690,12 +2718,22 @@ function restEndCueSeq() {
 }
 // Play now if audio is live, else queue for the first real gesture (a cue
 // fired with no user gesture since tab-return would silent-fail and be lost).
-function playOrQueue(seq) {
+function playOrQueue(seq, leadMs) {
   if (audioCtx && audioCtx.state === 'running') {
-    VoiceCue.playSequence(seq);
+    VoiceCue.playSequence(seq, null, leadMs);
   } else {
     pendingPostGestureCues.push(seq);
   }
+}
+// How long to hold the rest-end sequence back so the pre-scheduled GO tone can
+// ring out. 0 on any path that did NOT pre-schedule it (a restore into an
+// already-expired rest, a tab-return catch-up) -- there restEndCueSeq() still
+// leads with SFX_GO and playSequence orders it itself. sfx/go.wav is 403ms
+// long (measured); 420 clears it. Same test restEndCueSeq() uses to decide
+// whether GO is already on the clock, so the two can never disagree.
+const GO_TONE_MS = 420;
+function restEndLeadMs() {
+  return (countdownTailKey === (focusExId + ":" + (readyAt[focusExId] || 0))) ? GO_TONE_MS : 0;
 }
 
 // ============ §8.5 BESPOKE DAILY LINES ============
@@ -3628,7 +3666,7 @@ function applyState(notesValue) {
       triggerAlertFeedback();
       // Restored into an already-expired rest: no user gesture yet, so a
       // play now would silent-fail -- queue for the first real tap.
-      playOrQueue(restEndCueSeq());
+      playOrQueue(restEndCueSeq(), restEndLeadMs());
     } else {
       renderExercise();
       elTimer.textContent = formatTime(remaining);
@@ -3989,7 +4027,7 @@ function restDone() {
   // If we landed here from visibilitychange with the context still suspended
   // (no gesture since tab-return), a play now would silent-fail and the cue
   // would be lost -- queue for the gesture-recovery drain instead.
-  playOrQueue(restEndCueSeq());
+  playOrQueue(restEndCueSeq(), restEndLeadMs());
   requestAnimationFrame(() => {
     triggerAlertFeedback();
     saveState();
