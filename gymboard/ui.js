@@ -71,7 +71,23 @@ import {
   normalizeTrackTitle,
 } from './logic.js';
 
+// v9.4: the workout-PAUSE reads come in through a NAMESPACE import, never a named
+// one, for the same reason data.js documents at its own logic.js import. sw.js is
+// stale-while-revalidate and caches each asset INDEPENDENTLY, so a refresh that
+// lands a new ui.js but not a new logic.js is a normal outcome. A missing NAMED
+// export is a hard module-instantiation error -> white screen for someone who did
+// nothing wrong; a namespace lookup is just `undefined`, so pausedOn() falls back to
+// "nobody is paused" for that ONE load and self-heals on the next.
+// NOTE for future edits: never move workoutsPausedOn up into the named import block
+// above just because it looks tidier.
+import * as L from './logic.js';
 import * as data from './data.js';
+
+// Guarded pause predicate — the ONLY way ui.js asks "was this person excused that
+// day". Returns false rather than throwing when logic.js is a stale cached copy.
+function pausedOn(subject, dateKey) {
+  return typeof L.workoutsPausedOn === 'function' ? L.workoutsPausedOn(subject, dateKey) === true : false;
+}
 
 // ---- defaults (the businessDate FUNCTION already takes tz+rollover params, so
 //      per-user values from each subject's own doc ALWAYS win when present). ----
@@ -242,6 +258,14 @@ const elMxClose = $('mx-close');
 const elMeWorkout = $('me-workout');
 const elMeWType = $('me-wtype'); // workout-type picker (ME today card)
 const elMeRestday = $('me-restday'); // "make today a rest day" toggle
+// v9.4 workout-pause controls. All four are looked up with $() and every use is
+// null-guarded, so an older cached index.html (sw.js caches assets independently)
+// just renders without them instead of throwing.
+const elMePauseBanner = $('me-workout-paused'); // TODAY-zone "you are paused" notice
+const elMePauseBannerTxt = $('me-workout-paused-txt');
+const elMePauseResume = $('me-workout-resume'); // the banner's inline resume action
+const elMePauseToggle = $('me-pause-workouts'); // SETTINGS card toggle
+const elMePauseStatus = $('me-pause-status'); // SETTINGS card "paused since ..." line
 const elMeWeight = $('me-weight');
 const elMeLogWeight = $('me-log-weight');
 const elMeRestdays = $('me-restdays');
@@ -432,6 +456,10 @@ function subjectOf(member) {
     rolloverMinute: Number.isFinite(member.rolloverMinute) ? member.rolloverMinute : DEFAULT_ROLLOVER_M,
     restPattern: Array.isArray(member.restPattern) ? member.restPattern : [],
     perDateOverrides: member.perDateOverrides || {},
+    // v9.4: workout-pause ranges (illness/injury). Carried onto the subject so
+    // logic.missed / computeStreak / computeCompliance all see it without any
+    // signature change — they already take the subject.
+    workoutPauses: Array.isArray(member.workoutPauses) ? member.workoutPauses : [],
     profile: member.profile || {},
     // v3: nutrition auto-check needs the goal direction + goal numbers, which live
     // on the public /users doc. Carried here so classifyDay's signature is unchanged.
@@ -521,6 +549,9 @@ function classifyDay(subject, dateKey, now, day) {
   const trained = !!(day && day.workout === true);
   const off = !!(day && day.off === true);
 
+  // v9.4: is this day inside one of the subject's workout-pause ranges?
+  const paused = pausedOn(subject, dateKey);
+
   let wStatus;
   if (trained) {
     wStatus = 'done'; // workout on a rest day is still just 'done' (no bonus in v2)
@@ -528,6 +559,14 @@ function classifyDay(subject, dateKey, now, day) {
     wStatus = 'off';
   } else if (rest) {
     wStatus = 'rest';
+  } else if (paused) {
+    // v9.4: AFTER rest/off on purpose. A scheduled rest day that also falls inside a
+    // pause keeps reading 'rest' (the more specific, already-understood label), and a
+    // workout logged during a pause still wins above and paints green. This branch
+    // must sit BEFORE missed(): missed() already returns false for a paused day, so
+    // without it the cell would silently fall through to 'pending' — which is exactly
+    // the blank-looking half-cell this state exists to avoid.
+    wStatus = 'paused';
   } else if (missed(subject, dateKey, now, day)) {
     // missed() is the SINGLE source of truth here — it encodes isPast against the
     // subject's own clock, the joinDate gate, and the brand-new-user fail-safe.
@@ -564,6 +603,7 @@ const CELL_LABEL = {
   missed: 'missed',
   rest: 'rest',
   off: 'rest', // v4 (#1): off renders + reads identically to rest
+  paused: 'paused', // v9.4: workout tracking paused (illness / injury)
   pending: 'pending',
   prejoin: 'pre-join',
 };
@@ -648,13 +688,19 @@ function headStackHtml(member, now, viewerBiz) {
   }
   const wPct = comp && comp.workout ? comp.workout.percent : null;
   const compNone = wPct == null;
-  const pctText = compNone ? '—' : `${wPct}%`;
+  // v9.4: once a pause has consumed the whole 30d window there are no scheduled
+  // training days left, so the % is legitimately null. Rendering a bare "—" there
+  // reads as "broken / no data" about a person who is fine and eating — say the
+  // actual reason instead. The % still wins whenever one exists (a partially-paused
+  // window carries real data and must not be hidden behind a badge).
+  const pausedNow = pausedOn(subject, viewerBiz);
+  const pctText = compNone ? (pausedNow ? 'paused' : '—') : `${wPct}%`;
   const streakGlyph =
     streak > 0
       ? `<span class="gh-streak" aria-label="streak ${streak}"><span class="gh-streak-pip" aria-hidden="true"></span>${streak}</span>`
       : '';
   parts.push(
-    `<span class="gh-compliance${compNone ? ' none' : ''}" aria-label="workout compliance ${compNone ? 'not enough data' : wPct + ' percent'} over 30 days">` +
+    `<span class="gh-compliance${compNone ? ' none' : ''}" aria-label="workout compliance ${compNone ? (pausedNow ? 'paused' : 'not enough data') : wPct + ' percent'} over 30 days">` +
       `${pctText}${streakGlyph}</span>`
   );
 
@@ -826,7 +872,14 @@ function renderGrid(now) {
   // Legend (v4 #11): at the TOP now, with a labeled mini-cell DIAGRAM (top=workout /
   // bottom=nutrition) plus the color key. Off is merged into rest (#1); nutrition is
   // NEVER red, and the "missed = workout only" note makes that explicit.
-  if (!elGridLegend.dataset.built) {
+  // v9.4: the PAUSED chip is emitted ONLY while someone visible on the board is
+  // actually paused right now. Legend width is tight at 375px and a permanent 4th
+  // chip would cost every group that never uses the feature. The build cache key
+  // carries the flag, so the legend rebuilds the moment that changes (a bare
+  // `dataset.built` would have frozen the 3-chip version forever).
+  const anyPaused = cols.some((m) => pausedOn(subjectOf(m), today));
+  const legendKey = anyPaused ? 'v9.4-paused' : 'v9.4';
+  if (elGridLegend.dataset.built !== legendKey) {
     // v4.5: one clean row. A single example cell whose TOP half is the workout and BOTTOM
     // half is the nutrition (labeled right beside it), then a compact color key.
     elGridLegend.innerHTML =
@@ -838,8 +891,9 @@ function renderGrid(now) {
         `<span class="lgchip"><span class="lgsw lg-done"></span>done</span>` +
         `<span class="lgchip"><span class="lgsw lg-missed"></span>missed</span>` +
         `<span class="lgchip"><span class="lgsw lg-rest"></span>rest</span>` +
+        (anyPaused ? `<span class="lgchip"><span class="lgsw lg-paused"></span>paused</span>` : '') +
       `</span>`;
-    elGridLegend.dataset.built = '1';
+    elGridLegend.dataset.built = legendKey;
   }
 
   // v4 (#3): the weight-over-time chart shares this repaint (it lives below the grid on
@@ -2719,6 +2773,10 @@ function renderMe(now) {
     elMeRestday.textContent = off ? 'Today is a rest day ✓' : 'Make today a rest day';
   }
 
+  // v9.4 workout-pause: the TODAY banner + the SETTINGS card, both driven off the
+  // SAME predicate the grid paints with, so the two can never disagree.
+  renderWorkoutPause(me, cur);
+
   // weight quick-log input (don't stomp a field being edited).
   if (elMeWeight && document.activeElement !== elMeWeight) {
     const w = (weightsByUser.get(myUserId) || {})[cur];
@@ -2998,6 +3056,57 @@ function renderRestDays(member) {
     const wd = Number(btn.dataset.wd);
     btn.classList.toggle('rest', active.has(wd));
   }
+}
+
+// v9.4: the owner's workout-pause ranges, defensively normalized. The board reads
+// this straight off the public /users doc, and rules cannot type-check list ELEMENTS
+// (same posture as restPattern/savedMeals), so never assume the shape.
+function workoutPausesOf(member) {
+  return member && Array.isArray(member.workoutPauses) ? member.workoutPauses : [];
+}
+
+// The currently-OPEN pause range (to == null/undefined), or null. Deliberately the
+// same open-test logic.js uses, so "am I paused" has exactly one definition.
+function openPauseOf(member) {
+  const list = workoutPausesOf(member);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const r = list[i];
+    if (!r || typeof r !== 'object' || !isDayKey(r.from)) continue;
+    if (r.to === null || r.to === undefined) return r;
+  }
+  return null;
+}
+
+// Render BOTH pause surfaces: the always-visible TODAY banner and the SETTINGS card.
+// `cur` is the owner's current business-date.
+function renderWorkoutPause(member, cur) {
+  const open = openPauseOf(member);
+  const since = open ? open.from : null;
+  const sinceTxt = since ? `${fmtDateShort(since)}` : '';
+
+  if (elMePauseBanner) {
+    elMePauseBanner.classList.toggle('hidden', !open);
+    if (open && elMePauseBannerTxt) {
+      // Name the START DATE, not a day count: "paused since Aug 4" is checkable at a
+      // glance and does not silently drift, which is what makes a months-old forgotten
+      // pause noticeable instead of invisible.
+      elMePauseBannerTxt.textContent = `Workout tracking paused since ${sinceTxt}. Calories still count.`;
+    }
+  }
+
+  if (elMePauseToggle) {
+    elMePauseToggle.classList.toggle('neutral-on', !!open);
+    elMePauseToggle.textContent = open ? 'paused' : 'active';
+    elMePauseToggle.setAttribute('aria-pressed', open ? 'true' : 'false');
+  }
+  if (elMePauseStatus) {
+    elMePauseStatus.textContent = open
+      ? `Paused since ${sinceTxt}. Tap to resume — the days you were out stay excused, they will not turn red later.`
+      : 'Workouts are being tracked normally.';
+  }
+  // `cur` is accepted so a future revision can show "N days paused" without changing
+  // every call site; intentionally unused today (see the drift note above).
+  void cur;
 }
 
 function renderGoal(member) {
@@ -3490,6 +3599,39 @@ async function meToggleHideWeight() {
   }
 }
 
+// v9.4: flip the workout pause. `pause` starts an OPEN range at today; `resume`
+// closes it at yesterday (data.resumeWorkouts does that conversion), so the resume
+// day itself is live again.
+//
+// The local `me.workoutPauses` is updated from the list data.js actually WROTE, not
+// from a locally-guessed one — the two composers are idempotent and can legitimately
+// return the input unchanged (double-tap, already paused), and guessing would drift
+// the optimistic copy away from the doc until the next snapshot.
+async function meSetWorkoutPause(pause) {
+  const me = memberById(myUserId);
+  if (!me) return;
+  const subject = subjectOf(me);
+  const cur = currentBusinessDate(anchoredNow(), subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
+  try {
+    const next = pause
+      ? await data.pauseWorkouts(workoutPausesOf(me), cur)
+      : await data.resumeWorkouts(workoutPausesOf(me), cur);
+    me.workoutPauses = next;
+    renderMe(anchoredNow());
+    renderGrid(anchoredNow()); // cells + legend + the header % all change with it
+    toast(pause ? 'workouts paused — calories still tracked' : 'workouts tracking again');
+  } catch (err) {
+    handleWriteError(err);
+    renderMe(anchoredNow());
+  }
+}
+
+function meTogglePauseWorkouts() {
+  const me = memberById(myUserId);
+  if (!me) return;
+  meSetWorkoutPause(!openPauseOf(me));
+}
+
 async function meSaveSettings() {
   const me = memberById(myUserId);
   if (!me) return;
@@ -3520,7 +3662,11 @@ function handleWriteError(err) {
   // field/shape skew), and only data.js can tell them apart: it probes write-ownership
   // and fires data.onReclaimNeeded (-> showReclaim) ONLY on a confirmed takeover. Here
   // we just report the failed save; a real takeover surfaces the modal a beat later.
-  if (/bad-value|bad-date|bad-range/i.test(tag)) {
+  // v9.4: a stale cached logic.js is fixed by a reload, not by retyping anything -
+  // say so rather than sending the user round the 'try again' loop forever.
+  if (/stale-module/i.test(tag)) {
+    toast('app is mid-update — reload and try again');
+  } else if (/bad-value|bad-date|bad-range/i.test(tag)) {
     toast('check the value and try again');
   } else {
     toast('could not save — try again');
@@ -3576,6 +3722,10 @@ function wireMe() {
       if (btn) meSetType(btn.dataset.wtype);
     });
   if (elMeRestday) elMeRestday.addEventListener('click', meToggleRestToday);
+  // v9.4: two doors to the same flip - the SETTINGS toggle and the TODAY banner's
+  // inline `resume`. The banner one is resume-ONLY (it only exists while paused).
+  if (elMePauseToggle) elMePauseToggle.addEventListener('click', meTogglePauseWorkouts);
+  if (elMePauseResume) elMePauseResume.addEventListener('click', () => meSetWorkoutPause(false));
   // ---- TODAY: WEIGHT ----
   if (elMeLogWeight) elMeLogWeight.addEventListener('click', meLogWeight);
 
@@ -3900,7 +4050,13 @@ function buildDayPopBody(member, dateKey) {
 
   const lines = [];
   // v4 (#1): off reads as "rest" (off and rest converge).
-  const workoutVal = day.workout === true ? 'yes' : (day.off === true || isRestDay(subject.restPattern, subject.perDateOverrides, dateKey)) ? 'rest' : 'no';
+  // v9.4: 'paused' checked AFTER rest/off, matching classifyDay's branch order so the
+  // popover can never contradict the cell it was opened from.
+  const workoutVal =
+    day.workout === true ? 'yes'
+    : (day.off === true || isRestDay(subject.restPattern, subject.perDateOverrides, dateKey)) ? 'rest'
+    : pausedOn(subject, dateKey) ? 'paused'
+    : 'no';
   lines.push(line('Workout', workoutVal));
   if (day.workout === true && day.workoutType && WTYPE_LABEL[day.workoutType]) {
     lines.push(line('Type', WTYPE_LABEL[day.workoutType]));

@@ -136,6 +136,15 @@
             <div id="me-wtype" class="me-typepick"></div>
           </div>
 
+          <!-- v9.4: a paused person needs to SEE it without opening SETTINGS (which is
+               collapsed by default) - otherwise a pause set in August is silently still
+               on in November. Shown by ui.js only while a pause range is open. -->
+          <div id="me-workout-paused" class="me-paused-banner hidden">
+            <span class="me-paused-dot" aria-hidden="true"></span>
+            <span id="me-workout-paused-txt">Workout tracking is paused.</span>
+            <button id="me-workout-resume" class="me-textbtn" type="button">resume</button>
+          </div>
+
           <!-- ad-hoc rest day (surfaces the existing `off` flag) -->
           <div class="me-track-sep"></div>
           <button id="me-restday" class="me-restday-toggle" type="button">Make today a rest day</button>
@@ -153,7 +162,7 @@
         <div id="me-settings" class="me-settings collapsed">
           <button id="me-settings-toggle" class="me-settings-header" type="button" aria-expanded="false" aria-controls="me-settings-body">
             <span class="me-settings-label">⚙️ SETTINGS</span>
-            <span class="me-settings-sub">goal · rest days · quick meals · workout types · profile</span>
+            <span class="me-settings-sub">goal · rest days · pause · quick meals · workout types · profile</span>
             <span class="me-settings-caret" aria-hidden="true">▸</span>
           </button>
 
@@ -183,6 +192,17 @@
               <div class="me-card-title">REST DAYS</div>
               <div class="me-hint">Days you rest. Those never go red.</div>
               <div id="me-restdays" class="me-weekdays"></div>
+            </div>
+
+            <!-- v9.4 PAUSE WORKOUTS: a longer-run illness/injury amnesty. Distinct from
+                 REST DAYS (a recurring weekly shape) and from the ad-hoc one-day rest
+                 toggle above. Stored as RANGES, so recovering never retro-reds the
+                 days you were out. Nutrition tracking is untouched, by design. -->
+            <div class="me-card">
+              <div class="me-card-title">PAUSE WORKOUTS</div>
+              <div class="me-hint">Injured or sick for a while? Pause, and your workout squares stop going red. <strong>Calories and protein keep tracking normally.</strong></div>
+              <div class="me-row"><span class="me-label">Workout tracking</span><button id="me-pause-workouts" class="me-toggle" type="button">active</button></div>
+              <div id="me-pause-status" class="me-hint" style="margin-top:10px;margin-bottom:0;"></div>
             </div>
 
             <!-- QUICK MEALS manager (add / remove presets) -->

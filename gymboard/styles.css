@@ -58,6 +58,13 @@
   --st-off:var(--g3);       /* workout OFF — neutral + dash hint */
   --st-none:#202020;        /* nutrition past-not-hit — quiet gray (NEVER red) */
   --st-pending:#141414;     /* flat quiet fill for pending/empty cells (no hatch) */
+  /* v9.4: workout PAUSED (illness/injury) — a neutral slate that is deliberately
+     neither the rest GREEN nor the missed RED. It must read as "switched off on
+     purpose", not as "empty" and not as "excused-and-fine": a blank half-cell
+     reads as a rendering bug, and reusing the rest green would tell the group he
+     took 30 rest days. */
+  --st-paused:#39414d;
+  --st-paused-wash:#1b1f26;  /* banner fill behind the paused notice (matches --red-wash's role) */
   /* v3: the diagonal-divider + pending-hatch tokens are gone — cells are flat now. */
 }
 
@@ -78,6 +85,8 @@
   --st-done:#2f9e63; --st-done-bg:#dcf2e6; --st-bonus:#37b377;
   --st-missed:#d8443a; --st-rest:#c7ebd5; --st-off:var(--g3);
   --st-none:#e4e4e6; --st-pending:#ededef; --st-macrodot:#2f9e63;
+  --st-paused-wash:#eef0f4;
+  --st-paused:#c9cdd6; /* v9.4 paused — light slate; same "off on purpose" read */
   --wc-o1:#9a9a9e; --wc-o2:#76767a; --wc-o3:#54545a; --wc-o4:#88888c; --wc-o5:#646468;
 }
 
@@ -493,6 +502,9 @@ button:disabled { cursor:default; }
    (Data stays distinct: 'off' is ad-hoc, 'rest' is scheduled; only the paint converges.) */
 .gcell.w-off     { --w:var(--st-rest); }
 .gcell.w-pending { --w:var(--st-pending); }
+/* v9.4: workout PAUSED (illness/injury range). Neutral slate + a small "paused"
+   label, same treatment as rest so it can never read as blank/broken. */
+.gcell.w-paused  { --w:var(--st-paused); }
 .gcell.n-hit     { --n:var(--st-done); }
 .gcell.n-none    { --n:var(--st-none); }
 
@@ -520,6 +532,18 @@ button:disabled { cursor:default; }
 .gcell.n-pending { --n:var(--st-pending); }
 /* REST + OFF (v4 #1): both say "rest" in small letters, no diagonal/mark. */
 .gcell.w-rest .seg-w::after, .gcell.w-off .seg-w::after { content:'rest'; position:absolute; top:3px; left:3px; font-size:8px; font-weight:700; letter-spacing:.02em; color:var(--txt2); text-transform:lowercase; line-height:1; text-shadow:0 0 2px var(--g0), 0 0 2px var(--g0); }
+/* v9.4 PAUSED: same corner-label treatment as rest, but its own word so the two are
+   never confused. The label is REQUIRED, not decoration — an unlabeled neutral half
+   is indistinguishable from a broken cell.
+   ⚠️ 7px, NOT 8px like 'rest', and the margin is thin: .seg-w is clipped to the
+   upper-LEFT TRIANGLE, so the usable width shrinks as you go down the glyph box.
+   MEASURED (getBoundingClientRect + canvas measureText, both themes):
+     'paused' at 7px = 23.1px wide, ends at x=26.1
+     board cell at the 40px minmax floor -> x_max 30.0 at the label's baseline (3.9px spare)
+     MONTH cell at a 320px viewport (38.0px) -> x_max 28.0 (1.9px spare)
+   So 8px, a longer word, or any letter-spacing WILL clip on a small phone. Re-measure
+   before changing the size, the text, or the top/left offsets. */
+.gcell.w-paused .seg-w::after { content:'paused'; position:absolute; top:3px; left:3px; font-size:7px; font-weight:700; letter-spacing:0; color:var(--txt2); text-transform:lowercase; line-height:1; text-shadow:0 0 2px var(--g0), 0 0 2px var(--g0); }
 /* tiny dim corner tag for a typed workout — decoration only, never colored red. */
 .gcell-wtag {
   position:absolute; top:2.5px; left:3px; z-index:3;
@@ -780,6 +804,10 @@ button:disabled { cursor:default; }
 .lgsw.lg-done { background:var(--st-done); }
 .lgsw.lg-missed { background:var(--st-missed); }
 .lgsw.lg-rest { background:var(--st-rest); border:1px solid var(--etch); }
+/* v9.4: the PAUSED chip is emitted by ui.js ONLY while someone in the group is
+   actually paused, so the legend does not permanently grow a 4th chip for a state
+   nobody is in (legend real estate is tight at 375px). */
+.lgsw.lg-paused { background:var(--st-paused); border:1px solid var(--etch); }
 .leg { display:inline-flex; align-items:center; gap:3px; font-size:7.5px; letter-spacing:.03em; color:var(--txt3); text-transform:uppercase; }
 .leg-missed-note { font-size:8px; color:var(--txt3); opacity:.8; }
 
@@ -803,6 +831,7 @@ button:disabled { cursor:default; }
 .leg-cell.w-done { --w:var(--st-done); }
 .leg-cell.w-missed { --w:var(--st-missed); }
 .leg-cell.w-rest { --w:var(--st-rest); }
+.leg-cell.w-paused { --w:var(--st-paused); }
 .leg-cell.w-pending { --w:var(--st-pending); }
 .leg-cell.n-hit { --n:var(--st-done); }
 .leg-cell.n-none { --n:var(--st-none); }
@@ -1073,6 +1102,28 @@ button:disabled { cursor:default; }
 .me-restday-toggle.on { background:var(--g4); border-color:var(--etch); color:var(--txt); }
 .me-restday-toggle:active { transform:scale(.99); }
 .me-restday-hint { margin-top:8px; margin-bottom:0; }
+
+/* v9.4: the WORKOUT-PAUSED banner on the always-visible TODAY zone. Uses the neutral
+   --st-paused slate, never red — being ill is not a failure state and this app's red
+   means "you skipped". It carries its own `resume` action so ending a pause never
+   requires digging into the collapsed SETTINGS block. */
+.me-paused-banner {
+  display:flex; align-items:center; gap:8px; margin-top:10px;
+  padding:9px 11px; border-radius:var(--r-sm);
+  background:var(--st-paused-wash);
+  border:1px solid var(--st-paused);
+  font-size:11px; font-weight:700; letter-spacing:.03em; color:var(--txt2);
+}
+.me-paused-banner.hidden { display:none; }
+/* The inline `resume` action. .me-textbtn's base padding is 6px 0 2px, which measured
+   a 37x16 hit box here — far under a usable phone tap target. Give it real horizontal
+   padding and a 32px min-height so it is actually tappable; measured 44x32 after. */
+.me-paused-banner .me-textbtn {
+  margin-left:auto; margin-bottom:0; padding:0 6px; min-height:32px;
+  display:inline-flex; align-items:center; flex:0 0 auto;
+  color:var(--txt); text-decoration:underline;
+}
+.me-paused-dot { width:8px; height:8px; border-radius:2px; background:var(--st-paused); flex:0 0 auto; }
 
 /* ============================================================================
    v3.1 ME — TWO-ZONE LAYOUT (TODAY daily logging vs collapsible SETTINGS).

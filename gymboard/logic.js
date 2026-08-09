@@ -222,6 +222,127 @@ export function isRestDay(restPattern, perDateOverrides, dateKey) {
   return restFromPattern;
 }
 
+// ---- workout pauses: illness / injury amnesty, stored as RANGES (v9.4) -------
+
+/**
+ * workoutsPausedOn(subject, dateKey) -> boolean
+ *
+ * True when `dateKey` falls inside one of the subject's workout-pause ranges.
+ * A paused day is excused on the WORKOUT axis only: it never reds, it never
+ * breaks a streak, and it leaves the workout denominator. NUTRITION is
+ * deliberately untouched — the whole point of a pause is "I can't train right
+ * now but I'm still eating and still want that tracked."
+ *
+ *   subject.workoutPauses : Array<{ from:'YYYY-MM-DD', to:'YYYY-MM-DD'|null }>
+ *
+ * WHY RANGES AND NOT A BOOLEAN. A bare `workoutsPaused:true` has to be flipped
+ * back on recovery, and the instant it flips every day of the illness re-enters
+ * missed() and turns red at once — the exact outcome the feature exists to
+ * prevent. A CLOSED range excuses its days permanently, so recovering is free.
+ *
+ * Range semantics:
+ *   - `from` is INCLUSIVE. Days strictly before it are untouched: pausing today
+ *     never retro-excuses last week.
+ *   - `to === null`, or the key absent, means OPEN (paused from `from` onward).
+ *   - `to` a day-key means CLOSED and INCLUSIVE on both ends.
+ *   - Ranges are independent; any match wins. Gaps between them stay live.
+ *
+ * FAIL-CLOSED on malformed input, and that direction is deliberate. An entry
+ * with an unparseable `from` or a `to` that is neither null nor a day-key is
+ * SKIPPED, not read as open-forever. Reading junk as "paused forever" would
+ * silently switch off someone's accountability with no visible cause and
+ * nothing to notice; skipping it lets days go red, which someone sees and
+ * fixes. Prefer the loud failure. (A null/garbage array ELEMENT is skipped the
+ * same way, so one bad element cannot poison the scan.)
+ *
+ * Pure: no clock, no Firebase, no DOM.
+ */
+export function workoutsPausedOn(subject, dateKey) {
+  if (!isDayKey(dateKey)) return false;
+  const ranges = subject && subject.workoutPauses;
+  if (!Array.isArray(ranges)) return false;
+  for (const r of ranges) {
+    if (!r || typeof r !== 'object') continue;
+    if (!isDayKey(r.from)) continue;
+    if (dateKey < r.from) continue; // before this range opened
+    const to = r.to;
+    if (to === null || to === undefined) return true; // OPEN range
+    if (!isDayKey(to)) continue; // malformed close -> skip (fail closed)
+    if (dateKey <= to) return true; // inside a CLOSED range (inclusive)
+  }
+  return false;
+}
+
+// Index of the newest OPEN range in a pause list, or -1. "Open" is the same
+// null/undefined test workoutsPausedOn uses, so the two can never disagree about
+// whether someone is currently paused.
+function openPauseIndex(list) {
+  if (!Array.isArray(list)) return -1;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const r = list[i];
+    if (!r || typeof r !== 'object' || !isDayKey(r.from)) continue;
+    if (r.to === null || r.to === undefined) return i;
+  }
+  return -1;
+}
+
+/**
+ * withWorkoutPause(list, fromKey) -> new list
+ *
+ * Append an OPEN pause range starting at `fromKey` (normally the person's
+ * current business-date, so today stops reading as pending immediately).
+ *
+ * IDEMPOTENT: if a range is already open the list comes back unchanged, so a
+ * double-tap or a replayed offline write can never produce two open ranges (two
+ * open ranges would make "when did the pause start" ambiguous, and closing one
+ * would leave the other silently pausing forever).
+ *
+ * Pure + non-mutating: returns a new array; the input is never touched.
+ * Throws TypeError on a bad `fromKey` — a junk date must not reach the doc.
+ */
+export function withWorkoutPause(list, fromKey) {
+  if (!isDayKey(fromKey)) {
+    throw new TypeError(`withWorkoutPause: not a YYYY-MM-DD key: ${fromKey}`);
+  }
+  const base = Array.isArray(list) ? list : [];
+  if (openPauseIndex(base) >= 0) return base.slice(); // already paused: no-op
+  return base.concat([{ from: fromKey, to: null }]);
+}
+
+/**
+ * withWorkoutResume(list, lastPausedKey) -> new list
+ *
+ * Close the newest OPEN range at `lastPausedKey`, INCLUSIVE — so
+ * `lastPausedKey` is the final excused day and the day after it is back on the
+ * hook. Callers that think in terms of "the first day I'm accountable again"
+ * must pass prevBusinessDate(thatDay); data.js does exactly that.
+ *
+ * No-op when nothing is open (already resumed / never paused), so a double-tap
+ * is safe.
+ *
+ * ZERO-LENGTH PAUSES ARE DROPPED, not clamped: if `lastPausedKey` is earlier
+ * than the range's `from` (pause and un-pause on the same day), the range
+ * covered no days at all, and leaving a `to < from` husk in the doc would be
+ * permanent junk that every future reader has to reason about.
+ *
+ * Pure + non-mutating. Throws TypeError on a bad `lastPausedKey`.
+ */
+export function withWorkoutResume(list, lastPausedKey) {
+  if (!isDayKey(lastPausedKey)) {
+    throw new TypeError(`withWorkoutResume: not a YYYY-MM-DD key: ${lastPausedKey}`);
+  }
+  const base = Array.isArray(list) ? list : [];
+  const i = openPauseIndex(base);
+  if (i < 0) return base.slice(); // nothing open: no-op
+  const next = base.slice();
+  if (lastPausedKey < next[i].from) {
+    next.splice(i, 1); // covered zero days -> drop the entry entirely
+    return next;
+  }
+  next[i] = { ...next[i], to: lastPausedKey };
+  return next;
+}
+
 // ---- the missed predicate (computed on read, never stored) -------------------
 
 /**
@@ -246,9 +367,10 @@ function rollover(subject) {
 /**
  * missed(subject, dateKey, nowInstant, day)
  *
- * DESIGN's predicate, all five conjuncts:
+ * DESIGN's predicate, all six conjuncts (v9.4 added the pause one):
  *   missed =  isPast(D, S)               // D strictly before S's CURRENT bizdate
  *         AND not isRestDay(S, D)        // pattern-at-D then perDateOverrides[D]
+ *         AND not workoutsPausedOn(S, D) // illness/injury amnesty range
  *         AND not day.workout
  *         AND not day.off
  *         AND D >= S.profile.joinDate    // pre-join days never red
@@ -284,6 +406,12 @@ export function missed(subject, dateKey, nowInstant, day) {
   // rest days are never missed.
   if (isRestDay(subject.restPattern, subject.perDateOverrides, dateKey)) return false;
 
+  // v9.4: workouts paused (illness / injury) — the whole range is excused, and it
+  // STAYS excused after the person recovers because the range is closed, not
+  // cleared. This sits beside the rest-day conjunct on purpose: both answer "was
+  // this person on the hook to train that day", and neither touches nutrition.
+  if (workoutsPausedOn(subject, dateKey)) return false;
+
   // a logged workout or an OFF flag clears it.
   if (day && day.workout === true) return false;
   if (day && day.off === true) return false;
@@ -298,9 +426,15 @@ export function missed(subject, dateKey, nowInstant, day) {
  *
  * Per-person streak = consecutive NON-MISSED business-dates ending at the most
  * recent decided day. A day counts (preserves the streak) if it is NOT missed:
- * trained, rest, OFF, bonus, and pre-join all preserve it; ONLY a missed day
- * breaks it (resets to 0). Current/future days are never missed, so a pending
- * today never breaks the streak.
+ * trained, rest, OFF, v9.4 PAUSED, bonus, and pre-join all preserve it; ONLY a
+ * missed day breaks it (resets to 0). Current/future days are never missed, so a
+ * pending today never breaks the streak.
+ *
+ * v9.4 note: paused days come through missed() with no change needed here, and
+ * they INCREMENT the streak rather than freezing it — identical to how rest days
+ * and OFF days already behave. So an illness does not reset a streak; it grows it
+ * slowly. That is the established semantic of this counter (it counts days you
+ * were not on the hook and didn't blow it), not an oversight.
  *
  * daysMap: { [dateKey]: DayEntry } — the subject's authoritative /days docs.
  *          The board RECOMPUTES this on read (a viewer's recompute wins over any
@@ -398,9 +532,16 @@ export function groupConsistency(allMembersDays, weekKey, nowInstant) {
       const off = !!(day && day.off === true);
       const trained = !!(day && day.workout === true);
 
-      if (rest || off) {
-        // rest/OFF days are excluded from the denominator. A workout on one is a
-        // BONUS — counts in neither numerator nor denominator, surfaced separately.
+      // v9.4: a WORKOUT PAUSE excuses the day here too. groupConsistency builds its
+      // own denominator rather than calling missed(), so it does NOT inherit the
+      // pause conjunct automatically — without this line an ill member would drag
+      // the whole group's hero % down for weeks. (Nutrition is not part of this
+      // stat, so the computeCompliance asymmetry has no analogue here.)
+      const paused = workoutsPausedOn(subject, D);
+      if (rest || off || paused) {
+        // rest/OFF/paused days are excluded from the denominator. A workout on one
+        // is a BONUS — counts in neither numerator nor denominator, surfaced
+        // separately.
         if (trained) bonus += 1;
         continue;
       }
@@ -811,13 +952,18 @@ export function dayTotalsAfterMeals(day, nextMeals) {
  * windowDays PAST decided business-dates via prevBusinessDate (never raw ms).
  * Stop early once a date is before joinDate (pre-join is out of scope).
  *
- * WORKOUT %: rest/off days are NOT scheduled training days -> excluded from BOTH
- *   numerator and denominator (a workout on one is a bonus, ignored — mirrors
- *   groupConsistency). Every other in-window past non-prejoin day is expected;
- *   completed when day.workout === true. completed <= expected by construction.
+ * WORKOUT %: rest/off days AND v9.4 PAUSED days are NOT scheduled training days
+ *   -> excluded from BOTH numerator and denominator (a workout on one is a bonus,
+ *   ignored — mirrors groupConsistency). Every other in-window past non-prejoin day
+ *   is expected; completed when day.workout === true. completed <= expected by
+ *   construction. A window that is entirely paused yields expected 0 -> percent
+ *   null -> the caller renders "—", which is the honest reading.
  *
  * NUTRITION %: nutrition is expected on EVERY in-window past non-prejoin day
- *   (you eat on rest days too). completed when nutritionStatus(...isPast:true)
+ *   (you eat on rest days too). v9.4: a WORKOUT pause does NOT reduce this
+ *   denominator — being unable to train is not being unable to eat, and blanking
+ *   the nutrition % during an illness is exactly what the feature must not do.
+ *   completed when nutritionStatus(...isPast:true)
  *   === 'hit' for the subject's mode/goals. Unset goals honestly yield low % —
  *   intentional, not special-cased. v9: each day is judged against its OWN
  *   snapshotted goal (nutritionGoalOpts), falling back to the live goal for
@@ -860,10 +1006,25 @@ export function computeCompliance(daysMap, subject, nowInstant, opts = {}) {
     // walk starts at yesterday). rest/off are skipped here, mirroring the workout side.
     const rest = isRestDay(subject.restPattern, subject.perDateOverrides, cursor);
     const off = !!(day && day.off === true);
+    // v9.4: a WORKOUT PAUSE (illness / injury) removes the day from the workout
+    // denominator exactly the way rest/off do — it is not a scheduled training day.
+    // It is NOT counted as completed: faking a completion would inflate the % into
+    // a lie, and the number has to keep meaning "of the days that counted, how
+    // often you hit". A workout logged during a pause is a bonus and is ignored,
+    // mirroring the rest-day bonus treatment.
+    const paused = workoutsPausedOn(subject, cursor);
     if (!(rest || off)) {
-      wExpected += 1;
-      if (day && day.workout === true) wCompleted += 1;
+      if (!paused) {
+        wExpected += 1;
+        if (day && day.workout === true) wCompleted += 1;
+      }
 
+      // NUTRITION IS DELIBERATELY *NOT* GATED ON `paused`, and this asymmetry is
+      // the point of the feature. A pause says "I can't train", not "I stopped
+      // eating" — dropping paused days from this denominator would blank the
+      // person's nutrition % (expected 0 -> percent null -> the board renders "—")
+      // for the entire illness, which is the opposite of "he can still track cals".
+      // rest/off stay excluded here as before; only `paused` diverges.
       nExpected += 1;
       // v9: judge the day against its own snapshotted goal (else the live one) —
       // the same precedence classifyDay paints the cell with (nutritionGoalOpts).

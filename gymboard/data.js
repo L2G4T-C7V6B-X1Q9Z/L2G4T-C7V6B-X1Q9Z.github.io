@@ -1841,6 +1841,123 @@ export async function setRestPattern(pattern) {
   await updateOwnUser({ restPattern: pattern }, 'setRestPattern');
 }
 
+// v9.4 WORKOUT PAUSES -- illness / injury amnesty, stored as RANGES on the owner doc.
+//
+//   workoutPauses: [{ from:'YYYY-MM-DD', to:'YYYY-MM-DD'|null }, ...]
+//
+// Ranges, not a boolean: a boolean has to be flipped back on recovery, and the
+// instant it flips every day of the illness re-enters logic.missed() and reds at
+// once. A CLOSED range excuses its days permanently, so recovering costs nothing.
+//
+// Matches the rule's workoutPauses.size() <= 50 cap. Rules cannot iterate a list,
+// so per-ELEMENT shape is CLIENT-trusted here (same posture as restPattern and
+// savedMeals); these validators are the front line for it.
+const MAX_WORKOUT_PAUSES = 50;
+
+// Validate + normalize a whole pause list before it can reach Firestore. Returns a
+// clean copy. Keeps ONLY {from, to} so a stray key can never ride along onto the
+// group-readable doc.
+function cleanWorkoutPauses(list, caller) {
+  if (!Array.isArray(list)) {
+    throw taggedError('gymboard/bad-value', `${caller}: workoutPauses must be an array.`);
+  }
+  if (list.length > MAX_WORKOUT_PAUSES) {
+    throw taggedError('gymboard/bad-value', `${caller}: too many pause ranges (max ${MAX_WORKOUT_PAUSES}).`);
+  }
+  let open = 0;
+  const clean = list.map((r, i) => {
+    if (!r || typeof r !== 'object') {
+      throw taggedError('gymboard/bad-value', `${caller}: pause ${i} is not an object.`);
+    }
+    if (!isDayKey(r.from)) {
+      throw taggedError('gymboard/bad-date', `${caller}: pause ${i} has a bad from ${r.from}.`);
+    }
+    const openHere = r.to === null || r.to === undefined;
+    if (!openHere && !isDayKey(r.to)) {
+      throw taggedError('gymboard/bad-date', `${caller}: pause ${i} has a bad to ${r.to}.`);
+    }
+    if (!openHere && r.to < r.from) {
+      throw taggedError('gymboard/bad-date', `${caller}: pause ${i} ends before it starts.`);
+    }
+    if (openHere) open += 1;
+    return { from: r.from, to: openHere ? null : r.to };
+  });
+  // At most ONE open range, ever. Two open ranges make "when did the pause start"
+  // ambiguous, and closing one would leave the other silently pausing forever.
+  if (open > 1) {
+    throw taggedError('gymboard/bad-value', `${caller}: more than one open pause range.`);
+  }
+  return clean;
+}
+
+/**
+ * setWorkoutPauses(list) -> Promise<void>
+ *
+ * Replace the owner's whole workout-pause list. The primitive behind
+ * pauseWorkouts/resumeWorkouts; call those instead unless you are repairing a doc.
+ * This is a SETTING, so it does NOT bump lastActiveAt (consistent with
+ * setGoal/setRollover/setRestPattern).
+ */
+export async function setWorkoutPauses(list) {
+  const clean = cleanWorkoutPauses(list, 'setWorkoutPauses');
+  await updateOwnUser({ workoutPauses: clean }, 'setWorkoutPauses');
+}
+
+/**
+ * pauseWorkouts(currentList, fromDateKey) -> Promise<Array>
+ *
+ * Start a pause. `fromDateKey` is the FIRST excused day and should be the owner's
+ * current business-date, so today stops reading as pending immediately.
+ *
+ * `currentList` comes from the caller (the live /users snapshot), matching the
+ * addSavedMeal/setRestPattern posture: the client composes the new list and hands
+ * it in whole. Idempotent -- pausing while already paused writes nothing new.
+ * Returns the list that was written so the caller can update its local copy.
+ */
+export async function pauseWorkouts(currentList, fromDateKey) {
+  if (!isDayKey(fromDateKey)) {
+    throw taggedError('gymboard/bad-date', `pauseWorkouts: bad date ${fromDateKey}.`);
+  }
+  const base = Array.isArray(currentList) ? currentList : [];
+  if (base.length >= MAX_WORKOUT_PAUSES) {
+    throw taggedError('gymboard/bad-value', `pauseWorkouts: too many pause ranges (max ${MAX_WORKOUT_PAUSES}).`);
+  }
+  // logic.* via the NAMESPACE import on purpose (see the import note at the top):
+  // a stale cached logic.js yields undefined here instead of a boot-killing
+  // missing-named-export, so the worst case is one degraded load, not a white screen.
+  if (typeof logic.withWorkoutPause !== 'function') {
+    throw taggedError('gymboard/stale-module', 'pauseWorkouts: logic.js is stale, reload the app.');
+  }
+  const next = cleanWorkoutPauses(logic.withWorkoutPause(base, fromDateKey), 'pauseWorkouts');
+  await updateOwnUser({ workoutPauses: next }, 'pauseWorkouts');
+  return next;
+}
+
+/**
+ * resumeWorkouts(currentList, resumeOnDateKey) -> Promise<Array>
+ *
+ * End the open pause. `resumeOnDateKey` is the FIRST DAY BACK ON THE HOOK (normally
+ * the owner's current business-date), NOT the last excused day -- this function
+ * closes the range at prevBusinessDate(resumeOnDateKey) so the resume day itself is
+ * live again. Callers pass "today" and mean "I'm training again from today".
+ *
+ * Idempotent when nothing is open. Pausing and resuming on the SAME day drops the
+ * range entirely (it covered no days). Returns the list that was written.
+ */
+export async function resumeWorkouts(currentList, resumeOnDateKey) {
+  if (!isDayKey(resumeOnDateKey)) {
+    throw taggedError('gymboard/bad-date', `resumeWorkouts: bad date ${resumeOnDateKey}.`);
+  }
+  const base = Array.isArray(currentList) ? currentList : [];
+  if (typeof logic.withWorkoutResume !== 'function' || typeof logic.prevBusinessDate !== 'function') {
+    throw taggedError('gymboard/stale-module', 'resumeWorkouts: logic.js is stale, reload the app.');
+  }
+  const lastPaused = logic.prevBusinessDate(resumeOnDateKey);
+  const next = cleanWorkoutPauses(logic.withWorkoutResume(base, lastPaused), 'resumeWorkouts');
+  await updateOwnUser({ workoutPauses: next }, 'resumeWorkouts');
+  return next;
+}
+
 const MAX_SAVED_MEALS = 20; // matches the rule's savedMeals.size() <= 20 cap.
 
 /**
