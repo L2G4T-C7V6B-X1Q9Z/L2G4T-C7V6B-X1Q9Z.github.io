@@ -866,6 +866,17 @@ body.dragging-exercise {
 .setting-row:last-child { border-bottom: none; }
 .setting-label { font-size: 13px; color: #dddad4; font-weight: 600; letter-spacing: 0.3px; }
 .setting-sub { font-size: 10px; color: var(--ink-3); margin-top: 2px; letter-spacing: 0.5px; }
+.boost-step { display: flex; align-items: center; gap: 10px; flex: none; }
+.boost-step button {
+  width: 30px; height: 30px; border-radius: 8px; font-size: 17px; line-height: 1;
+  background: var(--surface-2); color: var(--ink); border: 1px solid var(--hair);
+  padding: 0; cursor: pointer;
+}
+.boost-step button:active { background: var(--red); border-color: var(--red); }
+.boost-step span {
+  min-width: 30px; text-align: center; font-weight: 700; font-size: 13px;
+  color: var(--ink); font-variant-numeric: tabular-nums;
+}
 .toggle {
   width: 44px;
   height: 24px;
@@ -1301,6 +1312,17 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
       </div>
       <div class="toggle" id="toggle-voice" role="switch"></div>
     </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Voice volume vs music</div>
+        <div class="setting-sub" id="boost-sub">0 dB &middot; unchanged</div>
+      </div>
+      <div class="boost-step">
+        <button type="button" id="boost-down" aria-label="Quieter">&minus;</button>
+        <span id="boost-val">0</span>
+        <button type="button" id="boost-up" aria-label="Louder">+</button>
+      </div>
+    </div>
     <button class="modal-close danger" id="settings-reset">Reset Workout</button>
     <button class="modal-close" id="settings-close">Close</button>
   </div>
@@ -1658,8 +1680,23 @@ const defaultSettings = {
   voice: true,
   // Soren 7/5: no UP NEXT countdown between exercises -- the walk to the next
   // machine IS the rest. Ships ON (his call); the settings toggle turns it off.
-  skipExerciseRest: true
+  skipExerciseRest: true,
+  // VOICE BOOST, dB (2026-08-10, item 10: "very hard to hear, especially over
+  // any music").
+  //
+  // Measured, not guessed: the generic bank and the nightly lines are already
+  // matched to each other at -18.07 dB K-RMS, so the lines are NOT quieter than
+  // the clips. The whole cue mix sits near -20 LUFS integrated, while streaming
+  // services normalise playback to roughly -14, so every cue runs several dB
+  // under the music and the scripted lines lose first because they are the
+  // longest and carry the most new information.
+  //
+  // SHIPS AT 0 = OFF, deliberately. Raising it changes every sound the timer
+  // makes, and he cannot audition that before a session -- so the mechanism
+  // ships and the choice stays his, one tap in Settings, mid-workout if he wants.
+  voiceBoostDb: 0
 };
+const VOICE_BOOST_MAX = 10;
 let settings = { ...defaultSettings };
 function loadSettings() {
   try {
@@ -2308,6 +2345,64 @@ const VoiceCue = (() => {
     arrayBuffers.forEach((ab, name) => decodeIfReady(name));
   }
 
+  // ---- THE VOICE BUS (item 10) ----
+  //
+  // Every clip used to connect straight to audioCtx.destination at unity, so
+  // there was no single place to raise the cue mix and nothing stopping a raised
+  // one from clipping. Now: source -> per-clip gain (the 6ms attack ramp and the
+  // cancel fade, unchanged) -> voiceBus -> soft limiter -> destination.
+  //
+  // The limiter is a WaveShaper running y = tanh(G*x), NOT a DynamicsCompressor.
+  // A compressor applies automatic makeup gain that the spec leaves
+  // implementation-defined, so its realized output would have to be measured on
+  // every engine and trusted between releases. tanh is a pure function with two
+  // properties I can state exactly and assert:
+  //
+  //   small-signal gain  = G          (d/dx tanh(Gx) at x=0 is exactly G)
+  //   ceiling            = tanh(G)    (< 1 for all finite G, so it CANNOT clip)
+  //
+  // At G = 2 (+6 dB): speech body near -18.5 dBFS passes within 0.2 dB of ideal,
+  // and the hottest clip in the bank (true peak -1.26 dBFS) lands at -0.55 dBFS
+  // instead of the +4.7 it would need to clip. Tones ride the same bus, so the
+  // countdown keeps its relationship to the voice.
+  //
+  // At 0 dB the shaper is bypassed entirely rather than run at G=1, because
+  // tanh(x) is not the identity -- it would quietly soften every peak and cost
+  // about 0.7 dB on the body. "Off" has to mean untouched.
+  let voiceBus = null, voiceBusGen = -1;
+  const VOICE_CURVE_N = 4096;
+  function softClipCurve(g) {
+    const c = new Float32Array(VOICE_CURVE_N);
+    for (let i = 0; i < VOICE_CURVE_N; i++) {
+      c[i] = Math.tanh(g * ((i * 2) / (VOICE_CURVE_N - 1) - 1));
+    }
+    return c;
+  }
+  function voiceOut() {
+    if (!audioCtx) return null;
+    const boost = Math.max(0, Math.min(VOICE_BOOST_MAX, +settings.voiceBoostDb || 0));
+    if (voiceBus && voiceBusGen === _ctxGen && voiceBus._boost === boost) return voiceBus;
+    try {
+      const bus = audioCtx.createGain();
+      bus.gain.value = 1;              // the boost lives in the curve, not here
+      bus._boost = boost;
+      if (boost > 0) {
+        const shaper = audioCtx.createWaveShaper();
+        shaper.oversample = '4x';
+        shaper.curve = softClipCurve(Math.pow(10, boost / 20));
+        bus.connect(shaper);
+        shaper.connect(audioCtx.destination);
+      } else {
+        bus.connect(audioCtx.destination);
+      }
+      voiceBus = bus;
+      voiceBusGen = _ctxGen;
+      return bus;
+    } catch (e) {
+      return null;                     // fall back to the destination
+    }
+  }
+
   async function play(name) {
     if (!settings.voice) return;
     recoverAudioCtx();
@@ -2351,7 +2446,7 @@ const VoiceCue = (() => {
         try { if ('audioSession' in navigator) navigator.audioSession.type = 'ambient'; } catch(e) {}
         source.buffer = buffer;
         source.connect(gain);
-        gain.connect(audioCtx.destination);
+        gain.connect(voiceOut() || audioCtx.destination);
         source.onended = () => {
           const idx = currentSources.findIndex(e => e.src === source);
           if (idx >= 0) currentSources.splice(idx, 1);
@@ -2378,7 +2473,7 @@ const VoiceCue = (() => {
       gain.gain.value = 1.0;
       source.buffer = buffer;
       source.connect(gain);
-      gain.connect(audioCtx.destination);
+      gain.connect(voiceOut() || audioCtx.destination);
       source.onended = () => {
         const idx = scheduledSources.findIndex(e => e.src === source);
         if (idx >= 0) scheduledSources.splice(idx, 1);
@@ -2468,6 +2563,7 @@ const VoiceCue = (() => {
   // unlocked stays true (the user gesture already happened).
   function _afterContextRecreated() {
     decodedBuffers.clear();
+    voiceBus = null; voiceBusGen = -1;   // nodes belong to the dead context
     cancel();
     arrayBuffers.forEach((ab, name) => decodeIfReady(name));
   }
@@ -2495,6 +2591,11 @@ const VoiceCue = (() => {
     });
   }
   return { init, unlock, play, playAt, playSequence, cancel, _afterContextRecreated, status, register,
+           // Exported ONLY so the selftest can measure the real curve instead of
+           // a second copy of the formula. A duplicated implementation is how
+           // numbers_in shipped a weaker parser than the one it was documented
+           // to delegate to; the test has to hold the same object the audio does.
+           _softClipCurve: softClipCurve,
            files: () => FILES.slice(),
            has: (name) => decodedBuffers.has(name) || arrayBuffers.has(name) };
 })();
@@ -2878,6 +2979,33 @@ function maybeFireBespokeLine(exId, remainingMs) {
   }
   if (!bespokeEpisode.armed || bespokeEpisode.fired || !bespokeEpisode.entry) return;
   if (remainingMs > bespokeEpisode.entry.durationMs + LINE_LEAD_OUT_MS) return;
+
+  // RE-VALIDATE AT FIRE TIME (2026-08-10).
+  //
+  // The entry was chosen when the episode began, which can be two and a half
+  // minutes earlier, and everything it was chosen against stays editable for the
+  // whole rest. The reachable path: he taps Set Done with whatever the dial read,
+  // then corrects the reps or the effort during the rest. That edit can fire the
+  // auto-drop, which moves effectiveWeight to the backoff -- and the line armed
+  // at the top of the rest still names the prescribed weight.
+  //
+  // It would then play a confident voice naming a weight the screen is no longer
+  // showing, which is precisely the failure every gate in this file exists to
+  // prevent. Selecting once and trusting it for minutes quietly opted out of all
+  // of them.
+  //
+  // Re-select instead of re-checking: with branching variants live, the honest
+  // answer after a drop is usually a DIFFERENT entry, not silence.
+  const live = bespokeLineFor(exId, ord);
+  if (live !== bespokeEpisode.entry) {
+    bespokeEpisode.fired = true;              // this episode is spent either way
+    if (!live) return;                        // nothing true left to say
+    // A replacement only plays if it still fits the window it has to end inside.
+    // A longer one would run into the lift, which is the one thing the backward
+    // scheduling exists to stop.
+    if (remainingMs < live.durationMs + LINE_LEAD_OUT_MS) return;
+    bespokeEpisode.entry = live;
+  }
   bespokeEpisode.fired = true;
   // Chime first, then the line. If the line is missing the chime still fires --
   // fail closed means silence instead of wrongness, not silence instead of
@@ -4938,6 +5066,37 @@ elSettingsReset.addEventListener("click", () => {
 elSettingsModal.addEventListener("click", (e) => {
   if (e.target === elSettingsModal) closeSettings();
 });
+// VOICE BOOST STEPPER. Changing it rebuilds the bus on the next clip (voiceOut
+// keys its cache on the boost value), so a change lands mid-workout with no
+// reload and without touching anything already scheduled.
+function renderBoost() {
+  const el = document.getElementById('boost-val');
+  const sub = document.getElementById('boost-sub');
+  const db = Math.max(0, Math.min(VOICE_BOOST_MAX, +settings.voiceBoostDb || 0));
+  if (el) el.textContent = db ? '+' + db : '0';
+  if (sub) sub.textContent = db
+    ? '+' + db + ' dB · cues lifted above the music'
+    : '0 dB · unchanged';
+}
+function stepBoost(delta) {
+  const now = Math.max(0, Math.min(VOICE_BOOST_MAX, +settings.voiceBoostDb || 0));
+  const next = Math.max(0, Math.min(VOICE_BOOST_MAX, now + delta));
+  if (next === now) return;
+  settings.voiceBoostDb = next;
+  saveSettings();
+  renderBoost();
+  // Speak something at the new level so the tap has an audible result -- a
+  // volume control you cannot hear yourself changing is guesswork.
+  VoiceCue.cancel();
+  VoiceCue.play('received');
+}
+{
+  const up = document.getElementById('boost-up');
+  const down = document.getElementById('boost-down');
+  if (up) up.addEventListener('click', () => stepBoost(1));
+  if (down) down.addEventListener('click', () => stepBoost(-1));
+  renderBoost();
+}
 elToggleAutoStart.addEventListener("click", () => {
   settings.autoStart = !settings.autoStart; saveSettings(); applySettingsToggles();
 });
@@ -6442,9 +6601,35 @@ function runSelfTest() {
       assert(hasArrivalLine(ex0.id) === false,
              "and reports false when the line would be suppressed, so the generic preamble stays");
 
+      // FIRE-TIME RE-VALIDATION. Arm a line, then change the world underneath it
+      // the way a mid-rest grade edit does, and check it does not still play.
+      clean();
+      readyAt = {}; readyPlanned = {};
+      dailyManifest = mkManifest({ weightLbs: w0 });
+      readyAt[ex0.id] = Date.now() + 150000;
+      bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+      maybeFireBespokeLine(ex0.id, 150000);
+      assert(bespokeEpisode.armed === true && bespokeEpisode.fired === false,
+             "the line arms at the top of the rest");
+      // Now the manifest's assumption stops being true, exactly as an auto-drop
+      // triggered by a corrected grade would make it stop being true.
+      dailyManifest = mkManifest({ weightLbs: w0 + 15 });
+      let firedStale = false;
+      const realSeqFT = VoiceCue.playSequence;
+      VoiceCue.playSequence = function (names) {
+        if ((names || []).some(n => String(n).indexOf('daily/') === 0)) firedStale = true;
+        return Promise.resolve();
+      };
+      try {
+        maybeFireBespokeLine(ex0.id, 7400 + LINE_LEAD_OUT_MS - 10);
+      } finally { VoiceCue.playSequence = realSeqFT; }
+      assert(firedStale === false,
+             "a line armed minutes ago does NOT play once its assumption stopped being true");
+
       // NO MANIFEST AT ALL = commit G behaviour, which is what makes this
       // commit stop-here-safe.
       clean();
+      readyAt = {}; readyPlanned = {};
       dailyManifest = null;
       assert(bespokeLineFor(ex0.id, 1) === null, "no manifest means no bespoke lines, no errors");
       const gseq = restEndCueSeq();
@@ -6726,6 +6911,80 @@ function runSelfTest() {
       }, 1400);
     })();
 
+    // ---- VOICE BUS CALIBRATION (item 10) ----
+    // The boost is a WaveShaper curve, so its realized gain is a property of
+    // arithmetic rather than of an engine's private makeup-gain policy. That is
+    // the whole reason a DynamicsCompressor was rejected -- but "it is just
+    // arithmetic" is still a claim, so render a known signal through a real
+    // graph and measure what comes out. Uses VoiceCue's own curve builder, never
+    // a second copy of the formula.
+    (function voiceBusCheck() {
+      if (typeof OfflineAudioContext === 'undefined') return;
+      const SR = 48000, N = 4800, G_DB = 6;
+      let octx;
+      try { octx = new OfflineAudioContext(1, N, SR); } catch (e) { return; }
+      const buf = octx.createBuffer(1, N, SR);
+      const ch = buf.getChannelData(0);
+      const amp = Math.pow(10, -18 / 20) * Math.SQRT2;   // -18 dBFS RMS sine
+      for (let i = 0; i < N; i++) ch[i] = amp * Math.sin(2 * Math.PI * 440 * i / SR);
+      const src = octx.createBufferSource(); src.buffer = buf;
+      const bus = octx.createGain(); bus.gain.value = 1;
+      const shaper = octx.createWaveShaper();
+      shaper.oversample = '4x';
+      shaper.curve = VoiceCue._softClipCurve(Math.pow(10, G_DB / 20));
+      src.connect(bus); bus.connect(shaper); shaper.connect(octx.destination);
+      src.start();
+      octx.startRendering().then(rendered => {
+        const out = rendered.getChannelData(0);
+        let sum = 0, peak = 0;
+        for (let i = 0; i < out.length; i++) { sum += out[i] * out[i]; peak = Math.max(peak, Math.abs(out[i])); }
+        const realized = 20 * Math.log10(Math.sqrt(sum / out.length) / (amp / Math.SQRT2));
+        const peakDb = 20 * Math.log10(peak || 1e-9);
+        // TWO KINDS OF CHECK, kept apart on purpose.
+        //
+        // The CURVE is mine and is exactly computable, so it is asserted
+        // exactly: it must never reach full scale (that is the no-clipping
+        // guarantee, and it is the property a naive linear gain violates), and
+        // its slope near zero must be the requested gain.
+        //
+        // The RENDER goes through WaveShaper's 4x oversampling, whose
+        // resampling filter I do not model. A first attempt asserted the render
+        // against a per-sample prediction and got the worst of both worlds: it
+        // failed the correct tanh curve by 0.18 dB and PASSED a linear
+        // clipping curve. So the render is only asked the robust questions.
+        const g = Math.pow(10, G_DB / 20);
+        const curve = VoiceCue._softClipCurve(g);
+        let cmax = 0, slopeOk = true;
+        for (let i = 0; i < curve.length; i++) cmax = Math.max(cmax, Math.abs(curve[i]));
+        const mid = curve.length >> 1;                    // x ~= 0
+        const dx = 2 / (curve.length - 1);
+        const slope = (curve[mid + 1] - curve[mid]) / dx;
+        slopeOk = Math.abs(slope - g) / g <= 0.01;
+        const curveOk = cmax < 1 && slopeOk;
+        const usefulOk = realized >= 4.5 && realized <= G_DB + 0.2;
+        const peakOk = peakDb <= -1;
+        const gainOk = curveOk;
+        const box3 = document.getElementById('selftest-overlay');
+        if (!box3) return;
+        const d3 = document.createElement('div');
+        const ok = gainOk && peakOk && usefulOk;
+        d3.style.cssText = 'margin-top:6px;padding-left:10px;border-left:2px solid ' +
+          (ok ? '#2a2a2e;color:#6a6a6e;' : '#e0584a;color:#e0584a;');
+        d3.textContent = 'voice bus "+' + G_DB + '": realized ' + realized.toFixed(2) +
+          ' dB, peak ' + peakDb.toFixed(2) + ' dBFS, curve ceiling ' + cmax.toFixed(4) +
+          (ok ? '' : '  <-- OUT OF SPEC' +
+            (curveOk ? '' : ' [curve can clip or has the wrong slope]') +
+            (usefulOk ? '' : ' [delivered lift outside 4.5..' + (G_DB + 0.2) + ' dB]') +
+            (peakOk ? '' : ' [peak too hot]'));
+        box3.appendChild(d3);
+        if (!ok) {
+          box3.setAttribute('data-selftest', 'FAIL');
+          const h3 = box3.firstChild;
+          if (h3) { h3.textContent = 'SELFTEST FAIL  (voice bus miscalibrated)'; h3.style.color = '#e0584a'; }
+        }
+      }).catch(() => {});
+    })();
+
     const want = dailyManifest.entries.map(e => e.file);
     const dead = want.filter(f => !played.has(f));
     const deadPaired = want.filter(f => !pairedPlayed.has(f));
@@ -6855,6 +7114,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-10 2B-upper v8S VOICE-REWRITE</div>
+<div class="build-stamp">prism &middot; 2026-08-10 2B-upper v8T VOICE-BUS</div>
 </body>
 </html>
