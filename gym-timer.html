@@ -2800,19 +2800,62 @@ function sessionDeviated() {
 // The line for this exact (exercise, set), or null. Every gate compares an
 // ASSUMED VALUE against the live one rather than trusting a bare flag, so the
 // question is "is this still true" instead of "was this thought to matter".
-function bespokeLineFor(exId, setOrd) {
-  if (!dailyManifest || dailyManifest.planHash !== planHash()) return null;
-  const e = dailyManifest.entries.find(x => x.exId === exId && x.set === setOrd);
-  if (!e || !e.assumes || !e.durationMs) return null;   // missing flags = suppress
+function bespokeEntryHolds(e, exId, setOrd) {
+  if (!e || !e.assumes || !e.durationMs) return false;  // missing flags = suppress
   const a = e.assumes;
   if (a.weightLbs != null) {
     const eff = effectiveWeight(exIdxOf(exId), setOrd - 1);
-    if (Number(eff.num) !== Number(a.weightLbs)) return null;   // an auto-drop fired
+    if (Number(eff.num) !== Number(a.weightLbs)) return false;  // an auto-drop fired
   }
-  if (a.configOrder && sessionDeviated()) return null;
-  if (a.unpaired && activePairOf(exId)) return null;
-  if (a.priorSetsPerformed && entriesOf(exId).some(x => x.kind === "skip")) return null;
-  return e;
+  if (a.configOrder && sessionDeviated()) return false;
+  if (a.unpaired && activePairOf(exId)) return false;
+  if (a.priorSetsPerformed && entriesOf(exId).some(x => x.kind === "skip")) return false;
+  // POSITION CLAIMS, gated live (2026-08-10). The openers now say where in the
+  // DAY he is -- "First up, Chest Press", "Cable Face Pulls. Last machine of the
+  // day" -- which fixes a line that announced the last exercise as though the
+  // session were starting. But a sentence about position is a statement that can
+  // become false, so it gets a gate like every other statement here.
+  //
+  // Each gate can only kill the one or two lines that make the claim; neither
+  // touches the rest of the bank. Both are missing-key-safe, so a bank generated
+  // before these existed leaves them undefined -> falsy -> inert.
+  if (a.sessionStart && ledger.length > 0) return false;
+  if (a.finalExercise &&
+      !boardOrder.filter(id => remainingOf(id) > 0).every(id => id === exId)) return false;
+  return true;
+}
+
+// How many conditions an entry actually commits to. Ordering only.
+function bespokeSpecificity(e) {
+  const a = (e && e.assumes) || {};
+  return (a.weightLbs != null ? 1 : 0) + (a.configOrder ? 1 : 0) +
+         (a.unpaired ? 1 : 0) + (a.priorSetsPerformed ? 1 : 0);
+}
+
+// BRANCHING LINES (Soren 2026-08-10, item 5): the manifest MAY carry more than
+// one entry for the same (exercise, set) -- a general line plus variants written
+// for a specific state, the obvious one being "the auto-drop fired, you are on
+// the backoff now".
+//
+// This is what the 8/9 session actually needed. Leg extension S3 ran at 50 after
+// a drop from 60, its one entry assumed 60, and the gate correctly killed it --
+// the only suppressed entry in all fifteen sets, and the silence he noticed. The
+// gate was not wrong; there was simply nothing else to say.
+//
+// Selection: keep the candidates whose recorded assumptions still hold, then take
+// the MOST SPECIFIC of those, so a line written for the drop beats a general line
+// that merely fails to contradict it. Ties break on manifest order, so it is
+// deterministic. With one entry per set -- every bank shipped to date -- this is
+// exactly the old behaviour, and with none holding it is still silence.
+function bespokeLineFor(exId, setOrd) {
+  if (!dailyManifest || dailyManifest.planHash !== planHash()) return null;
+  let best = null;
+  for (const e of dailyManifest.entries) {
+    if (e.exId !== exId || e.set !== setOrd) continue;
+    if (!bespokeEntryHolds(e, exId, setOrd)) continue;
+    if (!best || bespokeSpecificity(e) > bespokeSpecificity(best)) best = e;
+  }
+  return best;
 }
 
 // BACKWARD SCHEDULING. T=0 is the moment he lifts, so the line is placed by its
@@ -2869,7 +2912,27 @@ function arrivalCueSeq(exId) {
     // and a later countdown cannot replay the same line.
     bespokeEpisode = { key: exId + ":" + ord + ":" + (readyAt[exId] || 0),
                        entry: line, armed: false, fired: true };
-    return [SFX_CHIME, 'daily/' + line.file];
+    const seq = [SFX_CHIME, 'daily/' + line.file];
+    // THE WEIGHT BACKFILL (Soren 2026-08-10, item 2).
+    //
+    // `assumes.weightLbs == null` is the manifest's OWN statement that this line
+    // does not name a weight -- which is what happens when the word cap trims the
+    // fact out. Until now this path returned the line and nothing else, so on
+    // 2026-08-09 the opening 205 was spoken by neither channel: the line had lost
+    // it to the trim, and the line had replaced the crisp wgt- clip that would
+    // otherwise have said it.
+    //
+    // Fires ONLY when the line verifiably lacks the number, so it can never
+    // double-speak it. Placed AFTER the line, which also keeps it out of scope of
+    // his complaint about a generic clip stacked in FRONT of the custom one, and
+    // puts the number last -- right as he is pinning the stack.
+    if (line.assumes && line.assumes.weightLbs == null) {
+      if (ord === 1) seq.push(...weightClipsFor(ex));
+      // Same reasoning covers a freshly-materialized backoff, which this path
+      // has never announced at all (the resting paths do it independently).
+      seq.push(...dropAnnounceClips(exIdxOf(exId), ord - 1));
+    }
+    return seq;
   }
   const seq = [];
   const clip = clipForExercise(ex);
@@ -2881,6 +2944,17 @@ function arrivalCueSeq(exId) {
   }
   seq.push(...dropAnnounceClips(exIdxOf(exId), ord - 1));
   return seq;
+}
+
+// Will arrivalCueSeq() speak a scripted line for this machine? Asked BEFORE the
+// sequence is built, so the callers can drop the generic preamble that would
+// otherwise sit in front of it. Deliberately not "sniff seq[0] for the chime":
+// that couples every caller to the sequence's shape, and the shape now varies
+// (the weight backfill appends). bespokeLineFor is pure, so asking twice is free.
+function hasArrivalLine(exId) {
+  const ex = exById(exId);
+  if (!ex || remainingOf(exId) <= 0) return false;
+  return isReady(exId) && !!bespokeLineFor(exId, nextSetOf(exId));
 }
 
 // Where the line would start, in remaining-ms, or null when none is armed.
@@ -3783,7 +3857,16 @@ function startWorkout() {
   const startClip = dayType.toLowerCase().includes("upper") ? 'start-upper' : 'start-lower';
   // The day cue, then whatever the first machine has to say -- its scripted S1
   // line if one survives the gates, else the generic name/weight/reps cues.
-  const seq = [startClip].concat(arrivalCueSeq(focusExId));
+  //
+  // When the scripted line plays, the day cue is DROPPED: the opener says the
+  // day type itself ("Starting the day on Chest Press Machine. Upper day."), so
+  // keeping start-upper would announce it twice in two different voices, which
+  // is the back-to-back stacking he asked to be rid of. It cannot disagree with
+  // the config either, since planHash already killed any bank built for another
+  // day. No line -> the day cue stays, exactly as before.
+  const seq = hasArrivalLine(focusExId)
+    ? arrivalCueSeq(focusExId)
+    : [startClip].concat(arrivalCueSeq(focusExId));
   if (seq.length) VoiceCue.playSequence(seq);
 }
 
@@ -3884,12 +3967,25 @@ function setDone() {
 
   const nextFocus = advanceFocusFrom(finishedExId);
   if (nextFocus === null) {
+    // AUTO-FINISH (Soren 2026-08-10): the last set of the last exercise IS the
+    // end of the workout, so the Finish tap was asking him to confirm something
+    // he had already decided. enterFinishing() still runs first -- it is what
+    // clears the countdown interval, which finishWorkout() does not do.
+    //
+    // Two things depend on this running INSIDE the Set Done tap, and both keep
+    // working because it does: the summary's clipboard auto-copy needs transient
+    // activation, and the closing cues need a user gesture to be audible.
+    //
+    // The cost, and it is real: the finishing screen used to leave the log area
+    // open so the just-logged last set could still be corrected. It cannot be
+    // now -- reps and effort are whatever the dial read at the tap.
     enterFinishing();
     if (bankedTrigger) pulseTriggerHit(finishedExId);
-    VoiceCue.playSequence(bankedTrigger
-      ? ['received', 'cue-trigger-hit', 'final-set-logged']
-      : ['received', 'final-set-logged']);
-    requestAnimationFrame(() => { saveState(); });
+    finishWorkout(bankedTrigger
+      ? ['received', 'cue-trigger-hit', 'final-set-logged', 'workout-complete']
+      : ['received', 'final-set-logged', 'workout-complete']);
+    // NO saveState() here. finishWorkout() clears the saved state on purpose;
+    // a queued save would write it straight back and restore into a dead screen.
     return;
   }
 
@@ -3930,9 +4026,29 @@ function setDone() {
     {
       // A pair hop leaves the finished exercise unfinished, so no
       // 'exercise-complete' -- keep the cue tight.
-      const seq = (pairHop || !switchingExercise) ? ['received'] : ['received', 'exercise-complete'];
+      //
+      // THIS IS THE BACK-TO-BACK PATH (Soren 2026-08-10, item 9). With no rest
+      // between machines, the generic navigation clips land immediately before
+      // the scripted line: 'received | exercise-complete | up-next | chime |
+      // line', two voices in a row saying overlapping things. When a line plays,
+      // it is now the sole narrator -- its opener names the machine and states
+      // the position ("Over to Incline Press", "Cable Face Pulls. Last machine of
+      // the day"), so 'exercise-complete', 'up-next' and 'final-exercise' are
+      // pure double-speak in a second voice.
+      //
+      // 'received' STAYS. It is not narration, it is the sub-second confirmation
+      // that his tap registered, and it is uniform across every tap in the
+      // session -- cutting it only on these transitions would make those taps
+      // feel dropped. 'cue-trigger-hit' stays too: it is about the set he just
+      // banked, and no line carries it.
+      //
+      // On the generic fallback path nothing changes, so every one of these
+      // clips is still live and still doing its job.
+      const lineArrival = hasArrivalLine(nextFocus);
+      const seq = (pairHop || !switchingExercise || lineArrival)
+        ? ['received'] : ['received', 'exercise-complete'];
       if (bankedTrigger) seq.splice(1, 0, 'cue-trigger-hit');
-      if (switchingExercise) seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
+      if (switchingExercise && !lineArrival) seq.push(isFinalExercise ? 'final-exercise' : 'up-next');
       // Then the machine's own line (or the generic name/weight cues).
       seq.push(...arrivalCueSeq(nextFocus));
       VoiceCue.playSequence(seq);
@@ -4155,7 +4271,12 @@ function acknowledgeAlert() {
   saveState();
 }
 
-function finishWorkout() {
+// cueSeq lets the caller supply the whole closing announcement instead of the
+// bare 'workout-complete'. The auto-finish path (setDone on the last set of the
+// last exercise) uses it so the set-logged cues and the workout-complete cue are
+// ONE sequence -- built separately they would race, since this function opens by
+// cancelling whatever is in flight.
+function finishWorkout(cueSeq) {
   cancelRestNotif();
   releaseWakeLock();
   captureLog();
@@ -4198,7 +4319,7 @@ function finishWorkout() {
   try { localStorage.removeItem("gym-timer-state"); } catch(e) {}
   VoiceCue.cancel();
   pendingPostGestureCues.length = 0;
-  VoiceCue.play('workout-complete');
+  VoiceCue.playSequence(cueSeq || ['workout-complete']);
   if (_audioKeepaliveInterval) {
     clearInterval(_audioKeepaliveInterval);
     _audioKeepaliveInterval = null;
@@ -5803,6 +5924,46 @@ function runSelfTest() {
       });
       assert(totalRemaining() === 0 && advanceFocusFrom(LP.id) === null,
              "with nothing left anywhere, focus advance returns null -> finishing");
+
+      // AUTO-FINISH (Soren 2026-08-10): the last Set Done of the last exercise
+      // ends the workout outright. finishWorkout() is stubbed rather than run --
+      // the real one hides half the DOM and clears the saved state, which would
+      // poison every assert after this one. What is being tested is that setDone
+      // CALLS it, and that the closing cues arrive as ONE sequence: built
+      // separately they race, because finishWorkout opens by cancelling.
+      {
+        const sL = ledger.map(e => ({ ...e })), sSeq = ledgerSeq, sFocus = focusExId;
+        const sState = state, sReady = { ...readyAt }, sPlanned = { ...readyPlanned };
+        const realFinish = finishWorkout;
+        let finishedWith = null;
+        finishWorkout = function (cueSeq) { finishedWith = cueSeq || ['workout-complete']; };
+        try {
+          ledger.length = 0; ledgerSeq = 0; readyAt = {}; readyPlanned = {};
+          const lastEx = workout[workout.length - 1];
+          workout.forEach(ex => {
+            const upto = (ex === lastEx) ? ex.sets - 1 : ex.sets;
+            for (let o = 1; o <= upto; o++) {
+              ledger.push({ kind: "skip", n: ++ledgerSeq, exId: ex.id, set: o, at: 1, reason: "user" });
+            }
+          });
+          focusExId = lastEx.id; view = null; state = "ready";
+          assert(nextSetOf(lastEx.id) === lastEx.sets && totalRemaining() === 1,
+                 "the harness really is standing on the last set of the last exercise");
+          setDone();
+          assert(finishedWith !== null,
+                 "the last Set Done finishes the workout - no second Finish tap");
+          assert(finishedWith && finishedWith.indexOf('workout-complete') >= 0,
+                 "the closing cue rides the SAME sequence as the set-logged cues");
+        } catch (e) {
+          assert(false, "auto-finish walk threw: " + (e && e.message));
+        } finally {
+          finishWorkout = realFinish;
+          ledger.length = 0; sL.forEach(e => ledger.push(e));
+          ledgerSeq = sSeq; focusExId = sFocus; state = sState; view = null;
+          readyAt = sReady; readyPlanned = sPlanned;
+          try { renderExercise(); } catch (e) {}
+        }
+      }
     }
 
     // --- 8. EXPLICIT PAIRS (spec 3) ---
@@ -6178,8 +6339,112 @@ function runSelfTest() {
              "a line is NOT started when the episode begins inside its own window");
       assert(bespokeEpisode.fired === false, "and it never fires");
 
+      // BRANCHING VARIANTS (item 5): more than one entry per (exercise, set).
+      // The failure this exists to fix is real and dated: on 2026-08-09 leg
+      // extension S3 ran at 50 after an auto-drop from 60, its single entry
+      // assumed 60, and it was the ONLY suppressed line in the whole session.
+      clean();
+      const mkVariants = (aList) => ({
+        planHash: planHash(), dayType: dayType, generatedAt: "test",
+        entries: aList.map((a, i) => ({
+          exId: ex0.id, set: 1, file: ex0.id + "-s1-v" + i + ".wav",
+          durationMs: 7400, assumes: a
+        }))
+      });
+      // General line listed FIRST so a win by the specific one cannot be an
+      // artifact of manifest order.
+      dailyManifest = mkVariants([{ weightLbs: null }, { weightLbs: w0 }]);
+      const bothLive = bespokeLineFor(ex0.id, 1);
+      assert(bothLive && bothLive.file.indexOf("-v1") > 0,
+             "with two live variants the MORE SPECIFIC one wins, not the first listed");
+
+      // The specific variant's assumption is false; the general one still holds.
+      // This is precisely the leg-extension case, and it used to be silence.
+      dailyManifest = mkVariants([{ weightLbs: null }, { weightLbs: w0 + 15 }]);
+      const fellBack = bespokeLineFor(ex0.id, 1);
+      assert(fellBack && fellBack.file.indexOf("-v0") > 0,
+             "a false specific variant falls back to the general line instead of going silent");
+      // Same case with the order REVERSED. This is the one that actually
+      // discriminates: a first-match-then-gate lookup returns the dead specific
+      // entry, fails its gate, and yields silence with a perfectly good line
+      // sitting one slot later in the manifest.
+      dailyManifest = mkVariants([{ weightLbs: w0 + 15 }, { weightLbs: null }]);
+      const fellBackRev = bespokeLineFor(ex0.id, 1);
+      assert(fellBackRev && fellBackRev.file.indexOf("-v1") > 0,
+             "the fallback does not depend on the general variant being listed first");
+
+      // Fail-closed has to survive branching, or the whole gate design is gone.
+      dailyManifest = mkVariants([{ weightLbs: w0 + 15 }, { weightLbs: w0 + 30 }]);
+      assert(bespokeLineFor(ex0.id, 1) === null,
+             "when NO variant holds it is still silence - fail closed survives branching");
+
+      // POSITION CLAIMS (2026-08-10). The openers now say where in the DAY he
+      // is, and a sentence about position can become false.
+      clean();
+      dailyManifest = mkManifest({ weightLbs: null, sessionStart: true });
+      assert(!!bespokeLineFor(ex0.id, 1),
+             '"first up" survives when literally nothing has been logged yet');
+      ledger.push({ kind: "skip", n: ++ledgerSeq, exId: workout[1].id, set: 1,
+                    at: 1, reason: "user" });
+      assert(bespokeLineFor(ex0.id, 1) === null,
+             '"first up" is suppressed once anything has happened this session');
+
+      clean();
+      const lastEx = workout[workout.length - 1];
+      dailyManifest = { planHash: planHash(), dayType: dayType, generatedAt: "test",
+                        entries: [{ exId: lastEx.id, set: 1, file: "x.wav", durationMs: 7400,
+                                    assumes: { weightLbs: null, finalExercise: true } }] };
+      assert(bespokeLineFor(lastEx.id, 1) === null,
+             '"last machine of the day" is suppressed while other machines have work');
+      // Retire every OTHER exercise, then the claim is true.
+      workout.forEach(ex => {
+        if (ex.id === lastEx.id) return;
+        for (let o = 1; o <= ex.sets; o++) {
+          ledger.push({ kind: "skip", n: ++ledgerSeq, exId: ex.id, set: o, at: 1, reason: "user" });
+        }
+      });
+      assert(!!bespokeLineFor(lastEx.id, 1),
+             'and it plays once it is genuinely the last machine left');
+
+      // An OLD bank has neither key. Undefined must read as "makes no claim",
+      // or shipping this engine would silence every line of yesterday's bank.
+      clean();
+      dailyManifest = mkManifest({ weightLbs: null });
+      assert(!!bespokeLineFor(ex0.id, 1),
+             "a bank generated before position gates existed is unaffected by them");
+
+      // THE WEIGHT BACKFILL. A surviving line that says no weight must not leave
+      // the number unspoken -- that is how 205 went unsaid on 2026-08-09.
+      clean();
+      readyAt = {}; readyPlanned = {};
+      dailyManifest = mkManifest({ weightLbs: null });
+      const backfilled = arrivalCueSeq(ex0.id);
+      const wantWgt = weightClipsFor(ex0);
+      assert(wantWgt.length > 0 && backfilled.indexOf(wantWgt[0]) > 0,
+             "a line that names no weight gets the wgt- clip appended after it: " +
+             JSON.stringify(backfilled));
+      assert(backfilled.indexOf(wantWgt[0]) > backfilled.indexOf('daily/' + ex0.id + '-s1.wav'),
+             "and it lands AFTER the line, never in front of it");
+      clean();
+      bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+      dailyManifest = mkManifest({ weightLbs: w0 });
+      const notBackfilled = arrivalCueSeq(ex0.id);
+      assert(notBackfilled.indexOf(wantWgt[0]) === -1,
+             "a line that DOES name the weight never gets it spoken twice");
+
+      // ITEM 9: on an arrival that plays a line, the line is the sole narrator.
+      clean();
+      bespokeEpisode = { key: null, entry: null, armed: false, fired: false };
+      dailyManifest = mkManifest({ weightLbs: w0 });
+      assert(hasArrivalLine(ex0.id) === true,
+             "hasArrivalLine sees a playable arrival line");
+      dailyManifest = mkManifest({ weightLbs: w0 + 15 });
+      assert(hasArrivalLine(ex0.id) === false,
+             "and reports false when the line would be suppressed, so the generic preamble stays");
+
       // NO MANIFEST AT ALL = commit G behaviour, which is what makes this
       // commit stop-here-safe.
+      clean();
       dailyManifest = null;
       assert(bespokeLineFor(ex0.id, 1) === null, "no manifest means no bespoke lines, no errors");
       const gseq = restEndCueSeq();
@@ -6590,6 +6855,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-10 2B-upper v8R UPPER-SPLICE</div>
+<div class="build-stamp">prism &middot; 2026-08-10 2B-upper v8S VOICE-REWRITE</div>
 </body>
 </html>
