@@ -1392,155 +1392,205 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // ======================= CONFIG START =======================
 // The daily flip splices ONLY the fenced block (dayType + build note +
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
-const dayType = "Lower";
+const dayType = "Upper";
 
-// *** LOWER -- 15 SETS. ***
-// Set counts / weights / backoffs / triggers read from the previous LOWER BUILD
-// config (`git show 8a409b3:gym-timer.html`), NOT from a log table -- Obs 435.
-// *** SET TOTAL: 4+3+2+3+3 = 15, asserted against the documented 15. ***
+// *** UPPER -- PHASE 2B VOLUME BLOCK, 21 SETS. Built at the 8/13 close. ***
+// Set counts / weights / backoffs / triggers read from the previous UPPER BUILD
+// config (`git show c684cfa:gym-timer.html`), NOT from a log table -- Obs 435.
+// *** SET TOTAL: 4+5+2+3+4+3 = 21, asserted against the documented 21. ***
 //
-// This is a SPLICE onto the 8/12 Upper build, not a restore of 8a409b3. The
-// base file carries the v8T voice bus and its settings stepper; a wholesale
-// restore would revert them. Only the fenced config changed.
+// SPLICE onto the 8/13 Lower build, not a restore of c684cfa. The base file
+// carries the v8T voice bus, the settings stepper, AND the 6-id SAFETY_REQUIRED
+// list that gained `cable-face-pulls` on 8/13 -- restoring the old file
+// wholesale would silently revert all of it. Only the fenced config changed.
 //
-// *** CHANGE 1 OF 2: LEG PRESS ADVANCES 205 -> 220, BACKOFF 190 -> 205. ***
-// First weight move in ~3 weeks and it was earned on four independent signals
-// from 8/11: 49 reps at 205 (the most he has ever done at that load, 10,045 lb
-// = best capped-era tonnage), S1 came in at 13 AND was rated LIGHT despite the
-// build capping it at 12, S4 finished at 14 -- two past the top of the band --
-// with no auto-drop, and the 8/9 "15 -> 9 collapse" did not reproduce: he
-// CLIMBED 10 -> 12 -> 14. The S1 cap did its job and the load became the
-// limiter. Sled runs in 15 lb steps (190/205/220/235/250 all in the history).
-// *** THE S1 CAP AT 12 STAYS, AND IT MATTERS MORE AT 220, NOT LESS. ***
+// *** THIS SESSION IS ~6 DAYS AFTER THE ONE BEFORE IT. *** Lower ran Thu 8/13,
+// then San Francisco Fri night -> Tue night. First realistic Upper is Wed 8/19.
+// That gap is NOT a detraining event (losses start ~2-3 weeks) and it doubles
+// as the deload that never got finished -- 7/30 aborted at 8m18s on the knee
+// and only 7/31's Upper was delivered. EXPECT the first session back to feel
+// heavy and DO NOT read a rep drop as regression. Nothing rebases off it.
 //
-// *** CHANGE 2 OF 2: CABLE FACE PULLS MOVE FROM SLOT 5 TO SLOT 3. ***
-// This is the third time the cable station being busy has eaten this exercise:
-// 7/28 slot 5 -> 0 reps in 6 seconds. 7/30 the build moved it to slot 3 with
-// the reason written down verbatim ("A busy cable at minute 5 is still busy at
-// minute 24. Take it while it's free."). 8/11 it was back at slot 5 and got
-// ONE rep. The lesson lived in prose and the next rebuild dropped it -- the
-// same failure shape as the 90-degree cap surviving zero of 25 builds.
-// *** THE SLOT IS THE FIX. THE NOTE ABOUT THE SLOT IS NOT. ***
+// *** THE HEADLINE: THE TRUE-FAILURE RIR ANCHOR IS OWED HERE, AND THIS IS THE
+//     FIFTH UPPER IT HAS BEEN DEFERRED FROM. *** It is now the single
+// highest-value item in the program. 8/12 removed FUEL as the explanation --
+// 1,816 cal pre-lift, the >=1,500 floor cleared for the first time in eight
+// sessions -- and the session still came back 21/21 MAX. That leaves difficulty
+// scale drift (Armes 2020) as the only untested explanation for a month of
+// unreadable sessions.
+// HOW: after the first two exercises, compare each S1 to its median over the
+// last ~4 Uppers. Both at-or-above => take ONE set of CHEST PRESS or CABLE ROPE
+// ROW to genuine failure, then sit at a real 2-3 RIR for everything after.
+// Both below => defer again, hold weights, note it. Split => no anchor.
+// NEVER the curls. NEVER off the back of a 6-day layoff if the first two sets
+// read clearly under median -- a layoff read is not a drift read.
 //
-// *** EVERYTHING ELSE HOLDS. 8/11 WAS NOT A CLEAN READ. ***
-// 13 of 14 sets came back MAX -- only leg-press S1 (LIGHT) gradates. Leg press
-// advances anyway because it runs FIRST, before within-session fatigue, rest
-// compression or fuel depletion can bite; its signal is clean regardless of
-// which explanation holds. The later exercises' signal is not, so calf raises
-// hold 145, leg curl holds 40, leg extension holds 60.
+// *** 8/13 GAVE A CLUE THE ANCHOR SHOULD BE TESTED AGAINST. *** On the Lower,
+// LEG PRESS gradated properly -- MOD / MAX / HARD / MAX -- and it is the ONLY
+// exercise in the program carrying a rep cap (S1 stops at 12). All four
+// uncapped exercises that session rated MAX on every set. Hypothesis: part of
+// the all-MAX pattern is him taking every set to failure, not pure scale drift.
+// Does NOT retire drift -- 8/11 leg press rated MAX at 10, 12 AND 14 reps on
+// one weight, which failure-taking cannot explain. The anchor is what separates
+// them. LATERAL RAISE already carries a cap here; watch whether it gradates.
 //
-// *** TEXT LENGTHS HERE ARE A MEASURED BUDGET, NOT PROSE PREFERENCE. ***
-// At 375x667 the safety banner must wrap to at most TWO lines (40px). A
-// three-line banner (53px) pushes the static setNote past the 8px font floor
-// AND clamps the dial below its 14px clearance. Budget: safety <= ~85 chars,
-// and any setNote on an exercise WITH a banner <= ~115 chars.
+// *** THE RIGHT SHOULDER: TWO CLEAN SESSIONS, WATCH CONTINUES. ***
+// Onset 8/10 (skipped all 5 row sets, finished lat raises only at the dropped
+// 10 lb). 8/12 he ran ALL 5 rows and ALL 4 lat raises, 42 and 50 reps, nothing
+// cut, no pain reported. 8/13 face pulls went 20/20 clean. Per Obs 389 the
+// constraint stays in `safety` AND in the setNotes on BOTH cable-rope-row and
+// db-lateral-raise, and both ids stay in SAFETY_REQUIRED so a future build
+// cannot silently drop them. WATCH, not a ban -- train, stop at the first
+// pinch. Escalation: night pain, pain at rest, weakness raising the arm.
 //
-// *** TRUE-FAILURE RIR ANCHOR: NOT eligible tonight, and no question is needed
-// to establish that. *** The only machine compound here is the leg press, and
-// it is on a FIRST SESSION AT A NEW LOAD carrying an injury cap. You do not
-// chase failure on the session that introduces 220. It is owed on the next
-// Upper, where it has now deferred four times running and is the only untested
-// explanation left for a month of MAX-everywhere sessions.
-// *** NEVER ASK HIM ABOUT SLEEP. ***
-
+// *** ALL SIX WEIGHTS HOLD, AND 8/12 CANNOT REBASE ANYTHING. *** Four of the
+// six exercises carried an annotation naming different equipment ("30 lbs
+// dumbbells" on chest press and row, "35 lbs dumbbells" on incline, "35 lbs
+// French press" on pushdown). The timer summed the CONFIGURED weights and
+// ignored every one of them, so that session's 12,475 lb is not a number that
+// describes anything until he answers. Chest Press S1 came in at 16 against an
+// S1 median of 7. NOTHING advances off 8/12; the only usable output is the
+// 21/21 MAX rating pattern, which stands on its own.
+//
+// *** THE ORDER IS THE PRESCRIPTION. *** Chest Press -> Row -> Incline, so a
+// PULL sits between the two PRESSES. On 8/4 he ran Incline second and Row
+// third: Incline -42%, Row -18%, duration +43% (53m50s). On 8/8 he ran the
+// built order: 32m20s, the fastest 21-set Upper on record. 8/12 held the rule
+// (curls AND row both sat between the presses) and all 21 sets got done.
+// *** IF THE CABLE STATION IS TAKEN: fill with LATERAL RAISE or CURLS.
+//     NEVER Incline. Anything but a second press. ***
+// v8 helps here on its own: `muscles` is populated honestly, so pairing Chest
+// Press with Incline trips the PAIR warning instead of silently costing 42%.
+//
+// *** LATERAL RAISE S1 STOPS AT 12. IT IS WORKING AND IT STAYS. ***
+// 8/4 opened at 14 [MAX] and paid it back: 14/9/8/8 = 39. 8/12 opened at 11,
+// respected the cap, and posted 11/12/12/15 = 50 -- the most volume on record
+// for that exercise. NOT banked as a PR: three of those four sets ran at the
+// 10 lb backoff after the auto-drop fired, so it is volume at a lighter load,
+// not a progression signal.
 const workout = [
   {
-    id: "leg-press",
-    muscles: ["quads", "glutes"],
-    name: "Leg Press",
-    short: "LEG PRESS",
+    id: "chest-press",
+    muscles: ["chest", "front delts", "triceps"],
+    name: "Chest Press Machine",
+    short: "PRESS",
     sets: 4,
     reps: "8-12",
-    weight: "220 lbs",
-    backoff: "205 lbs",
+    weight: "120 lbs",
+    backoff: "100 lbs",
     rest: 150,
-    safety: "Stop at 90 degrees, never knees-to-chest. Sharp medial knee pain ENDS the session.",
-    note: "90° knee angle, NOT knees-to-chest. Stop the descent at 90°. NEW LOAD: 220, up from 205. You earned it on 8/11 -- 13/10/12/14 = 49 reps, the most you have ever done at 205, with S1 rated LIGHT at 13 and S4 climbing to 14. The 8/9 collapse did not reproduce. Expect fewer reps tonight; 8-10 on the openers is a normal first session at a new pin. The 90° cap is PERMANENT and matters MORE here. Drive through the heels. Backoff is 205.",
+    note: "Hold 120, and run it FIRST while you are fresh. Slot 1 is settled -- take the machine when you walk in. Full ROM, controlled descent to the chest, drive without slamming the elbows locked. Backoff is 100. *** ANCHOR CANDIDATE: one set to true failure, your pick of this or the row. ***",
     setNotes: [
-      "S1: 90° knee angle, NOT knees-to-chest. Stop at 90°. *** STOP AT 12 REPS *** -- the cap matters more at 220.",
-      "S2: 90° knee angle, NOT knees-to-chest. Full rest first, same depth. New load, so 8-10 is honest.",
-      "S3: 90° knee angle, NOT knees-to-chest. Stop at 90°. This is the set the capped S1 protects.",
-      "S4: 90° knee angle, NOT knees-to-chest. Last one. Do not chase depth to make a rep."
+      "S1: fresh -- full ROM, controlled descent. This is the read: S1 median is 7 over the last 4 Uppers.",
+      "S2: full 2.5-min rest first, same depth and tempo.",
+      "S3: drive through the mid-chest, no half reps.",
+      "S4: last set. If the anchor is live, THIS is the one -- go to genuine failure, not 'hard'."
     ],
     trigger: [12, 12, 12, 12],
-    triggerWeight: "235 lbs"
+    triggerWeight: "130 lbs"
   },
   {
-    id: "leg-press-calf-raises",
-    muscles: ["calves"],
-    name: "Leg Press Calf Raises",
-    short: "CALF",
+    id: "cable-rope-row",
+    muscles: ["back", "biceps", "rear delts"],
+    name: "Cable Rope Row",
+    short: "ROW",
+    sets: 5,
+    reps: "8-12",
+    weight: "120 lbs",
+    backoff: "100 lbs",
+    rest: 150,
+    safety: "RIGHT inner shoulder. Stop at the first pinch.",
+    note: "Hold 120, 5 SETS (Phase 2B volume block). RUN THIS SECOND -- it is the pull that sits between your two presses. Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return, no jerking with the low back. *** ANCHOR CANDIDATE. ***",
+    setNotes: [
+      "S1: pull to the waist. S1 median is 9. Shoulder read -- 8/12 ran all 5 sets clean.",
+      "S2: elbows close, no torso heave. Back off if it pinches.",
+      "S3: controlled return, full stretch at the front.",
+      "S4: drive the elbows back, clean reps.",
+      "S5: last set, the Phase 2B set. Empty it, no torso heave."
+    ],
+    trigger: [12, 12, 12, 12, 12],
+    triggerWeight: "130 lbs"
+  },
+  {
+    id: "incline-press",
+    muscles: ["chest", "front delts", "triceps"],
+    name: "Incline Press",
+    short: "INCLINE",
+    sets: 2,
+    reps: "8-12",
+    weight: "70 lbs",
+    backoff: "60 lbs",
+    rest: 120,
+    safety: "STOP on ANY rotator-cuff pain. French-press history -- nothing gets pushed through.",
+    note: "Incline press MACHINE at 70. Seat at the incline setting, lower to the UPPER chest, elbows ~45 deg, press up and slightly back, controlled negative. Still staged at 2 sets until clean 12s. DO NOT run this straight off the chest press -- it cost you 42% on 8/4.",
+    setNotes: [
+      "S1: lower to the UPPER chest, elbows ~45, controlled.",
+      "S2: same groove, controlled negative. Got 0 here on 8/12 at the backoff -- if that repeats it is a real signal, not fatigue."
+    ],
+    trigger: [12, 12],
+    triggerWeight: "80 lbs"
+  },
+  {
+    id: "cable-tricep-pushdown",
+    muscles: ["triceps"],
+    name: "Cable Tricep Pushdown",
+    short: "PUSHDOWN",
     sets: 3,
     reps: "12-15",
-    weight: "145 lbs",
-    backoff: "130 lbs",
+    weight: "25 lbs",
+    backoff: "20 lbs",
     rest: 90,
-    safety: "Anything sharp in the knee is a KNEE signal. Stop, do not push through it.",
-    note: "Holds at 145. On 8/11 you ran 12 / 10@130 / 8@130 = 30 reps -- S1 landed exactly on the 12 floor and the auto-drop fired correctly at S2. Same sled as the leg press, so stay on the machine. The leg press just went up 15 lb, so if S1 drops below 12 tonight the pairing is charging real interest on that advance and we split them next time. Ball of the foot, full stretch, hard squeeze, no bouncing. Backoff is 130.",
+    note: "Hold 25. Elbows pinned to the sides, full lockout at the bottom, control the negative -- no leaning into it or flaring the elbows. If the cable station is taken, FRENCH PRESS at 40 is the proven fallback (zero cuff pain).",
     setNotes: [
-      "S1: full stretch at the bottom, controlled all the way up. You opened at 12 last Lower.",
-      "S2: ball of the foot, no bouncing out of the bottom. The drop fired here on 8/11.",
-      "S3: slow the negative, do not chase reps. 8 reps at 130 last time."
+      "S1: elbows pinned, full lockout.",
+      "S2: control the negative, no body english.",
+      "S3: last set, squeeze the lockout, clean reps."
     ],
     trigger: [15, 15, 15],
-    triggerWeight: "160 lbs"
+    triggerWeight: "30 lbs"
   },
   {
-    id: "cable-face-pulls",
-    muscles: ["rear-delts", "upper-back"],
-    name: "Cable Face Pulls",
-    short: "FACE PULL",
-    sets: 2,
-    reps: "15-20",
+    id: "db-lateral-raise",
+    muscles: ["side delts"],
+    name: "DB Lateral Raise",
+    short: "LAT RAISE",
+    sets: 4,
+    reps: "12-15",
     weight: "15 lbs",
     backoff: "10 lbs",
     rest: 90,
-    safety: "RIGHT shoulder is active. Stop at the first pinch -- do not push through it.",
-    note: "*** MOVED TO SLOT 3 ON PURPOSE. TAKE THE CABLE WHILE IT IS FREE. *** Three times now a busy cable at a late slot has eaten this exercise: 0 reps on 7/28, 1 rep on 8/11. A busy cable at minute 5 is still busy at minute 24. Holds at 15 -- 8/11 gave no usable read. Your RIGHT shoulder was symptomatic 8/10 on lateral raises and rows, but you ran all 5 rows and all 4 raises on 8/12 with nothing cut, so this is a watch, not a ban. Never to failure. Elbows high, pull to the forehead, squeeze, slow return.",
+    safety: "RIGHT inner shoulder. Stop at the first pinch.",
+    note: "Strict 15s, range 12-15, 4 SETS (Phase 2B). Lead with the elbows, raise to parallel and no higher -- the LEFT shoulder clicks above parallel, and the RIGHT one is the live one. No swinging. STOP SET 1 AT 12.",
     setNotes: [
-      "S1: elbows high, pull to the forehead, hard squeeze, slow return. Stop on a right-shoulder pinch.",
-      "S2: strict form beats another rep. Both sets hit 20 on 8/9, so there is room here."
-    ]
+      "S1: *** STOP AT 12. *** Opened at 11 on 8/12 and respected the cap.",
+      "S2: no swing, slow negative. The drop fired here on 8/12.",
+      "S3: keep it strict, stop at parallel.",
+      "S4: last set. Put up 50 reps total on 8/12 -- most on record, but at the backoff."
+    ],
+    trigger: [15, 15, 15, 15],
+    triggerWeight: "17.5 lbs"
   },
   {
-    id: "lying-leg-curl",
-    muscles: ["hamstrings"],
-    name: "Lying Leg Curl",
-    short: "LEG CURL",
+    id: "db-curls",
+    muscles: ["biceps"],
+    name: "DB Curls (supinated)",
+    short: "CURLS",
     sets: 3,
     reps: "8-12",
-    weight: "40 lbs",
-    rest: 120,
-    noDropAdvice: true,
-    safety: "HARD STOP on ANY medial-thigh sensation -- not pain, ANY sensation. Rack it.",
-    note: "40 holds. FOUR clean sessions running with ZERO medial-thigh sensation on the exercise with the recurrent nerve history -- 7/28, 7/30, 8/3, 8/9, and 8/11 added a fifth. 8/11 gave 9/8/6 = 23, down from 27, on a session where 13 of 14 sets read MAX, so that decline is the session and not the exercise. VOLUME grows here, LOAD does not. Pad low on the calves, hips flat on the bench, no jerking the weight up. No weight-drop prompts here; a short set means nerve, not load.",
+    weight: "25 lbs",
+    backoff: "20 lbs",
+    rest: 90,
+    safety: "SUPINATED grip ONLY -- hammer twangs the nerve. Stop on a nerve twang, not a rep count.",
+    note: "Hold 25. Supinated is nerve-safe, so you CAN push these to failure -- the only stop is an actual twang, never a rep cap. Controlled, no swinging. NOT the anchor exercise -- the anchor is a machine compound.",
     setNotes: [
-      "S1: hips flat, pad low, slow negative. Any medial-thigh sensation and you rack it.",
-      "S2: same. 9 -> 8 last time. Slow the negative, take the reps you get.",
-      "S3: the set that earned its place. If anything reads medial, drop it rather than push."
-    ]
-  },
-  {
-    id: "leg-extension",
-    muscles: ["quads"],
-    name: "Leg Extension",
-    short: "LEG EXT",
-    sets: 3,
-    reps: "8-12",
-    weight: "60 lbs",
-    backoff: "50 lbs",
-    rest: 120,
-    note: "60 holds, and this is the second session it has read below band. On 8/11 you ran 7 / 7@50 / 7@50 = 21 with the drop firing at S2; on 8/9 it was 9 / 5 / 9@50. It runs late in the order, so accumulated fatigue is still the likelier driver than the load -- but if it reads under 8 again tonight from the NEW slot 5 position, the weight comes down to 50 rather than waiting on another drop. Open-chain extension was the movement that did NOT hurt on 7/30, which is why it keeps full range. Controlled up, slow down, no swinging. Backoff is 50.",
-    setNotes: [
-      "S1: 8-11 is the honest read at 60. Two sessions running it has opened at 9 then 7.",
-      "S2: slow the negative rather than chasing an extra rep. The drop fired here last time.",
-      "S3: form holds or the set ends. This one has stayed clean -- keep it that way."
+      "S1: controlled, no swing. Opened at 11 on 8/12.",
+      "S2: squeeze the top, slow negative. Fell to 6 on 8/12.",
+      "S3: last set, push it -- failure is fine supinated."
     ],
     trigger: [12, 12, 12],
-    triggerWeight: "70 lbs"
+    triggerWeight: "30 lbs"
   },
 ];
-
 // ======================== CONFIG END ========================
 
 // ============ §1.5 IDENTITY + PLAN HASH (v8) ============
@@ -7091,6 +7141,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-13 2B-lower v8T LP220-FP3</div>
+<div class="build-stamp">prism &middot; 2026-08-13 2B-upper v8T ANCHOR5</div>
 </body>
 </html>
