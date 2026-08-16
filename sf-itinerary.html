@@ -7,8 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --bg:#0b0b0d;
@@ -22,7 +20,6 @@
     --red-glow:rgba(255,59,59,0.35);
     --red-dim:#7a2323;
     --green:#3ddc84;
-    --amber:#ffb545;
   }
   *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
@@ -71,50 +68,18 @@
   .day-panel{ display:none; }
   .day-panel.active{ display:block; }
 
-  .day-note{ font-size:12.5px; color:var(--text-dim); margin-bottom:12px; line-height:1.5; padding:10px 12px;
+  .day-note{ font-size:12.5px; color:var(--text-dim); margin-bottom:14px; line-height:1.5; padding:10px 12px;
     background:var(--card); border:1px dashed var(--line); border-radius:12px; }
-
-  .start-row{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); margin-bottom:14px; }
-  .start-row input[type=time]{
-    background:var(--card); border:1px solid var(--line); color:var(--text); border-radius:8px;
-    padding:5px 8px; font-family:inherit; font-size:12px; color-scheme:dark;
-  }
-
-  .day-map{ height:230px; border-radius:16px; overflow:hidden; margin-bottom:14px; border:1px solid var(--line); background:#111114; }
-  .leaflet-control-attribution{ background:rgba(0,0,0,0.55) !important; color:#9a9aa0 !important; font-size:9px !important; }
-  .leaflet-control-attribution a{ color:#c8c8ce !important; }
-  .leaflet-popup-content-wrapper{ background:var(--card-hi); color:var(--text); border-radius:12px; }
-  .leaflet-popup-tip{ background:var(--card-hi); }
-  .leaflet-popup-content{ font-family:'Inter',sans-serif; font-size:13px; margin:10px 12px; }
-  .leaflet-popup-content b{ font-family:'Fraunces',serif; }
-  .leaflet-popup-content a{ color:var(--red); font-weight:600; text-decoration:none; display:inline-block; margin-top:4px; }
-  .num-marker div{
-    background:var(--red); color:#fff; width:24px; height:24px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11.5px;
-    border:2px solid #1a0505; box-shadow:0 2px 6px rgba(0,0,0,0.5); font-family:'Inter',sans-serif;
-  }
 
   .item-list{ display:flex; flex-direction:column; gap:8px; }
   .item{
-    display:flex; align-items:flex-start; gap:9px;
+    display:flex; align-items:flex-start; gap:10px;
     background:var(--card); border:1px solid var(--line); border-radius:16px;
-    padding:12px 10px 12px 6px;
+    padding:12px 12px;
     transition:background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
-    position:relative;
-  }
-  .item.dragging{
-    box-shadow:0 16px 34px -6px rgba(0,0,0,0.65); border-color:var(--red);
-    background:var(--card-hi); cursor:grabbing;
   }
   .item.done{ opacity:0.45; }
   .item.done .i-title{ text-decoration:line-through; }
-
-  .handle{
-    flex-shrink:0; width:28px; height:44px; display:flex; align-items:center; justify-content:center;
-    color:var(--text-dimmer); font-size:18px; cursor:grab; touch-action:none; letter-spacing:-2px;
-    border-radius:8px;
-  }
-  .handle:active{ color:var(--text-dim); }
 
   .check{
     flex-shrink:0; width:26px; height:26px; border-radius:50%; border:1.5px solid var(--line);
@@ -126,24 +91,13 @@
   .i-emoji{ flex-shrink:0; font-size:22px; margin-top:1px; width:26px; text-align:center; }
 
   .i-body{ flex:1; min-width:0; cursor:pointer; }
-  .i-time{ font-size:11px; color:var(--red); font-weight:700; letter-spacing:0.02em; display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap; }
-  .i-mode{ font-size:12px; }
-  .auto-time{ color:var(--text-dimmer); font-weight:600; }
-  .auto-time.warn{ color:var(--amber); }
-  .i-title{ font-family:'Fraunces',serif; font-weight:600; font-size:15.5px; line-height:1.25; margin-top:1px; }
+  .i-title{ font-family:'Fraunces',serif; font-weight:600; font-size:15.5px; line-height:1.25; }
   .i-note{ font-size:12.5px; color:var(--text-dim); line-height:1.42; margin-top:3px; }
   .i-map-link{
     display:inline-block; margin-top:6px; font-size:11.5px; font-weight:700; color:var(--red);
     text-decoration:none; letter-spacing:0.01em;
   }
   .i-map-link:active{ opacity:0.6; }
-
-  .reset-row{ text-align:center; margin-top:26px; }
-  .btn-ghost{
-    background:transparent; color:var(--text-dimmer); border:1px solid var(--line);
-    border-radius:999px; padding:10px 20px; font-size:12.5px; cursor:pointer; font-family:inherit;
-  }
-  .btn-ghost:hover{ color:var(--text-dim); border-color:#3a3a42; }
 
   footer.watermark{ text-align:center; color:var(--text-dimmer); font-size:11px; margin-top:30px; }
 
@@ -166,17 +120,13 @@
   <header>
     <div class="kicker">san francisco</div>
     <h1>Itinerary</h1>
-    <div class="subtext">Tap ✓ to check off. Hold ⠿ to drag-reorder. 🕐 auto-updates times when you reorder. 📍 opens live directions.</div>
+    <div class="subtext">Tap to check off. Saves automatically.</div>
   </header>
 
   <nav class="tabs" id="tabs"></nav>
   <div class="day-progress-bar"><div class="day-progress-fill" id="progress-fill"></div></div>
 
   <div id="panels"></div>
-
-  <div class="reset-row">
-    <button class="btn-ghost" id="reset-btn">Reset this day's order</button>
-  </div>
 
   <footer class="watermark">sf-itinerary</footer>
 </div>
@@ -189,109 +139,90 @@ const ZOE = {lat:37.8058, lng:-122.4204};
 
 const DAYS = [
   {
-    id: "sun", label: "Sun", date: "8/16", defaultStart: "12:45",
-    note: "Anchored to landing at Powell St from SFO. Shift the start time below if that's late.",
+    id: "sun", label: "Sun", date: "8/16",
+    note: "Landing at Powell St from SFO, then UCSF and the west side.",
     items: [
-      {id:"s1", time:"T+0", title:"SFO → BART → Powell St", emoji:"🚆", note:"Rental Car Center → AirTrain Blue → BART Yellow Line, ~35 min direct, ~$11.", lat:37.7845, lng:-122.4079, mode:"transit", fromOverride:SFO, dwell:0, travelDefault:{min:35, matchesPrev:null}},
-      {id:"s2", time:"~1:20", title:"Hotel Nikko, drop bags", emoji:"🏨", note:"222 Mason St. Check-in is 3PM; bag drop isn't.", lat:37.7863, lng:-122.4088, mode:"walk", dwell:10, travelDefault:{min:2, matchesPrev:"s1"}},
-      {id:"s3", time:"~1:50", title:"N Judah → Carl & Cole", emoji:"🚊", note:"Muni Metro from Powell St, ~25 min, walk 5 min up.", lat:37.7658, lng:-122.4505, mode:"transit", dwell:0, travelDefault:{min:25, matchesPrev:"s2"}},
-      {id:"s4", time:"2:30–3:30", title:"UCSF Parnassus", emoji:"🎓", note:"Moffitt/Long lobby, Med Sciences Bldg, walk to the top of the hill for the view.", lat:37.7627, lng:-122.4584, mode:"walk", dwell:60, travelDefault:{min:5, matchesPrev:"s3"}},
-      {id:"s5", time:"3:30–4:00", title:"Mount Sutro (optional)", emoji:"🌲", note:"Eucalyptus forest trailhead on campus off Medical Center Way.", lat:37.7602, lng:-122.4572, mode:"walk", dwell:30, travelDefault:{min:5, matchesPrev:"s4"}},
-      {id:"s6", time:"4:00–5:00", title:"Late lunch, Inner Sunset", emoji:"🍽️", note:"9th & Irving.", lat:37.7639, lng:-122.4663, mode:"walk", dwell:60, travelDefault:{min:10, matchesPrev:"s5"}},
-      {id:"s7", time:"5:00–5:30", title:"16th Ave Tiled Steps → Grand View Park", emoji:"🪜", note:"163 mosaic steps, then a 360° dune-top view. Free.", lat:37.7554, lng:-122.4715, mode:"walk", dwell:30, travelDefault:{min:10, matchesPrev:"s6"}},
-      {id:"s8", time:"5:30–6:30", title:"SF Botanical Garden", emoji:"🌸", note:"9th & Lincoln. Last entry 6PM — hard cutoff.", lat:37.7669, lng:-122.4693, mode:"walk", dwell:60, travelDefault:{min:5, matchesPrev:"s7"}, hardDeadline:"18:00"},
-      {id:"s9", time:"6:45", title:"GG Park shuttle/bus → Haight St", emoji:"🚌", note:"Free shuttle or the 7/43 bus.", lat:37.7692, lng:-122.4534, mode:"transit", dwell:0, travelDefault:{min:10, matchesPrev:"s8"}},
-      {id:"s10", time:"6:45–7:15", title:"Haight-Ashbury walk", emoji:"🕶️", note:"", lat:37.7699, lng:-122.4469, mode:"walk", dwell:30, travelDefault:{min:2, matchesPrev:"s9"}},
-      {id:"s11", time:"7:30–7:50", title:"Corona Heights Park", emoji:"🪨", note:"Red rock outcrop, 360° view, almost nobody there.", lat:37.7648, lng:-122.4380, mode:"walk", dwell:20, travelDefault:{min:15, matchesPrev:"s10"}},
-      {id:"s12", time:"8:10", title:"Alamo Square / Painted Ladies", emoji:"🏘️", note:"Sunset ~8PM.", lat:37.7764, lng:-122.4346, mode:"walk", dwell:20, travelDefault:{min:20, matchesPrev:"s11"}},
-      {id:"s13", time:"8:40", title:"Zuni Cafe, Hayes Valley", emoji:"🍗", note:"Order the roast chicken for two the second you sit — takes an hour.", lat:37.7726, lng:-122.4218, mode:"walk", dwell:90, travelDefault:{min:15, matchesPrev:"s12"}},
-      {id:"s14", time:"~10:30", title:"Muni back to Nikko", emoji:"🛏️", note:"Van Ness → Powell St, ~15 min.", lat:37.7863, lng:-122.4088, mode:"transit", dwell:0, travelDefault:{min:15, matchesPrev:"s13"}},
+      {id:"s1", title:"SFO → BART → Powell St", emoji:"🚆", note:"Rental Car Center → AirTrain Blue → BART Yellow Line, ~35 min direct, ~$11.", lat:37.7845, lng:-122.4079, mode:"transit", fromOverride:SFO},
+      {id:"s2", title:"Hotel Nikko, drop bags", emoji:"🏨", note:"222 Mason St. Check-in is 3PM; bag drop isn't.", lat:37.7863, lng:-122.4088, mode:"walk"},
+      {id:"s3", title:"N Judah → Carl & Cole", emoji:"🚊", note:"Muni Metro from Powell St, walk 5 min up.", lat:37.7658, lng:-122.4505, mode:"transit"},
+      {id:"s4", title:"UCSF Parnassus", emoji:"🎓", note:"Moffitt/Long lobby, Med Sciences Bldg, walk to the top of the hill for the view.", lat:37.7627, lng:-122.4584, mode:"walk"},
+      {id:"s5", title:"Mount Sutro (optional)", emoji:"🌲", note:"Eucalyptus forest trailhead on campus off Medical Center Way.", lat:37.7602, lng:-122.4572, mode:"walk"},
+      {id:"s6", title:"Late lunch, Inner Sunset", emoji:"🍽️", note:"9th & Irving.", lat:37.7639, lng:-122.4663, mode:"walk"},
+      {id:"s7", title:"16th Ave Tiled Steps → Grand View Park", emoji:"🪜", note:"163 mosaic steps, then a 360° dune-top view. Free.", lat:37.7554, lng:-122.4715, mode:"walk"},
+      {id:"s8", title:"SF Botanical Garden", emoji:"🌸", note:"9th & Lincoln. Last entry 6PM — hard cutoff.", lat:37.7669, lng:-122.4693, mode:"walk"},
+      {id:"s9", title:"GG Park shuttle/bus → Haight St", emoji:"🚌", note:"Free shuttle or the 7/43 bus.", lat:37.7692, lng:-122.4534, mode:"transit"},
+      {id:"s10", title:"Haight-Ashbury walk", emoji:"🕶️", note:"", lat:37.7699, lng:-122.4469, mode:"walk"},
+      {id:"s11", title:"Corona Heights Park", emoji:"🪨", note:"Red rock outcrop, 360° view, almost nobody there.", lat:37.7648, lng:-122.4380, mode:"walk"},
+      {id:"s12", title:"Alamo Square / Painted Ladies", emoji:"🏘️", note:"Sunset ~8PM.", lat:37.7764, lng:-122.4346, mode:"walk"},
+      {id:"s13", title:"Zuni Cafe, Hayes Valley", emoji:"🍗", note:"Order the roast chicken for two the second you sit — takes an hour.", lat:37.7726, lng:-122.4218, mode:"walk"},
+      {id:"s14", title:"Muni back to Nikko", emoji:"🛏️", note:"Van Ness → Powell St.", lat:37.7863, lng:-122.4088, mode:"transit"},
     ]
   },
   {
-    id: "mon", label: "Mon", date: "8/17", defaultStart: "09:45",
-    note: "Hotel move day. Checkout Nikko, bags to Zoe, then Hornet + harbor. The 2:30 PM ferry is the last one that leaves usable time at the Hornet — the ⚠ warning below will flag it if reordering pushes you past that.",
+    id: "mon", label: "Mon", date: "8/17",
+    note: "Hotel move day. Checkout Nikko, bags to Zoe, then Hornet + harbor. Catch the ferry by 2:30 PM at the absolute latest — miss it and the Hornet is off the table.",
     items: [
-      {id:"m1", time:"9:45", title:"Checkout Nikko", emoji:"🧳", note:"", lat:37.7863, lng:-122.4088, mode:"walk", dwell:15, travelDefault:{min:0, matchesPrev:null}},
-      {id:"m2", time:"10:00", title:"Rideshare → Hotel Zoe, drop bags", emoji:"🚗", note:"425 North Point St, ~15–20 min. Ask the desk to hold bags before 3PM check-in.", lat:37.8058, lng:-122.4204, mode:"drive", dwell:10, travelDefault:{min:18, matchesPrev:"m1"}},
-      {id:"m3", time:"10:30", title:"Coffee, North Beach", emoji:"☕", note:"Caffe Trieste or Mario's Bohemian Cigar Store.", lat:37.7983, lng:-122.4082, mode:"walk", dwell:20, travelDefault:{min:5, matchesPrev:"m2"}},
-      {id:"m4", time:"11:00–12:00", title:"USS Pampanito", emoji:"🛥️", note:"Pier 45. WWII fleet submarine, self-guided.", lat:37.8087, lng:-122.4177, mode:"walk", dwell:60, travelDefault:{min:10, matchesPrev:"m3"}, hardDeadline:"18:00"},
-      {id:"m5", time:"12:00–12:20", title:"Musée Mécanique", emoji:"🕹️", note:"Next door. Free entry, antique arcade machines.", lat:37.8087, lng:-122.4172, mode:"walk", dwell:20, travelDefault:{min:2, matchesPrev:"m4"}},
-      {id:"m6", time:"12:20–1:00", title:"Harbor walk south", emoji:"🌊", note:"Hyde St Pier → Pier 39 → Pier 7 → Ferry Building. This IS the commute to the ferry.", lat:37.7955, lng:-122.3937, mode:"walk", dwell:40, travelDefault:{min:0, matchesPrev:"m5"}},
-      {id:"m7", time:"1:00 PM", title:"Ferry, Gate F1 → Alameda", emoji:"⛴️", note:"Boards the next real departure from the schedule below. Absolute last usable boat is 2:30 PM.", lat:37.7822, lng:-122.2996, mode:"ferry", dwell:0, travelDefault:{min:5, matchesPrev:"m6"}, ferrySchedule:["10:25","11:35","12:00","13:00","14:30","15:30","16:30"], ferryRideMin:20},
-      {id:"m8", time:"1:20–1:35", title:"Walk to the ship", emoji:"🚶", note:"10 min around Seaplane Lagoon.", lat:37.7714, lng:-122.3010, mode:"walk", dwell:0, travelDefault:{min:10, matchesPrev:"m7"}},
-      {id:"m9", time:"1:35–4:00", title:"USS Hornet", emoji:"🛩️", note:"707 W Hornet Ave, Pier 3. $20. Flight deck, Apollo recovery exhibit.", lat:37.7714, lng:-122.3006, mode:"walk", dwell:145, travelDefault:{min:0, matchesPrev:"m8"}, hardDeadline:"16:00"},
-      {id:"m10", time:"4:00–4:50", title:"Faction Brewing", emoji:"🍺", note:"Alameda Point, patio faces the SF skyline.", lat:37.7796, lng:-122.2978, mode:"walk", dwell:50, travelDefault:{min:5, matchesPrev:"m9"}},
-      {id:"m11", time:"5:00 PM", title:"Ferry back", emoji:"⛴️", note:"Boards the next real departure from the schedule below.", lat:37.7955, lng:-122.3937, mode:"ferry", dwell:0, travelDefault:{min:5, matchesPrev:"m10"}, ferrySchedule:["15:00","15:35","16:00","17:00","18:00","18:50","20:25"], ferryRideMin:20},
-      {id:"m12", time:"5:45", title:"Buena Vista Cafe", emoji:"☘️", note:"Irish coffee, invented here in 1952.", lat:37.8064, lng:-122.4204, mode:"walk", dwell:30, travelDefault:{min:5, matchesPrev:"m11"}},
-      {id:"m13", time:"6:30", title:"Filbert Steps + Coit Tower", emoji:"🗼", note:"Telegraph Hill, wild parrots, WPA murals.", lat:37.8024, lng:-122.4058, mode:"walk", dwell:45, travelDefault:{min:15, matchesPrev:"m12"}},
-      {id:"m14", time:"7:30", title:"North Beach dinner", emoji:"🍝", note:"Then The Saloon / The Devil's Acre / Gino & Carlo.", lat:37.8001, lng:-122.4077, mode:"walk", dwell:75, travelDefault:{min:10, matchesPrev:"m13"}},
-      {id:"m15", time:"Late", title:"Li Po Cocktail Lounge", emoji:"🍸", note:"Chinatown basement dive, Chinese Mai Tai. Walk home.", lat:37.7955, lng:-122.4067, mode:"walk", dwell:45, travelDefault:{min:10, matchesPrev:"m14"}},
+      {id:"m1", title:"Checkout Nikko", emoji:"🧳", note:"", lat:37.7863, lng:-122.4088, mode:"walk"},
+      {id:"m2", title:"Rideshare → Hotel Zoe, drop bags", emoji:"🚗", note:"425 North Point St, ~15–20 min. Ask the desk to hold bags before 3PM check-in.", lat:37.8058, lng:-122.4204, mode:"drive"},
+      {id:"m3", title:"Coffee, North Beach", emoji:"☕", note:"Caffe Trieste or Mario's Bohemian Cigar Store.", lat:37.7983, lng:-122.4082, mode:"walk"},
+      {id:"m4", title:"USS Pampanito", emoji:"🛥️", note:"Pier 45. WWII fleet submarine, self-guided.", lat:37.8087, lng:-122.4177, mode:"walk"},
+      {id:"m5", title:"Musée Mécanique", emoji:"🕹️", note:"Next door. Free entry, antique arcade machines.", lat:37.8087, lng:-122.4172, mode:"walk"},
+      {id:"m6", title:"Harbor walk south", emoji:"🌊", note:"Hyde St Pier → Pier 39 → Pier 7 → Ferry Building. This IS the commute to the ferry.", lat:37.7955, lng:-122.3937, mode:"walk"},
+      {id:"m7", title:"Ferry, Gate F1 → Alameda", emoji:"⛴️", note:"1:00 PM boat is the target. 2:30 PM is the absolute last one that still works.", lat:37.7822, lng:-122.2996, mode:"ferry"},
+      {id:"m8", title:"Walk to the ship", emoji:"🚶", note:"10 min around Seaplane Lagoon.", lat:37.7714, lng:-122.3010, mode:"walk"},
+      {id:"m9", title:"USS Hornet", emoji:"🛩️", note:"707 W Hornet Ave, Pier 3. $20. Flight deck, Apollo recovery exhibit. Last entry 4PM.", lat:37.7714, lng:-122.3006, mode:"walk"},
+      {id:"m10", title:"Faction Brewing", emoji:"🍺", note:"Alameda Point, patio faces the SF skyline.", lat:37.7796, lng:-122.2978, mode:"walk"},
+      {id:"m11", title:"Ferry back", emoji:"⛴️", note:"~5:00 PM boat.", lat:37.7955, lng:-122.3937, mode:"ferry"},
+      {id:"m12", title:"Buena Vista Cafe", emoji:"☘️", note:"Irish coffee, invented here in 1952.", lat:37.8064, lng:-122.4204, mode:"walk"},
+      {id:"m13", title:"Filbert Steps + Coit Tower", emoji:"🗼", note:"Telegraph Hill, wild parrots, WPA murals.", lat:37.8024, lng:-122.4058, mode:"walk"},
+      {id:"m14", title:"North Beach dinner", emoji:"🍝", note:"Then The Saloon / The Devil's Acre / Gino & Carlo.", lat:37.8001, lng:-122.4077, mode:"walk"},
+      {id:"m15", title:"Li Po Cocktail Lounge", emoji:"🍸", note:"Chinatown basement dive, Chinese Mai Tai. Walk home.", lat:37.7955, lng:-122.4067, mode:"walk"},
     ]
   },
   {
-    id: "tue", label: "Tue", date: "8/18", defaultStart: "10:00",
+    id: "tue", label: "Tue", date: "8/18",
     note: "Departure day. No BART from North Beach — rideshare to SFO.",
     items: [
-      {id:"t1", time:"10AM–2PM", title:"Ferry Plaza Farmers Market", emoji:"🥕", note:"~20 min walk south down the Embarcadero from Zoe, or the F-line.", lat:37.7955, lng:-122.3937, mode:"walk", fromOverride:ZOE, dwell:60, travelDefault:{min:20, matchesPrev:null}},
-      {id:"t2", time:"optional", title:"185 Berry St, China Basin", emoji:"🏥", note:"UCSF Radiology's other big footprint. Only if the morning has slack.", lat:37.7726, lng:-122.3936, mode:"transit", dwell:30, travelDefault:{min:20, matchesPrev:"t1"}},
-      {id:"t3", time:"—", title:"Rideshare to SFO", emoji:"🚕", note:"~25–30 min depending on traffic. Standby board in standby-board.html.", lat:37.6213, lng:-122.3790, mode:"drive", dwell:0, travelDefault:{min:28, matchesPrev:"t2"}},
+      {id:"t1", title:"Ferry Plaza Farmers Market", emoji:"🥕", note:"~20 min walk south down the Embarcadero from Zoe, or the F-line.", lat:37.7955, lng:-122.3937, mode:"walk", fromOverride:ZOE},
+      {id:"t2", title:"185 Berry St, China Basin", emoji:"🏥", note:"UCSF Radiology's other big footprint. Only if the morning has slack.", lat:37.7726, lng:-122.3936, mode:"transit"},
+      {id:"t3", title:"Rideshare to SFO", emoji:"🚕", note:"~25–30 min depending on traffic. Standby board in standby-board.html.", lat:37.6213, lng:-122.3790, mode:"drive"},
     ]
   },
   {
     id: "extra", label: "Extra", date: "maybe",
     note: "Not scheduled anywhere yet — came up in Soren's picks. Consider swapping into Tuesday if they matter.",
-    noDirections: true, noSchedule: true,
+    noDirections: true,
     items: [
-      {id:"e1", time:"—", title:"Dolores Park", emoji:"🌳", note:"Mission. Skyline views, best people-watching in the city.", lat:37.7596, lng:-122.4269, mode:"walk"},
-      {id:"e2", time:"—", title:"Sausalito", emoji:"⛴️", note:"Direct ferry from the Ferry Building, no car needed.", lat:37.8590, lng:-122.4852, mode:"ferry"},
-      {id:"e3", time:"—", title:"Mission Burritos", emoji:"🌯", note:"La Taqueria or El Farolito.", lat:37.7514, lng:-122.4183, mode:"walk"},
-      {id:"e4", time:"—", title:"Valencia Street", emoji:"🎨", note:"Murals, boutiques, the walkable spine of the Mission.", lat:37.7648, lng:-122.4216, mode:"walk"},
+      {id:"e1", title:"Dolores Park", emoji:"🌳", note:"Mission. Skyline views, best people-watching in the city.", lat:37.7596, lng:-122.4269, mode:"walk"},
+      {id:"e2", title:"Sausalito", emoji:"⛴️", note:"Direct ferry from the Ferry Building, no car needed.", lat:37.8590, lng:-122.4852, mode:"ferry"},
+      {id:"e3", title:"Mission Burritos", emoji:"🌯", note:"La Taqueria or El Farolito.", lat:37.7514, lng:-122.4183, mode:"walk"},
+      {id:"e4", title:"Valencia Street", emoji:"🎨", note:"Murals, boutiques, the walkable spine of the Mission.", lat:37.7648, lng:-122.4216, mode:"walk"},
     ]
   },
 ];
 
-const MODE_ICON = { walk:"", transit:"🚇", ferry:"⛴", drive:"🚗" };
 const MODE_TRAVELMODE = { walk:"walking", transit:"transit", ferry:"transit", drive:"driving" };
 
-const STORAGE_KEY = "sfItinerary_v2";
+const STORAGE_KEY = "sfItinerary_v3";
 let state = loadState();
 let activeDay = state.activeDay || DAYS[0].id;
-const maps = {}; // dayId -> { map, markerLayer, lineLayer, fitted }
 
 function loadState(){
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e){}
-  const order = {}, checked = saved.checked || {}, dayStart = saved.dayStart || {};
-  DAYS.forEach(day => {
-    const defaultIds = day.items.map(i => i.id);
-    const savedOrder = (saved.order && saved.order[day.id]) || [];
-    const kept = savedOrder.filter(id => defaultIds.includes(id));
-    const missing = defaultIds.filter(id => !kept.includes(id));
-    order[day.id] = kept.concat(missing);
-    if (day.defaultStart && !dayStart[day.id]) dayStart[day.id] = day.defaultStart;
-  });
-  return { order, checked, dayStart, activeDay: saved.activeDay };
+  return { checked: saved.checked || {}, activeDay: saved.activeDay };
 }
 
 function saveState(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ order: state.order, checked: state.checked, dayStart: state.dayStart, activeDay }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ checked: state.checked, activeDay }));
   const toast = document.getElementById('toast');
   toast.classList.add('show');
   clearTimeout(saveState._t);
   saveState._t = setTimeout(() => toast.classList.remove('show'), 900);
 }
 
-function itemById(id){
-  for (const day of DAYS) {
-    const found = day.items.find(i => i.id === id);
-    if (found) return found;
-  }
-}
-
-function mapsUrl(day, dayId, idx){
-  const ids = state.order[dayId];
-  const item = itemById(ids[idx]);
+function mapsUrl(day, idx){
+  const item = day.items[idx];
   if (item.lat == null) return null;
   const travelmode = MODE_TRAVELMODE[item.mode] || "walking";
   if (!day.noDirections){
@@ -299,69 +230,13 @@ function mapsUrl(day, dayId, idx){
       return `https://www.google.com/maps/dir/?api=1&origin=${item.fromOverride.lat},${item.fromOverride.lng}&destination=${item.lat},${item.lng}&travelmode=${travelmode}`;
     }
     if (idx > 0){
-      const prev = itemById(ids[idx-1]);
+      const prev = day.items[idx-1];
       if (prev && prev.lat != null){
         return `https://www.google.com/maps/dir/?api=1&origin=${prev.lat},${prev.lng}&destination=${item.lat},${item.lng}&travelmode=${travelmode}`;
       }
     }
   }
   return `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
-}
-
-/* ---------- auto-reschedule ---------- */
-function toMin(hhmm){ const [h,m] = hhmm.split(':').map(Number); return h*60+m; }
-function fmtMin(mins){
-  mins = ((Math.round(mins)%1440)+1440)%1440;
-  let h = Math.floor(mins/60), m = mins%60;
-  const ap = h < 12 ? 'a' : 'p';
-  let h12 = h % 12; if (h12 === 0) h12 = 12;
-  return `${h12}:${String(m).padStart(2,'0')}${ap}`;
-}
-function haversineMin(a, b){
-  const R = 3958.8, toRad = d => d*Math.PI/180;
-  const dLat = toRad(b.lat-a.lat), dLng = toRad(b.lng-a.lng);
-  const la1 = toRad(a.lat), la2 = toRad(b.lat);
-  const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
-  const dist = 2*R*Math.asin(Math.sqrt(h));
-  return Math.max(3, Math.round(dist/3 * 60)); // ~3mph walking pace, floor 3 min
-}
-function recomputeSchedule(day, dayId){
-  const ids = state.order[dayId];
-  let clock = toMin(state.dayStart[dayId] || day.defaultStart);
-  const out = {};
-  ids.forEach((id, idx) => {
-    const item = itemById(id);
-    let travel, estimated = false;
-    if (idx === 0){
-      travel = (item.travelDefault && item.travelDefault.matchesPrev === null) ? item.travelDefault.min : 0;
-    } else {
-      const prevId = ids[idx-1];
-      if (item.travelDefault && item.travelDefault.matchesPrev === prevId){
-        travel = item.travelDefault.min;
-      } else {
-        const prevItem = itemById(prevId);
-        travel = (prevItem && prevItem.lat != null && item.lat != null) ? haversineMin(prevItem, item) : 10;
-        estimated = true;
-      }
-    }
-    clock += travel;
-    let arrival = clock, end, overdue = false, departClock = null;
-    if (item.ferrySchedule){
-      const options = item.ferrySchedule.map(toMin);
-      let dep = options.find(t => t >= clock);
-      if (dep === undefined){ dep = options[options.length-1]; overdue = true; }
-      departClock = dep;
-      end = dep + item.ferryRideMin;
-      clock = end;
-    } else {
-      end = clock + (item.dwell || 0);
-      clock = end;
-    }
-    const deadlineMissed = item.hardDeadline ? arrival > toMin(item.hardDeadline) : false;
-    const tight = item.ferrySchedule && !overdue && departClock === item.ferrySchedule.map(toMin).slice(-1)[0];
-    out[id] = { arrival, end, departClock, estimated, overdue, deadlineMissed, tight };
-  });
-  return out;
 }
 
 /* ---------- render tabs ---------- */
@@ -381,66 +256,34 @@ DAYS.forEach(day => {
   const panel = document.createElement('div');
   panel.className = 'day-panel' + (day.id === activeDay ? ' active' : '');
   panel.id = `panel-${day.id}`;
-  const startRow = day.defaultStart
-    ? `<div class="start-row">🕐 Day starts <input type="time" id="start-${day.id}" value="${state.dayStart[day.id]}"></div>`
-    : '';
-  panel.innerHTML = `<div class="day-note">${day.note}</div>${startRow}<div class="day-map" id="map-${day.id}"></div><div class="item-list" id="list-${day.id}"></div>`;
+  panel.innerHTML = `<div class="day-note">${day.note}</div><div class="item-list" id="list-${day.id}"></div>`;
   panelsEl.appendChild(panel);
-  if (day.defaultStart){
-    document.getElementById(`start-${day.id}`).onchange = (e) => {
-      state.dayStart[day.id] = e.target.value;
-      saveState();
-      renderList(day.id);
-    };
-  }
   renderList(day.id);
 });
 
 function renderList(dayId){
   const day = DAYS.find(d => d.id === dayId);
   const listEl = document.getElementById(`list-${dayId}`);
-  const sched = day.noSchedule ? null : recomputeSchedule(day, dayId);
   listEl.innerHTML = '';
-  state.order[dayId].forEach((id, idx) => {
-    const item = itemById(id);
-    if (!item) return;
-    const done = !!state.checked[id];
+  day.items.forEach((item, idx) => {
+    const done = !!state.checked[item.id];
     const el = document.createElement('div');
     el.className = 'item' + (done ? ' done' : '');
-    el.dataset.id = id;
-    const modeIcon = MODE_ICON[item.mode] || "";
-    const url = mapsUrl(day, dayId, idx);
-
-    let autoHtml = '';
-    if (sched){
-      const s = sched[id];
-      let label = s.departClock != null ? `board ${fmtMin(s.departClock)}` : fmtMin(s.arrival);
-      let warn = '';
-      let cls = 'auto-time';
-      if (s.overdue){ warn = ' ⚠ past last departure'; cls += ' warn'; }
-      else if (s.deadlineMissed){ warn = ' ⚠ past cutoff'; cls += ' warn'; }
-      else if (s.tight){ warn = ' ⚠ last boat that works'; cls += ' warn'; }
-      autoHtml = `<span class="${cls}">🕐 ${s.estimated ? '~' : ''}${label}${warn}</span>`;
-    }
-
+    const url = mapsUrl(day, idx);
     el.innerHTML = `
-      <div class="handle" data-id="${id}">⠿</div>
       <div class="check">✓</div>
       <div class="i-emoji">${item.emoji || '📍'}</div>
       <div class="i-body">
-        <div class="i-time">${modeIcon ? `<span class="i-mode">${modeIcon}</span>` : ''}${item.time}${autoHtml}</div>
         <div class="i-title">${item.title}</div>
         ${item.note ? `<div class="i-note">${item.note}</div>` : ''}
         ${url ? `<a class="i-map-link" href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 Open in Maps →</a>` : ''}
       </div>
     `;
-    el.querySelector('.check').onclick = () => toggleCheck(id, dayId);
-    el.querySelector('.i-body').onclick = (e) => { if (e.target.closest('.i-map-link')) return; toggleCheck(id, dayId); };
+    el.querySelector('.check').onclick = () => toggleCheck(item.id, dayId);
+    el.querySelector('.i-body').onclick = (e) => { if (e.target.closest('.i-map-link')) return; toggleCheck(item.id, dayId); };
     listEl.appendChild(el);
   });
   updateProgress(dayId);
-  attachDrag(dayId);
-  if (maps[dayId]) renderMap(dayId);
 }
 
 function toggleCheck(id, dayId){
@@ -459,137 +302,16 @@ function updateProgress(dayId){
   if (dayId === activeDay) document.getElementById('progress-fill').style.width = pct + '%';
 }
 
-/* ---------- map ---------- */
-function initMap(dayId){
-  if (maps[dayId]) return maps[dayId];
-  const map = L.map(`map-${dayId}`, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO',
-    subdomains: 'abcd', maxZoom: 19
-  }).addTo(map);
-  maps[dayId] = { map, markerLayer: L.layerGroup().addTo(map), lineLayer: null, fitted: false };
-  return maps[dayId];
-}
-
-function renderMap(dayId){
-  const day = DAYS.find(d => d.id === dayId);
-  const m = maps[dayId] || initMap(dayId);
-  m.markerLayer.clearLayers();
-  if (m.lineLayer) { m.map.removeLayer(m.lineLayer); m.lineLayer = null; }
-
-  const ids = state.order[dayId];
-  const latlngs = [];
-  ids.forEach((id, idx) => {
-    const item = itemById(id);
-    if (!item || item.lat == null) return;
-    const ll = [item.lat, item.lng];
-    latlngs.push(ll);
-    const icon = L.divIcon({ className: 'num-marker', html: `<div>${idx+1}</div>`, iconSize: [24,24], iconAnchor:[12,12] });
-    const url = mapsUrl(day, dayId, idx);
-    L.marker(ll, { icon }).addTo(m.markerLayer)
-      .bindPopup(`<b>${item.emoji || ''} ${idx+1}. ${item.title}</b>${url ? `<br><a href="${url}" target="_blank" rel="noopener">Open in Maps →</a>` : ''}`);
-  });
-
-  if (latlngs.length > 1){
-    m.lineLayer = L.polyline(latlngs, { color:'#ff3b3b', weight:3, opacity:0.7, dashArray:'1,8', lineCap:'round' }).addTo(m.map);
-  }
-  if (!m.fitted && latlngs.length){
-    m.map.fitBounds(L.latLngBounds(latlngs), { padding:[24,24] });
-    m.fitted = true;
-  }
-}
-
-function activateMap(dayId){
-  requestAnimationFrame(() => {
-    const m = initMap(dayId);
-    renderMap(dayId);
-    m.map.invalidateSize();
-  });
-}
-
 function setActiveDay(dayId){
   activeDay = dayId;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.day === dayId));
   document.querySelectorAll('.day-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${dayId}`));
   updateProgress(dayId);
-  activateMap(dayId);
   saveState();
 }
-
-/* ---------- drag reorder (pointer events, touch + mouse) ----------
-   Design: only the dragged card ever moves during the gesture (pure
-   translateY following the pointer). Nothing else in the DOM is
-   touched until pointerup, when the target index — computed from a
-   ONE-TIME snapshot of sibling positions taken at pointerdown — is
-   spliced into the order array and the whole list re-renders once.
-   No live DOM swapping mid-drag, so there's no compensation math to
-   get wrong and nothing to desync. */
-function attachDrag(dayId){
-  const listEl = document.getElementById(`list-${dayId}`);
-  listEl.querySelectorAll('.handle').forEach(handle => {
-    handle.onpointerdown = (e) => startDrag(e, handle, listEl, dayId);
-  });
-}
-
-function startDrag(e, handle, listEl, dayId){
-  e.preventDefault();
-  const itemEl = handle.closest('.item');
-  const siblings = Array.from(listEl.children);
-  const startIndex = siblings.indexOf(itemEl);
-  const rects = siblings.map(el => el.getBoundingClientRect());
-  const startY = e.clientY;
-  let targetIndex = startIndex;
-
-  itemEl.classList.add('dragging');
-  itemEl.style.zIndex = '50';
-  handle.setPointerCapture(e.pointerId);
-
-  function onMove(ev){
-    if (ev.cancelable) ev.preventDefault();
-    const dy = ev.clientY - startY;
-    itemEl.style.transform = `translateY(${dy}px)`;
-    const draggedCenter = rects[startIndex].top + rects[startIndex].height/2 + dy;
-    let count = 0;
-    siblings.forEach((el, i) => {
-      if (i === startIndex) return;
-      const mid = rects[i].top + rects[i].height/2;
-      if (mid < draggedCenter) count++;
-    });
-    targetIndex = count;
-  }
-
-  function onUp(ev){
-    try { handle.releasePointerCapture(ev.pointerId); } catch(e){}
-    document.removeEventListener('pointermove', onMove);
-    document.removeEventListener('pointerup', onUp);
-    itemEl.classList.remove('dragging');
-    itemEl.style.transform = '';
-    itemEl.style.zIndex = '';
-
-    const ids = siblings.map(el => el.dataset.id);
-    const draggedId = ids[startIndex];
-    const others = ids.filter((_, i) => i !== startIndex);
-    others.splice(targetIndex, 0, draggedId);
-    state.order[dayId] = others;
-    saveState();
-    renderList(dayId); // single clean rebuild: fresh Maps links, marker numbers, auto-times
-  }
-
-  document.addEventListener('pointermove', onMove);
-  document.addEventListener('pointerup', onUp);
-}
-
-/* ---------- reset ---------- */
-document.getElementById('reset-btn').onclick = () => {
-  const day = DAYS.find(d => d.id === activeDay);
-  state.order[activeDay] = day.items.map(i => i.id);
-  saveState();
-  renderList(activeDay);
-};
 
 /* ---------- init ---------- */
 DAYS.forEach(d => updateProgress(d.id));
-activateMap(activeDay);
 </script>
 
 </body>
