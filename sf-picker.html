@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SF Picker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0b0d;
+    --bg-soft:#131316;
+    --card:#18181c;
+    --card-hi:#1f1f24;
+    --line:#2a2a30;
+    --text:#ececee;
+    --text-dim:#8f8f96;
+    --text-dimmer:#5c5c62;
+    --red:#ff3b3b;
+    --red-glow:rgba(255,59,59,0.35);
+    --red-dim:#7a2323;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    overflow-x:hidden;
+    min-height:100vh;
+    position:relative;
+    -webkit-tap-highlight-color:transparent;
+  }
+  h1,h2,h3,.display{
+    font-family:'Fraunces',Georgia,serif;
+    letter-spacing:-0.02em;
+  }
+
+  /* ---------- ambient background ---------- */
+  .blob{
+    position:fixed;
+    border-radius:50%;
+    filter:blur(80px);
+    opacity:0.35;
+    z-index:0;
+    pointer-events:none;
+  }
+  .blob1{width:520px;height:520px; background:radial-gradient(circle, var(--red-glow), transparent 70%);
+    top:-180px; left:-140px; animation:drift1 22s ease-in-out infinite alternate;}
+  .blob2{width:420px;height:420px; background:radial-gradient(circle, rgba(255,255,255,0.05), transparent 70%);
+    bottom:-160px; right:-100px; animation:drift2 26s ease-in-out infinite alternate;}
+  .blob3{width:340px;height:340px; background:radial-gradient(circle, var(--red-glow), transparent 70%);
+    bottom:20%; left:60%; opacity:0.18; animation:drift3 18s ease-in-out infinite alternate;}
+  @keyframes drift1{from{transform:translate(0,0) scale(1);} to{transform:translate(60px,80px) scale(1.15);}}
+  @keyframes drift2{from{transform:translate(0,0) scale(1);} to{transform:translate(-50px,-60px) scale(1.1);}}
+  @keyframes drift3{from{transform:translate(0,0);} to{transform:translate(-40px,50px);}}
+
+  .grain{
+    position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0.035; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ---------- layout ---------- */
+  #app{
+    position:relative; z-index:2;
+    max-width:720px; margin:0 auto;
+    min-height:100vh;
+    display:flex; flex-direction:column;
+    padding:24px 20px 48px;
+  }
+  .screen{ display:none; flex:1; flex-direction:column; animation:fadeUp 0.5s ease both; }
+  .screen.active{ display:flex; }
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);} }
+
+  /* progress bar */
+  #progress-wrap{
+    height:4px; width:100%; background:var(--line); border-radius:4px; overflow:hidden;
+    margin-bottom:28px; display:none;
+  }
+  #progress-wrap.show{ display:block; }
+  #progress-bar{
+    height:100%; width:0%; background:linear-gradient(90deg, var(--red-dim), var(--red));
+    border-radius:4px; transition:width 0.4s ease;
+  }
+
+  /* ---------- intro ---------- */
+  #screen-intro{ justify-content:center; align-items:stretch; text-align:center; gap:18px; padding-top:8vh; }
+  #screen-intro > *{ max-width:100%; }
+  .kicker{
+    font-size:12px; letter-spacing:0.24em; text-transform:uppercase; color:var(--text-dimmer);
+    font-weight:600;
+  }
+  .headline{
+    font-size:clamp(40px, 11vw, 68px);
+    font-weight:700;
+    line-height:0.98;
+    background:linear-gradient(180deg, #fff, #b9b9bf);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .headline em{
+    font-style:italic; font-weight:500;
+    background:linear-gradient(180deg, var(--red), #7a1e1e);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sub{ color:var(--text-dim); font-size:16px; max-width:440px; line-height:1.55; margin:2px auto 0; }
+  .sub b{ color:var(--text); font-weight:600; }
+  .stat-row{ display:flex; gap:22px; margin:8px auto 0; color:var(--text-dimmer); font-size:13px; justify-content:center; }
+  .stat-row span b{ color:var(--text); font-family:'Fraunces',serif; font-size:20px; display:block; font-weight:600; }
+
+  .btn{
+    font-family:'Inter',sans-serif;
+    font-weight:700; font-size:15px;
+    border:none; cursor:pointer;
+    border-radius:999px;
+    padding:16px 30px;
+    transition:transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .btn:active{ transform:scale(0.96); }
+  .btn-primary{
+    background:linear-gradient(135deg, #ff5252, var(--red) 60%, #b81f1f);
+    color:#fff;
+    box-shadow:0 8px 30px -6px var(--red-glow);
+  }
+  .btn-primary:hover{ box-shadow:0 10px 36px -4px var(--red-glow); }
+  .btn-ghost{
+    background:transparent; color:var(--text-dim);
+    border:1px solid var(--line);
+  }
+  .btn-ghost:hover{ color:var(--text); border-color:#3a3a42; }
+  .btn-row{ display:flex; gap:12px; margin-top:22px; flex-wrap:wrap; justify-content:center; }
+  .arrow{ display:inline-block; transition:transform 0.2s ease; margin-left:2px; }
+  .btn:hover .arrow{ transform:translateX(3px); }
+
+  /* ---------- vibe select ---------- */
+  #screen-vibe{ justify-content:center; gap:20px; padding-top:6vh; }
+  .q-title{ font-size:28px; font-weight:700; margin-bottom:4px; }
+  .q-sub{ color:var(--text-dim); font-size:14px; margin-bottom:18px; }
+  .vibe-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:460px){ .vibe-grid{ grid-template-columns:1fr; } }
+  .vibe-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:22px 18px;
+    cursor:pointer;
+    text-align:left;
+    transition:all 0.2s ease;
+    position:relative; overflow:hidden;
+  }
+  .vibe-card:hover{ border-color:#3d3d46; transform:translateY(-2px); background:var(--card-hi); }
+  .vibe-card:active{ transform:scale(0.97); }
+  .vibe-card .ic{ font-size:28px; display:block; margin-bottom:10px; }
+  .vibe-card .vt{ font-weight:700; font-size:16px; margin-bottom:3px; }
+  .vibe-card .vd{ font-size:13px; color:var(--text-dim); line-height:1.4; }
+
+  /* ---------- round screen ---------- */
+  #screen-round{ gap:0; }
+  .round-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px; }
+  .round-label{ font-size:13px; color:var(--text-dimmer); font-weight:600; letter-spacing:0.04em; }
+  .round-count{ font-size:13px; color:var(--text-dim); }
+  .cat-tag{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:12px; color:var(--text-dim); font-weight:600;
+    text-transform:uppercase; letter-spacing:0.06em;
+    margin-bottom:18px;
+  }
+
+  .card-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(210px,1fr)); gap:14px; }
+  .pick-card{
+    background:var(--card);
+    border:1.5px solid var(--line);
+    border-radius:20px;
+    padding:20px 18px 18px;
+    cursor:pointer;
+    position:relative;
+    transition:border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+    display:flex; flex-direction:column; min-height:158px;
+  }
+  .pick-card:active{ transform:scale(0.98); }
+  .pick-card .pc-ic{ font-size:30px; margin-bottom:12px; filter:drop-shadow(0 4px 12px rgba(0,0,0,0.4)); }
+  .pick-card .pc-title{ font-family:'Fraunces',serif; font-weight:600; font-size:19px; line-height:1.15; margin-bottom:8px; }
+  .pick-card .pc-blurb{ font-size:13.5px; color:var(--text-dim); line-height:1.5; flex:1; }
+  .pick-card .pc-meta{ font-size:11.5px; color:var(--text-dimmer); margin-top:10px; font-weight:500; }
+  .pick-card .heart{
+    position:absolute; top:14px; right:14px;
+    width:30px; height:30px; border-radius:50%;
+    border:1.5px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; color:var(--text-dimmer);
+    transition:all 0.2s ease;
+  }
+  .pick-card.selected{
+    border-color:var(--red);
+    background:linear-gradient(160deg, rgba(255,59,59,0.10), var(--card) 55%);
+    box-shadow:0 0 0 1px var(--red), 0 14px 30px -10px var(--red-glow);
+  }
+  .pick-card.selected .heart{
+    background:var(--red); border-color:var(--red); color:#fff;
+    transform:scale(1.08);
+  }
+  .pick-card.selected .pc-title{ color:#fff; }
+  .pick-card.pulse .heart{ animation:heartPulse 0.4s ease; }
+  @keyframes heartPulse{ 0%{transform:scale(1);} 40%{transform:scale(1.5);} 100%{transform:scale(1.08);} }
+
+  .particle{
+    position:absolute; pointer-events:none; font-size:16px;
+    animation:floatUp 0.9s ease forwards;
+  }
+  @keyframes floatUp{
+    0%{ opacity:1; transform:translateY(0) scale(0.6) rotate(0deg); }
+    100%{ opacity:0; transform:translateY(-70px) scale(1.3) rotate(30deg); }
+  }
+
+  .round-footer{ margin-top:26px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .skip-link{
+    background:none; border:none; color:var(--text-dimmer); font-size:13px;
+    cursor:pointer; text-decoration:underline; text-underline-offset:3px;
+  }
+  .skip-link:hover{ color:var(--text-dim); }
+
+  /* ---------- results ---------- */
+  #screen-results{ gap:0; }
+  .r-head{ text-align:center; margin-bottom:26px; }
+  .r-count{
+    font-family:'Fraunces',serif; font-weight:700; font-size:44px;
+    background:linear-gradient(180deg,#fff,#b9b9bf); -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .r-sub{ color:var(--text-dim); font-size:14px; margin-top:4px; }
+
+  .cat-block{ margin-bottom:22px; }
+  .cat-block-head{
+    display:flex; align-items:center; gap:8px;
+    font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--text-dimmer); margin-bottom:10px;
+  }
+  .cat-block-head .n{ color:var(--red); }
+  .result-item{
+    display:flex; align-items:flex-start; gap:12px;
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; margin-bottom:8px;
+  }
+  .result-item .ri-ic{ font-size:20px; margin-top:1px; flex-shrink:0; }
+  .result-item .ri-body{ flex:1; min-width:0; }
+  .result-item .ri-title{ font-weight:700; font-size:15px; margin-bottom:2px; }
+  .result-item .ri-blurb{ font-size:13px; color:var(--text-dim); line-height:1.45; }
+
+  .empty-note{
+    text-align:center; color:var(--text-dim); font-size:14px; padding:30px 10px;
+    border:1px dashed var(--line); border-radius:16px; margin-bottom:20px;
+  }
+
+  #copy-zone{ margin-top:14px; text-align:center; }
+  #copy-btn{ width:100%; max-width:340px; margin:0 auto; display:block; }
+  .copy-help{
+    margin-top:14px; font-size:13px; color:var(--text-dim);
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    opacity:0; transform:translateY(-4px); transition:all 0.3s ease;
+  }
+  .copy-help.show{ opacity:1; transform:translateY(0); }
+
+  .restart-row{ text-align:center; margin-top:28px; }
+
+  footer.watermark{
+    text-align:center; color:var(--text-dimmer); font-size:11px;
+    margin-top:34px; letter-spacing:0.03em;
+  }
+</style>
+</head>
+<body>
+
+<div class="blob blob1"></div>
+<div class="blob blob2"></div>
+<div class="blob blob3"></div>
+<div class="grain"></div>
+
+<div id="app">
+
+  <div id="progress-wrap"><div id="progress-bar"></div></div>
+
+  <!-- INTRO -->
+  <section id="screen-intro" class="screen active">
+    <div class="kicker">for Lars &middot; from Soren</div>
+    <h1 class="headline">San Francisco.</h1>
+    <p class="sub">Tap what looks good, a few at a time. ~2 min. <b>Copy the list at the end and text it back.</b></p>
+    <div class="stat-row">
+      <span><b id="stat-total">36</b>spots</span>
+      <span><b>6</b>categories</span>
+      <span><b>~2min</b>to finish</span>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goVibe()">Let's go <span class="arrow">&rarr;</span></button>
+    </div>
+  </section>
+
+  <!-- VIBE -->
+  <section id="screen-vibe" class="screen">
+    <div class="q-title">Pick one to start.</div>
+    <div class="q-sub">Changes the order only. You'll see everything either way.</div>
+    <div class="vibe-grid" id="vibe-grid"></div>
+  </section>
+
+  <!-- ROUND -->
+  <section id="screen-round" class="screen">
+    <div class="round-head">
+      <span class="round-label">ROUND <span id="round-num">1</span> / <span id="round-total">12</span></span>
+      <span class="round-count"><span id="picked-count">0</span> picked so far</span>
+    </div>
+    <div class="cat-tag" id="round-cat-tag"></div>
+    <div class="card-grid" id="round-cards"></div>
+    <div class="round-footer">
+      <button class="skip-link" id="skip-btn" onclick="skipToResults()">skip ahead &rarr; see my list</button>
+      <button class="btn btn-primary" onclick="nextRound()">Next <span class="arrow">&rarr;</span></button>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="screen-results" class="screen">
+    <div class="r-head">
+      <div class="r-count" id="r-count">0</div>
+      <div class="r-sub">spots picked for San Francisco</div>
+    </div>
+    <div id="results-list"></div>
+    <div id="copy-zone">
+      <button class="btn btn-primary" id="copy-btn" onclick="copyResults()">Copy my list <span class="arrow">&rarr;</span></button>
+      <div class="copy-help" id="copy-help">Copied! Now text that to Soren 📱</div>
+    </div>
+    <div class="restart-row">
+      <button class="btn btn-ghost" onclick="restart()">Start over</button>
+    </div>
+  </section>
+
+  <footer class="watermark">sf-picker</footer>
+
+</div>
+
+<script>
+/* ============ DATA ============ */
+const CATS = {
+  nature:   { label: "Nature & Parks",     icon: "🌿" },
+  landmark: { label: "Landmarks & History", icon: "🏛" },
+  water:    { label: "Waterfront & Views",  icon: "🌊" },
+  food:     { label: "Food & Drink",        icon: "🍜" },
+  hood:     { label: "Neighborhoods",       icon: "🧭" },
+  night:    { label: "Nightlife",           icon: "🌙" },
+};
+
+const CARDS = [
+  // NATURE & PARKS
+  {id:"jtg", cat:"nature", title:"Japanese Tea Garden", blurb:"Koi ponds, a steep drum bridge, pagodas tucked into Golden Gate Park.", meta:"Golden Gate Park"},
+  {id:"sfbg", cat:"nature", title:"SF Botanical Garden", blurb:"55 acres, quiet paths, plants from every climate on earth.", meta:"9th & Lincoln"},
+  {id:"cof", cat:"nature", title:"Conservatory of Flowers", blurb:"Victorian glasshouse. Orchids, carnivorous plants, humid air.", meta:"JFK Dr, Golden Gate Park"},
+  {id:"steps", cat:"nature", title:"16th Ave Tiled Steps", blurb:"163 mosaic steps up a residential hill. Free, and genuinely stunning.", meta:"Inner Sunset"},
+  {id:"gvp", cat:"nature", title:"Grand View Park", blurb:"A bare sand dune with a 360° view of the whole city and the ocean.", meta:"top of the tiled steps"},
+  {id:"corona", cat:"nature", title:"Corona Heights Park", blurb:"A red rock outcrop nobody talks about. 360° view, almost empty.", meta:"between Haight & the Castro"},
+  {id:"sutro", cat:"nature", title:"Mount Sutro", blurb:"A eucalyptus forest hiding above UCSF. Feels nothing like the rest of the city.", meta:"above Parnassus"},
+  {id:"landsend", cat:"nature", title:"Lands End Trail", blurb:"Coastal cliffs, shipwreck views, and the Sutro Baths ruins at the end.", meta:"far NW corner"},
+  {id:"dolores", cat:"nature", title:"Dolores Park", blurb:"Skyline views, a slope full of people, the best people-watching in the city.", meta:"Mission"},
+
+  // LANDMARKS & HISTORY
+  {id:"hornet", cat:"landmark", title:"USS Hornet", icon:"🛩️", blurb:"WWII aircraft carrier that later recovered Apollo 11 and 12 from the ocean.", meta:"Alameda, ferry ride away"},
+  {id:"pampanito", cat:"landmark", title:"USS Pampanito", icon:"🛥️", blurb:"A real WWII fleet submarine you walk straight through, compartment by compartment.", meta:"Pier 45"},
+  {id:"musee", cat:"landmark", title:"Musée Mécanique", icon:"🕹️", blurb:"A few hundred antique coin-op machines, still running. Free to walk in.", meta:"Pier 45, next to the sub"},
+  {id:"coit", cat:"landmark", title:"Coit Tower", blurb:"WPA murals inside, a full view of the bay from the top of Telegraph Hill.", meta:"North Beach"},
+  {id:"paintedladies", cat:"landmark", title:"Painted Ladies", blurb:"The postcard Victorians, skyline behind them, from Alamo Square.", meta:"Alamo Square"},
+  {id:"pfa", cat:"landmark", title:"Palace of Fine Arts", blurb:"A giant Beaux-Arts rotunda next to a quiet lagoon. Looks fake. Isn't.", meta:"Marina District"},
+  {id:"citylights", cat:"landmark", title:"City Lights Booksellers", blurb:"The Beat-era bookstore that published Ginsberg. Still exactly itself.", meta:"North Beach"},
+  {id:"batteryspencer", cat:"landmark", title:"Battery Spencer", blurb:"The single best Golden Gate Bridge photo in the Bay Area, full stop.", meta:"Marin side"},
+
+  // WATERFRONT & VIEWS
+  {id:"hydestreet", cat:"water", title:"Hyde Street Pier", blurb:"Real historic sailing ships you can board, right on the water.", meta:"Fisherman's Wharf"},
+  {id:"ferrybldg", cat:"water", title:"Ferry Building", blurb:"A waterfront marketplace built into a working ferry terminal.", meta:"Embarcadero"},
+  {id:"pier39", cat:"water", title:"Pier 39", blurb:"A whole dock full of sea lions, loud and doing nothing productive.", meta:"Fisherman's Wharf"},
+  {id:"sausalito", cat:"water", title:"Sausalito", blurb:"Houseboats and bay views, a short scenic ferry ride from downtown.", meta:"across the bay"},
+  {id:"marinheadlands", cat:"water", title:"Marin Headlands", blurb:"The Golden Gate Bridge from the north side, with hiking trails attached.", meta:"across the bridge"},
+  {id:"twinpeaks", cat:"water", title:"Twin Peaks", blurb:"The highest point most people can drive or bus to. The whole city, at once.", meta:"central SF"},
+
+  // FOOD & DRINK
+  {id:"farmersmkt", cat:"food", title:"Ferry Plaza Farmers Market", blurb:"Produce stalls and food vendors right on the water, Tue & Sat.", meta:"Embarcadero"},
+  {id:"swan", cat:"food", title:"Swan Oyster Depot", blurb:"18 stools, no tables, open since 1912. Oysters and chowder at the counter.", meta:"Polk St"},
+  {id:"zuni", cat:"food", title:"Zuni Cafe", blurb:"Wood-fired roast chicken for two. Order it the second you sit down.", meta:"Hayes Valley"},
+  {id:"japantown", cat:"food", title:"Japantown", blurb:"Ramen, mochi, an arcade, and a five-story pagoda in the middle of it.", meta:"Peace Plaza"},
+  {id:"mission-food", cat:"food", title:"Mission Burritos", blurb:"La Taqueria or El Farolito. The actual, contested, real thing.", meta:"Mission / Valencia"},
+  {id:"buenavista", cat:"food", title:"Buena Vista Cafe", blurb:"Where the Irish coffee was invented in 1952. They still pour it the same way.", meta:"near Ghirardelli Sq"},
+
+  // NEIGHBORHOODS
+  {id:"haight", cat:"hood", title:"Haight-Ashbury", blurb:"'60s counterculture ground zero, vintage shops, still a little weird.", meta:""},
+  {id:"valencia", cat:"hood", title:"Valencia Street", blurb:"Murals, boutiques, the walkable spine of the Mission.", meta:""},
+  {id:"chinatown", cat:"hood", title:"Chinatown", blurb:"The oldest Chinatown in North America. Dragon's Gate, alleyways, dumplings.", meta:""},
+  {id:"northbeach", cat:"hood", title:"North Beach", blurb:"Little Italy collided with the Beat Generation. Still both.", meta:""},
+
+  // NIGHTLIFE
+  {id:"lipo", cat:"night", title:"Li Po Cocktail Lounge", blurb:"A red-lantern dive bar in a Chinatown basement. Order the Chinese Mai Tai.", meta:"Chinatown"},
+  {id:"devilsacre", cat:"night", title:"The Devil's Acre", blurb:"A proper cocktail tavern, North Beach, no pretense about it.", meta:"North Beach"},
+  {id:"thesaloon", cat:"night", title:"The Saloon", blurb:"SF's oldest bar. Live blues most nights, since 1861.", meta:"North Beach"},
+  {id:"ginocarlo", cat:"night", title:"Gino & Carlo", blurb:"An old-school neighborhood bar that hasn't changed for anyone.", meta:"North Beach"},
+];
+
+document.getElementById('stat-total').textContent = CARDS.length;
+
+/* ============ STATE ============ */
+const VIBES = [
+  {id:"chill", icon:"🌲", title:"Chill & Nature", desc:"Parks, quiet corners, good views", order:["nature","water","hood","landmark","food","night"]},
+  {id:"iconic", icon:"🌉", title:"Iconic & Touristy", desc:"The things you came here to see", order:["landmark","water","hood","nature","food","night"]},
+  {id:"food", icon:"🍽️", title:"Food First", desc:"Plan the rest around eating well", order:["food","hood","water","nature","landmark","night"]},
+  {id:"night", icon:"🌃", title:"Night Owl", desc:"Bars, wandering, staying out late", order:["night","hood","food","water","landmark","nature"]},
+];
+
+let orderedCards = CARDS.slice();
+let rounds = [];
+let roundIndex = 0;
+let selected = new Set();
+
+/* ============ RENDER: VIBE ============ */
+const vibeGrid = document.getElementById('vibe-grid');
+VIBES.forEach(v => {
+  const el = document.createElement('div');
+  el.className = 'vibe-card';
+  el.innerHTML = `<span class="ic">${v.icon}</span><div class="vt">${v.title}</div><div class="vd">${v.desc}</div>`;
+  el.onclick = () => chooseVibe(v);
+  vibeGrid.appendChild(el);
+});
+
+function chooseVibe(v){
+  const catRank = {};
+  v.order.forEach((c,i) => catRank[c] = i);
+  orderedCards = CARDS.slice().sort((a,b) => catRank[a.cat] - catRank[b.cat]);
+  rounds = [];
+  for (let i=0; i<orderedCards.length; i+=3){
+    rounds.push(orderedCards.slice(i, i+3));
+  }
+  roundIndex = 0;
+  selected = new Set();
+  document.getElementById('round-total').textContent = rounds.length;
+  document.getElementById('progress-wrap').classList.add('show');
+  showScreen('screen-round');
+  renderRound();
+}
+
+/* ============ RENDER: ROUND ============ */
+function renderRound(){
+  const round = rounds[roundIndex];
+  document.getElementById('round-num').textContent = roundIndex + 1;
+  document.getElementById('picked-count').textContent = selected.size;
+  updateProgress();
+
+  const cats = [...new Set(round.map(c => c.cat))];
+  const tagHtml = cats.map(c => `${CATS[c].icon} ${CATS[c].label}`).join('  &middot;  ');
+  document.getElementById('round-cat-tag').innerHTML = tagHtml;
+
+  const wrap = document.getElementById('round-cards');
+  wrap.innerHTML = '';
+  round.forEach(card => {
+    const el = document.createElement('div');
+    el.className = 'pick-card' + (selected.has(card.id) ? ' selected' : '');
+    el.dataset.id = card.id;
+    const icon = card.icon || CATS[card.cat].icon;
+    el.innerHTML = `
+      <div class="heart">&hearts;</div>
+      <div class="pc-ic">${icon}</div>
+      <div class="pc-title">${card.title}</div>
+      <div class="pc-blurb">${card.blurb}</div>
+      ${card.meta ? `<div class="pc-meta">${card.meta}</div>` : ''}
+    `;
+    el.onclick = (e) => toggleCard(card, el, e);
+    wrap.appendChild(el);
+  });
+
+  document.getElementById('skip-btn').style.visibility = (roundIndex >= 4) ? 'visible' : 'hidden';
+}
+
+function toggleCard(card, el, evt){
+  if (selected.has(card.id)){
+    selected.delete(card.id);
+    el.classList.remove('selected');
+  } else {
+    selected.add(card.id);
+    el.classList.add('selected');
+    el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
+    burstParticle(el, evt);
+  }
+  document.getElementById('picked-count').textContent = selected.size;
+}
+
+function burstParticle(el, evt){
+  const rect = el.getBoundingClientRect();
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.textContent = '❤';
+  p.style.left = (rect.width - 30) + 'px';
+  p.style.top = '14px';
+  p.style.color = 'var(--red)';
+  el.appendChild(p);
+  setTimeout(() => p.remove(), 900);
+}
+
+function nextRound(){
+  if (roundIndex < rounds.length - 1){
+    roundIndex++;
+    renderRound();
+    document.getElementById('screen-round').scrollTop = 0;
+    window.scrollTo({top:0, behavior:'smooth'});
+  } else {
+    showResults();
+  }
+}
+
+function skipToResults(){ showResults(); }
+
+function updateProgress(){
+  const pct = ((roundIndex) / rounds.length) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+/* ============ RESULTS ============ */
+function showResults(){
+  document.getElementById('progress-bar').style.width = '100%';
+  const picked = CARDS.filter(c => selected.has(c.id));
+  document.getElementById('r-count').textContent = picked.length;
+
+  const list = document.getElementById('results-list');
+  list.innerHTML = '';
+
+  if (picked.length === 0){
+    list.innerHTML = `<div class="empty-note">Nothing picked. Go back and hit a few hearts.</div>`;
+  } else {
+    Object.keys(CATS).forEach(catKey => {
+      const items = picked.filter(c => c.cat === catKey);
+      if (!items.length) return;
+      const block = document.createElement('div');
+      block.className = 'cat-block';
+      block.innerHTML = `<div class="cat-block-head">${CATS[catKey].icon} ${CATS[catKey].label} <span class="n">&middot; ${items.length}</span></div>`;
+      items.forEach(c => {
+        const icon = c.icon || CATS[c.cat].icon;
+        const row = document.createElement('div');
+        row.className = 'result-item';
+        row.innerHTML = `<div class="ri-ic">${icon}</div><div class="ri-body"><div class="ri-title">${c.title}</div><div class="ri-blurb">${c.blurb}</div></div>`;
+        block.appendChild(row);
+      });
+      list.appendChild(block);
+    });
+  }
+
+  showScreen('screen-results');
+  document.getElementById('progress-wrap').classList.remove('show');
+  document.getElementById('copy-help').classList.remove('show');
+  const btn = document.getElementById('copy-btn');
+  btn.innerHTML = 'Copy my list <span class="arrow">&rarr;</span>';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function copyResults(){
+  const picked = CARDS.filter(c => selected.has(c.id));
+  let text = `Lars's SF picks (${picked.length} spots)\n\n`;
+  Object.keys(CATS).forEach(catKey => {
+    const items = picked.filter(c => c.cat === catKey);
+    if (!items.length) return;
+    text += `${CATS[catKey].label.toUpperCase()}\n`;
+    items.forEach(c => { text += `- ${c.title}\n`; });
+    text += `\n`;
+  });
+  text += `Made with the SF picker, sent to Soren.`;
+
+  const done = () => {
+    const btn = document.getElementById('copy-btn');
+    btn.innerHTML = 'Copied ✓';
+    const help = document.getElementById('copy-help');
+    help.classList.add('show');
+    setTimeout(() => { btn.innerHTML = 'Copy my list <span class="arrow">&rarr;</span>'; }, 2400);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, cb){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try { document.execCommand('copy'); } catch(e){}
+  document.body.removeChild(ta);
+  cb();
+}
+
+function restart(){
+  selected = new Set();
+  roundIndex = 0;
+  document.getElementById('progress-wrap').classList.remove('show');
+  showScreen('screen-intro');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function goVibe(){
+  showScreen('screen-vibe');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+</script>
+
+</body>
+</html>
