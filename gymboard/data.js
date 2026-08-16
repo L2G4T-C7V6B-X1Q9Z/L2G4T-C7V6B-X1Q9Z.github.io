@@ -46,8 +46,10 @@ import {
   getDocs,
   getDocsFromCache, // v9.2: cache-only reads for the instant boot paint
   setDoc,
-  updateDoc,
-  arrayUnion,
+  // updateDoc / arrayUnion were dropped 2026-08-15: their ONLY caller was
+  // appendSelfToActive()'s arrayUnion append to /meta/active.uids, which was the
+  // authorization hole. Enrollment is now a per-uid setDoc on /activeReaders, so
+  // there is no shared array to union into. Don't re-add them without a caller.
   writeBatch,
   runTransaction,
   serverTimestamp,
@@ -414,7 +416,7 @@ export async function initApp(firebaseConfig, appCheckSiteKey, opts = {}) {
 }
 
 // =============================================================================
-// authAndBind — anonymous sign-in + token-gated binding + meta/active append
+// authAndBind — anonymous sign-in + token-gated binding + activeReader enrollment
 // =============================================================================
 
 /** Wrap signInAnonymously, resolving with the (stable-per-install) uid. */
@@ -444,37 +446,46 @@ async function writeBinding(userId, token) {
 }
 
 /**
- * Append THIS uid to /meta/active (active-reader allowlist). The rule permits a
- * signed-in client to append ONLY its own uid (read current, add me, write back;
- * nothing removed, nothing foreign added). Non-fatal: if the doc is missing or
- * the write loses a race, reads simply stay gated until the next attempt — auth
- * itself does not fail. Skips the write if this uid is already present.
+ * enrollAsActiveReader(userId) -> Promise<boolean>
+ *
+ * Enroll THIS uid as an active reader by writing /activeReaders/{myUid} =
+ * { userId, at }. The rules verify PROOF OF BINDING — /bindings/{userId}.uid ==
+ * my uid — before allowing the row, so enrollment requires a live capability
+ * binding rather than merely being signed in.
+ *
+ * ⛔ 2026-08-15 SECURITY FIX. This replaces appendSelfToActive(), which appended
+ * this uid to /meta/active.uids under a rule that accepted ANY signed-in caller.
+ * Anonymous sign-in is open to anyone holding firebase-config.js, and that file
+ * is committed in the PUBLIC Pages repo — so a stranger could enroll themselves
+ * and read every member's name, goals, saved meals, daily kcal/protein, workout
+ * history and weights. /meta/active is Admin-SDK-write-only now, and this write
+ * is the only enrollment path.
+ *
+ * ⚠️ ORDERING IS LOAD-BEARING. This MUST run AFTER writeBinding() has been
+ * ACKED by the server, because the rule reads /bindings/{userId} server-side. The
+ * old code deliberately raced them in parallel (v9.2 boot-latency win); under the
+ * new rule that parallel enrollment fails on any device whose uid is not yet in
+ * the binding — i.e. every new phone, every reinstall, every cleared-site-data
+ * recovery. Do not "optimize" this back into a Promise.all.
+ *
+ * One row per uid, doc id == the uid, so there is no read-modify-write window and
+ * no shared document to contend on: the concurrent-bind race that the arrayUnion
+ * version existed to fix cannot occur here at all.
+ *
+ * Non-fatal by design: a failure leaves reads gated until the next attempt rather
+ * than failing auth, and subscribeUsers() self-heals by calling this once on a
+ * permission-denied. Returns true only on a real server ack.
  */
-async function appendSelfToActive() {
-  if (!_uid) return false;
-  const ref = doc(_db, 'meta', 'active');
-  // Atomic enrollment. arrayUnion is race-free (no read-modify-write window), so two
-  // devices binding at the same moment can't clobber each other's uid. It also
-  // satisfies the /meta/active rule: the post-write array is old ∪ {me}, which is
-  // hasAll(old) AND hasOnly(old + me). The prior read-then-setDoc(full array) raced
-  // under concurrent binds — a stale `current` dropped someone else's uid, the rule's
-  // hasAll(old) then failed, the write was DENIED, and the silent catch left this
-  // fresh anon uid OFF the activeReader allowlist. Its very first /users list was then
-  // denied and the board rendered EMPTY (the iOS-PWA "everyone else is missing").
+async function enrollAsActiveReader(userId) {
+  if (!_uid || !userId) return false;
   try {
-    await updateDoc(ref, { uids: arrayUnion(_uid) });
+    await setDoc(doc(_db, 'activeReaders', _uid), {
+      userId,
+      at: serverTimestamp(), // rule requires == request.time; no backdating
+    });
     return true;
   } catch (_e) {
-    // Fallback if the allowlist doc somehow doesn't exist yet (pre-seed): create it.
-    try {
-      const snap = await getDoc(ref);
-      const current = snap.exists() && Array.isArray(snap.data().uids) ? snap.data().uids : [];
-      if (current.includes(_uid)) return true;
-      await setDoc(ref, { uids: [...current, _uid] }, { merge: true });
-      return true;
-    } catch (_e2) {
-      return false; // never block auth on enrollment; subscribeUsers self-heals.
-    }
+    return false; // never block auth on enrollment; subscribeUsers self-heals.
   }
 }
 
@@ -482,10 +493,11 @@ async function appendSelfToActive() {
  * authAndBind() -> Promise<{ userId, uid }>
  *
  * The load-bearing sequence: resolve capability (hash, else stored URL) ->
- * signInAnonymously -> setDoc /bindings (token proof) -> append own uid to
- * /meta/active -> strip the fragment -> persist the full capability URL for the
- * rebind path. Throws a tagged error if no capability is present or the token is
- * malformed. App Check is already initialized (initApp ran first).
+ * signInAnonymously -> setDoc /bindings (token proof) -> AND ONLY THEN write
+ * /activeReaders/{myUid} (the read enrollment, which the rules gate on that
+ * binding) -> persist the full capability URL for the rebind path. Throws a
+ * tagged error if no capability is present or the token is malformed. App Check
+ * is already initialized (initApp ran first).
  */
 export async function authAndBind() {
   assertInit();
@@ -517,18 +529,19 @@ export async function authAndBind() {
   // not match /_tokenIndex (wrong/rotated link) — NOT a uid mismatch — so it is
   // a hard bad-token, surfaced as such (reclaim is for the post-bind mismatch).
   //
-  // v9.2 (perf): the read self-enrollment (appendSelfToActive) runs IN PARALLEL with
-  // the binding write instead of serially after it — they were two back-to-back awaited
-  // server acks on EVERY boot's critical path. Safe: the /meta/active append rule is
-  // signedIn()-only by design ("a reader self-enrolling is not yet a bound owner"), so
-  // it has no dependency on the binding existing; it swallows its own errors (never
-  // blocks auth; subscribeUsers self-heals a missed enrollment); and we still await the
-  // BINDING before setting any bound state, so a rotated link doormats exactly as before.
-  const enrollP = appendSelfToActive(); // self-swallowing, non-fatal
+  // ⚠️ 2026-08-15: the v9.2 perf trick that ran the read self-enrollment IN PARALLEL
+  // with this write is REVERTED, deliberately. It was safe only because the old
+  // /meta/active append rule was signedIn()-only — which was the authorization hole.
+  // Enrollment now requires PROOF OF BINDING (the rule does a server-side get() on
+  // /bindings/{userId}), so it has a hard happens-after dependency on this ack. Run
+  // in parallel it would be evaluated against the PREVIOUS binding and be denied on
+  // every device with a fresh uid. Cost of the revert: one extra sequential server
+  // ack on boot. That is a real regression against the boot-latency work and it is
+  // the price of the fix; the answer to a slow boot is BOUNDING these awaits (the
+  // open P1), not racing an authorization check against the thing it authorizes.
   try {
     await writeBinding(cap.userId, cap.token);
   } catch (err) {
-    await enrollP.catch(() => {}); // settle the parallel write before throwing
     if (isPermissionDenied(err)) {
       throw taggedError(
         'gymboard/bind-denied',
@@ -543,7 +556,9 @@ export async function authAndBind() {
   _bound = true;
   _reclaimFired = false; // a fresh successful bind re-arms the loud prompt
 
-  await enrollP; // already settled or in flight; appendSelfToActive never rejects
+  // Now that the binding is on the server, enroll for group reads. Self-swallowing
+  // and non-fatal: a miss leaves the board gated, and subscribeUsers() self-heals.
+  await enrollAsActiveReader(cap.userId);
 
   // v4.4: do NOT strip the fragment. iOS "Add to Home Screen" captures the CURRENT
   // URL, and a standalone home-screen PWA gets ISOLATED storage — the localStorage
@@ -588,7 +603,8 @@ export async function reclaim() {
   _token = cap.token;
   _bound = true;
   _reclaimFired = false;
-  await appendSelfToActive();
+  // AFTER the binding ack, never before it — the enrollment rule reads /bindings.
+  await enrollAsActiveReader(cap.userId);
 
   // After a successful reclaim, retry anything stranded in the outbox.
   flushOutbox();
@@ -783,8 +799,8 @@ export async function ensureUserDoc(userId) {
  * onSnapshot on /users where archived==false; cb(usersArray) on every change.
  * Each element is { id, ...docData } (id == userId == the doc id). The single
  * where('archived','==',false) needs the single-field index the console offers
- * on first run — accept it. A permission-denied on the stream (our uid dropped
- * from /meta/active, or a binding mismatch) routes to the reclaim prompt.
+ * on first run — accept it. A permission-denied on the stream (our /activeReaders
+ * row is gone, or a binding mismatch) routes to the reclaim prompt.
  */
 export function subscribeUsers(cb) {
   assertInit();
@@ -806,10 +822,17 @@ export function subscribeUsers(cb) {
   const onErr = async (err) => {
     // SELF-HEAL: a brand-new context (e.g. a freshly installed iOS home-screen PWA,
     // which gets ISOLATED storage and therefore a brand-new anon uid) can hit this
-    // first /users list before its uid is on the /meta/active allowlist (or after an
-    // enrollment hiccup), which is a permission-denied that KILLS the listener. Re-
-    // enroll ONCE and re-subscribe before falling back to the reclaim prompt, so the
-    // board fills in on its own instead of stranding the user on an empty grid.
+    // first /users list before its /activeReaders row exists (or after an enrollment
+    // hiccup), which is a permission-denied that KILLS the listener. Re-enroll ONCE
+    // and re-subscribe before falling back to the reclaim prompt, so the board fills
+    // in on its own instead of stranding the user on an empty grid.
+    //
+    // 2026-08-15: this is ALSO the zero-touch path for an already-open tab on the day
+    // the new rules land — a legacy member whose reads start failing re-enrolls here
+    // and keeps going without a reload. It is NOT a way back in for a revoked member:
+    // enrollAsActiveReader() needs a live /bindings doc, and archive-member.js deletes
+    // it (plus /_tokenIndex, plus the /activeReaders row), so the re-enroll is denied
+    // and this falls through to the reclaim prompt exactly as it should.
     if (!healed && isPermissionDenied(err)) {
       healed = true;
       if (active) {
@@ -820,7 +843,7 @@ export function subscribeUsers(cb) {
           /* already detached */
         }
       }
-      const ok = await appendSelfToActive();
+      const ok = await enrollAsActiveReader(_userId);
       if (ok) {
         active = onSnapshot(q, onNext, onErr);
         _unsubs.add(active);
@@ -2324,7 +2347,7 @@ function recordSongTrackId(songId, trackId) {
  * createdAt is null on the local echo of an optimistic add until the write acks;
  * ui.js handles that (it renders its own optimistic row meanwhile). The unsub is
  * tracked in _unsubs so data.teardown() detaches it. A permission-denied on the
- * stream (our uid dropped from /meta/active, or a binding mismatch) routes to the
+ * stream (our /activeReaders row is gone, or a binding mismatch) routes to the
  * reclaim prompt - same posture as subscribeUsers.
  */
 export function subscribePlaylist(cb) {
