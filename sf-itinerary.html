@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SF Itinerary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0b0d;
+    --card:#18181c;
+    --card-hi:#1f1f24;
+    --line:#2a2a30;
+    --text:#ececee;
+    --text-dim:#8f8f96;
+    --text-dimmer:#5c5c62;
+    --red:#ff3b3b;
+    --red-glow:rgba(255,59,59,0.35);
+    --red-dim:#7a2323;
+    --green:#3ddc84;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    overflow-x:hidden; min-height:100vh; position:relative;
+  }
+  h1,h2,.display{ font-family:'Fraunces',Georgia,serif; letter-spacing:-0.02em; }
+
+  .blob{ position:fixed; border-radius:50%; filter:blur(80px); opacity:0.3; z-index:0; pointer-events:none; }
+  .blob1{width:480px;height:480px; background:radial-gradient(circle, var(--red-glow), transparent 70%);
+    top:-160px; left:-140px; animation:drift1 24s ease-in-out infinite alternate;}
+  .blob2{width:380px;height:380px; background:radial-gradient(circle, rgba(255,255,255,0.04), transparent 70%);
+    bottom:-140px; right:-100px; animation:drift2 28s ease-in-out infinite alternate;}
+  @keyframes drift1{from{transform:translate(0,0);} to{transform:translate(50px,70px);}}
+  @keyframes drift2{from{transform:translate(0,0);} to{transform:translate(-40px,-50px);}}
+  .grain{
+    position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0.03; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  #app{ position:relative; z-index:2; max-width:640px; margin:0 auto; padding:20px 16px 60px; }
+
+  header{ text-align:center; margin-bottom:18px; }
+  .kicker{ font-size:11px; letter-spacing:0.22em; text-transform:uppercase; color:var(--text-dimmer); font-weight:600; }
+  h1{ font-size:32px; font-weight:700; margin:2px 0 6px;
+    background:linear-gradient(180deg,#fff,#b9b9bf); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .subtext{ color:var(--text-dimmer); font-size:12.5px; }
+
+  nav.tabs{ display:flex; gap:6px; margin:18px 0 16px; overflow-x:auto; padding-bottom:2px; }
+  .tab{
+    flex:1; min-width:76px; text-align:center; padding:10px 6px; border-radius:14px;
+    background:var(--card); border:1px solid var(--line); cursor:pointer; user-select:none;
+    transition:all 0.15s ease;
+  }
+  .tab.active{ background:linear-gradient(160deg, rgba(255,59,59,0.16), var(--card)); border-color:var(--red); }
+  .tab .t-day{ font-size:12.5px; font-weight:700; }
+  .tab .t-date{ font-size:10.5px; color:var(--text-dimmer); margin-top:1px; }
+  .tab .t-prog{ font-size:10.5px; color:var(--text-dim); margin-top:3px; font-weight:600; }
+  .tab.active .t-prog{ color:var(--red); }
+
+  .day-progress-bar{ height:4px; background:var(--line); border-radius:4px; overflow:hidden; margin-bottom:16px; }
+  .day-progress-fill{ height:100%; background:linear-gradient(90deg, var(--red-dim), var(--red)); border-radius:4px; transition:width 0.3s ease; width:0%; }
+
+  .day-panel{ display:none; }
+  .day-panel.active{ display:block; }
+
+  .day-note{ font-size:12.5px; color:var(--text-dim); margin-bottom:14px; line-height:1.5; padding:10px 12px;
+    background:var(--card); border:1px dashed var(--line); border-radius:12px; }
+
+  .item-list{ display:flex; flex-direction:column; gap:8px; }
+  .item{
+    display:flex; align-items:flex-start; gap:10px;
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:12px 10px 12px 6px;
+    transition:background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+    position:relative;
+  }
+  .item.dragging{
+    z-index:50; box-shadow:0 12px 30px -6px rgba(0,0,0,0.6); border-color:var(--red);
+    background:var(--card-hi); cursor:grabbing;
+  }
+  .item.done{ opacity:0.45; }
+  .item.done .i-title{ text-decoration:line-through; }
+
+  .handle{
+    flex-shrink:0; width:30px; height:44px; display:flex; align-items:center; justify-content:center;
+    color:var(--text-dimmer); font-size:18px; cursor:grab; touch-action:none; letter-spacing:-2px;
+    border-radius:8px;
+  }
+  .handle:active{ color:var(--text-dim); }
+
+  .check{
+    flex-shrink:0; width:26px; height:26px; border-radius:50%; border:1.5px solid var(--line);
+    margin-top:2px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition:all 0.15s ease; font-size:14px; color:transparent;
+  }
+  .item.done .check{ background:var(--green); border-color:var(--green); color:#08130d; }
+
+  .i-body{ flex:1; min-width:0; cursor:pointer; }
+  .i-time{ font-size:11px; color:var(--red); font-weight:700; letter-spacing:0.02em; }
+  .i-title{ font-family:'Fraunces',serif; font-weight:600; font-size:15.5px; line-height:1.25; margin-top:1px; }
+  .i-note{ font-size:12.5px; color:var(--text-dim); line-height:1.42; margin-top:3px; }
+
+  .reset-row{ text-align:center; margin-top:26px; }
+  .btn-ghost{
+    background:transparent; color:var(--text-dimmer); border:1px solid var(--line);
+    border-radius:999px; padding:10px 20px; font-size:12.5px; cursor:pointer; font-family:inherit;
+  }
+  .btn-ghost:hover{ color:var(--text-dim); border-color:#3a3a42; }
+
+  footer.watermark{ text-align:center; color:var(--text-dimmer); font-size:11px; margin-top:30px; }
+
+  .saved-toast{
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%) translateY(10px);
+    background:var(--card-hi); border:1px solid var(--line); color:var(--text-dim);
+    font-size:12px; padding:8px 16px; border-radius:999px; z-index:100;
+    opacity:0; transition:all 0.25s ease; pointer-events:none;
+  }
+  .saved-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="blob blob1"></div>
+<div class="blob blob2"></div>
+<div class="grain"></div>
+
+<div id="app">
+  <header>
+    <div class="kicker">san francisco</div>
+    <h1>Itinerary</h1>
+    <div class="subtext">Tap to check off. Hold ⠿ to reorder. Saves automatically.</div>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+  <div class="day-progress-bar"><div class="day-progress-fill" id="progress-fill"></div></div>
+
+  <div id="panels"></div>
+
+  <div class="reset-row">
+    <button class="btn-ghost" id="reset-btn">Reset this day's order</button>
+  </div>
+
+  <footer class="watermark">sf-itinerary</footer>
+</div>
+
+<div class="saved-toast" id="toast">Saved</div>
+
+<script>
+const DAYS = [
+  {
+    id: "sun", label: "Sun", date: "8/16",
+    note: "Anchored to landing at Powell St from SFO. Shift the whole day if that's late.",
+    items: [
+      {id:"s1", time:"T+0", title:"SFO → BART → Powell St", note:"Rental Car Center → AirTrain Blue → BART Yellow Line, ~35 min direct, ~$11."},
+      {id:"s2", time:"~1:20", title:"Hotel Nikko, drop bags", note:"222 Mason St. Check-in is 3PM; bag drop isn't."},
+      {id:"s3", time:"~1:50", title:"N Judah → Carl & Cole", note:"Muni Metro from Powell St, ~25 min, walk 5 min up."},
+      {id:"s4", time:"2:30–3:30", title:"UCSF Parnassus", note:"Moffitt/Long lobby, Med Sciences Bldg, walk to the top of the hill for the view."},
+      {id:"s5", time:"3:30–4:00", title:"Mount Sutro (optional)", note:"Eucalyptus forest trailhead on campus off Medical Center Way."},
+      {id:"s6", time:"4:00–5:00", title:"Late lunch, Inner Sunset", note:"9th & Irving."},
+      {id:"s7", time:"5:00–5:30", title:"16th Ave Tiled Steps → Grand View Park", note:"163 mosaic steps, then a 360° dune-top view. Free."},
+      {id:"s8", time:"5:30–6:30", title:"SF Botanical Garden", note:"9th & Lincoln. Last entry 6PM — hard cutoff."},
+      {id:"s9", time:"6:45", title:"GG Park shuttle/bus → Haight St", note:"Free shuttle or the 7/43 bus."},
+      {id:"s10", time:"6:45–7:15", title:"Haight-Ashbury walk", note:""},
+      {id:"s11", time:"7:30–7:50", title:"Corona Heights Park", note:"Red rock outcrop, 360° view, almost nobody there."},
+      {id:"s12", time:"8:10", title:"Alamo Square / Painted Ladies", note:"Sunset ~8PM."},
+      {id:"s13", time:"8:40", title:"Zuni Cafe, Hayes Valley", note:"Order the roast chicken for two the second you sit — takes an hour."},
+      {id:"s14", time:"~10:30", title:"Muni back to Nikko", note:"Van Ness → Powell St, ~15 min."},
+    ]
+  },
+  {
+    id: "mon", label: "Mon", date: "8/17",
+    note: "Hotel move day. Checkout Nikko, bags to Zoe, then Hornet + harbor. 2:30 PM ferry is the last one that leaves usable time at the Hornet — don't miss it.",
+    items: [
+      {id:"m1", time:"9:45", title:"Checkout Nikko", note:""},
+      {id:"m2", time:"10:00", title:"Rideshare → Hotel Zoe, drop bags", note:"425 North Point St, ~15–20 min. Ask the desk to hold bags before 3PM check-in."},
+      {id:"m3", time:"10:30", title:"Coffee, North Beach", note:"Caffe Trieste or Mario's Bohemian Cigar Store."},
+      {id:"m4", time:"11:00–12:00", title:"USS Pampanito", note:"Pier 45. WWII fleet submarine, self-guided."},
+      {id:"m5", time:"12:00–12:20", title:"Musée Mécanique", note:"Next door. Free entry, antique arcade machines."},
+      {id:"m6", time:"12:20–1:00", title:"Harbor walk south", note:"Hyde St Pier → Pier 39 → Pier 7 → Ferry Building. This IS the commute to the ferry."},
+      {id:"m7", time:"1:00 PM", title:"Ferry, Gate F1 → Alameda", note:"Absolute last usable boat is 2:30 PM."},
+      {id:"m8", time:"1:20–1:35", title:"Walk to the ship", note:"10 min around Seaplane Lagoon."},
+      {id:"m9", time:"1:35–4:00", title:"USS Hornet", note:"707 W Hornet Ave, Pier 3. $20. Flight deck, Apollo recovery exhibit."},
+      {id:"m10", time:"4:00–4:50", title:"Faction Brewing", note:"Alameda Point, patio faces the SF skyline."},
+      {id:"m11", time:"5:00 PM", title:"Ferry back", note:"Arrives Ferry Building 5:20."},
+      {id:"m12", time:"5:45", title:"Buena Vista Cafe", note:"Irish coffee, invented here in 1952."},
+      {id:"m13", time:"6:30", title:"Filbert Steps + Coit Tower", note:"Telegraph Hill, wild parrots, WPA murals."},
+      {id:"m14", time:"7:30", title:"North Beach dinner", note:"Then The Saloon / The Devil's Acre / Gino & Carlo."},
+      {id:"m15", time:"Late", title:"Li Po Cocktail Lounge", note:"Chinatown basement dive, Chinese Mai Tai. Walk home."},
+    ]
+  },
+  {
+    id: "tue", label: "Tue", date: "8/18",
+    note: "Departure day. No BART from North Beach — rideshare to SFO.",
+    items: [
+      {id:"t1", time:"10AM–2PM", title:"Ferry Plaza Farmers Market", note:"~20 min walk south down the Embarcadero from Zoe, or the F-line."},
+      {id:"t2", time:"optional", title:"185 Berry St, China Basin", note:"UCSF Radiology's other big footprint. Only if the morning has slack."},
+      {id:"t3", time:"—", title:"Rideshare to SFO", note:"~25–30 min depending on traffic. Standby board in standby-board.html."},
+    ]
+  },
+  {
+    id: "extra", label: "Extra", date: "maybe",
+    note: "Not scheduled anywhere yet — came up in Soren's picks. Consider swapping into Tuesday if they matter.",
+    items: [
+      {id:"e1", time:"—", title:"Dolores Park", note:"Mission. Skyline views, best people-watching in the city."},
+      {id:"e2", time:"—", title:"Sausalito", note:"Direct ferry from the Ferry Building, no car needed."},
+      {id:"e3", time:"—", title:"Mission Burritos", note:"La Taqueria or El Farolito."},
+      {id:"e4", time:"—", title:"Valencia Street", note:"Murals, boutiques, the walkable spine of the Mission."},
+    ]
+  },
+];
+
+const STORAGE_KEY = "sfItinerary_v1";
+let state = loadState();
+let activeDay = state.activeDay || DAYS[0].id;
+
+function loadState(){
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e){}
+  const order = {}, checked = saved.checked || {};
+  DAYS.forEach(day => {
+    const defaultIds = day.items.map(i => i.id);
+    const savedOrder = (saved.order && saved.order[day.id]) || [];
+    const kept = savedOrder.filter(id => defaultIds.includes(id));
+    const missing = defaultIds.filter(id => !kept.includes(id));
+    order[day.id] = kept.concat(missing);
+  });
+  return { order, checked, activeDay: saved.activeDay };
+}
+
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ order: state.order, checked: state.checked, activeDay }));
+  const toast = document.getElementById('toast');
+  toast.classList.add('show');
+  clearTimeout(saveState._t);
+  saveState._t = setTimeout(() => toast.classList.remove('show'), 900);
+}
+
+function itemById(id){
+  for (const day of DAYS) {
+    const found = day.items.find(i => i.id === id);
+    if (found) return found;
+  }
+}
+
+/* ---------- render tabs ---------- */
+const tabsEl = document.getElementById('tabs');
+DAYS.forEach(day => {
+  const el = document.createElement('div');
+  el.className = 'tab' + (day.id === activeDay ? ' active' : '');
+  el.dataset.day = day.id;
+  el.innerHTML = `<div class="t-day">${day.label}</div><div class="t-date">${day.date}</div><div class="t-prog" id="prog-${day.id}"></div>`;
+  el.onclick = () => setActiveDay(day.id);
+  tabsEl.appendChild(el);
+});
+
+/* ---------- render panels ---------- */
+const panelsEl = document.getElementById('panels');
+DAYS.forEach(day => {
+  const panel = document.createElement('div');
+  panel.className = 'day-panel' + (day.id === activeDay ? ' active' : '');
+  panel.id = `panel-${day.id}`;
+  panel.innerHTML = `<div class="day-note">${day.note}</div><div class="item-list" id="list-${day.id}"></div>`;
+  panelsEl.appendChild(panel);
+  renderList(day.id);
+});
+
+function renderList(dayId){
+  const listEl = document.getElementById(`list-${dayId}`);
+  listEl.innerHTML = '';
+  state.order[dayId].forEach(id => {
+    const item = itemById(id);
+    if (!item) return;
+    const done = !!state.checked[id];
+    const el = document.createElement('div');
+    el.className = 'item' + (done ? ' done' : '');
+    el.dataset.id = id;
+    el.innerHTML = `
+      <div class="handle" data-id="${id}">⠿</div>
+      <div class="check">✓</div>
+      <div class="i-body">
+        <div class="i-time">${item.time}</div>
+        <div class="i-title">${item.title}</div>
+        ${item.note ? `<div class="i-note">${item.note}</div>` : ''}
+      </div>
+    `;
+    el.querySelector('.check').onclick = () => toggleCheck(id, dayId);
+    el.querySelector('.i-body').onclick = () => toggleCheck(id, dayId);
+    listEl.appendChild(el);
+  });
+  updateProgress(dayId);
+  attachDrag(dayId);
+}
+
+function toggleCheck(id, dayId){
+  state.checked[id] = !state.checked[id];
+  saveState();
+  renderList(dayId);
+}
+
+function updateProgress(dayId){
+  const day = DAYS.find(d => d.id === dayId);
+  const total = day.items.length;
+  const done = day.items.filter(i => state.checked[i.id]).length;
+  const pct = total ? Math.round((done/total)*100) : 0;
+  const progEl = document.getElementById(`prog-${dayId}`);
+  if (progEl) progEl.textContent = `${done}/${total}`;
+  if (dayId === activeDay) document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+function setActiveDay(dayId){
+  activeDay = dayId;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.day === dayId));
+  document.querySelectorAll('.day-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${dayId}`));
+  updateProgress(dayId);
+  saveState();
+}
+
+/* ---------- drag reorder (pointer events, touch + mouse) ---------- */
+function attachDrag(dayId){
+  const listEl = document.getElementById(`list-${dayId}`);
+  listEl.querySelectorAll('.handle').forEach(handle => {
+    handle.onpointerdown = (e) => startDrag(e, handle, listEl, dayId);
+  });
+}
+
+function startDrag(e, handle, listEl, dayId){
+  e.preventDefault();
+  const itemEl = handle.closest('.item');
+  const items = Array.from(listEl.children);
+  const startY = e.clientY;
+  const startRect = itemEl.getBoundingClientRect();
+  itemEl.classList.add('dragging');
+  itemEl.style.position = 'relative';
+  handle.setPointerCapture(e.pointerId);
+
+  function onMove(ev){
+    const dy = ev.clientY - startY;
+    itemEl.style.transform = `translateY(${dy}px)`;
+    itemEl.style.zIndex = '50';
+
+    const draggedRect = itemEl.getBoundingClientRect();
+    const draggedMid = draggedRect.top + draggedRect.height/2;
+
+    for (const sib of items) {
+      if (sib === itemEl) continue;
+      const r = sib.getBoundingClientRect();
+      const sibMid = r.top + r.height/2;
+      if (draggedMid < sibMid && itemEl.nextSibling !== sib && draggedRect.top < sibMid) {
+        listEl.insertBefore(itemEl, sib);
+        itemEl.style.transform = `translateY(${dy - (startRect.top - itemEl.getBoundingClientRect().top)}px)`;
+        break;
+      }
+      if (draggedMid > sibMid && itemEl.previousSibling !== sib && draggedRect.bottom > sibMid) {
+        listEl.insertBefore(itemEl, sib.nextSibling);
+        itemEl.style.transform = `translateY(${dy - (startRect.top - itemEl.getBoundingClientRect().top)}px)`;
+        break;
+      }
+    }
+  }
+
+  function onUp(ev){
+    handle.releasePointerCapture(ev.pointerId);
+    itemEl.classList.remove('dragging');
+    itemEl.style.transform = '';
+    itemEl.style.zIndex = '';
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+
+    state.order[dayId] = Array.from(listEl.children).map(el => el.dataset.id);
+    saveState();
+  }
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+}
+
+/* ---------- reset ---------- */
+document.getElementById('reset-btn').onclick = () => {
+  const day = DAYS.find(d => d.id === activeDay);
+  state.order[activeDay] = day.items.map(i => i.id);
+  saveState();
+  renderList(activeDay);
+};
+
+/* ---------- init progress numbers ---------- */
+DAYS.forEach(d => updateProgress(d.id));
+</script>
+
+</body>
+</html>
