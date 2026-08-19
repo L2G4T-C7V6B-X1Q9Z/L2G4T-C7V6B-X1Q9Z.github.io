@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restricted</title>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{color-scheme:dark only}
+body{font-family:'SF Mono',Monaco,Inconsolata,'Fira Code','Droid Sans Mono','Source Code Pro',monospace;
+ font-size:13px;line-height:1.6;background:#141414;color:#ddd;padding:2.5rem 1.25rem}
+.wrap{max-width:940px;margin:0 auto}
+h1{font-size:2.1rem;font-weight:700;letter-spacing:-1px;color:#eee}
+h2{font-size:1.15rem;font-weight:700;margin:2.5rem 0 .9rem;padding-bottom:.45rem;
+ border-bottom:1px solid #333;color:#eee;position:relative}
+h2::before{content:'\2192';position:absolute;left:-1.5rem;color:#555;font-weight:400}
+a{color:#c41e1e;text-decoration:none}
+.muted{color:#777}
+
+#gate{max-width:400px;margin:16vh auto;text-align:center}
+#gate h1{font-size:1.3rem;letter-spacing:0;margin-bottom:.4rem}
+#gate p{color:#666;font-size:12px;margin-bottom:1.6rem}
+#pw{width:100%;background:#0d0d0d;border:1px solid #333;color:#eee;padding:.7rem .8rem;
+ font-family:inherit;font-size:14px;text-align:center;letter-spacing:2px}
+#pw:focus{outline:none;border-color:#c41e1e}
+#gate button{width:100%;margin-top:.7rem;background:#c41e1e;border:0;color:#fff;
+ padding:.7rem;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:1px}
+#gate button:disabled{background:#3a1010;color:#888;cursor:wait}
+#err{color:#c41e1e;font-size:12px;margin-top:.9rem;min-height:1.2em}
+
+#app{display:none}
+.bar{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.3rem}
+.bar h1{flex:1}
+button.act{background:#1c1c1c;border:1px solid #3a3a3a;color:#ddd;padding:.45rem .8rem;
+ font-family:inherit;font-size:12px;cursor:pointer}
+button.act:hover{border-color:#c41e1e;color:#fff}
+button.act.primary{background:#c41e1e;border-color:#c41e1e;color:#fff;font-weight:700}
+button.act.primary:disabled{background:#3a1010;border-color:#3a1010;color:#888;cursor:wait}
+#stat{font-size:11px;color:#777;min-height:1.3em;margin-bottom:1.4rem}
+#stat.ok{color:#4a9}
+#stat.bad{color:#c41e1e}
+#stat.dirty{color:#d9a441}
+
+table{width:100%;border-collapse:collapse;margin:.5rem 0 1rem;font-size:12px}
+th{text-align:left;font-weight:700;padding:.5rem .6rem;border-bottom:2px solid #444;
+ text-transform:uppercase;font-size:10px;letter-spacing:.5px;color:#999}
+td{padding:.5rem .6rem;border-bottom:1px solid #262626;vertical-align:top}
+tr:hover td{background:#1a1a1a}
+
+.fld{margin:0 0 1.6rem}
+.fld .lab{display:flex;align-items:baseline;gap:.6rem;margin-bottom:.3rem}
+.fld .lab b{flex:1;font-weight:700;color:#ddd;font-size:12px}
+.cnt{font-size:11px;color:#666;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cnt.warn{color:#d9a441}
+.cnt.over{color:#c41e1e;font-weight:700}
+textarea{width:100%;background:#0d0d0d;border:1px solid #2d2d2d;color:#ddd;padding:.7rem;
+ font-family:inherit;font-size:12.5px;line-height:1.65;resize:vertical;min-height:80px}
+textarea:focus{outline:none;border-color:#555}
+textarea.over{border-color:#c41e1e}
+.meter{height:2px;background:#262626;margin-top:3px}
+.meter i{display:block;height:100%;background:#4a9;transition:width .15s}
+.meter i.warn{background:#d9a441}
+.meter i.over{background:#c41e1e}
+
+input[type=text]{background:#0d0d0d;border:1px solid #2d2d2d;color:#ddd;padding:.35rem .5rem;
+ font-family:inherit;font-size:12px;width:100%}
+input[type=text]:focus{outline:none;border-color:#555}
+input[type=checkbox]{accent-color:#c41e1e;width:14px;height:14px;cursor:pointer}
+.done td{opacity:.42;text-decoration:line-through}
+.dl{font-variant-numeric:tabular-nums;white-space:nowrap}
+.dl.soon{color:#c41e1e;font-weight:700}
+.dl.near{color:#d9a441}
+.pill{display:inline-block;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.p-up{background:#12301f;color:#5cbf8a}
+.p-out{background:#3a2a10;color:#d9a441}
+.p-dead{background:#3a1010;color:#e26b6b}
+ul.cons{list-style:none}
+ul.cons li{border-left:2px solid #c41e1e;padding:.4rem .8rem;margin-bottom:.5rem;
+ background:#1a1414;font-size:11.5px;color:#bbb}
+.hint{font-size:11px;color:#666;margin:.4rem 0 1rem}
+#notes{min-height:150px}
+.foot{margin-top:3rem;padding-top:1rem;border-top:1px solid #262626;font-size:10.5px;color:#555}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <h1>Restricted</h1>
+  <p>This page holds no readable content until unlocked.</p>
+  <input id="pw" type="password" autocomplete="current-password" placeholder="passphrase" autofocus>
+  <button id="go">UNLOCK</button>
+  <div id="err"></div>
+</div>
+
+<div id="app"><div class="wrap">
+  <div class="bar">
+    <h1 id="ttl"></h1>
+    <button class="act" id="btnTok">token</button>
+    <button class="act" id="btnDl">download .enc</button>
+    <button class="act primary" id="btnSave">SAVE</button>
+  </div>
+  <div id="stat"></div>
+  <div id="body"></div>
+  <div class="foot" id="foot"></div>
+</div></div>
+
+<script>
+"use strict";
+var ITER = 600000, DATA_URL = "notes-data.enc", SS = "pg_pw_n", LS_TOK = "pg_tok_n";
+var REPO = "L2G4T-C7V6B-X1Q9Z/L2G4T-C7V6B-X1Q9Z.github.io", PATH = "notes-data.enc";
+var BUILD = "2026-08-19a";
+function $(id){ return document.getElementById(id); }
+var D = null, PW = null, SHA = null, dirty = false;
+
+function hb(h){ var a = new Uint8Array(h.length/2); for(var i=0;i<a.length;i++) a[i]=parseInt(h.substr(i*2,2),16); return a; }
+function bh(b){ return Array.prototype.map.call(new Uint8Array(b), function(x){ return x.toString(16).padStart(2,'0'); }).join(''); }
+function b64d(s){ var t=atob(s), a=new Uint8Array(t.length); for(var i=0;i<t.length;i++) a[i]=t.charCodeAt(i); return a; }
+function b64e(b){ var s='', a=new Uint8Array(b); for(var i=0;i<a.length;i++) s+=String.fromCharCode(a[i]); return btoa(s); }
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    if(c==='&') return '&amp;';
+    if(c==='<') return '&lt;';
+    if(c==='>') return '&gt;';
+    if(c==='"') return '&quot;';
+    return '&#39;';
+  });
+}
+
+function derive(pw, salt){
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(pw.normalize("NFC")), "PBKDF2", false, ["deriveKey"])
+    .then(function(km){
+      return crypto.subtle.deriveKey({name:"PBKDF2", salt:salt, iterations:ITER, hash:"SHA-256"},
+        km, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+    });
+}
+function decryptBlob(blob, pw){
+  return derive(pw, hb(blob.salt)).then(function(k){
+    var ct = b64d(blob.data), tag = hb(blob.tag);
+    var buf = new Uint8Array(ct.length + tag.length);
+    buf.set(ct); buf.set(tag, ct.length);
+    return crypto.subtle.decrypt({name:"AES-GCM", iv:hb(blob.iv)}, k, buf);
+  }).then(function(pt){ return JSON.parse(new TextDecoder().decode(pt)); });
+}
+function encryptObj(obj, pw){
+  var salt = crypto.getRandomValues(new Uint8Array(16));
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  return derive(pw, salt).then(function(k){
+    return crypto.subtle.encrypt({name:"AES-GCM", iv:iv}, k, new TextEncoder().encode(JSON.stringify(obj)));
+  }).then(function(res){
+    var out = new Uint8Array(res);
+    return { v:1, salt:bh(salt), iv:bh(iv),
+             tag:bh(out.slice(out.length-16)), data:b64e(out.slice(0, out.length-16)) };
+  });
+}
+
+function unlock(pw){
+  return fetch(DATA_URL + "?t=" + Date.now(), {cache:"no-store"}).then(function(r){
+    if(!r.ok) throw new Error("data file unreachable (" + r.status + ")");
+    return r.json();
+  }).then(function(blob){
+    return decryptBlob(blob, pw);
+  }).then(function(obj){
+    D = obj; PW = pw;
+    try { sessionStorage.setItem(SS, pw); } catch(e){}
+    $('gate').style.display = 'none';
+    $('app').style.display = 'block';
+    render();
+  });
+}
+$('go').onclick = function(){
+  var b = $('go'), pw = $('pw').value;
+  if(!pw) return;
+  b.disabled = true; b.textContent = 'DERIVING...'; $('err').textContent = '';
+  unlock(pw)['catch'](function(e){
+    $('err').textContent = /unreachable/.test(e.message) ? e.message : 'Wrong passphrase.';
+    b.disabled = false; b.textContent = 'UNLOCK'; $('pw').select();
+  });
+};
+$('pw').addEventListener('keydown', function(e){ if(e.key === 'Enter') $('go').click(); });
+
+function mark(){ dirty = true; setStat('unsaved changes', 'dirty'); }
+function setStat(m, c){ var s = $('stat'); s.textContent = m; s.className = c || ''; }
+function days(d){
+  return Math.ceil((new Date(d + 'T00:00:00') - new Date(new Date().toDateString())) / 864e5);
+}
+
+function render(){
+  $('ttl').textContent = D.meta.title || 'Notes';
+  var H = [];
+
+  H.push('<h2>Deadlines</h2><table><thead><tr><th style="width:28px"></th><th style="width:96px">Date</th><th style="width:70px">In</th><th>Item</th></tr></thead><tbody>');
+  D.deadlines.forEach(function(d, i){
+    var n = days(d.date), cls = n < 0 ? '' : (n <= 7 ? 'soon' : (n <= 21 ? 'near' : ''));
+    H.push('<tr class="' + (d.done ? 'done' : '') + '"><td><input type="checkbox" data-k="dl" data-i="' + i + '" ' + (d.done ? 'checked' : '') + '></td>' +
+      '<td class="dl">' + esc(d.date) + '</td><td class="dl ' + cls + '">' + (n < 0 ? 'passed' : n + 'd') + '</td><td>' + esc(d.label) + '</td></tr>');
+  });
+  H.push('</tbody></table>');
+
+  H.push('<h2>Letters</h2><table><thead><tr><th>Writer</th><th style="width:80px">Status</th><th style="width:160px">Entry ID</th><th>Note</th></tr></thead><tbody>');
+  D.lors.forEach(function(l){
+    var p = l.status === 'UPLOADED' ? 'p-up' : (l.status === 'DEAD' ? 'p-dead' : 'p-out');
+    H.push('<tr><td><b>' + esc(l.writer) + '</b></td><td><span class="pill ' + p + '">' + esc(l.status) + '</span></td>' +
+      '<td class="muted">' + esc(l.entry) + '</td><td class="muted">' + esc(l.note) + '</td></tr>');
+  });
+  H.push('</tbody></table>');
+
+  H.push('<h2>Prose fields</h2><div class="hint">Counters are live. Amber at 90% of cap, red over. The form truncates silently, so the number is the contract.</div>');
+  D.fields.forEach(function(f, i){
+    var rows = Math.min(14, Math.max(3, Math.ceil(f.text.length / 78)));
+    H.push('<div class="fld"><div class="lab"><b>' + esc(f.label) + '</b><span class="cnt" id="c' + i + '"></span></div>' +
+      '<textarea data-k="fld" data-i="' + i + '" rows="' + rows + '">' + esc(f.text) + '</textarea>' +
+      '<div class="meter"><i id="m' + i + '"></i></div></div>');
+  });
+
+  H.push('<h2>Open items</h2><table><tbody>');
+  D.open.forEach(function(o, i){
+    H.push('<tr class="' + (o.done ? 'done' : '') + '"><td style="width:28px"><input type="checkbox" data-k="op" data-i="' + i + '" ' + (o.done ? 'checked' : '') + '></td><td>' + esc(o.t) + '</td></tr>');
+  });
+  H.push('</tbody></table>');
+
+  H.push('<h2>Deliverables</h2><table><thead><tr><th style="width:32px">#</th><th>Item</th><th style="width:220px">Status</th></tr></thead><tbody>');
+  D.deliverables.forEach(function(d, i){
+    H.push('<tr><td class="muted">' + d.n + '</td><td>' + esc(d.item) + '</td>' +
+      '<td><input type="text" data-k="dv" data-i="' + i + '" value="' + esc(d.status) + '"></td></tr>');
+  });
+  H.push('</tbody></table>');
+
+  H.push('<h2>Hard constraints</h2><ul class="cons">');
+  D.constraints.forEach(function(c){ H.push('<li>' + esc(c) + '</li>'); });
+  H.push('</ul>');
+
+  H.push('<h2>Notes</h2><textarea id="notes" data-k="nt">' + esc(D.notes || '') + '</textarea>');
+  $('body').innerHTML = H.join('');
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-k]'), function(el){
+    var k = el.dataset.k, i = +el.dataset.i;
+    var ev = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(ev, function(){
+      if(k === 'dl'){ D.deadlines[i].done = el.checked; el.closest('tr').classList.toggle('done', el.checked); }
+      else if(k === 'op'){ D.open[i].done = el.checked; el.closest('tr').classList.toggle('done', el.checked); }
+      else if(k === 'dv'){ D.deliverables[i].status = el.value; }
+      else if(k === 'nt'){ D.notes = el.value; }
+      else if(k === 'fld'){ D.fields[i].text = el.value; count(i); }
+      mark();
+    });
+  });
+  D.fields.forEach(function(_, i){ count(i); });
+  $('foot').textContent = 'build ' + BUILD + ' · rev ' + (D.meta.rev || 1) +
+    ' · last saved ' + (D.meta.updated || '?') + ' by ' + (D.meta.updatedBy || '?');
+}
+
+function count(i){
+  var f = D.fields[i], n = f.text.length, cap = f.cap;
+  var pct = Math.min(100, n / cap * 100);
+  var c = $('c' + i), m = $('m' + i);
+  var ta = document.querySelector('textarea[data-i="' + i + '"][data-k="fld"]');
+  var cls = n > cap ? 'over' : (n >= cap * 0.9 ? 'warn' : '');
+  c.textContent = n + ' / ' + cap + (n > cap ? '  +' + (n - cap) + ' OVER' : '  (' + (cap - n) + ' left)');
+  c.className = 'cnt ' + cls;
+  m.className = cls;
+  m.style.width = pct + '%';
+  if(ta) ta.classList.toggle('over', n > cap);
+}
+
+function stamp(){
+  D.meta.rev = (D.meta.rev || 1) + 1;
+  D.meta.updated = new Date().toISOString().slice(0, 16);
+  D.meta.updatedBy = 'soren';
+  return D;
+}
+
+$('btnDl').onclick = function(){
+  encryptObj(stamp(), PW).then(function(blob){
+    var u = URL.createObjectURL(new Blob([JSON.stringify(blob)], {type:'application/json'}));
+    var a = document.createElement('a');
+    a.href = u; a.download = 'notes-data.enc'; a.click();
+    URL.revokeObjectURL(u);
+    setStat('downloaded notes-data.enc — drop it in the repo', 'ok');
+  });
+};
+
+$('btnTok').onclick = function(){
+  var cur = localStorage.getItem(LS_TOK) || '';
+  var t = prompt('GitHub fine-grained token (Contents: Read and write, this repo only).\nStored in this browser only, never in the repo.\nBlank to clear.', cur);
+  if(t === null) return;
+  if(t.trim()){ localStorage.setItem(LS_TOK, t.trim()); setStat('token stored in this browser', 'ok'); }
+  else { localStorage.removeItem(LS_TOK); setStat('token cleared', ''); }
+};
+
+$('btnSave').onclick = function(){
+  var tok = localStorage.getItem(LS_TOK);
+  if(!tok){ setStat('no token — click "token" first, or use "download .enc"', 'bad'); return; }
+  var b = $('btnSave');
+  b.disabled = true; b.textContent = 'SAVING...';
+  var api = 'https://api.github.com/repos/' + REPO + '/contents/' + PATH;
+  var hdr = { Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json' };
+  var pre = SHA ? Promise.resolve(SHA) : fetch(api, {headers: hdr}).then(function(g){
+      return g.ok ? g.json().then(function(j){ return j.sha; }) : null;
+    });
+  pre.then(function(sha){
+    SHA = sha;
+    return encryptObj(stamp(), PW);
+  }).then(function(blob){
+    var body = { message: 'notes: update (rev ' + D.meta.rev + ')',
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(blob)))) };
+    if(SHA) body.sha = SHA;
+    return fetch(api, {method:'PUT',
+      headers: {Authorization:'Bearer ' + tok, Accept:'application/vnd.github+json', 'Content-Type':'application/json'},
+      body: JSON.stringify(body)});
+  }).then(function(r){
+    if(!r.ok) return r.json().then(function(j){ throw new Error(j.message || r.status); });
+    return r.json();
+  }).then(function(j){
+    SHA = j.content.sha; dirty = false;
+    setStat('saved — rev ' + D.meta.rev + ' pushed to GitHub', 'ok');
+    $('foot').textContent = 'build ' + BUILD + ' · rev ' + D.meta.rev + ' · last saved ' + D.meta.updated + ' by soren';
+    b.disabled = false; b.textContent = 'SAVE';
+  })['catch'](function(e){
+    D.meta.rev--;
+    setStat('save failed: ' + e.message, 'bad');
+    b.disabled = false; b.textContent = 'SAVE';
+  });
+};
+
+window.addEventListener('beforeunload', function(e){ if(dirty){ e.preventDefault(); e.returnValue = ''; } });
+
+(function(){
+  var p = null;
+  try { p = sessionStorage.getItem(SS); } catch(e){}
+  if(p){ unlock(p)['catch'](function(){ try { sessionStorage.removeItem(SS); } catch(_){} }); }
+})();
+</script>
+</body>
+</html>
