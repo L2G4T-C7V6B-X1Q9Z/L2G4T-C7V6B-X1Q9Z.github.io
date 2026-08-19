@@ -212,7 +212,7 @@ details.ps summary b{flex:1;font-weight:500}
 "use strict";
 var ITER=600000, DATA_URL="notes-data.enc", SS="pg_pw_n", LS_TOK="pg_tok_n", LS_DRAFT="pg_draft_n";
 var REPO="L2G4T-C7V6B-X1Q9Z/L2G4T-C7V6B-X1Q9Z.github.io", PATH="notes-data.enc";
-var BUILD="2026-08-19b";
+var BUILD="2026-08-19c v34";
 function $(id){return document.getElementById(id);}
 var D=null, PW=null, SHA=null, tLocal=null, tRemote=null, syncing=false;
 
@@ -367,9 +367,9 @@ function render(){
     r.push('<div class="fld"><div class="lab"><b>'+esc(p.label)+'</b><span class="cnt" id="pc'+i+'"></span></div>'+
       '<textarea data-k="ps" data-i="'+i+'" rows="16">'+esc(p.text)+'</textarea></div>');
   });
-  r.push('<div class="hint" style="margin-top:1.6rem">Per-program insert - the sentences that slot into the final paragraph, one per token program.</div>');
+  r.push('<div class="hint" style="margin-top:1.6rem">&#9888; These 16 inserts are still derived from <b>v32</b> and have NOT been re-derived from v34. Do not paste them yet.</div>');
   (D.psInserts||[]).forEach(function(p,i){
-    r.push('<details class="ps"><summary><b>'+esc(p.program)+'</b><span class="cnt">'+p.text.length+' ch</span></summary>'+
+    r.push('<details class="ps"><summary><b>'+esc(p.program)+'</b><span class="cnt">'+(p.stale?'v32 &mdash; STALE  ':'')+p.text.length+' ch</span></summary>'+
       '<textarea data-k="psi" data-i="'+i+'" rows="4" style="margin-top:.6rem">'+esc(p.text)+'</textarea></details>');
   });
   sec('s-ps','Personal statement','v32 - '+((D.ps||[])[0]?(D.ps[0].words||0)+' words':'')+' - '+(D.psInserts||[]).length+' variants',r.join(''));
@@ -382,6 +382,12 @@ function render(){
       '<div class="meter"><i id="m'+i+'"></i></div></div>');
   });
   sec('s-fld','Prose fields',D.fields.length+' capped',r.join(''));
+
+  if(D.awards){
+    sec('s-awd','Honors &amp; awards','11 entries',
+      '<div class="hint">Bressler stays blank until its selection basis is sourced. Penn Linguistics is a POSTER.</div>'+
+      '<textarea data-k="awd" rows="20">'+esc(D.awards)+'</textarea>');
+  }
 
   r=['<table><thead><tr><th>Writer</th><th style="width:76px">Status</th><th style="width:150px">Entry ID</th><th>Note</th></tr></thead><tbody>'];
   D.lors.forEach(function(l){
@@ -419,6 +425,7 @@ function render(){
       else if(k==='op'){D.open[i].done=el.checked;el.closest('tr').classList.toggle('done',el.checked);}
       else if(k==='dv'){D.deliverables[i].status=el.value;}
       else if(k==='nt'){D.notes=el.value;}
+      else if(k==='awd'){D.awards=el.value;}
       else if(k==='ps'){D.ps[i].text=el.value;D.ps[i].words=words(el.value);pcount(i);}
       else if(k==='psi'){D.psInserts[i].text=el.value;}
       else if(k==='fld'){D.fields[i].text=el.value;count(i);}
