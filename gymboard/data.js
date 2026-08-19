@@ -1981,6 +1981,115 @@ export async function resumeWorkouts(currentList, resumeOnDateKey) {
   return next;
 }
 
+// v9.5 VACATIONS -- travel amnesty on BOTH axes, stored as CLOSED RANGES on the
+// owner doc.
+//
+//   vacations: [{ from:'YYYY-MM-DD', to:'YYYY-MM-DD' }, ...]
+//
+// Same range model as workoutPauses and for the same reason (a boolean would
+// re-red every travel day the moment it flipped back). Two deliberate differences:
+//   1. `to` is REQUIRED. A trip has known dates; there is no open-ended vacation.
+//      Open-ended amnesty is what a pause is for.
+//   2. A vacation excuses NUTRITION too. logic.js carries that split; this layer
+//      only stores the ranges.
+//
+// Matches the rule's vacations.size() <= 50 cap. Rules cannot iterate a list, so
+// per-ELEMENT shape is CLIENT-trusted here (same posture as workoutPauses,
+// restPattern, savedMeals); cleanVacations() is the front line for it.
+const MAX_VACATIONS = 50;
+
+// Validate + normalize a whole vacation list before it can reach Firestore. Returns
+// a clean copy holding ONLY {from, to} per entry, so a stray key can never ride
+// along onto the group-readable doc.
+function cleanVacations(list, caller) {
+  if (!Array.isArray(list)) {
+    throw taggedError('gymboard/bad-value', `${caller}: vacations must be an array.`);
+  }
+  if (list.length > MAX_VACATIONS) {
+    throw taggedError('gymboard/bad-value', `${caller}: too many vacation ranges (max ${MAX_VACATIONS}).`);
+  }
+  return list.map((r, i) => {
+    if (!r || typeof r !== 'object') {
+      throw taggedError('gymboard/bad-value', `${caller}: vacation ${i} is not an object.`);
+    }
+    if (!isDayKey(r.from)) {
+      throw taggedError('gymboard/bad-date', `${caller}: vacation ${i} has a bad from ${r.from}.`);
+    }
+    if (!isDayKey(r.to)) {
+      throw taggedError('gymboard/bad-date', `${caller}: vacation ${i} has a bad to ${r.to} (a vacation needs an end date).`);
+    }
+    if (r.to < r.from) {
+      throw taggedError('gymboard/bad-date', `${caller}: vacation ${i} ends before it starts.`);
+    }
+    return { from: r.from, to: r.to };
+  });
+}
+
+/**
+ * setVacations(list) -> Promise<void>
+ *
+ * Replace the owner's whole vacation list. The primitive behind addVacation /
+ * removeVacation; call those instead unless you are repairing a doc. This is a
+ * SETTING, so it does NOT bump lastActiveAt (consistent with setWorkoutPauses).
+ */
+export async function setVacations(list) {
+  const clean = cleanVacations(list, 'setVacations');
+  await updateOwnUser({ vacations: clean }, 'setVacations');
+}
+
+/**
+ * addVacation(currentList, fromDateKey, toDateKey) -> Promise<Array>
+ *
+ * Add a closed vacation range [from, to], both inclusive; from === to for a single
+ * day. Past ranges are fine and are the common case ("I was away last week") --
+ * the point of the feature is that entering it after the fact un-reds those days.
+ *
+ * `currentList` comes from the caller (the live /users snapshot), matching the
+ * pauseWorkouts posture: the client composes the new list and hands it in whole.
+ * Idempotent -- adding an identical range twice writes one. Returns the list that
+ * was written so the caller can update its local copy from truth, not a guess.
+ */
+export async function addVacation(currentList, fromDateKey, toDateKey) {
+  if (!isDayKey(fromDateKey) || !isDayKey(toDateKey)) {
+    throw taggedError('gymboard/bad-date', `addVacation: bad range ${fromDateKey}..${toDateKey}.`);
+  }
+  if (toDateKey < fromDateKey) {
+    throw taggedError('gymboard/bad-date', 'addVacation: the end date is before the start date.');
+  }
+  const base = Array.isArray(currentList) ? currentList : [];
+  if (base.length >= MAX_VACATIONS) {
+    throw taggedError('gymboard/bad-value', `addVacation: too many vacation ranges (max ${MAX_VACATIONS}).`);
+  }
+  // logic.* via the NAMESPACE import on purpose (see the import note at the top):
+  // a stale cached logic.js yields undefined here instead of a boot-killing
+  // missing-named-export, so the worst case is one degraded load, not a white screen.
+  if (typeof logic.withVacation !== 'function') {
+    throw taggedError('gymboard/stale-module', 'addVacation: logic.js is stale, reload the app.');
+  }
+  const next = cleanVacations(logic.withVacation(base, fromDateKey, toDateKey), 'addVacation');
+  await updateOwnUser({ vacations: next }, 'addVacation');
+  return next;
+}
+
+/**
+ * removeVacation(currentList, fromDateKey, toDateKey) -> Promise<Array>
+ *
+ * The UNDO. Remove the range matching [from, to] EXACTLY; everything else is left
+ * alone. Idempotent when the range is not there. Returns the list that was written.
+ */
+export async function removeVacation(currentList, fromDateKey, toDateKey) {
+  if (!isDayKey(fromDateKey) || !isDayKey(toDateKey)) {
+    throw taggedError('gymboard/bad-date', `removeVacation: bad range ${fromDateKey}..${toDateKey}.`);
+  }
+  const base = Array.isArray(currentList) ? currentList : [];
+  if (typeof logic.withoutVacation !== 'function') {
+    throw taggedError('gymboard/stale-module', 'removeVacation: logic.js is stale, reload the app.');
+  }
+  const next = cleanVacations(logic.withoutVacation(base, fromDateKey, toDateKey), 'removeVacation');
+  await updateOwnUser({ vacations: next }, 'removeVacation');
+  return next;
+}
+
 const MAX_SAVED_MEALS = 20; // matches the rule's savedMeals.size() <= 20 cap.
 
 /**

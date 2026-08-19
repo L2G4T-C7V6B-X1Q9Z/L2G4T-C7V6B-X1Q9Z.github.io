@@ -343,6 +343,113 @@ export function withWorkoutResume(list, lastPausedKey) {
   return next;
 }
 
+// ---- vacations: travel amnesty on BOTH axes, stored as CLOSED RANGES (v9.5) ---
+
+/**
+ * vacationOn(subject, dateKey) -> boolean
+ *
+ * True when `dateKey` falls inside one of the subject's vacation ranges. A
+ * vacation day is excused on BOTH axes: the workout half never reds and leaves
+ * the workout denominator, AND the nutrition half is neither judged nor counted.
+ * That second half is exactly where this differs from a workout pause (v9.4):
+ * a pause says "I can't train but I'm still eating and want that tracked"; a
+ * vacation says "I'm away, don't count either." Both are excused, neither is a
+ * completion — the percentages keep meaning "of the days that counted".
+ *
+ *   subject.vacations : Array<{ from:'YYYY-MM-DD', to:'YYYY-MM-DD' }>
+ *
+ * Same range model as workoutPauses, and for the same reason: a boolean would
+ * have to be flipped back on return, and at that instant every travel day
+ * re-enters missed() and reds at once. A closed range excuses its days forever.
+ *
+ * Range semantics:
+ *   - `from` and `to` are BOTH INCLUSIVE and BOTH REQUIRED. There is no open
+ *     vacation: a trip has known dates, and an open-ended one would silently
+ *     switch off someone's accountability with nothing to notice. Want
+ *     open-ended? That is a pause, use that.
+ *   - Ranges are independent; any match wins. Gaps between them stay live.
+ *   - Ranges may overlap (a trip extended after it was entered). Any hit wins.
+ *
+ * FAIL-CLOSED on malformed input, same posture as workoutsPausedOn: an entry
+ * with a bad `from`, a missing/bad `to`, or `to < from` is SKIPPED, never read
+ * as "on vacation." Skipping lets days go red, which someone sees and fixes.
+ *
+ * Pure: no clock, no Firebase, no DOM.
+ */
+export function vacationOn(subject, dateKey) {
+  if (!isDayKey(dateKey)) return false;
+  const ranges = subject && subject.vacations;
+  if (!Array.isArray(ranges)) return false;
+  for (const r of ranges) {
+    if (!r || typeof r !== 'object') continue;
+    if (!isDayKey(r.from) || !isDayKey(r.to)) continue; // both required (fail closed)
+    if (r.to < r.from) continue; // inverted -> skip
+    if (dateKey >= r.from && dateKey <= r.to) return true;
+  }
+  return false;
+}
+
+// Canonical form of one vacation range, or null if it cannot be one. Used by the
+// composers below so that "same range" has exactly one definition (a caller that
+// hands in {from,to,extra:1} and one that hands in {to,from} both normalize alike).
+function normVacation(r) {
+  if (!r || typeof r !== 'object') return null;
+  if (!isDayKey(r.from) || !isDayKey(r.to) || r.to < r.from) return null;
+  return { from: r.from, to: r.to };
+}
+
+/**
+ * withVacation(list, fromKey, toKey) -> new list
+ *
+ * Add a CLOSED vacation range [fromKey, toKey]. Both inclusive; toKey may equal
+ * fromKey (a single day). The result is sorted by `from` and DEDUPED — adding a
+ * range that already exists verbatim is a no-op, so a double-tap or a replayed
+ * offline write cannot stack duplicates. Overlapping-but-different ranges are
+ * both kept: they read the same on the board and merging them would make undo
+ * ambiguous ("which trip did I just remove?").
+ *
+ * Malformed EXISTING entries are dropped on the way through, so one write of a
+ * good range also scrubs junk out of the doc instead of carrying it forever.
+ *
+ * Pure + non-mutating. Throws TypeError on bad keys or an inverted range — a
+ * junk range must not reach the doc.
+ */
+export function withVacation(list, fromKey, toKey) {
+  if (!isDayKey(fromKey)) throw new TypeError(`withVacation: not a YYYY-MM-DD key: ${fromKey}`);
+  if (!isDayKey(toKey)) throw new TypeError(`withVacation: not a YYYY-MM-DD key: ${toKey}`);
+  if (toKey < fromKey) throw new TypeError(`withVacation: range ends before it starts: ${fromKey}..${toKey}`);
+  const base = (Array.isArray(list) ? list : []).map(normVacation).filter(Boolean);
+  if (!base.some((r) => r.from === fromKey && r.to === toKey)) {
+    base.push({ from: fromKey, to: toKey });
+  }
+  base.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : a.to > b.to ? 1 : 0));
+  return base;
+}
+
+/**
+ * withoutVacation(list, fromKey, toKey) -> new list
+ *
+ * The UNDO. Remove the range that matches [fromKey, toKey] EXACTLY. Nothing else
+ * is touched: removing a 4-day trip does not clip an overlapping 2-day one, and
+ * removing a range that is not there is a no-op (idempotent, double-tap safe).
+ * Malformed existing entries are scrubbed the same way withVacation scrubs them.
+ *
+ * Exact-match on purpose: the UI lists ranges verbatim with an x next to each,
+ * so "remove this one" is unambiguous. There is deliberately no "remove today
+ * from whatever range covers it" — splitting ranges is exactly the kind of
+ * silent history rewrite this whole model exists to avoid.
+ *
+ * Pure + non-mutating. Throws TypeError on bad keys.
+ */
+export function withoutVacation(list, fromKey, toKey) {
+  if (!isDayKey(fromKey)) throw new TypeError(`withoutVacation: not a YYYY-MM-DD key: ${fromKey}`);
+  if (!isDayKey(toKey)) throw new TypeError(`withoutVacation: not a YYYY-MM-DD key: ${toKey}`);
+  return (Array.isArray(list) ? list : [])
+    .map(normVacation)
+    .filter(Boolean)
+    .filter((r) => !(r.from === fromKey && r.to === toKey));
+}
+
 // ---- the missed predicate (computed on read, never stored) -------------------
 
 /**
@@ -367,10 +474,11 @@ function rollover(subject) {
 /**
  * missed(subject, dateKey, nowInstant, day)
  *
- * DESIGN's predicate, all six conjuncts (v9.4 added the pause one):
+ * DESIGN's predicate, all seven conjuncts (v9.4 added pause, v9.5 vacation):
  *   missed =  isPast(D, S)               // D strictly before S's CURRENT bizdate
  *         AND not isRestDay(S, D)        // pattern-at-D then perDateOverrides[D]
  *         AND not workoutsPausedOn(S, D) // illness/injury amnesty range
+ *         AND not vacationOn(S, D)       // travel amnesty range (both axes)
  *         AND not day.workout
  *         AND not day.off
  *         AND D >= S.profile.joinDate    // pre-join days never red
@@ -411,6 +519,11 @@ export function missed(subject, dateKey, nowInstant, day) {
   // cleared. This sits beside the rest-day conjunct on purpose: both answer "was
   // this person on the hook to train that day", and neither touches nutrition.
   if (workoutsPausedOn(subject, dateKey)) return false;
+
+  // v9.5: on vacation — excused the same way, and (unlike a pause) the nutrition
+  // side is excused too, but THAT lives in the nutrition readers, not here.
+  // missed() is the workout predicate and only the workout predicate.
+  if (vacationOn(subject, dateKey)) return false;
 
   // a logged workout or an OFF flag clears it.
   if (day && day.workout === true) return false;
@@ -538,9 +651,12 @@ export function groupConsistency(allMembersDays, weekKey, nowInstant) {
       // the whole group's hero % down for weeks. (Nutrition is not part of this
       // stat, so the computeCompliance asymmetry has no analogue here.)
       const paused = workoutsPausedOn(subject, D);
-      if (rest || off || paused) {
-        // rest/OFF/paused days are excluded from the denominator. A workout on one
-        // is a BONUS — counts in neither numerator nor denominator, surfaced
+      // v9.5: a VACATION excuses the day here too — same reasoning as pause: this
+      // builder does not call missed(), so it must repeat the conjunct itself.
+      const vacation = vacationOn(subject, D);
+      if (rest || off || paused || vacation) {
+        // rest/OFF/paused/vacation days are excluded from the denominator. A workout
+        // on one is a BONUS — counts in neither numerator nor denominator, surfaced
         // separately.
         if (trained) bonus += 1;
         continue;
@@ -1013,8 +1129,11 @@ export function computeCompliance(daysMap, subject, nowInstant, opts = {}) {
     // often you hit". A workout logged during a pause is a bonus and is ignored,
     // mirroring the rest-day bonus treatment.
     const paused = workoutsPausedOn(subject, cursor);
+    // v9.5: a VACATION excuses BOTH axes. This is the one place the pause and the
+    // vacation deliberately diverge — read the two comments below together.
+    const vacation = vacationOn(subject, cursor);
     if (!(rest || off)) {
-      if (!paused) {
+      if (!paused && !vacation) {
         wExpected += 1;
         if (day && day.workout === true) wCompleted += 1;
       }
@@ -1025,11 +1144,20 @@ export function computeCompliance(daysMap, subject, nowInstant, opts = {}) {
       // person's nutrition % (expected 0 -> percent null -> the board renders "—")
       // for the entire illness, which is the opposite of "he can still track cals".
       // rest/off stay excluded here as before; only `paused` diverges.
-      nExpected += 1;
-      // v9: judge the day against its own snapshotted goal (else the live one) —
-      // the same precedence classifyDay paints the cell with (nutritionGoalOpts).
-      const ns = nutritionStatus(day, { ...nutritionGoalOpts(day, subject), isPast: true });
-      if (ns === 'hit') nCompleted += 1;
+      //
+      // NUTRITION *IS* GATED ON `vacation`, and that is the whole difference
+      // between the two features. A vacation says "I'm away, don't count either
+      // half." A trip that ran the nutrition denominator would score every
+      // restaurant day as a miss on the board, which is exactly the red the
+      // person marked the days to avoid. (A vacation-only window can still blank
+      // the % to "—" — that is correct: nothing counted, so there is no rate.)
+      if (!vacation) {
+        nExpected += 1;
+        // v9: judge the day against its own snapshotted goal (else the live one) —
+        // the same precedence classifyDay paints the cell with (nutritionGoalOpts).
+        const ns = nutritionStatus(day, { ...nutritionGoalOpts(day, subject), isPast: true });
+        if (ns === 'hit') nCompleted += 1;
+      }
     }
 
     cursor = prevBusinessDate(cursor);

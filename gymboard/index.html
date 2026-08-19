@@ -162,7 +162,7 @@
         <div id="me-settings" class="me-settings collapsed">
           <button id="me-settings-toggle" class="me-settings-header" type="button" aria-expanded="false" aria-controls="me-settings-body">
             <span class="me-settings-label">⚙️ SETTINGS</span>
-            <span class="me-settings-sub">goal · rest days · pause · quick meals · workout types · profile</span>
+            <span class="me-settings-sub">goal · rest days · pause · vacation · quick meals · workout types · profile</span>
             <span class="me-settings-caret" aria-hidden="true">▸</span>
           </button>
 
@@ -203,6 +203,24 @@
               <div class="me-hint">Injured or sick for a while? Pause, and your workout squares stop going red. <strong>Calories and protein keep tracking normally.</strong></div>
               <div class="me-row"><span class="me-label">Workout tracking</span><button id="me-pause-workouts" class="me-toggle" type="button">active</button></div>
               <div id="me-pause-status" class="me-hint" style="margin-top:10px;margin-bottom:0;"></div>
+            </div>
+
+            <!-- v9.5 VACATION: a dated range where BOTH workouts and nutrition are excused.
+                 Distinct from PAUSE (workout-only, open-ended, "I'm hurt") — a vacation
+                 has known dates and means "I'm away, don't count either half." Stored as
+                 closed ranges, so a trip entered after the fact un-reds those days and
+                 stays excused forever. Each range has its own remove (the undo). -->
+            <div class="me-card">
+              <div class="me-card-title">VACATION</div>
+              <div class="me-hint">Away for a few days? Mark the dates and <strong>both workouts and nutrition are excused</strong> for them — nothing goes red, nothing counts. Works for past trips too. Single day: same date twice.</div>
+              <div id="me-vac-list" class="me-qm-manage" aria-label="Your vacations"></div>
+              <div class="me-meal-add me-vac-add">
+                <input id="me-vac-from" class="me-input me-meal-in" type="date" aria-label="first day away">
+                <span class="me-vac-arrow" aria-hidden="true">→</span>
+                <input id="me-vac-to" class="me-input me-meal-in" type="date" aria-label="last day away">
+                <button id="me-vac-add" class="me-toggle" type="button">add</button>
+              </div>
+              <div id="me-vac-status" class="me-hint" style="margin-top:8px;margin-bottom:0;"></div>
             </div>
 
             <!-- QUICK MEALS manager (add / remove presets) -->

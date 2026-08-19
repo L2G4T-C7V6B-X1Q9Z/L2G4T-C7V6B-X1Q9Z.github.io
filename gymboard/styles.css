@@ -65,6 +65,10 @@
      took 30 rest days. */
   --st-paused:#39414d;
   --st-paused-wash:#1b1f26;  /* banner fill behind the paused notice (matches --red-wash's role) */
+  /* v9.5 vacation — both halves excused. A warm-neutral tan, deliberately NOT the
+     rest green (would read as 30 rest days), NOT paused slate (that means "hurt"),
+     NOT missed red. Away on purpose. */
+  --st-vacation:#4a4438;
   /* v3: the diagonal-divider + pending-hatch tokens are gone — cells are flat now. */
 }
 
@@ -87,6 +91,7 @@
   --st-none:#e4e4e6; --st-pending:#ededef; --st-macrodot:#2f9e63;
   --st-paused-wash:#eef0f4;
   --st-paused:#c9cdd6; /* v9.4 paused — light slate; same "off on purpose" read */
+  --st-vacation:#e6dcc6; /* v9.5 vacation — light tan */
   --wc-o1:#9a9a9e; --wc-o2:#76767a; --wc-o3:#54545a; --wc-o4:#88888c; --wc-o5:#646468;
 }
 
@@ -505,6 +510,12 @@ button:disabled { cursor:default; }
 /* v9.4: workout PAUSED (illness/injury range). Neutral slate + a small "paused"
    label, same treatment as rest so it can never read as blank/broken. */
 .gcell.w-paused  { --w:var(--st-paused); }
+/* v9.5: on VACATION — both halves excused. Same neutral treatment as rest/paused so
+   it can never read as blank, and a small "away" label. n-vacation is the ONLY non-hit
+   nutrition state besides n-none/n-pending, and it exists so a past trip day never
+   paints as "didn't eat". */
+.gcell.w-vacation { --w:var(--st-vacation); }
+.gcell.n-vacation { --n:var(--st-vacation); }
 .gcell.n-hit     { --n:var(--st-done); }
 .gcell.n-none    { --n:var(--st-none); }
 
@@ -544,6 +555,9 @@ button:disabled { cursor:default; }
    So 8px, a longer word, or any letter-spacing WILL clip on a small phone. Re-measure
    before changing the size, the text, or the top/left offsets. */
 .gcell.w-paused .seg-w::after { content:'paused'; position:absolute; top:3px; left:3px; font-size:7px; font-weight:700; letter-spacing:0; color:var(--txt2); text-transform:lowercase; line-height:1; text-shadow:0 0 2px var(--g0), 0 0 2px var(--g0); }
+/* v9.5: 'away' is 4 letters — narrower than the measured 'paused' at the same size, so
+   it inherits that clearance with margin. Do not lengthen the word. */
+.gcell.w-vacation .seg-w::after { content:'away'; position:absolute; top:3px; left:3px; font-size:7px; font-weight:700; letter-spacing:0; color:var(--txt2); text-transform:lowercase; line-height:1; text-shadow:0 0 2px var(--g0), 0 0 2px var(--g0); }
 /* tiny dim corner tag for a typed workout — decoration only, never colored red. */
 .gcell-wtag {
   position:absolute; top:2.5px; left:3px; z-index:3;
@@ -808,6 +822,7 @@ button:disabled { cursor:default; }
    actually paused, so the legend does not permanently grow a 4th chip for a state
    nobody is in (legend real estate is tight at 375px). */
 .lgsw.lg-paused { background:var(--st-paused); border:1px solid var(--etch); }
+.lgsw.lg-vacation { background:var(--st-vacation); border:1px solid var(--etch); }
 .leg { display:inline-flex; align-items:center; gap:3px; font-size:7.5px; letter-spacing:.03em; color:var(--txt3); text-transform:uppercase; }
 .leg-missed-note { font-size:8px; color:var(--txt3); opacity:.8; }
 
@@ -1009,6 +1024,12 @@ button:disabled { cursor:default; }
 /* add-meal form: two inputs + ADD */
 .me-meal-add { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
 .me-meal-in { flex:1; width:auto; min-width:0; text-align:left; }
+/* v9.5 vacation picker: two native date inputs + add. Date inputs ignore text-align on
+   iOS, so left is the only honest value; the arrow is decoration. */
+.me-vac-add .me-input { text-align:left; padding:0 8px; font-size:12px; min-width:0; }
+.me-vac-arrow { flex:0 0 auto; color:var(--txt3); font-size:12px; }
+.me-vac-row.vac-live { border-color:var(--etch); }
+.vac-now { display:inline-block; margin-left:6px; padding:1px 5px; border-radius:3px; background:var(--st-vacation); color:var(--txt); font-size:9px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; vertical-align:middle; }
 .me-meal-btn { flex:0 0 auto; height:34px; padding:0 14px; border-radius:var(--r-sm); background:var(--red); border:1px solid var(--red); color:#fff; font-family:var(--font-mono); font-size:11.5px; font-weight:700; letter-spacing:.06em; }
 .me-meal-btn:active:not(:disabled) { filter:brightness(.9); }
 .me-meal-btn:disabled { opacity:.5; }

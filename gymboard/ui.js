@@ -89,6 +89,12 @@ function pausedOn(subject, dateKey) {
   return typeof L.workoutsPausedOn === 'function' ? L.workoutsPausedOn(subject, dateKey) === true : false;
 }
 
+// v9.5: guarded vacation predicate, same posture as pausedOn — a stale logic.js
+// degrades to "nobody is away" for one load instead of a white screen.
+function vacationOn(subject, dateKey) {
+  return typeof L.vacationOn === 'function' ? L.vacationOn(subject, dateKey) === true : false;
+}
+
 // ---- defaults (the businessDate FUNCTION already takes tz+rollover params, so
 //      per-user values from each subject's own doc ALWAYS win when present). ----
 const DEFAULT_ROLLOVER_H = 4;
@@ -266,6 +272,12 @@ const elMePauseBannerTxt = $('me-workout-paused-txt');
 const elMePauseResume = $('me-workout-resume'); // the banner's inline resume action
 const elMePauseToggle = $('me-pause-workouts'); // SETTINGS card toggle
 const elMePauseStatus = $('me-pause-status'); // SETTINGS card "paused since ..." line
+// v9.5 VACATION card (SETTINGS)
+const elMeVacList = $('me-vac-list'); // existing ranges, each with its own remove
+const elMeVacFrom = $('me-vac-from'); // <input type=date> first day away
+const elMeVacTo = $('me-vac-to'); // <input type=date> last day away
+const elMeVacAdd = $('me-vac-add');
+const elMeVacStatus = $('me-vac-status');
 const elMeWeight = $('me-weight');
 const elMeLogWeight = $('me-log-weight');
 const elMeRestdays = $('me-restdays');
@@ -460,6 +472,8 @@ function subjectOf(member) {
     // logic.missed / computeStreak / computeCompliance all see it without any
     // signature change — they already take the subject.
     workoutPauses: Array.isArray(member.workoutPauses) ? member.workoutPauses : [],
+    // v9.5: vacation ranges ride along the same way, so the board reads them.
+    vacations: Array.isArray(member.vacations) ? member.vacations : [],
     profile: member.profile || {},
     // v3: nutrition auto-check needs the goal direction + goal numbers, which live
     // on the public /users doc. Carried here so classifyDay's signature is unchanged.
@@ -551,6 +565,9 @@ function classifyDay(subject, dateKey, now, day) {
 
   // v9.4: is this day inside one of the subject's workout-pause ranges?
   const paused = pausedOn(subject, dateKey);
+  // v9.5: is this day inside one of the subject's vacation ranges? Excuses BOTH
+  // halves — see the nutrition side below, which is the part a pause never touches.
+  const vacation = vacationOn(subject, dateKey);
 
   let wStatus;
   if (trained) {
@@ -559,6 +576,13 @@ function classifyDay(subject, dateKey, now, day) {
     wStatus = 'off';
   } else if (rest) {
     wStatus = 'rest';
+  } else if (vacation) {
+    // v9.5: AFTER rest/off (a scheduled rest day inside a trip keeps its more
+    // specific label), BEFORE paused (a trip is the more specific reason than an
+    // open-ended illness range that happens to span it), and BEFORE missed() for
+    // the same reason the pause branch is: missed() already returns false here, so
+    // without this branch the cell would fall through to a blank-looking 'pending'.
+    wStatus = 'vacation';
   } else if (paused) {
     // v9.4: AFTER rest/off on purpose. A scheduled rest day that also falls inside a
     // pause keeps reading 'rest' (the more specific, already-understood label), and a
@@ -588,12 +612,21 @@ function classifyDay(subject, dateKey, now, day) {
   // computeCompliance so no two views of the same day can disagree.
   const goalOpts = nutritionGoalOpts(day, subject);
 
-  const nStatus = nutritionStatus(day, { ...goalOpts, isPast: dateKey < cur });
+  // v9.5: on vacation the nutrition half is EXCUSED, not judged. A logged hit
+  // still shows as a hit (he ate well on the road — that is real and it paints);
+  // anything short of a hit paints 'vacation' instead of the quiet-gray 'none',
+  // so a past trip day never reads as "didn't eat" on the board. This is the
+  // whole point of vacation vs pause: pause leaves this block exactly alone.
+  const rawN = nutritionStatus(day, { ...goalOpts, isPast: dateKey < cur });
+  const nStatus = (vacation && rawN !== 'hit') ? 'vacation' : rawN;
 
   // v8: the fraction of the calorie (or protein) goal logged -> drives the
   // dithered partial-fill on the nutrition triangle. null when there's no
   // measurable goal (manual mode / goal unset) -> cell stays the flat binary.
-  const nProgress = nutritionProgress(day, goalOpts);
+  // v9.5: no dither on a vacation half — a partial fill on an excused day would
+  // read as "60% of a day that counted", which is exactly the judgement it is
+  // exempt from. Solid neutral, like rest.
+  const nProgress = nStatus === 'vacation' ? null : nutritionProgress(day, goalOpts);
 
   return { wStatus, nStatus, nProgress };
 }
@@ -604,6 +637,7 @@ const CELL_LABEL = {
   rest: 'rest',
   off: 'rest', // v4 (#1): off renders + reads identically to rest
   paused: 'paused', // v9.4: workout tracking paused (illness / injury)
+  vacation: 'away', // v9.5: on vacation — both halves excused
   pending: 'pending',
   prejoin: 'pre-join',
 };
@@ -878,7 +912,10 @@ function renderGrid(now) {
   // carries the flag, so the legend rebuilds the moment that changes (a bare
   // `dataset.built` would have frozen the 3-chip version forever).
   const anyPaused = cols.some((m) => pausedOn(subjectOf(m), today));
-  const legendKey = anyPaused ? 'v9.4-paused' : 'v9.4';
+  // v9.5: same treatment for 'away' — chip only while someone on the board is on
+  // vacation right now; the key carries both flags so any change rebuilds.
+  const anyAway = cols.some((m) => vacationOn(subjectOf(m), today));
+  const legendKey = 'v9.5' + (anyPaused ? '-paused' : '') + (anyAway ? '-away' : '');
   if (elGridLegend.dataset.built !== legendKey) {
     // v4.5: one clean row. A single example cell whose TOP half is the workout and BOTTOM
     // half is the nutrition (labeled right beside it), then a compact color key.
@@ -892,6 +929,7 @@ function renderGrid(now) {
         `<span class="lgchip"><span class="lgsw lg-missed"></span>missed</span>` +
         `<span class="lgchip"><span class="lgsw lg-rest"></span>rest</span>` +
         (anyPaused ? `<span class="lgchip"><span class="lgsw lg-paused"></span>paused</span>` : '') +
+        (anyAway ? `<span class="lgchip"><span class="lgsw lg-vacation"></span>away</span>` : '') +
       `</span>`;
     elGridLegend.dataset.built = legendKey;
   }
@@ -2776,6 +2814,8 @@ function renderMe(now) {
   // v9.4 workout-pause: the TODAY banner + the SETTINGS card, both driven off the
   // SAME predicate the grid paints with, so the two can never disagree.
   renderWorkoutPause(me, cur);
+  // v9.5 vacation: the SETTINGS card list + status line.
+  renderVacations(me, cur);
 
   // weight quick-log input (don't stomp a field being edited).
   if (elMeWeight && document.activeElement !== elMeWeight) {
@@ -3107,6 +3147,107 @@ function renderWorkoutPause(member, cur) {
   // `cur` is accepted so a future revision can show "N days paused" without changing
   // every call site; intentionally unused today (see the drift note above).
   void cur;
+}
+
+// =============================================================================
+// v9.5 VACATION (SETTINGS card): a list of closed date ranges where BOTH halves
+// are excused. Each row has its own remove — that IS the undo. No open-ended
+// vacations (that is what PAUSE is for), so `to` is required in the picker.
+// =============================================================================
+function vacationsOf(member) {
+  return member && Array.isArray(member.vacations) ? member.vacations : [];
+}
+
+// Only well-formed ranges are shown/actionable. logic.js skips malformed entries
+// when painting; the list does the same so a junk row can never be "removed" into
+// a write that then fails validation.
+function cleanVacationRows(list) {
+  return list
+    .filter((r) => r && typeof r === 'object' && isDayKey(r.from) && isDayKey(r.to) && r.to >= r.from)
+    .map((r) => ({ from: r.from, to: r.to }));
+}
+
+function fmtVacRange(r) {
+  return r.from === r.to ? fmtDateShort(r.from) : `${fmtDateShort(r.from)} – ${fmtDateShort(r.to)}`;
+}
+
+function renderVacations(member, cur) {
+  const rows = cleanVacationRows(vacationsOf(member));
+  if (elMeVacList) {
+    if (!rows.length) {
+      elMeVacList.innerHTML = '';
+    } else {
+      elMeVacList.innerHTML = rows.map((r) => {
+        const live = cur && r.from <= cur && cur <= r.to;
+        const days = 1 + Math.round((Date.UTC(...r.to.split('-').map(Number).map((n, i) => (i === 1 ? n - 1 : n))) -
+                                     Date.UTC(...r.from.split('-').map(Number).map((n, i) => (i === 1 ? n - 1 : n)))) / 86400000);
+        return (
+          `<div class="me-qm-row me-vac-row${live ? ' vac-live' : ''}">` +
+          `<span class="qm-row-label">${escapeHtml(fmtVacRange(r))}${live ? ' <span class="vac-now">now</span>' : ''}</span>` +
+          `<span class="qm-row-fig">${days}d</span>` +
+          `<button class="qm-row-x" type="button" data-vac-from="${r.from}" data-vac-to="${r.to}" aria-label="remove vacation ${escapeHtml(fmtVacRange(r))}">✕</button>` +
+          `</div>`
+        );
+      }).join('');
+    }
+  }
+  if (elMeVacStatus) {
+    const live = cur ? rows.find((r) => r.from <= cur && cur <= r.to) : null;
+    elMeVacStatus.textContent = live
+      ? `You are marked away through ${fmtDateShort(live.to)}. Nothing counts until then; the day after is back on the hook.`
+      : rows.length ? 'Tap ✕ on a range to undo it — those days go back to counting.' : 'No vacations marked.';
+  }
+  // Default the pickers to today so a single-day "mark today" is one tap on add.
+  if (cur && elMeVacFrom && !elMeVacFrom.value && document.activeElement !== elMeVacFrom) elMeVacFrom.value = cur;
+  if (cur && elMeVacTo && !elMeVacTo.value && document.activeElement !== elMeVacTo) elMeVacTo.value = cur;
+}
+
+// The local `me.vacations` is updated from the list data.js actually WROTE (same
+// posture as meSetWorkoutPause): both composers are idempotent and may return the
+// input unchanged, and guessing would drift the optimistic copy off the doc.
+async function meAddVacation() {
+  const me = memberById(myUserId);
+  if (!me) return;
+  const from = elMeVacFrom ? String(elMeVacFrom.value || '').trim() : '';
+  const to = elMeVacTo ? String(elMeVacTo.value || '').trim() : '';
+  if (!isDayKey(from) || !isDayKey(to)) { toast('pick both dates'); return; }
+  if (to < from) { toast('the end date is before the start'); return; }
+  // Guard the far future: a typo like 2062 would silently excuse decades. Two
+  // years is generous for anything he would actually book.
+  const subject = subjectOf(me);
+  const cur = currentBusinessDate(anchoredNow(), subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
+  if (to > cur.replace(/^\d{4}/, (y) => String(Number(y) + 2))) { toast('that end date is more than 2 years out — typo?'); return; }
+  if (elMeVacAdd) elMeVacAdd.disabled = true;
+  try {
+    const next = await data.addVacation(vacationsOf(me), from, to);
+    me.vacations = next;
+    if (elMeVacFrom) elMeVacFrom.value = '';
+    if (elMeVacTo) elMeVacTo.value = '';
+    renderMe(anchoredNow());
+    renderGrid(anchoredNow()); // cells + legend + the header % all change with it
+    toast(from === to ? `${fmtDateShort(from)} marked away` : `${fmtDateShort(from)} – ${fmtDateShort(to)} marked away`);
+  } catch (err) {
+    handleWriteError(err);
+    renderMe(anchoredNow());
+  } finally {
+    if (elMeVacAdd) elMeVacAdd.disabled = false;
+  }
+}
+
+async function meRemoveVacation(from, to) {
+  const me = memberById(myUserId);
+  if (!me) return;
+  if (!isDayKey(from) || !isDayKey(to)) return;
+  try {
+    const next = await data.removeVacation(vacationsOf(me), from, to);
+    me.vacations = next;
+    renderMe(anchoredNow());
+    renderGrid(anchoredNow());
+    toast('vacation removed — those days count again');
+  } catch (err) {
+    handleWriteError(err);
+    renderMe(anchoredNow());
+  }
 }
 
 function renderGoal(member) {
@@ -3760,6 +3901,20 @@ function wireMe() {
       const x = e.target.closest('.qm-row-x');
       if (x) meRemoveQuickMeal(Number(x.dataset.qmRm));
     });
+  // ---- SETTINGS: VACATION (v9.5) ----
+  if (elMeVacAdd) elMeVacAdd.addEventListener('click', meAddVacation);
+  if (elMeVacList)
+    elMeVacList.addEventListener('click', (e) => {
+      const x = e.target.closest('.qm-row-x');
+      if (x) meRemoveVacation(x.dataset.vacFrom, x.dataset.vacTo);
+    });
+  // typing a start date after the end date -> drag the end along (single-day default)
+  if (elMeVacFrom && elMeVacTo)
+    elMeVacFrom.addEventListener('change', () => {
+      if (isDayKey(elMeVacFrom.value) && (!isDayKey(elMeVacTo.value) || elMeVacTo.value < elMeVacFrom.value)) {
+        elMeVacTo.value = elMeVacFrom.value;
+      }
+    });
   // ---- SETTINGS: WORKOUT TYPES chooser ----
   if (elMeTypeChooser)
     elMeTypeChooser.addEventListener('click', (e) => {
@@ -4052,9 +4207,12 @@ function buildDayPopBody(member, dateKey) {
   // v4 (#1): off reads as "rest" (off and rest converge).
   // v9.4: 'paused' checked AFTER rest/off, matching classifyDay's branch order so the
   // popover can never contradict the cell it was opened from.
+  // v9.5: 'away' sits between rest and paused, matching classifyDay's order.
+  const away = vacationOn(subject, dateKey);
   const workoutVal =
     day.workout === true ? 'yes'
     : (day.off === true || isRestDay(subject.restPattern, subject.perDateOverrides, dateKey)) ? 'rest'
+    : away ? 'away'
     : pausedOn(subject, dateKey) ? 'paused'
     : 'no';
   lines.push(line('Workout', workoutVal));
@@ -4068,7 +4226,9 @@ function buildDayPopBody(member, dateKey) {
   const now = anchoredNow();
   const cur = currentBusinessDate(now, subject.ianaTz, subject.rolloverHour, subject.rolloverMinute);
   const ns = nutritionStatus(day, { ...nutritionGoalOpts(day, subject), isPast: dateKey < cur });
-  lines.push(line('Nutrition', ns === 'hit' ? 'hit' : '—'));
+  // v9.5: an excused day reads 'away' unless he actually hit anyway (a real hit is
+  // still a hit) — the same rule classifyDay paints the cell with.
+  lines.push(line('Nutrition', ns === 'hit' ? 'hit' : away ? 'away' : '—'));
   if (Number.isFinite(day.kcal)) lines.push(line('Calories', `${day.kcal}`));
   if (Number.isFinite(day.protein)) lines.push(line('Protein', `${day.protein}g`));
   if (Number.isFinite(wt)) lines.push(line('Weight', `${wt} lb`)); // omit if hidden/absent
