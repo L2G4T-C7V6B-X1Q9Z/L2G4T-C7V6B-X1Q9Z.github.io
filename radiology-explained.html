@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#131314">
+<title>Radiology: training timeline and compensation</title>
+<style>
+:root{
+  --bg:#131314;--card:#1b1b1e;--card2:#232327;--line:#303035;--line2:#3d3d44;
+  --ink:#f2f1ee;--ink2:#aeada7;--ink3:#78776f;--acc:#e66767;--acc2:#f7c3c3;--dim:#2c2c31;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+ -webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
+.wrap{max-width:520px;margin:0 auto;padding:32px 20px 70px}
+h1{font-size:27px;line-height:1.2;font-weight:670;letter-spacing:-.028em;margin:0 0 6px}
+h2{font-size:21px;line-height:1.25;font-weight:660;letter-spacing:-.022em;margin:0 0 12px}
+h3{font-size:17px;font-weight:650;margin:0 0 10px;letter-spacing:-.01em}
+.kicker{font-size:11.5px;font-weight:680;letter-spacing:.16em;text-transform:uppercase;
+ color:var(--acc);margin:0 0 9px}
+.sub{font-size:14px;color:var(--ink3);margin:0 0 18px}
+p{margin:0 0 14px;color:var(--ink2)}
+strong{color:var(--ink);font-weight:650}
+section{margin:0 0 12px;padding:26px 0 4px;border-top:1px solid var(--line)}
+section:first-of-type{border-top:0;padding-top:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 17px;margin:16px 0}
+.card.accent{border-color:#4a2c2c;background:#1e1719}
+.num{font-size:42px;line-height:1;font-weight:700;letter-spacing:-.035em;color:var(--acc);
+ font-variant-numeric:tabular-nums;margin:0 0 6px}
+.num.sm{font-size:32px}
+.numlab{font-size:14px;color:var(--ink2);margin:0}
+
+.tl{margin:18px 0 4px}
+.tlrow{display:grid;grid-template-columns:52px 1fr;gap:12px}
+.tlyear{font-size:13px;font-weight:660;color:var(--ink3);font-variant-numeric:tabular-nums;
+ padding-top:14px;text-align:right}
+.tlbody{border-left:2px solid var(--line2);padding:0 0 18px 15px;position:relative}
+.tlrow:last-child .tlbody{border-left-color:transparent}
+.tlbody:before{content:"";position:absolute;left:-6px;top:15px;width:10px;height:10px;
+ border-radius:50%;background:var(--dim);border:2px solid var(--bg)}
+.tlrow.now .tlbody:before{background:var(--acc);box-shadow:0 0 0 4px rgba(230,103,103,.18)}
+.tlrow.pay .tlbody:before{background:var(--acc2)}
+.tlttl{font-size:16px;font-weight:640;color:var(--ink);padding-top:8px}
+.tlsub{font-size:14px;color:var(--ink3);margin-top:1px}
+.tlmoney{display:inline-block;margin-top:7px;font-size:15px;font-weight:660;
+ font-variant-numeric:tabular-nums;background:var(--card2);border:1px solid var(--line);
+ border-radius:99px;padding:3px 12px;color:var(--ink2)}
+.tlmoney.on{color:#141416;background:var(--acc);border-color:var(--acc)}
+.tlmoney.zero{color:var(--ink3)}
+
+.brow{margin:0 0 13px}
+.blab{display:flex;justify-content:space-between;align-items:baseline;font-size:14.5px;margin-bottom:5px}
+.blab b{color:var(--ink);font-weight:640}
+.blab span{color:var(--ink2);font-variant-numeric:tabular-nums;font-weight:640}
+.btrack{height:13px;background:var(--dim);border-radius:7px;overflow:hidden}
+.bfill{height:100%;border-radius:7px;background:var(--acc)}
+.bnote{font-size:13.5px;color:var(--ink3);margin:6px 0 0}
+
+.wgrid{display:grid;grid-template-columns:repeat(13,1fr);gap:3px;margin:7px 0 3px}
+.wcell{aspect-ratio:1;border-radius:2px;background:var(--dim)}
+.wcell.on{background:var(--acc)}
+.wleg{font-size:13.5px;color:var(--ink3);margin:5px 0 0;font-variant-numeric:tabular-nums}
+.wttl{margin:16px 0 3px;font-size:15px;color:var(--ink);font-weight:640}
+
+table{width:100%;border-collapse:collapse;font-size:15px;font-variant-numeric:tabular-nums}
+th{text-align:right;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);
+ font-weight:660;padding:0 0 8px;border-bottom:1px solid var(--line2)}
+th:first-child,td:first-child{text-align:left}
+td{padding:9px 0;border-bottom:1px solid var(--line);color:var(--ink2)}
+td.hi{color:var(--ink);font-weight:640}
+td.acc{color:var(--acc);font-weight:660}
+ul{padding-left:19px;margin:0 0 14px;color:var(--ink2)}
+li{margin:9px 0}
+li strong{color:var(--ink)}
+.tag{display:inline-block;font-size:11.5px;font-weight:660;letter-spacing:.07em;text-transform:uppercase;
+ color:var(--acc);background:#2a1d1e;border-radius:5px;padding:3px 8px;margin:0 0 11px}
+.foot{font-size:13.5px;color:var(--ink3);margin-top:30px;padding-top:18px;border-top:1px solid var(--line)}
+.foot p{color:var(--ink3);font-size:13.5px}
+.foot strong{color:var(--ink2)}
+</style></head><body>
+<div class="wrap">
+
+<section>
+<h1>Radiology: training timeline and compensation</h1>
+<p class="sub">US data, 2026. Figures and sources listed at the end.</p>
+</section>
+
+<section>
+<p class="kicker">Definition</p>
+<h2>The specialty</h2>
+<p>A radiologist is a physician who interprets medical images: X-ray, CT, MRI, ultrasound, and nuclear
+medicine studies. The radiologist reviews the images, determines the diagnosis, and issues a written
+report to the physician who ordered the study.</p>
+<p>Most of the work is performed at a multi-monitor workstation rather than at the bedside. Some
+radiologists also perform image-guided procedures, such as biopsies and drainages. Because the work
+does not require the patient to be present, a substantial share of it can be performed remotely:
+<strong>25.6% of radiology job listings in 2026 were fully remote.</strong></p>
+</section>
+
+<section>
+<p class="kicker">Timeline</p>
+<h2>Training path and stipends</h2>
+<p class="sub">Residency and fellowship salaries are national averages from the AAMC 2025 survey
+(114,361 residents, 350 institutions).</p>
+
+<div class="tl">
+  <div class="tlrow now"><div class="tlyear">2026</div><div class="tlbody">
+    <div class="tlttl">Fourth year of medical school</div>
+    <div class="tlsub">Residency applications submitted September 2026; match results March 2027</div>
+    <div class="tlmoney zero">No income</div></div></div>
+
+  <div class="tlrow"><div class="tlyear">2027</div><div class="tlbody">
+    <div class="tlttl">Internship (PGY-1)</div>
+    <div class="tlsub">General clinical year, required before radiology training begins</div>
+    <div class="tlmoney">$68,166</div></div></div>
+
+  <div class="tlrow"><div class="tlyear">2028</div><div class="tlbody">
+    <div class="tlttl">Radiology residency (PGY-2)</div>
+    <div class="tlsub">Four years of diagnostic radiology training</div>
+    <div class="tlmoney">$70,499</div></div></div>
+
+  <div class="tlrow"><div class="tlyear">2029</div><div class="tlbody">
+    <div class="tlttl">Residency (PGY-3)</div>
+    <div class="tlmoney">$73,301</div></div></div>
+
+  <div class="tlrow"><div class="tlyear">2030</div><div class="tlbody">
+    <div class="tlttl">Residency (PGY-4)</div>
+    <div class="tlmoney">$77,593</div></div></div>
+
+  <div class="tlrow"><div class="tlyear">2031</div><div class="tlbody">
+    <div class="tlttl">Residency (PGY-5)</div>
+    <div class="tlsub">Board certification examinations</div>
+    <div class="tlmoney">$81,807</div></div></div>
+
+  <div class="tlrow"><div class="tlyear">2032</div><div class="tlbody">
+    <div class="tlttl">Fellowship (PGY-6)</div>
+    <div class="tlsub">One additional year of subspecialty training. Optional; most radiologists complete one.</div>
+    <div class="tlmoney">$84,744</div></div></div>
+
+  <div class="tlrow pay"><div class="tlyear">2033</div><div class="tlbody">
+    <div class="tlttl">Attending physician, associate</div>
+    <div class="tlsub">Employed, not yet an owner of the practice</div>
+    <div class="tlmoney on">~$490,000</div></div></div>
+
+  <div class="tlrow pay"><div class="tlyear">2036</div><div class="tlbody">
+    <div class="tlttl">Partner</div>
+    <div class="tlsub">Part-owner. Partnership tracks currently run two to three years.</div>
+    <div class="tlmoney on">~$690,000</div></div></div>
+</div>
+
+<div class="card">
+<p style="margin:0;font-size:16px"><strong>Total: six years of post-medical-school training at an
+average stipend of $76,018 per year, followed by a single-year increase of approximately 5.8x.</strong>
+Compensation in radiology is a step function, not a gradual progression. After partnership, income is
+driven by practice performance and hours worked rather than by seniority.</p>
+</div>
+</section>
+
+<section>
+<p class="kicker">Variable 1</p>
+<h2>Pay by employer type</h2>
+<p class="sub">Average maximum advertised salary, 4,333 US job listings, 2026.</p>
+<div class="card">
+  <div class="brow"><div class="blab"><b>Independent practice</b><span>$746K</span></div>
+    <div class="btrack"><div class="bfill" style="width:100%"></div></div></div>
+  <div class="brow"><div class="blab"><b>Private-equity owned</b><span>$702K</span></div>
+    <div class="btrack"><div class="bfill" style="width:94%"></div></div></div>
+  <div class="brow"><div class="blab"><b>Hospital system</b><span>$638K</span></div>
+    <div class="btrack"><div class="bfill" style="width:85%"></div></div></div>
+  <div class="brow"><div class="blab"><b>Academic / university</b><span>$528K</span></div>
+    <div class="btrack"><div class="bfill" style="width:71%"></div></div></div>
+  <div class="brow"><div class="blab"><b>Government</b><span>$381K</span></div>
+    <div class="btrack"><div class="bfill" style="width:51%"></div></div></div>
+<p class="bnote">Spread between independent practice and academic: $218,000 per year. Academic
+positions include protected research time and qualify for federal loan forgiveness. 68.2% of
+independent-practice listings include a partnership track; 35.6% of all listings do.</p>
+</div>
+</section>
+
+<section>
+<p class="kicker">Variable 2</p>
+<h2>Pay by state</h2>
+<p class="sub">Highest-paying states, and the states with the most open positions. The two lists
+overlap in only three states.</p>
+<div class="card">
+<table><thead><tr><th>State</th><th>Avg max salary</th><th>Openings</th></tr></thead><tbody>
+<tr><td class="hi">South Dakota</td><td class="acc">$859K</td><td>—</td></tr>
+<tr><td class="hi">Montana</td><td class="acc">$850K</td><td>50</td></tr>
+<tr><td class="hi">Tennessee</td><td class="acc">$793K</td><td>—</td></tr>
+<tr><td class="hi">North Carolina</td><td class="acc">$792K</td><td>118</td></tr>
+<tr><td class="hi">Texas</td><td class="acc">$777K</td><td>276</td></tr>
+<tr><td class="hi">Florida</td><td class="acc">$761K</td><td>379</td></tr>
+<tr><td class="hi">California</td><td>~$600K</td><td>227</td></tr>
+<tr><td class="hi">New York</td><td>~$600K</td><td>190</td></tr>
+<tr><td class="hi">Massachusetts</td><td>~$500K</td><td>209</td></tr>
+</tbody></table>
+<p class="bnote">Compensation is inversely related to how many radiologists want to live in a state.
+Adjusted for local price levels, a Florida salary is worth 2.04x a Massachusetts salary. Nine states
+levy no individual income tax, including Florida, Texas, Tennessee and South Dakota.</p>
+</div>
+</section>
+
+<section>
+<p class="kicker">Variable 3</p>
+<h2>Weeks worked per year</h2>
+<p class="sub">Each grid is 52 weeks. Filled cells are weeks worked.</p>
+<div class="card">
+<p class="wttl">Academic radiologist</p>
+<div class="wgrid" id="w46"></div>
+<p class="wleg">46 worked · 6 off · $528K</p>
+
+<p class="wttl">Private practice partner</p>
+<div class="wgrid" id="w38"></div>
+<p class="wleg">38 worked · 14 off · $746K</p>
+
+<p class="wttl">Private practice, low-demand market</p>
+<div class="wgrid" id="w32"></div>
+<p class="wleg">32 worked · 20 off</p>
+
+<p class="wttl">Night shift, 7 days on / 7 off</p>
+<div class="wgrid" id="w26"></div>
+<p class="wleg">26 worked · 26 off</p>
+
+<p class="wttl">Night shift, 7 days on / 14 off</p>
+<div class="wgrid" id="w17"></div>
+<p class="wleg">17 worked · 35 off · $650K+ advertised</p>
+<p class="bnote">Eight to twelve weeks of leave is standard in private practice. Night-shift positions
+trade schedule for time: the 7-on/14-off pattern is 17 working weeks per year. Reported burnout rates
+in night positions are high, and such roles are frequently not partnership-track.</p>
+</div>
+</section>
+
+<section>
+<p class="kicker">Take-home</p>
+<h2>After federal and state tax</h2>
+<p class="sub">Single filer, $650,000 gross, 2026 tax law, standard deduction.</p>
+<div class="card">
+<table><thead><tr><th>State</th><th>State rate</th><th>Take-home</th></tr></thead><tbody>
+<tr><td class="hi">Florida / Texas / Tennessee</td><td>none</td><td class="acc">$434,452</td></tr>
+<tr><td class="hi">Arizona</td><td>2.50%</td><td>$418,604</td></tr>
+<tr><td class="hi">Ohio</td><td>2.75%</td><td>$417,020</td></tr>
+<tr><td class="hi">Pennsylvania</td><td>3.07%</td><td>$414,991</td></tr>
+<tr><td class="hi">North Carolina</td><td>3.99%</td><td>$409,159</td></tr>
+<tr><td class="hi">Illinois</td><td>4.95%</td><td>$403,074</td></tr>
+<tr><td class="hi">Georgia</td><td>5.19%</td><td>$401,552</td></tr>
+</tbody></table>
+<p class="bnote">Effective total rate 33.2% to 38.2%, including federal income tax, Social Security to
+the $184,500 wage base, and Medicare with the 0.9% high-earner surtax. Excludes retirement
+contributions, which reduce the figure. States with graduated brackets are omitted because their top
+marginal rates could not be verified.</p>
+</div>
+</section>
+
+<section>
+<p class="kicker">Automation</p>
+<h2>Artificial intelligence</h2>
+<p>In 2016 a widely reported prediction held that medical schools should stop training radiologists
+because image interpretation would be automated within five to ten years.</p>
+<p>Ten years on, measured outcomes are the reverse:</p>
+<ul>
+<li><strong>82.4% of radiology job postings in 2026 make no mention of AI tools</strong>, despite more
+than 873 FDA-cleared algorithms existing.</li>
+<li>Radiology position counts reached an all-time high in the 2026 residency match, and there is a
+documented national shortage of radiologists.</li>
+<li>Imaging volume is growing 3-4% per year while the radiologist workforce is approximately flat.</li>
+</ul>
+<p>Two structural reasons are cited: legal responsibility for a diagnosis rests with a licensed
+physician, and no vendor has accepted that liability; and rising imaging volume absorbs efficiency
+gains rather than reducing headcount.</p>
+<p>A 2026 survey of 401 medical students and residents found 2.5% considered AI "extremely
+influential" on specialty choice, while 33% of those interested in radiology reported feeling
+discouraged by it.</p>
+</section>
+
+<section>
+<p class="kicker">Risks</p>
+<h2>Documented downside factors</h2>
+<ul>
+<li><strong>Medicare reimbursement.</strong> The 2027 physician fee schedule reduces the conversion
+factor by 1.68%, though the net estimated impact for diagnostic radiology is +2% after other
+adjustments. Long-term reimbursement pressure is the most frequently cited financial risk.</li>
+<li><strong>Private-equity acquisition.</strong> Roughly 10% of the radiology market. Documented
+outcomes for junior physicians after acquisition include compensation 20-25% below projection,
+increased workload, and turnover exceeding 50% of associate cohorts in reported cases.</li>
+<li><strong>Geography.</strong> The highest-paying markets are the least populated. Compensation and
+location preference are directly in tension.</li>
+</ul>
+</section>
+
+<section>
+<div class="card accent">
+<p class="num sm">2033</p>
+<p class="numlab">First year of attending-physician income. Compensation before that year is fixed by
+national residency stipend scales and is not affected by performance.</p>
+</div>
+</section>
+
+<div class="foot">
+<p><strong>Sources.</strong> Training stipends: AAMC 2025 Survey of Resident/Fellow Stipends and
+Benefits (114,361 residents, 350 institutions). Practicing compensation, state figures, remote share
+and AI mentions: RadBoard 2026 US Radiology Job Market Report (4,333 listings) and Dynamics Report
+(20,775 postings). Price levels: US Bureau of Economic Analysis Regional Price Parities, 2024. Tax
+rates: Tax Foundation 2026; Social Security Administration 2026 wage base. Match data: NRMP 2026 Main
+Residency Match.</p>
+<p><strong>Limitations.</strong> Practicing-salary figures are employer-advertised maxima, not
+realized income, and are drawn from the 2,066 of 4,333 listings that disclosed a range. Early-career
+compensation is closer to the advertised minimum of $489,000 than to the maximum. State and
+employer-type figures are single-vendor job-posting measurements. Price parity data is 2024 against
+2026 salaries. The timeline assumes uninterrupted progression.</p>
+<p style="margin-top:16px">Compiled August 2026.</p>
+</div>
+
+</div>
+<script>
+[['w46',46],['w38',38],['w32',32],['w26',26],['w17',17]].forEach(function(p){
+  var host=document.getElementById(p[0]);
+  for(var i=0;i<52;i++){
+    var d=document.createElement('div');
+    d.className='wcell'+(i<p[1]?' on':'');
+    host.appendChild(d);
+  }
+});
+</script>
+</body></html>
