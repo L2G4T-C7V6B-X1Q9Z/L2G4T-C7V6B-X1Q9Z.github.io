@@ -572,17 +572,23 @@ function classifyDay(subject, dateKey, now, day) {
   let wStatus;
   if (trained) {
     wStatus = 'done'; // workout on a rest day is still just 'done' (no bonus in v2)
+  } else if (vacation) {
+    // v9.5.1: BEFORE rest/off — corrected 2026-08-18 on Soren's read of his own
+    // board ("Fri to Mon should have been marked as away not rest"). v9.5 shipped
+    // this branch AFTER rest/off on the theory that a scheduled rest day inside a
+    // trip keeps its "more specific" label. That is backwards for how the board is
+    // read: if he is away, the day is AWAY, and whether it also happened to be a
+    // Saturday is not information anyone wants on the cell. Same for an ad-hoc
+    // `off` flag the coach-sync stamped on a travel day. A logged workout still
+    // wins above (a lift on a trip is real). Also BEFORE paused (a trip is the more
+    // specific reason than an open-ended illness range that spans it) and BEFORE
+    // missed(): missed() already returns false here, so without this branch the
+    // cell would fall through to a blank-looking 'pending'.
+    wStatus = 'vacation';
   } else if (off) {
     wStatus = 'off';
   } else if (rest) {
     wStatus = 'rest';
-  } else if (vacation) {
-    // v9.5: AFTER rest/off (a scheduled rest day inside a trip keeps its more
-    // specific label), BEFORE paused (a trip is the more specific reason than an
-    // open-ended illness range that happens to span it), and BEFORE missed() for
-    // the same reason the pause branch is: missed() already returns false here, so
-    // without this branch the cell would fall through to a blank-looking 'pending'.
-    wStatus = 'vacation';
   } else if (paused) {
     // v9.4: AFTER rest/off on purpose. A scheduled rest day that also falls inside a
     // pause keeps reading 'rest' (the more specific, already-understood label), and a
@@ -4207,12 +4213,13 @@ function buildDayPopBody(member, dateKey) {
   // v4 (#1): off reads as "rest" (off and rest converge).
   // v9.4: 'paused' checked AFTER rest/off, matching classifyDay's branch order so the
   // popover can never contradict the cell it was opened from.
-  // v9.5: 'away' sits between rest and paused, matching classifyDay's order.
+  // v9.5.1: 'away' sits right after a logged workout and BEFORE rest/off/paused,
+  // matching classifyDay's order (a trip day is away, not "rest that was also away").
   const away = vacationOn(subject, dateKey);
   const workoutVal =
     day.workout === true ? 'yes'
-    : (day.off === true || isRestDay(subject.restPattern, subject.perDateOverrides, dateKey)) ? 'rest'
     : away ? 'away'
+    : (day.off === true || isRestDay(subject.restPattern, subject.perDateOverrides, dateKey)) ? 'rest'
     : pausedOn(subject, dateKey) ? 'paused'
     : 'no';
   lines.push(line('Workout', workoutVal));
