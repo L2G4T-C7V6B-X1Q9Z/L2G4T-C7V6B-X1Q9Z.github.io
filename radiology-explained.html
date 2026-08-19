@@ -1,327 +1,149 @@
 <!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8">
+<html lang="en">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex,nofollow">
-<meta name="theme-color" content="#131314">
-<title>Radiology: training timeline and compensation</title>
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Protected</title>
 <style>
-:root{
-  --bg:#131314;--card:#1b1b1e;--card2:#232327;--line:#303035;--line2:#3d3d44;
-  --ink:#f2f1ee;--ink2:#aeada7;--ink3:#78776f;--acc:#e66767;--acc2:#f7c3c3;--dim:#2c2c31;
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--ink);
- font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
- -webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
-.wrap{max-width:520px;margin:0 auto;padding:32px 20px 70px}
-h1{font-size:27px;line-height:1.2;font-weight:670;letter-spacing:-.028em;margin:0 0 6px}
-h2{font-size:21px;line-height:1.25;font-weight:660;letter-spacing:-.022em;margin:0 0 12px}
-h3{font-size:17px;font-weight:650;margin:0 0 10px;letter-spacing:-.01em}
-.kicker{font-size:11.5px;font-weight:680;letter-spacing:.16em;text-transform:uppercase;
- color:var(--acc);margin:0 0 9px}
-.sub{font-size:14px;color:var(--ink3);margin:0 0 18px}
-p{margin:0 0 14px;color:var(--ink2)}
-strong{color:var(--ink);font-weight:650}
-section{margin:0 0 12px;padding:26px 0 4px;border-top:1px solid var(--line)}
-section:first-of-type{border-top:0;padding-top:0}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 17px;margin:16px 0}
-.card.accent{border-color:#4a2c2c;background:#1e1719}
-.num{font-size:42px;line-height:1;font-weight:700;letter-spacing:-.035em;color:var(--acc);
- font-variant-numeric:tabular-nums;margin:0 0 6px}
-.num.sm{font-size:32px}
-.numlab{font-size:14px;color:var(--ink2);margin:0}
-
-.tl{margin:18px 0 4px}
-.tlrow{display:grid;grid-template-columns:52px 1fr;gap:12px}
-.tlyear{font-size:13px;font-weight:660;color:var(--ink3);font-variant-numeric:tabular-nums;
- padding-top:14px;text-align:right}
-.tlbody{border-left:2px solid var(--line2);padding:0 0 18px 15px;position:relative}
-.tlrow:last-child .tlbody{border-left-color:transparent}
-.tlbody:before{content:"";position:absolute;left:-6px;top:15px;width:10px;height:10px;
- border-radius:50%;background:var(--dim);border:2px solid var(--bg)}
-.tlrow.now .tlbody:before{background:var(--acc);box-shadow:0 0 0 4px rgba(230,103,103,.18)}
-.tlrow.pay .tlbody:before{background:var(--acc2)}
-.tlttl{font-size:16px;font-weight:640;color:var(--ink);padding-top:8px}
-.tlsub{font-size:14px;color:var(--ink3);margin-top:1px}
-.tlmoney{display:inline-block;margin-top:7px;font-size:15px;font-weight:660;
- font-variant-numeric:tabular-nums;background:var(--card2);border:1px solid var(--line);
- border-radius:99px;padding:3px 12px;color:var(--ink2)}
-.tlmoney.on{color:#141416;background:var(--acc);border-color:var(--acc)}
-.tlmoney.zero{color:var(--ink3)}
-
-.brow{margin:0 0 13px}
-.blab{display:flex;justify-content:space-between;align-items:baseline;font-size:14.5px;margin-bottom:5px}
-.blab b{color:var(--ink);font-weight:640}
-.blab span{color:var(--ink2);font-variant-numeric:tabular-nums;font-weight:640}
-.btrack{height:13px;background:var(--dim);border-radius:7px;overflow:hidden}
-.bfill{height:100%;border-radius:7px;background:var(--acc)}
-.bnote{font-size:13.5px;color:var(--ink3);margin:6px 0 0}
-
-.wgrid{display:grid;grid-template-columns:repeat(13,1fr);gap:3px;margin:7px 0 3px}
-.wcell{aspect-ratio:1;border-radius:2px;background:var(--dim)}
-.wcell.on{background:var(--acc)}
-.wleg{font-size:13.5px;color:var(--ink3);margin:5px 0 0;font-variant-numeric:tabular-nums}
-.wttl{margin:16px 0 3px;font-size:15px;color:var(--ink);font-weight:640}
-
-table{width:100%;border-collapse:collapse;font-size:15px;font-variant-numeric:tabular-nums}
-th{text-align:right;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);
- font-weight:660;padding:0 0 8px;border-bottom:1px solid var(--line2)}
-th:first-child,td:first-child{text-align:left}
-td{padding:9px 0;border-bottom:1px solid var(--line);color:var(--ink2)}
-td.hi{color:var(--ink);font-weight:640}
-td.acc{color:var(--acc);font-weight:660}
-ul{padding-left:19px;margin:0 0 14px;color:var(--ink2)}
-li{margin:9px 0}
-li strong{color:var(--ink)}
-.tag{display:inline-block;font-size:11.5px;font-weight:660;letter-spacing:.07em;text-transform:uppercase;
- color:var(--acc);background:#2a1d1e;border-radius:5px;padding:3px 8px;margin:0 0 11px}
-.foot{font-size:13.5px;color:var(--ink3);margin-top:30px;padding-top:18px;border-top:1px solid var(--line)}
-.foot p{color:var(--ink3);font-size:13.5px}
-.foot strong{color:var(--ink2)}
-</style></head><body>
-<div class="wrap">
-
-<section>
-<h1>Radiology: training timeline and compensation</h1>
-<p class="sub">US data, 2026. Figures and sources listed at the end.</p>
-</section>
-
-<section>
-<p class="kicker">Definition</p>
-<h2>The specialty</h2>
-<p>A radiologist is a physician who interprets medical images: X-ray, CT, MRI, ultrasound, and nuclear
-medicine studies. The radiologist reviews the images, determines the diagnosis, and issues a written
-report to the physician who ordered the study.</p>
-<p>Most of the work is performed at a multi-monitor workstation rather than at the bedside. Some
-radiologists also perform image-guided procedures, such as biopsies and drainages. Because the work
-does not require the patient to be present, a substantial share of it can be performed remotely:
-<strong>25.6% of radiology job listings in 2026 were fully remote.</strong></p>
-</section>
-
-<section>
-<p class="kicker">Timeline</p>
-<h2>Training path and stipends</h2>
-<p class="sub">Residency and fellowship salaries are national averages from the AAMC 2025 survey
-(114,361 residents, 350 institutions).</p>
-
-<div class="tl">
-  <div class="tlrow now"><div class="tlyear">2026</div><div class="tlbody">
-    <div class="tlttl">Fourth year of medical school</div>
-    <div class="tlsub">Residency applications submitted September 2026; match results March 2027</div>
-    <div class="tlmoney zero">No income</div></div></div>
-
-  <div class="tlrow"><div class="tlyear">2027</div><div class="tlbody">
-    <div class="tlttl">Internship (PGY-1)</div>
-    <div class="tlsub">General clinical year, required before radiology training begins</div>
-    <div class="tlmoney">$68,166</div></div></div>
-
-  <div class="tlrow"><div class="tlyear">2028</div><div class="tlbody">
-    <div class="tlttl">Radiology residency (PGY-2)</div>
-    <div class="tlsub">Four years of diagnostic radiology training</div>
-    <div class="tlmoney">$70,499</div></div></div>
-
-  <div class="tlrow"><div class="tlyear">2029</div><div class="tlbody">
-    <div class="tlttl">Residency (PGY-3)</div>
-    <div class="tlmoney">$73,301</div></div></div>
-
-  <div class="tlrow"><div class="tlyear">2030</div><div class="tlbody">
-    <div class="tlttl">Residency (PGY-4)</div>
-    <div class="tlmoney">$77,593</div></div></div>
-
-  <div class="tlrow"><div class="tlyear">2031</div><div class="tlbody">
-    <div class="tlttl">Residency (PGY-5)</div>
-    <div class="tlsub">Board certification examinations</div>
-    <div class="tlmoney">$81,807</div></div></div>
-
-  <div class="tlrow"><div class="tlyear">2032</div><div class="tlbody">
-    <div class="tlttl">Fellowship (PGY-6)</div>
-    <div class="tlsub">One additional year of subspecialty training. Optional; most radiologists complete one.</div>
-    <div class="tlmoney">$84,744</div></div></div>
-
-  <div class="tlrow pay"><div class="tlyear">2033</div><div class="tlbody">
-    <div class="tlttl">Attending physician, associate</div>
-    <div class="tlsub">Employed, not yet an owner of the practice</div>
-    <div class="tlmoney on">~$490,000</div></div></div>
-
-  <div class="tlrow pay"><div class="tlyear">2036</div><div class="tlbody">
-    <div class="tlttl">Partner</div>
-    <div class="tlsub">Part-owner. Partnership tracks currently run two to three years.</div>
-    <div class="tlmoney on">~$690,000</div></div></div>
-</div>
-
-<div class="card">
-<p style="margin:0;font-size:16px"><strong>Total: six years of post-medical-school training at an
-average stipend of $76,018 per year, followed by a single-year increase of approximately 5.8x.</strong>
-Compensation in radiology is a step function, not a gradual progression. After partnership, income is
-driven by practice performance and hours worked rather than by seniority.</p>
-</div>
-</section>
-
-<section>
-<p class="kicker">Variable 1</p>
-<h2>Pay by employer type</h2>
-<p class="sub">Average maximum advertised salary, 4,333 US job listings, 2026.</p>
-<div class="card">
-  <div class="brow"><div class="blab"><b>Independent practice</b><span>$746K</span></div>
-    <div class="btrack"><div class="bfill" style="width:100%"></div></div></div>
-  <div class="brow"><div class="blab"><b>Private-equity owned</b><span>$702K</span></div>
-    <div class="btrack"><div class="bfill" style="width:94%"></div></div></div>
-  <div class="brow"><div class="blab"><b>Hospital system</b><span>$638K</span></div>
-    <div class="btrack"><div class="bfill" style="width:85%"></div></div></div>
-  <div class="brow"><div class="blab"><b>Academic / university</b><span>$528K</span></div>
-    <div class="btrack"><div class="bfill" style="width:71%"></div></div></div>
-  <div class="brow"><div class="blab"><b>Government</b><span>$381K</span></div>
-    <div class="btrack"><div class="bfill" style="width:51%"></div></div></div>
-<p class="bnote">Spread between independent practice and academic: $218,000 per year. Academic
-positions include protected research time and qualify for federal loan forgiveness. 68.2% of
-independent-practice listings include a partnership track; 35.6% of all listings do.</p>
-</div>
-</section>
-
-<section>
-<p class="kicker">Variable 2</p>
-<h2>Pay by state</h2>
-<p class="sub">Highest-paying states, and the states with the most open positions. The two lists
-overlap in only three states.</p>
-<div class="card">
-<table><thead><tr><th>State</th><th>Avg max salary</th><th>Openings</th></tr></thead><tbody>
-<tr><td class="hi">South Dakota</td><td class="acc">$859K</td><td>—</td></tr>
-<tr><td class="hi">Montana</td><td class="acc">$850K</td><td>50</td></tr>
-<tr><td class="hi">Tennessee</td><td class="acc">$793K</td><td>—</td></tr>
-<tr><td class="hi">North Carolina</td><td class="acc">$792K</td><td>118</td></tr>
-<tr><td class="hi">Texas</td><td class="acc">$777K</td><td>276</td></tr>
-<tr><td class="hi">Florida</td><td class="acc">$761K</td><td>379</td></tr>
-<tr><td class="hi">California</td><td>~$600K</td><td>227</td></tr>
-<tr><td class="hi">New York</td><td>~$600K</td><td>190</td></tr>
-<tr><td class="hi">Massachusetts</td><td>~$500K</td><td>209</td></tr>
-</tbody></table>
-<p class="bnote">Compensation is inversely related to how many radiologists want to live in a state.
-Adjusted for local price levels, a Florida salary is worth 2.04x a Massachusetts salary. Nine states
-levy no individual income tax, including Florida, Texas, Tennessee and South Dakota.</p>
-</div>
-</section>
-
-<section>
-<p class="kicker">Variable 3</p>
-<h2>Weeks worked per year</h2>
-<p class="sub">Each grid is 52 weeks. Filled cells are weeks worked.</p>
-<div class="card">
-<p class="wttl">Academic radiologist</p>
-<div class="wgrid" id="w46"></div>
-<p class="wleg">46 worked · 6 off · $528K</p>
-
-<p class="wttl">Private practice partner</p>
-<div class="wgrid" id="w38"></div>
-<p class="wleg">38 worked · 14 off · $746K</p>
-
-<p class="wttl">Private practice, low-demand market</p>
-<div class="wgrid" id="w32"></div>
-<p class="wleg">32 worked · 20 off</p>
-
-<p class="wttl">Night shift, 7 days on / 7 off</p>
-<div class="wgrid" id="w26"></div>
-<p class="wleg">26 worked · 26 off</p>
-
-<p class="wttl">Night shift, 7 days on / 14 off</p>
-<div class="wgrid" id="w17"></div>
-<p class="wleg">17 worked · 35 off · $650K+ advertised</p>
-<p class="bnote">Eight to twelve weeks of leave is standard in private practice. Night-shift positions
-trade schedule for time: the 7-on/14-off pattern is 17 working weeks per year. Reported burnout rates
-in night positions are high, and such roles are frequently not partnership-track.</p>
-</div>
-</section>
-
-<section>
-<p class="kicker">Take-home</p>
-<h2>After federal and state tax</h2>
-<p class="sub">Single filer, $650,000 gross, 2026 tax law, standard deduction.</p>
-<div class="card">
-<table><thead><tr><th>State</th><th>State rate</th><th>Take-home</th></tr></thead><tbody>
-<tr><td class="hi">Florida / Texas / Tennessee</td><td>none</td><td class="acc">$434,452</td></tr>
-<tr><td class="hi">Arizona</td><td>2.50%</td><td>$418,604</td></tr>
-<tr><td class="hi">Ohio</td><td>2.75%</td><td>$417,020</td></tr>
-<tr><td class="hi">Pennsylvania</td><td>3.07%</td><td>$414,991</td></tr>
-<tr><td class="hi">North Carolina</td><td>3.99%</td><td>$409,159</td></tr>
-<tr><td class="hi">Illinois</td><td>4.95%</td><td>$403,074</td></tr>
-<tr><td class="hi">Georgia</td><td>5.19%</td><td>$401,552</td></tr>
-</tbody></table>
-<p class="bnote">Effective total rate 33.2% to 38.2%, including federal income tax, Social Security to
-the $184,500 wage base, and Medicare with the 0.9% high-earner surtax. Excludes retirement
-contributions, which reduce the figure. States with graduated brackets are omitted because their top
-marginal rates could not be verified.</p>
-</div>
-</section>
-
-<section>
-<p class="kicker">Automation</p>
-<h2>Artificial intelligence</h2>
-<p>In 2016 a widely reported prediction held that medical schools should stop training radiologists
-because image interpretation would be automated within five to ten years.</p>
-<p>Ten years on, measured outcomes are the reverse:</p>
-<ul>
-<li><strong>82.4% of radiology job postings in 2026 make no mention of AI tools</strong>, despite more
-than 873 FDA-cleared algorithms existing.</li>
-<li>Radiology position counts reached an all-time high in the 2026 residency match, and there is a
-documented national shortage of radiologists.</li>
-<li>Imaging volume is growing 3-4% per year while the radiologist workforce is approximately flat.</li>
-</ul>
-<p>Two structural reasons are cited: legal responsibility for a diagnosis rests with a licensed
-physician, and no vendor has accepted that liability; and rising imaging volume absorbs efficiency
-gains rather than reducing headcount.</p>
-<p>A 2026 survey of 401 medical students and residents found 2.5% considered AI "extremely
-influential" on specialty choice, while 33% of those interested in radiology reported feeling
-discouraged by it.</p>
-</section>
-
-<section>
-<p class="kicker">Risks</p>
-<h2>Documented downside factors</h2>
-<ul>
-<li><strong>Medicare reimbursement.</strong> The 2027 physician fee schedule reduces the conversion
-factor by 1.68%, though the net estimated impact for diagnostic radiology is +2% after other
-adjustments. Long-term reimbursement pressure is the most frequently cited financial risk.</li>
-<li><strong>Private-equity acquisition.</strong> Roughly 10% of the radiology market. Documented
-outcomes for junior physicians after acquisition include compensation 20-25% below projection,
-increased workload, and turnover exceeding 50% of associate cohorts in reported cases.</li>
-<li><strong>Geography.</strong> The highest-paying markets are the least populated. Compensation and
-location preference are directly in tension.</li>
-</ul>
-</section>
-
-<section>
-<div class="card accent">
-<p class="num sm">2033</p>
-<p class="numlab">First year of attending-physician income. Compensation before that year is fixed by
-national residency stipend scales and is not affected by performance.</p>
-</div>
-</section>
-
-<div class="foot">
-<p><strong>Sources.</strong> Training stipends: AAMC 2025 Survey of Resident/Fellow Stipends and
-Benefits (114,361 residents, 350 institutions). Practicing compensation, state figures, remote share
-and AI mentions: RadBoard 2026 US Radiology Job Market Report (4,333 listings) and Dynamics Report
-(20,775 postings). Price levels: US Bureau of Economic Analysis Regional Price Parities, 2024. Tax
-rates: Tax Foundation 2026; Social Security Administration 2026 wage base. Match data: NRMP 2026 Main
-Residency Match.</p>
-<p><strong>Limitations.</strong> Practicing-salary figures are employer-advertised maxima, not
-realized income, and are drawn from the 2,066 of 4,333 listings that disclosed a range. Early-career
-compensation is closer to the advertised minimum of $489,000 than to the maximum. State and
-employer-type figures are single-vendor job-posting measurements. Price parity data is 2024 against
-2026 salaries. The timeline assumes uninterrupted progression.</p>
-<p style="margin-top:16px">Compiled August 2026.</p>
-</div>
-
-</div>
-<script>
-[['w46',46],['w38',38],['w32',32],['w26',26],['w17',17]].forEach(function(p){
-  var host=document.getElementById(p[0]);
-  for(var i=0;i<52;i++){
-    var d=document.createElement('div');
-    d.className='wcell'+(i<p[1]?' on':'');
-    host.appendChild(d);
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#0a0a0c; --fg:#e8e8ea; --dim:#6b6b73; --line:#22222a; --accent:#e5484d;
   }
-});
+  html,body{height:100%}
+  body{
+    font:400 16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--fg);
+    display:flex; align-items:center; justify-content:center;
+    min-height:100dvh;
+    padding:max(1.5rem,env(safe-area-inset-top)) 1.5rem max(1.5rem,env(safe-area-inset-bottom));
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+  /* One cheap compositor-only ambient gradient. No backdrop-filter anywhere on
+     this page - it is the single biggest cause of sub-30fps on iOS Safari. */
+  .glow{
+    position:fixed; inset:-30%; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(38% 32% at 22% 18%, rgba(229,72,77,.16), transparent 70%),
+      radial-gradient(34% 30% at 80% 84%, rgba(120,120,190,.10), transparent 70%);
+    animation:drift 24s ease-in-out infinite alternate;
+    will-change:transform;
+  }
+  @keyframes drift{ from{transform:translate3d(-2%,-1%,0) scale(1)} to{transform:translate3d(2%,1%,0) scale(1.06)} }
+  .box{position:relative; z-index:1; width:100%; max-width:22rem; text-align:center}
+  .lock{
+    width:34px;height:34px;margin:0 auto 1.35rem;display:block;
+    stroke:var(--dim); stroke-width:1.5; fill:none;
+    stroke-linecap:round; stroke-linejoin:round;
+  }
+  h1{
+    font-size:.8125rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--dim); margin-bottom:1.5rem;
+  }
+  .field{position:relative}
+  input{
+    width:100%; padding:.875rem 1rem; font:inherit; font-size:1rem;
+    color:var(--fg); background:#121218;
+    border:1px solid var(--line); border-radius:12px; outline:none;
+    transition:border-color .18s ease, box-shadow .18s ease;
+    -webkit-appearance:none; appearance:none;
+  }
+  input::placeholder{color:#4a4a52}
+  input:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(229,72,77,.13)}
+  input:disabled{opacity:.55}
+  .msg{font-size:.8125rem; color:var(--dim); margin-top:.9rem; min-height:1.3em; transition:color .18s}
+  .msg.bad{color:var(--accent)}
+  .shake{animation:shake .32s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}
+    30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
+  .spin{display:inline-block;width:11px;height:11px;margin-right:.5rem;vertical-align:-1px;
+    border:1.5px solid var(--line); border-top-color:var(--dim); border-radius:50%;
+    animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){ .glow,.shake,.spin{animation:none} }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main class="box">
+  <svg class="lock" viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="4" y="10.5" width="16" height="10.5" rx="2.5"/>
+    <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>
+  </svg>
+  <h1>Protected</h1>
+  <div class="field">
+    <!-- Page passphrase, not a site login: a saved credential must never be offered here.
+         The login-style autocomplete hint used until 2026-08-19 made Chrome and every password
+         manager prefill an unrelated saved password, which reads as a broken gate. Turning
+         autocomplete off alone is widely ignored by managers, hence the vendor opt-outs, the
+         non-login field name, and the readonly-until-focus trick in the script below. -->
+    <input id="pw" type="password" placeholder="Passphrase" autocomplete="off"
+           name="page-passphrase" data-lpignore="true" data-1p-ignore data-bwignore
+           data-form-type="other" readonly
+           autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+  </div>
+  <p class="msg" id="msg" role="status" aria-live="polite"></p>
+</main>
+<script>
+(function(){
+  var SK='pg_rads_for_parents_locked_html';
+  var SALT='b3455bfb81efd7c34509ad72e72cb37b', IV='473d0b0859ec685e2c3317ef', TAG='7da8ac77dacdaf3fe9cfc134e1181b61';
+  var DATA='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';
+
+  var pw=document.getElementById('pw'), msg=document.getElementById('msg'), box=document.querySelector('.box');
+
+  // Anti-autofill: drop readonly on first interaction, and wipe anything a manager
+  // injected before that. Without this the field arrives prefilled with an unrelated
+  // saved password and the user cannot tell the gate from a bug.
+  function armField(){ if(pw.hasAttribute('readonly')){ pw.removeAttribute('readonly'); } }
+  ['focus','pointerdown','touchstart','keydown'].forEach(function(ev){
+    pw.addEventListener(ev, armField, {once:false});
+  });
+  setTimeout(function(){ if(!pw.value) return; if(document.activeElement!==pw) pw.value=''; }, 60);
+  setTimeout(function(){ armField(); pw.focus(); }, 120);
+
+  function hb(h){var b=new Uint8Array(h.length/2);for(var i=0;i<h.length;i+=2)b[i/2]=parseInt(h.substr(i,2),16);return b;}
+  function bb(s){var x=atob(s),b=new Uint8Array(x.length);for(var i=0;i<x.length;i++)b[i]=x.charCodeAt(i);return b;}
+
+  async function open_(pass){
+    var km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+    var key=await crypto.subtle.deriveKey(
+      {name:'PBKDF2',salt:hb(SALT),iterations:600000,hash:'SHA-256'},
+      km,{name:'AES-GCM',length:256},false,['decrypt']);
+    var ct=bb(DATA), tag=hb(TAG), all=new Uint8Array(ct.length+tag.length);
+    all.set(ct); all.set(tag,ct.length);
+    var plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:hb(IV)},key,all);
+    return new TextDecoder().decode(plain);
+  }
+
+  function paint(html){ document.open(); document.write(html); document.close(); }
+
+  function attempt(pass, remember){
+    msg.className='msg'; msg.innerHTML='<span class="spin"></span>Deriving key…'; pw.disabled=true;
+    // Yield a frame so the spinner paints before PBKDF2 blocks the thread.
+    requestAnimationFrame(function(){ setTimeout(function(){
+      open_(pass).then(function(html){
+        if(remember){ try{ sessionStorage.setItem(SK,pass); }catch(e){} }
+        paint(html);
+      }).catch(function(){
+        try{ sessionStorage.removeItem(SK); }catch(e){}
+        pw.disabled=false; pw.value=''; pw.focus();
+        msg.className='msg bad'; msg.textContent='Incorrect passphrase';
+        box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+      });
+    },0); });
+  }
+
+  var saved=null; try{ saved=sessionStorage.getItem(SK); }catch(e){}
+  if(saved){ attempt(saved,false); }
+
+  pw.addEventListener('keydown',function(e){ if(e.key==='Enter'&&pw.value) attempt(pw.value,true); });
+})();
 </script>
-</body></html>
+</body>
+</html>
