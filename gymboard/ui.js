@@ -4261,6 +4261,8 @@ function buildDayPopBody(member, dateKey) {
     uid === myUserId && dateKey <= cur && (!isDayKey(jd) || dateKey >= jd);
   if (ownEditable) {
     const curType = day.workout === true ? (day.workoutType || '') : '';
+    // v9.6: is this day already flagged off? Drives the retroactive rest-day button below.
+    const dayIsOff = day.off === true;
     const typeBtns = enabledTypesOf(member)
       .map(
         (k) =>
@@ -4273,6 +4275,15 @@ function buildDayPopBody(member, dateKey) {
         `<div class="dd-edit-h">Edit · workout</div>` +
         `<div class="dd-edit-types">${typeBtns}</div>` +
         `<button class="dd-edit-act" type="button" data-edit-workout="clear">Clear workout</button>` +
+        // v9.6 RETROACTIVE REST DAY. The ME card's "Make today a rest day" button reaches
+        // ONLY today — meToggleRestToday() reads myCurrentBiz() and writes that one date —
+        // so a day that had already gone red could never be excused by its owner. That is
+        // precisely the day people want to fix, because a red cell is only noticed AFTER
+        // the day is over. Nothing new is trusted: this reuses the SAME owner-scoped
+        // data.setDayOff, which already accepted any day-key, and the deployed rules
+        // already allow ±400d (dayKeyInRange) and delegate edit-window precision to the
+        // client. Only the reachability was missing.
+        `<button class="dd-edit-act${dayIsOff ? ' on' : ''}" type="button" data-edit-off="${dayIsOff ? 'clear' : 'set'}">${dayIsOff ? 'Clear rest day' : 'Mark rest day'}</button>` +
         `<div class="dd-edit-h">Edit · nutrition</div>` +
         `<button class="dd-edit-act${nutHit ? ' on' : ''}" type="button" data-edit-nut="${nutHit ? 'clear' : 'hit'}">${nutHit ? 'Clear hit' : 'Mark hit'}</button>` +
         // v9.3: the popover is a ~150px mini-panel — far too small to hold number inputs,
@@ -4454,7 +4465,7 @@ function onGridCellActivate(target) {
 async function onDayPopEditClick(e) {
   const btn =
     e.target.closest &&
-    e.target.closest('[data-edit-wtype],[data-edit-workout],[data-edit-nut],[data-edit-macros]');
+    e.target.closest('[data-edit-wtype],[data-edit-workout],[data-edit-nut],[data-edit-macros],[data-edit-off]');
   if (!btn || !daypopAnchor) return;
   const { uid, date } = daypopAnchor;
   if (uid !== myUserId || !isDayKey(date)) return; // own cells only
@@ -4488,6 +4499,21 @@ async function onDayPopEditClick(e) {
       await commitWorkout(date, true, { workoutType: btn.dataset.editWtype });
     } else if (btn.dataset.editWorkout === 'clear') {
       await commitWorkout(date, false);
+    } else if (btn.dataset.editOff) {
+      // v9.6: retroactive rest day. Guard is the MIRROR of the editWtype guard above and
+      // exists for the same reason: the deployed rules reject a day with workout==true AND
+      // off==true, and data.js reads that permission-denied as a RECLAIM — the loud "signed
+      // out elsewhere" modal. Catching it here turns a scary false alarm into one sentence.
+      const wantOff = btn.dataset.editOff === 'set';
+      const days = effectiveDays(myUserId);
+      if (wantOff && days[date] && days[date].workout === true) {
+        showError('A workout is logged for this day. Clear the workout first to mark it a rest day.');
+        return;
+      }
+      const status = await commitWithTimeout(data.setDayOff(date, wantOff));
+      await withSoftTimeout(refetchMyDays());
+      const sfx = status === 'queued' ? ' · will sync' : '';
+      toast((wantOff ? "that day won't go red" : 'rest day cleared') + sfx);
     } else if (btn.dataset.editNut) {
       const status = await commitWithTimeout(data.setNutritionHit(date, btn.dataset.editNut === 'hit'));
       await withSoftTimeout(refetchMyDays());
