@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ch11 — breathing</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0a0a0c; overflow: hidden; height: 100%; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script src="dither.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const canvas = document.getElementById('screen');
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const D = Dither.create({ canvas, width: 480, height: 270, algo: 'bayer8' });
+  const ctx = D.ctx;
+  const W = D.width, H = D.height;
+  const cx = W / 2, cy = H / 2;
+  const baseRadius = Math.min(W, H) * 0.46;
+
+  function easeInOutSine(t) {
+    return -(Math.cos(Math.PI * t) - 1) / 2;
+  }
+
+  // resting respiratory rate: ~12 breaths/min, physiologic asymmetry
+  const NORMAL_PHASES = [
+    { name: 'inhale', dur: 2.0, from: 0, to: 1, ease: easeInOutSine },
+    { name: 'hold1', dur: 0.2, value: 1 },
+    { name: 'exhale', dur: 2.3, from: 1, to: 0, ease: easeInOutSine },
+    { name: 'hold2', dur: 0.5, value: 0 },
+  ];
+  const BOX_PHASES = [
+    { name: 'inhale', dur: 4, from: 0, to: 1, ease: easeInOutSine },
+    { name: 'hold1', dur: 4, value: 1 },
+    { name: 'exhale', dur: 4, from: 1, to: 0, ease: easeInOutSine },
+    { name: 'hold2', dur: 4, value: 0 },
+  ];
+
+  function cycleTotal(phases) {
+    return phases.reduce((s, p) => s + p.dur, 0);
+  }
+  const NORMAL_TOTAL = cycleTotal(NORMAL_PHASES);
+  const BOX_TOTAL = cycleTotal(BOX_PHASES);
+
+  let boxMode = false;
+
+  function breathAt(tSec) {
+    const phases = boxMode ? BOX_PHASES : NORMAL_PHASES;
+    const total = boxMode ? BOX_TOTAL : NORMAL_TOTAL;
+    const tm = tSec % total;
+    let acc = 0;
+    for (const p of phases) {
+      if (tm < acc + p.dur) {
+        const local = (tm - acc) / p.dur;
+        const b = p.value !== undefined ? p.value : p.from + (p.to - p.from) * p.ease(local);
+        return { b, cycleProgress: tm / total };
+      }
+      acc += p.dur;
+    }
+    return { b: 0, cycleProgress: 0 };
+  }
+
+  // idle tracking for the 10-minute fade to black (except the red arc)
+  const IDLE_FADE_START_MS = 10 * 60 * 1000;
+  const IDLE_FADE_DURATION_MS = 30 * 1000;
+  let lastInteraction = performance.now();
+
+  function fadeFactor(now) {
+    const idle = now - lastInteraction;
+    if (idle <= IDLE_FADE_START_MS) return 1;
+    const t = (idle - IDLE_FADE_START_MS) / IDLE_FADE_DURATION_MS;
+    return Math.max(0, 1 - t);
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'd' || e.key === 'D') {
+      D.cycleAlgo();
+      lastInteraction = performance.now();
+    } else if (e.key === 'b' || e.key === 'B') {
+      boxMode = !boxMode;
+      D.flashLabel(boxMode ? 'box breathing 4-4-4-4' : 'natural breathing', 1500);
+      lastInteraction = performance.now();
+    }
+  });
+
+  const start = performance.now();
+
+  function frame(now) {
+    const tSec = (now - start) / 1000;
+    const { b, cycleProgress } = breathAt(tSec);
+    const fade = fadeFactor(now);
+
+    ctx.save();
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+
+    // whole scene scales 98% -> 100% with the breath
+    const scale = 0.98 + 0.02 * b;
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.translate(-cx, -cy);
+
+    // soft radial luminance field: brightens/expands on inhale, dims/contracts on exhale
+    const innerLum = Math.round((40 + 200 * b) * fade);
+    const radius = baseRadius * (0.55 + 0.55 * b);
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    grad.addColorStop(0, `rgb(${innerLum},${innerLum},${innerLum})`);
+    grad.addColorStop(0.6, `rgb(${Math.round(innerLum * 0.35)},${Math.round(innerLum * 0.35)},${Math.round(innerLum * 0.35)})`);
+    grad.addColorStop(1, 'rgb(0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // thin red arc traces the screen edge, completing once per breath cycle
+    ctx.strokeStyle = '#ff3030';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, baseRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cycleProgress);
+    ctx.stroke();
+
+    ctx.restore();
+
+    D.render();
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
