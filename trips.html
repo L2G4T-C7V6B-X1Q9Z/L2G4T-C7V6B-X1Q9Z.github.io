@@ -1,51 +1,345 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trips, Aug 2026 to Jun 2027</title>
+<title>Trips · Aug 2026 – Jun 2027</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0e0e0f;color:#999;font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px}
-h1{font-size:19px;font-weight:600;color:#ccc;letter-spacing:.02em;margin-bottom:4px}
-.sub{font-size:12px;color:#555;margin-bottom:26px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:22px;max-width:1500px}
-.m{background:#161617;border:1px solid #232325;border-radius:8px;padding:13px 13px 11px}
-.mh{font-size:13px;font-weight:600;color:#bbb;margin-bottom:9px;letter-spacing:.03em}
-.mh span{color:#4a4a4c;font-weight:400}
-.dow,.days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
-.dow div{font-size:9px;color:#4a4a4c;text-align:center;padding-bottom:4px;letter-spacing:.06em}
-.days div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;
-  font-size:11px;border-radius:3px;color:#6a6a6c}
-.pad{visibility:hidden}
-.rot{background:#1d1d1f;color:#525254}
-.trip{background:#c0272d;color:#fff;font-weight:600}
-.tstart{border-top-left-radius:7px;border-bottom-left-radius:7px}
-.tend{border-top-right-radius:7px;border-bottom-right-radius:7px}
-.key{margin-top:11px;padding-top:9px;border-top:1px solid #232325;font-size:11px}
-.key div{color:#8a8a8c;padding:1px 0}
-.key b{color:#e0555a;font-weight:600}
-.key i{color:#4a4a4c;font-style:normal}
-.rk{color:#4a4a4c!important}
-.legend{margin-top:30px;font-size:11px;color:#4a4a4c;display:flex;gap:20px;align-items:center}
-.sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:6px}
+body{background:#0e0e0f;color:#999;font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:26px 30px 70px}
+h1{font-size:19px;font-weight:600;color:#ccc;letter-spacing:.02em}
+h1 em{color:#4a4a4c;font-style:normal;font-weight:400}
+.sub{font-size:12px;color:#555;margin:3px 0 18px}
+
+.stats{display:flex;gap:26px;flex-wrap:wrap;padding:13px 17px;background:#161617;border:1px solid #232325;border-radius:8px;margin-bottom:16px}
+.stat b{display:block;font-size:20px;color:#e0555a;font-weight:600;line-height:1.15}
+.stat span{font-size:10px;color:#55555a;letter-spacing:.07em;text-transform:uppercase}
+.stat.n b{color:#bbb}
+
+.bar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+button{background:#1b1b1d;border:1px solid #2b2b2e;color:#8a8a8c;font:inherit;font-size:12px;
+  padding:5px 11px;border-radius:6px;cursor:pointer}
+button:hover{border-color:#3d3d41;color:#bbb}
+button.on{background:#c0272d;border-color:#c0272d;color:#fff}
+button.ghost{background:none;border-color:transparent;color:#4a4a4c}
+button.ghost:hover{color:#8a8a8c}
+
+.wrap{display:flex;gap:22px;align-items:flex-start}
+.tl{flex:1;min-width:0;background:#161617;border:1px solid #232325;border-radius:8px;padding:6px 16px 14px}
+
+.mo{display:flex;align-items:stretch;border-top:1px solid #1e1e21;padding:9px 0 5px}
+.mo:first-child{border-top:none}
+.mlab{width:74px;flex:none;font-size:11px;color:#8a8a8c;font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;padding-top:2px}
+.mlab i{display:block;color:#3f3f43;font-style:normal;font-weight:400;font-size:10px}
+.track{flex:1;min-width:0;position:relative}
+.nums{display:grid;height:15px}
+.nums div{font-size:9px;color:#46464a;text-align:center;line-height:15px;border-radius:2px}
+.nums div.we{color:#333336}
+.nums div.tdy{color:#fff;background:#2e2e33}
+.lane{position:relative;height:26px;margin-top:3px}
+.rotband{position:absolute;top:0;height:26px;background:#1c1c1f;border-radius:4px}
+.rotband span{position:absolute;left:7px;top:5px;font-size:10px;color:#48484c;letter-spacing:.04em;white-space:nowrap}
+.fixtick{position:absolute;top:-19px;height:45px;border-left:1px dashed #35597f;pointer-events:none}
+.fixtick.hard{border-color:#5b7fae}
+.tripbar{position:absolute;top:0;height:26px;border-radius:5px;background:#c0272d;color:#fff;
+  font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px;padding:0 7px;
+  cursor:pointer;overflow:hidden;white-space:nowrap;border:1px solid transparent}
+.tripbar:hover{filter:brightness(1.18)}
+.tripbar.maybe{background:#7a5220}
+.tripbar.dropped{background:#1f1f22;color:#525256;font-weight:400;text-decoration:line-through}
+.tripbar.open{background:none;border:1px dashed #4a4a50;color:#7a7a80;font-weight:500}
+.tripbar.sel{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.22)}
+.tripbar .nm{overflow:hidden;text-overflow:ellipsis}
+.tripbar .dy{opacity:.62;font-weight:400}
+.cont{border-top-left-radius:0;border-bottom-left-radius:0}
+.cont2{border-top-right-radius:0;border-bottom-right-radius:0}
+
+aside{width:322px;flex:none;position:sticky;top:26px;background:#161617;border:1px solid #232325;
+  border-radius:8px;padding:16px;max-height:calc(100vh - 52px);overflow:auto}
+aside h2{font-size:16px;color:#eee;font-weight:600;margin-bottom:2px}
+aside .when{font-size:12px;color:#e0555a;margin-bottom:13px}
+.row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:5px 0;border-bottom:1px solid #202023}
+.row span{color:#55555a}
+.row b{color:#b5b5b8;font-weight:500;text-align:right}
+.note{font-size:12px;color:#7a7a7d;margin-top:12px;line-height:1.55}
+.warn{font-size:12px;color:#e08a55;background:#241a13;border-left:2px solid #e08a55;padding:8px 10px;border-radius:0 4px 4px 0;margin-top:9px;line-height:1.5}
+.warn.bad{color:#e0555a;background:#241315;border-color:#e0555a}
+.warn.good{color:#6a9c74;background:#141d16;border-color:#4e7a58}
+.nudge{display:flex;gap:6px;align-items:center;margin-top:13px;font-size:11px;color:#55555a}
+.nudge button{padding:3px 9px}
+.empty{font-size:12px;color:#4a4a4c;line-height:1.6}
+
+.issues{margin-top:22px;background:#161617;border:1px solid #232325;border-radius:8px;padding:15px 17px}
+.issues h3{font-size:12px;color:#8a8a8c;letter-spacing:.06em;text-transform:uppercase;margin-bottom:9px}
+.issues div{font-size:12px;padding:4px 0;color:#8a8a8c;cursor:pointer}
+.issues div:hover{color:#ccc}
+.issues b{color:#e0555a}
+.issues .ok{color:#4a7a52;cursor:default}
+.beenrow{cursor:default!important;padding:7px 0!important;border-top:1px solid #1e1e21}
+.beenrow:first-of-type{border-top:none}
+.beenrow b{color:#c8c8cb!important;font-size:13px;font-weight:600;margin-right:9px}
+.beenrow i{color:#4e4e52;font-style:normal;font-size:11px}
+.beenrow p{color:#7a7a7d;font-size:12px;margin-top:2px;line-height:1.5;max-width:78ch}
+.legend{margin-top:20px;font-size:11px;color:#46464a;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:6px}
+@media(max-width:980px){.wrap{flex-direction:column}aside{width:100%;position:static}.mlab{width:60px}}
 </style></head><body>
-<h1>Trips <span style="color:#4a4a4c;font-weight:400">/</span> Aug 2026 to Jun 2027</h1>
-<div class="sub">18 trips. Gray = rotation blocks. Red = away.</div>
-<div class="grid">
-<div class="m"><div class="mh">August <span>2026</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="">1</div><div class="">2</div><div class="">3</div><div class="">4</div><div class="">5</div><div class="">6</div><div class="">7</div><div class="">8</div><div class="">9</div><div class="">10</div><div class="">11</div><div class="">12</div><div class="">13</div><div class="">14</div><div class="">15</div><div class="">16</div><div class="">17</div><div class="">18</div><div class="">19</div><div class="">20</div><div class="">21</div><div class="">22</div><div class="">23</div><div class="rot">24</div><div class="rot">25</div><div class="rot">26</div><div class="rot">27</div><div class="trip tstart">28</div><div class="trip">29</div><div class="trip">30</div><div class="trip">31</div></div><div class="key"><div><b>28–Sep 1</b> 🇺🇸 San Diego <i>Dad</i></div><div class="rk">24–Sep 18 MSK</div></div></div>
-<div class="m"><div class="mh">September <span>2026</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="pad">0</div><div class="trip tend">1</div><div class="rot">2</div><div class="rot">3</div><div class="rot">4</div><div class="rot">5</div><div class="rot">6</div><div class="rot">7</div><div class="rot">8</div><div class="rot">9</div><div class="rot">10</div><div class="rot">11</div><div class="rot">12</div><div class="rot">13</div><div class="rot">14</div><div class="rot">15</div><div class="rot">16</div><div class="rot">17</div><div class="rot">18</div><div class="">19</div><div class="">20</div><div class="rot">21</div><div class="rot">22</div><div class="rot">23</div><div class="rot">24</div><div class="rot">25</div><div class="rot">26</div><div class="rot">27</div><div class="rot">28</div><div class="rot">29</div><div class="rot">30</div></div><div class="key"><div><b>Aug 28–1</b> 🇺🇸 San Diego <i>Dad</i></div><div class="rk">21–Oct 16 Autopsy</div></div></div>
-<div class="m"><div class="mh">October <span>2026</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="rot">1</div><div class="rot">2</div><div class="rot">3</div><div class="rot">4</div><div class="rot">5</div><div class="rot">6</div><div class="rot">7</div><div class="rot">8</div><div class="trip tstart">9</div><div class="trip">10</div><div class="trip">11</div><div class="trip tend">12</div><div class="rot">13</div><div class="rot">14</div><div class="rot">15</div><div class="rot">16</div><div class="">17</div><div class="">18</div><div class="">19</div><div class="trip tstart">20</div><div class="trip">21</div><div class="trip">22</div><div class="trip">23</div><div class="trip">24</div><div class="trip">25</div><div class="trip tend">26</div><div class="">27</div><div class="">28</div><div class="trip tstart">29</div><div class="trip">30</div><div class="trip">31</div></div><div class="key"><div><b>9–12</b> 🇺🇸 Destin <i>Dad</i></div><div><b>20–26</b> 🇯🇵 Tokyo <i>Lars</i></div><div><b>29–Nov 2</b> 🇺🇸 New Orleans</div></div></div>
-<div class="m"><div class="mh">November <span>2026</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="trip">1</div><div class="trip tend">2</div><div class="">3</div><div class="">4</div><div class="trip tstart">5</div><div class="trip">6</div><div class="trip">7</div><div class="trip">8</div><div class="trip tend">9</div><div class="">10</div><div class="">11</div><div class="">12</div><div class="">13</div><div class="">14</div><div class="">15</div><div class="">16</div><div class="">17</div><div class="">18</div><div class="">19</div><div class="">20</div><div class="">21</div><div class="">22</div><div class="">23</div><div class="">24</div><div class="">25</div><div class="">26</div><div class="">27</div><div class="">28</div><div class="trip tstart">29</div><div class="trip">30</div></div><div class="key"><div><b>Oct 29–2</b> 🇺🇸 New Orleans</div><div><b>5–9</b> 🇺🇸 LA</div><div><b>29–Dec 2</b> 🇺🇸 RSNA Chicago <i>booked</i></div></div></div>
-<div class="m"><div class="mh">December <span>2026</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="pad">0</div><div class="trip">1</div><div class="trip tend">2</div><div class="">3</div><div class="">4</div><div class="">5</div><div class="">6</div><div class="">7</div><div class="">8</div><div class="">9</div><div class="">10</div><div class="">11</div><div class="">12</div><div class="trip tstart">13</div><div class="trip">14</div><div class="trip">15</div><div class="trip">16</div><div class="trip tend">17</div><div class="">18</div><div class="">19</div><div class="">20</div><div class="">21</div><div class="">22</div><div class="">23</div><div class="">24</div><div class="">25</div><div class="">26</div><div class="">27</div><div class="">28</div><div class="">29</div><div class="">30</div><div class="">31</div></div><div class="key"><div><b>Nov 29–2</b> 🇺🇸 RSNA Chicago <i>booked</i></div><div><b>13–17</b> 🇺🇸 Miami</div></div></div>
-<div class="m"><div class="mh">January <span>2027</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="">1</div><div class="">2</div><div class="">3</div><div class="rot">4</div><div class="rot">5</div><div class="rot">6</div><div class="rot">7</div><div class="rot">8</div><div class="rot">9</div><div class="rot">10</div><div class="rot">11</div><div class="rot">12</div><div class="rot">13</div><div class="rot">14</div><div class="rot">15</div><div class="trip tstart">16</div><div class="trip">17</div><div class="trip tend">18</div><div class="rot">19</div><div class="rot">20</div><div class="rot">21</div><div class="rot">22</div><div class="rot">23</div><div class="rot">24</div><div class="rot">25</div><div class="rot">26</div><div class="rot">27</div><div class="rot">28</div><div class="rot">29</div><div class="">30</div><div class="">31</div></div><div class="key"><div><b>16–18</b> 🇵🇷 Puerto Rico</div><div class="rk">4–29 Neurorad</div></div></div>
-<div class="m"><div class="mh">February <span>2027</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="">1</div><div class="">2</div><div class="">3</div><div class="">4</div><div class="">5</div><div class="">6</div><div class="">7</div><div class="trip tstart">8</div><div class="trip">9</div><div class="trip">10</div><div class="trip">11</div><div class="trip">12</div><div class="trip tend">13</div><div class="">14</div><div class="">15</div><div class="">16</div><div class="">17</div><div class="">18</div><div class="">19</div><div class="trip tstart">20</div><div class="trip">21</div><div class="trip">22</div><div class="trip">23</div><div class="trip tend">24</div><div class="">25</div><div class="">26</div><div class="">27</div><div class="">28</div></div><div class="key"><div><b>8–13</b> 🇺🇸 Hawaii</div><div><b>20–24</b> 🇺🇸 Colorado ski <i>booked</i></div></div></div>
-<div class="m"><div class="mh">March <span>2027</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="rot">1</div><div class="rot">2</div><div class="rot">3</div><div class="rot">4</div><div class="rot">5</div><div class="rot">6</div><div class="rot">7</div><div class="rot">8</div><div class="rot">9</div><div class="rot">10</div><div class="rot">11</div><div class="rot">12</div><div class="rot">13</div><div class="rot">14</div><div class="rot">15</div><div class="rot">16</div><div class="rot">17</div><div class="rot">18</div><div class="rot">19</div><div class="rot">20</div><div class="rot">21</div><div class="rot">22</div><div class="rot">23</div><div class="rot">24</div><div class="rot">25</div><div class="rot">26</div><div class="">27</div><div class="">28</div><div class="">29</div><div class="">30</div><div class="">31</div></div><div class="key"><div class="rk">1–26 Capstone Live</div></div></div>
-<div class="m"><div class="mh">April <span>2027</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="">1</div><div class="">2</div><div class="">3</div><div class="">4</div><div class="trip tstart">5</div><div class="trip">6</div><div class="trip">7</div><div class="trip">8</div><div class="trip tend">9</div><div class="">10</div><div class="">11</div><div class="trip tstart">12</div><div class="trip">13</div><div class="trip">14</div><div class="trip">15</div><div class="trip tend">16</div><div class="">17</div><div class="">18</div><div class="">19</div><div class="trip tstart">20</div><div class="trip">21</div><div class="trip">22</div><div class="trip">23</div><div class="trip">24</div><div class="trip tend">25</div><div class="">26</div><div class="trip tstart">27</div><div class="trip">28</div><div class="trip">29</div><div class="trip">30</div></div><div class="key"><div><b>5–9</b> 🇯🇵 Japan <i>Mom</i></div><div><b>12–16</b> 🇳🇱 Amsterdam</div><div><b>20–25</b> 🇰🇷 Seoul <i>maybe</i></div><div><b>27–May 1</b> 🇨🇷 Costa Rica</div></div></div>
-<div class="m"><div class="mh">May <span>2027</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="pad">0</div><div class="trip tend">1</div><div class="">2</div><div class="">3</div><div class="">4</div><div class="">5</div><div class="">6</div><div class="">7</div><div class="">8</div><div class="">9</div><div class="">10</div><div class="trip tstart">11</div><div class="trip">12</div><div class="trip">13</div><div class="trip">14</div><div class="trip tend">15</div><div class="">16</div><div class="">17</div><div class="trip tstart">18</div><div class="trip">19</div><div class="trip">20</div><div class="trip">21</div><div class="trip tend">22</div><div class="">23</div><div class="">24</div><div class="trip tstart">25</div><div class="trip">26</div><div class="trip">27</div><div class="trip">28</div><div class="trip tend">29</div><div class="">30</div><div class="">31</div></div><div class="key"><div><b>Apr 27–1</b> 🇨🇷 Costa Rica</div><div><b>11–15</b> 🇵🇹 Lisbon</div><div><b>18–22</b> 🇩🇰 Copenhagen</div><div><b>25–29</b> 🇺🇸 Seattle + Portland</div></div></div>
-<div class="m"><div class="mh">June <span>2027</span></div><div class="dow"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div><div class="days"><div class="pad">0</div><div class="pad">0</div><div class="trip tstart">1</div><div class="trip">2</div><div class="trip">3</div><div class="trip">4</div><div class="trip tend">5</div><div class="">6</div><div class="">7</div><div class="">8</div><div class="">9</div><div class="">10</div><div class="">11</div><div class="">12</div><div class="">13</div><div class="">14</div><div class="">15</div><div class="">16</div><div class="">17</div><div class="">18</div><div class="">19</div><div class="">20</div><div class="">21</div><div class="">22</div><div class="">23</div><div class="">24</div><div class="">25</div><div class="">26</div><div class="">27</div><div class="">28</div><div class="">29</div><div class="">30</div></div><div class="key"><div><b>1–5</b> 🇮🇸 Iceland</div></div></div>
+
+<h1>Trips <em>/ Aug 2026 – Jun 2027</em></h1>
+<div class="sub">One row per month, each trip a labelled bar. Click a bar to inspect, arrow keys to move it, shift+arrows to stretch it. Saved in this browser.</div>
+
+<div class="stats" id="stats"></div>
+
+<div class="bar">
+  <button data-f="all" class="on">All</button>
+  <button data-f="confirmed">Confirmed</button>
+  <button data-f="maybe">Maybe / open</button>
+  <button data-f="intl">International</button>
+  <button data-f="dropped">Dropped</button>
+  <button class="ghost" id="reset">Reset changes</button>
 </div>
+
+<div class="wrap">
+  <div class="tl" id="tl"></div>
+  <aside id="panel"></aside>
+</div>
+
+<div class="issues" id="issues"></div>
+<div class="issues" id="been"></div>
+
 <div class="legend">
-<span><span class="sw" style="background:#c0272d"></span>trip</span>
-<span><span class="sw" style="background:#1d1d1f"></span>rotation</span>
-<span>built 2026-08-22 against gcal</span>
+  <span><span class="sw" style="background:#c0272d"></span>confirmed</span>
+  <span><span class="sw" style="background:#7a5220"></span>maybe</span>
+  <span><span class="sw" style="border:1px dashed #4a4a50"></span>open slot</span>
+  <span><span class="sw" style="background:#1c1c1f"></span>rotation</span>
+  <span><span class="sw" style="border-left:2px dashed #5b7fae;border-radius:0;width:2px"></span>fixed commitment</span>
 </div>
+
+<script>
+const DEFAULTS = [
+ {id:'sd',  flag:'\u{1F1FA}\u{1F1F8}', name:'San Diego',          s:'2026-08-28', e:'2026-09-01', who:'Dad',   status:'confirmed', intl:false, note:'Nothing booked. SAN is not a Delta hub, expect one stop each way. The weekend playbook killed Sunday returns; a Mon/Tue return was never tested. Buy at least the return, since Wed 9/2 and Thu 9/3 are working days.'},
+ {id:'lab', flag:'\u{1F3D5}\u{FE0F}',  name:'Yellowstone',        s:'2026-09-04', e:'2026-09-07', who:'candidate', status:'maybe', intl:false, note:'Mon Sep 7 is a verified Duke student holiday (registrar, checked 8/18), so one day of leave (Fri Sep 4) buys a 4-day weekend inside MSK. This is the only fully-open Yellowstone window on the whole calendar: the park’s roads shut roughly Nov through April, and Feb 25–28 would only get you the North entrance by snowcoach. BZN (Bozeman) and JAC (Jackson Hole) are both Delta-served via SLC. Two catches: San Diego returns Sep 1, so only 2 days home, and Labor Day is the single busiest weekend of the park’s year. Alternative window is late May 2027, which currently holds Seattle.'},
+ {id:'gap', flag:'\u{1F3D6}\u{FE0F}',  name:'MSK→Autopsy gap', s:'2026-09-19', e:'2026-09-20', who:'no destination', status:'open', intl:false, note:'MSK ends Fri Sep 18, Autopsy starts Mon Sep 21. Zero days off, zero permission needed. Two days is too thin for a one-stop, so Tier-1 only. Skippable, there is no shortage of slots this year.'},
+ {id:'des', flag:'\u{1F1FA}\u{1F1F8}', name:'Destin',             s:'2026-10-09', e:'2026-10-12', who:'Dad',   status:'confirmed', intl:false, note:'VPS via ATL. RDU–ATL is the most resilient leg in the system at 9x daily, so a missed connection costs hours rather than the trip. Later weekend chosen for less hurricane risk.'},
+ {id:'tok', flag:'\u{1F1EF}\u{1F1F5}', name:'Tokyo',              s:'2026-10-20', e:'2026-10-26', who:'Lars',  status:'confirmed', intl:true,  note:'Single base, no Kyoto. Listing on the same reservation as Lars moves you S3B→S3, above every other S3B and retiree. Gateway DTW. Buy the HND return refundable. 7 calendar days for about 5 on the ground.'},
+ {id:'nol', flag:'\u{1F1FA}\u{1F1F8}', name:'New Orleans',        s:'2026-10-29', e:'2026-11-02', who:'',      status:'confirmed', intl:false, note:'Moved off Oct 28, since spring 2027 registration opens that day and you need to be home and awake for it. WWII Museum, Garden District, po-boys.'},
+ {id:'la',  flag:'\u{1F1FA}\u{1F1F8}', name:'Los Angeles',        s:'2026-11-05', e:'2026-11-09', who:'',      status:'confirmed', intl:false, note:'Midweek trip sidesteps the playbook’s morning-only Sunday returns. Home four days before the Nov 13 interview floor.'},
+ {id:'rsn', flag:'\u{1F1FA}\u{1F1F8}', name:'RSNA Chicago',       s:'2026-11-29', e:'2026-12-02', who:'oral 11/30', status:'confirmed', intl:false, note:'Conference registration is paid. Travel is NOT booked: no flights, no hotel. Delta flies no RDU–ORD nonstop at all, so it is a two-roll connection through a hub and a missed connection costs the presentation. Buy the outbound.'},
+ {id:'mia', flag:'\u{1F1FA}\u{1F1F8}', name:'Miami',              s:'2026-12-13', e:'2026-12-17', who:'',      status:'confirmed', intl:false, note:'No Delta Friday-evening nonstop from RDU. Buy AA out, ride Delta home. Keep it before ~Dec 18, when holiday loads collapse.'},
+ {id:'pr',  flag:'\u{1F1F5}\u{1F1F7}', name:'Puerto Rico',        s:'2027-01-16', e:'2027-01-18', who:'',      status:'confirmed', intl:false, note:'MLK weekend, zero days off. No passport needed. Old San Juan forts, El Yunque. SJU via ATL/JFK.'},
+ {id:'haw', flag:'\u{1F1FA}\u{1F1F8}', name:'Hawaii',             s:'2027-02-08', e:'2027-02-13', who:'',      status:'confirmed', intl:false, note:'The redo: beach, snorkel, surf lesson, luau, Pearl Harbor, rather than the hikes-only March 2026 trip. Oahu base, whale season. HNL via LAX/SEA/SLC, all hubs.'},
+ {id:'ski', flag:'\u{26F7}\u{FE0F}',   name:'Colorado ski',       s:'2027-02-20', e:'2027-02-24', who:'pass bought', status:'confirmed', intl:false, note:'Epic Pass #599108574797, $373.58, AD Epic 3 Day RST. RST means restricted, so confirm blackouts against Vail’s published list. Epic Coverage refund deadline is Jan 15.'},
+ {id:'jpm', flag:'\u{1F1EF}\u{1F1F5}', name:'Japan',              s:'2027-04-05', e:'2027-04-09', who:'Mom',   status:'confirmed', intl:true,  note:'Confirmed 8/20, dates open. Early April is sakura in Tokyo. Avoid Golden Week Apr 29–May 5. Ask whether Mom holds her own pass privileges, it decides standby-together vs buying her a confirmed seat.'},
+ {id:'ams', flag:'\u{1F1F3}\u{1F1F1}', name:'Amsterdam',          s:'2027-04-12', e:'2027-04-16', who:'',      status:'confirmed', intl:true,  note:'Keukenhof tulip peak. Year-round Delta gateway via the KLM JV, so no seasonality risk.'},
+ {id:'seo', flag:'\u{1F1F0}\u{1F1F7}', name:'Seoul',              s:'2027-04-20', e:'2027-04-25', who:'soft hold', status:'maybe', intl:true,  note:'Not a yes. ICN via DTW/ATL/SEA on the Korean Air JV. If dropped, the slot goes back to open.'},
+ {id:'cr',  flag:'\u{1F1E8}\u{1F1F7}', name:'Costa Rica',         s:'2027-04-27', e:'2027-05-01', who:'',      status:'confirmed', intl:true,  note:'Moved off Mar 30 so Japan with Mom is not a one-day turnaround. Dry-season tail, Pacific side stays driest. SJO via ATL.'},
+ {id:'lis', flag:'\u{1F1F5}\u{1F1F9}', name:'Lisbon',             s:'2027-05-11', e:'2027-05-15', who:'',      status:'confirmed', intl:true,  note:'Delta’s southern-Europe flying is summer-weighted and reopens around May. VERIFY on TravelNet before committing.'},
+ {id:'cph', flag:'\u{1F1E9}\u{1F1F0}', name:'Copenhagen',         s:'2027-05-18', e:'2027-05-22', who:'',      status:'confirmed', intl:true,  note:'Long days, best weather of the year. Seasonal service, so VERIFY on TravelNet.'},
+ {id:'sea', flag:'\u{1F1FA}\u{1F1F8}', name:'Seattle + Portland', s:'2027-05-25', e:'2027-05-29', who:'',      status:'confirmed', intl:false, note:'SEA is a Delta hub, the best non-rev odds on the whole list. Portland Japanese Garden is 3h by train. Home before Memorial Day loads.'},
+ {id:'ice', flag:'\u{1F1EE}\u{1F1F8}', name:'Iceland',            s:'2027-06-01', e:'2027-06-05', who:'',      status:'confirmed', intl:true,  note:'Midnight sun, puffins. KEF summer service still UNCONFIRMED: a public fetch died on a 403 JS shell, so it needs an authenticated TravelNet pull.'}
+];
+
+const ROTATIONS = [
+ {s:'2026-08-24', e:'2026-09-18', name:'MSK Imaging'},
+ {s:'2026-09-21', e:'2026-10-16', name:'Autopsy Path'},
+ {s:'2027-01-04', e:'2027-01-29', name:'Neuroradiology'},
+ {s:'2027-03-01', e:'2027-03-26', name:'Capstone Live'}
+];
+
+const HOLIDAYS = ['2026-09-07','2026-11-26','2026-12-25','2027-01-01','2027-01-18','2027-05-31'];
+
+const FIXED = [
+ {d:'2026-08-24', name:'MSK day 1 + Dr. Martin 2pm', hard:true},
+ {d:'2026-08-25', name:'Capstone Orientation 5pm (mandatory)', hard:true},
+ {d:'2026-09-03', name:'Patching results Zoom 1pm', hard:true},
+ {d:'2026-10-07', name:'Flu Blitz', hard:false},
+ {d:'2026-10-28', name:'Spring 2027 registration opens', hard:true},
+ {d:'2026-10-31', name:'Flu shot compliance deadline', hard:false},
+ {d:'2026-11-13', name:'Interview season begins', hard:false},
+ {d:'2026-12-12', name:'Grad PLUS fee-free return deadline', hard:true},
+ {d:'2027-01-15', name:'Epic Coverage refund deadline', hard:false},
+ {d:'2027-03-19', name:'Match Day', hard:true},
+ {d:'2027-05-08', name:'Duke SoM graduation', hard:false}
+];
+
+// Been-there ledger. One row per closed trip; canonical copy is claude dump/travel/BEEN.md.
+const BEEN = [
+ {when:'Aug 14–18, 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'San Francisco', who:'Lars',
+  did:'Golden Gate Park and the Conservatory of Flowers, USS Hornet, USS Pampanito, Hyde Street Pier, Swan Oyster Depot, mission burritos, dive bars over clubs. Car-free Sun through Tue.'},
+ {when:'May 17–20, 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'Austin', who:'',
+  did:'ASNR 2026. Gave an oral presentation.'},
+ {when:'Apr 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'Princeton', who:'', did:''},
+ {when:'Mar 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'Hawaii', who:'',
+  did:'Hikes only. The Feb 2027 return trip is the beach-and-snorkel version.'},
+ {when:'earlier', flag:'\u{1F1FA}\u{1F1F8}', place:'New York', who:'', did:''},
+ {when:'earlier', flag:'\u{1F1FA}\u{1F1F8}', place:'Boston', who:'', did:'Been a while.'},
+ {when:'earlier', flag:'\u{1F1FA}\u{1F1F8}', place:'Atlanta', who:'', did:'Also the default non-rev connecting hub.'},
+ {when:'grew up there', flag:'\u{1F1FA}\u{1F1F8}', place:'Washington DC', who:'', did:''},
+ {when:'dual national', flag:'\u{1F1EF}\u{1F1F5}', place:'Japan', who:'', did:''}
+];
+
+const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const KEY='trips-v2';
+const D=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
+const S=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const days=(a,b)=>Math.round((D(b)-D(a))/864e5)+1;
+const fmt=d=>MN[d.getMonth()].slice(0,3)+' '+d.getDate();
+
+let trips, sel=null, filter='all';
+
+function load(){
+  trips = DEFAULTS.map(t=>({...t}));
+  try{ const sv=JSON.parse(localStorage.getItem(KEY)||'{}');
+       trips.forEach(t=>{ if(sv[t.id]) Object.assign(t,sv[t.id]); }); }catch(e){}
+}
+function save(){
+  const o={};
+  trips.forEach(t=>{ const d=DEFAULTS.find(x=>x.id===t.id);
+    if(t.s!==d.s||t.e!==d.e||t.status!==d.status) o[t.id]={s:t.s,e:t.e,status:t.status}; });
+  localStorage.setItem(KEY, JSON.stringify(o));
+}
+
+const visible = t => filter==='all' ? t.status!=='dropped'
+  : filter==='intl' ? t.intl && t.status!=='dropped'
+  : filter==='maybe' ? (t.status==='maybe'||t.status==='open')
+  : t.status===filter;
+
+const rotAt = k => ROTATIONS.find(r=>k>=r.s&&k<=r.e);
+
+function daysOff(t){
+  if(t.status==='open'&&t.who==='no destination'&&t.id==='gap') return 0;
+  let n=0;
+  for(let d=D(t.s); d<=D(t.e); d=add(d,1)){
+    const k=S(d), w=d.getDay();
+    if(w!==0&&w!==6&&rotAt(k)&&!HOLIDAYS.includes(k)) n++;
+  }
+  return n;
+}
+
+function conflicts(t){
+  const out=[];
+  FIXED.forEach(f=>{ if(f.d>=t.s&&f.d<=t.e)
+    out.push({lvl:f.hard?'bad':'warn', msg:(f.hard?'Away on ':'Overlaps ')+f.name}); });
+  const hol=[]; for(let d=D(t.s);d<=D(t.e);d=add(d,1)) if(HOLIDAYS.includes(S(d))) hol.push(fmt(d));
+  if(hol.length) out.push({lvl:'good', msg:'Free holiday inside the trip: '+hol.join(', ')});
+  const n=daysOff(t);
+  const rs=[...new Set(Array.from({length:days(t.s,t.e)},(_,i)=>rotAt(S(add(D(t.s),i)))).filter(Boolean).map(x=>x.name))];
+  if(n) out.push({lvl:'warn', msg:n+' day'+(n>1?'s':'')+' off to ask for, from '+rs.join(' + ')});
+  const len=days(t.s,t.e), ground=t.intl?len-2:len;
+  if(ground>5) out.push({lvl:'warn', msg:ground+' days on the ground, over the 4–5 ceiling'});
+  trips.filter(x=>x.id!==t.id&&x.status!=='dropped').forEach(o=>{
+    if(o.s<=t.e&&o.e>=t.s){ out.push({lvl:'bad', msg:'Overlaps '+o.name}); return; }
+    const gap = o.s>t.e ? Math.round((D(o.s)-D(t.e))/864e5)-1 : Math.round((D(t.s)-D(o.e))/864e5)-1;
+    if(gap>=0&&gap<2) out.push({lvl:'warn', msg:'Only '+gap+' day'+(gap===1?'':'s')+' home '+(o.s>t.e?'before ':'after ')+o.name});
+  });
+  return out;
+}
+
+function render(){
+  const today=S(new Date());
+  let h='';
+  for(let i=0;i<11;i++){
+    const y=2026+(i>4?1:0), m=(7+i)%12, nd=new Date(y,m+1,0).getDate();
+    const pc=100/nd, mS=S(new Date(y,m,1)), mE=S(new Date(y,m,nd));
+    h+='<div class="mo"><div class="mlab">'+MN[m].slice(0,3)+'<i>'+y+'</i></div><div class="track">';
+
+    h+='<div class="nums" style="grid-template-columns:repeat('+nd+',1fr)">';
+    for(let d=1;d<=nd;d++){
+      const dt=new Date(y,m,d), k=S(dt), w=dt.getDay();
+      h+='<div class="'+(k===today?'tdy':(w===0||w===6?'we':''))+'">'+d+'</div>';
+    }
+    h+='</div><div class="lane">';
+
+    ROTATIONS.forEach(r=>{
+      if(r.e<mS||r.s>mE) return;
+      const a=Math.max(D(r.s),D(new Date(y,m,1))), b=Math.min(D(r.e),D(new Date(y,m,nd)));
+      const L=(a.getDate()-1)*pc, W=(Math.round((b-a)/864e5)+1)*pc;
+      h+='<div class="rotband" style="left:'+L+'%;width:'+W+'%"><span>'+(D(r.s)>=D(mS)?r.name:'')+'</span></div>';
+    });
+
+    FIXED.forEach(f=>{ if(f.d>=mS&&f.d<=mE)
+      h+='<div class="fixtick'+(f.hard?' hard':'')+'" style="left:'+((D(f.d).getDate()-.5)*pc)+'%" title="'+f.name+'"></div>'; });
+
+    trips.filter(visible).forEach(t=>{
+      if(t.e<mS||t.s>mE) return;
+      const a=Math.max(D(t.s),D(new Date(y,m,1))), b=Math.min(D(t.e),D(new Date(y,m,nd)));
+      const L=(a.getDate()-1)*pc, W=(Math.round((b-a)/864e5)+1)*pc;
+      const cls=['tripbar',t.status]; if(sel===t.id) cls.push('sel');
+      if(D(t.s)<D(mS)) cls.push('cont'); if(D(t.e)>D(mE)) cls.push('cont2');
+      h+='<div class="'+cls.join(' ')+'" data-t="'+t.id+'" style="left:'+L+'%;width:'+W+'%" '
+        +'title="'+t.name+' · '+fmt(D(t.s))+'–'+fmt(D(t.e))+'">'
+        +'<span>'+t.flag+'</span><span class="nm">'+t.name+'</span>'
+        +'<span class="dy">'+days(t.s,t.e)+'d</span></div>';
+    });
+    h+='</div></div></div>';
+  }
+  document.getElementById('tl').innerHTML=h;
+
+  const live=trips.filter(t=>t.status!=='dropped'&&t.status!=='open');
+  const away=live.reduce((n,t)=>n+days(t.s,t.e),0);
+  const off=trips.filter(t=>t.status!=='dropped').reduce((n,t)=>n+daysOff(t),0);
+  const nx=trips.filter(t=>t.status!=='dropped'&&t.s>=today).sort((a,b)=>a.s<b.s?-1:1)[0];
+  document.getElementById('stats').innerHTML=
+     '<div class="stat"><b>'+live.length+'</b><span>trips</span></div>'
+    +'<div class="stat"><b>'+away+'</b><span>days away</span></div>'
+    +'<div class="stat"><b>'+live.filter(t=>t.intl).length+'</b><span>international</span></div>'
+    +'<div class="stat '+(off?'':'n')+'"><b>'+off+'</b><span>days off to ask for</span></div>'
+    +(nx?'<div class="stat n"><b>'+Math.round((D(nx.s)-D(today))/864e5)+'</b><span>days to '+nx.flag+' '+nx.name+'</span></div>':'');
+
+  const all=[];
+  trips.filter(t=>t.status!=='dropped').forEach(t=>
+    conflicts(t).filter(c=>c.lvl==='bad').forEach(c=>all.push({id:t.id,name:t.name,msg:c.msg})));
+  document.getElementById('issues').innerHTML='<h3>Conflicts</h3>'+(all.length
+    ? all.map(c=>'<div data-t="'+c.id+'"><b>'+c.name+'</b> — '+c.msg+'</div>').join('')
+    : '<div class="ok">Nothing clashes. Every trip clears its fixed commitments.</div>');
+
+  document.getElementById('been').innerHTML =
+    '<h3>Been there — '+BEEN.length+' places</h3>'
+    + BEEN.map(b=>'<div class="beenrow"><b>'+b.flag+' '+b.place+'</b>'
+        +'<i>'+b.when+(b.who?' · with '+b.who:'')+'</i>'
+        +(b.did?'<p>'+b.did+'</p>':'')+'</div>').join('');
+  panel();
+}
+
+function panel(){
+  const p=document.getElementById('panel'), t=trips.find(x=>x.id===sel);
+  if(!t){ p.innerHTML='<div class="empty">Pick a bar.<br><br>Move it with ← →, stretch it with shift+← →. Day counts, leave needed and the conflict list all recompute live. Changes stay in this browser; Reset puts everything back.</div>'; return; }
+  const len=days(t.s,t.e), n=daysOff(t);
+  p.innerHTML='<h2>'+t.flag+' '+t.name+'</h2>'
+    +'<div class="when">'+fmt(D(t.s))+' – '+fmt(D(t.e))+', '+D(t.e).getFullYear()+'</div>'
+    +'<div class="row"><span>Length</span><b>'+len+' days'+(t.intl?' ('+(len-2)+' on the ground)':'')+'</b></div>'
+    +'<div class="row"><span>Days off needed</span><b>'+(n||'none')+'</b></div>'
+    +(t.who?'<div class="row"><span>'+(t.status==='open'?'Status':'With')+'</span><b>'+t.who+'</b></div>':'')
+    +conflicts(t).map(c=>'<div class="warn '+(c.lvl==='bad'?'bad':c.lvl==='good'?'good':'')+'">'+c.msg+'</div>').join('')
+    +'<div class="note">'+t.note+'</div>'
+    +'<div class="nudge">move <button data-mv="-1">‹</button><button data-mv="1">›</button>'
+    +'&nbsp;length <button data-len="-1">–</button><button data-len="1">+</button></div>'
+    +'<div class="nudge">'+['confirmed','maybe','open','dropped'].map(s=>
+        '<button data-st="'+s+'"'+(t.status===s?' class="on"':'')+'>'+s+'</button>').join('')+'</div>';
+}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-t]');
+  if(b){ sel = sel===b.dataset.t ? null : b.dataset.t; render(); return; }
+  const f=e.target.closest('[data-f]');
+  if(f){ filter=f.dataset.f; document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('on',x===f)); render(); return; }
+  if(e.target.id==='reset'){ localStorage.removeItem(KEY); load(); sel=null; render(); return; }
+  const tr=trips.find(x=>x.id===sel); if(!tr) return;
+  if(e.target.dataset.mv){ const n=+e.target.dataset.mv; tr.s=S(add(D(tr.s),n)); tr.e=S(add(D(tr.e),n)); save(); render(); }
+  else if(e.target.dataset.len){ const n=+e.target.dataset.len;
+    if(days(tr.s,tr.e)+n>=1){ tr.e=S(add(D(tr.e),n)); save(); render(); } }
+  else if(e.target.dataset.st){ tr.status=e.target.dataset.st; save(); render(); }
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ sel=null; render(); return; }
+  const tr=trips.find(x=>x.id===sel); if(!tr) return;
+  if(e.key==='ArrowLeft'||e.key==='ArrowRight'){ e.preventDefault();
+    const n=e.key==='ArrowRight'?1:-1;
+    if(e.shiftKey){ if(days(tr.s,tr.e)+n>=1) tr.e=S(add(D(tr.e),n)); }
+    else { tr.s=S(add(D(tr.s),n)); tr.e=S(add(D(tr.e),n)); }
+    save(); render(); }
+});
+
+load(); render();
+</script>
 </body></html>
