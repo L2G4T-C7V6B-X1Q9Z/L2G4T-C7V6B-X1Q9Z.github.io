@@ -23,35 +23,41 @@ button.ghost{background:none;border-color:transparent;color:#4a4a4c}
 button.ghost:hover{color:#8a8a8c}
 
 .wrap{display:flex;gap:22px;align-items:flex-start}
-.tl{flex:1;min-width:0;background:#161617;border:1px solid #232325;border-radius:8px;padding:6px 16px 14px}
+.cal{flex:1;min-width:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+.m{background:#161617;border:1px solid #232325;border-radius:8px;padding:12px 13px 11px}
+.mh{font-size:13px;font-weight:600;color:#bbb;margin-bottom:7px;letter-spacing:.03em}
+.mh span{color:#4a4a4c;font-weight:400}
 
-.mo{display:flex;align-items:stretch;border-top:1px solid #1e1e21;padding:9px 0 5px}
-.mo:first-child{border-top:none}
-.mlab{width:74px;flex:none;font-size:11px;color:#8a8a8c;font-weight:600;letter-spacing:.05em;
-  text-transform:uppercase;padding-top:2px}
-.mlab i{display:block;color:#3f3f43;font-style:normal;font-weight:400;font-size:10px}
-.track{flex:1;min-width:0;position:relative}
-.nums{display:grid;height:15px}
-.nums div{font-size:9px;color:#46464a;text-align:center;line-height:15px;border-radius:2px}
-.nums div.we{color:#333336}
-.nums div.tdy{color:#fff;background:#2e2e33}
-.lane{position:relative;height:26px;margin-top:3px}
-.rotband{position:absolute;top:0;height:26px;background:#1c1c1f;border-radius:4px}
-.rotband span{position:absolute;left:7px;top:5px;font-size:10px;color:#48484c;letter-spacing:.04em;white-space:nowrap}
-.fixtick{position:absolute;top:-19px;height:45px;border-left:1px dashed #35597f;pointer-events:none}
-.fixtick.hard{border-color:#5b7fae}
-.tripbar{position:absolute;top:0;height:26px;border-radius:5px;background:#c0272d;color:#fff;
-  font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px;padding:0 7px;
-  cursor:pointer;overflow:hidden;white-space:nowrap;border:1px solid transparent}
-.tripbar:hover{filter:brightness(1.18)}
-.tripbar.maybe{background:#7a5220}
-.tripbar.dropped{background:#1f1f22;color:#525256;font-weight:400;text-decoration:line-through}
-.tripbar.open{background:none;border:1px dashed #4a4a50;color:#7a7a80;font-weight:500}
-.tripbar.sel{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.22)}
-.tripbar .nm{overflow:hidden;text-overflow:ellipsis}
-.tripbar .dy{opacity:.62;font-weight:400}
-.cont{border-top-left-radius:0;border-bottom-left-radius:0}
-.cont2{border-top-right-radius:0;border-bottom-right-radius:0}
+.dow{display:grid;grid-template-columns:repeat(7,1fr)}
+.dow div{font-size:9px;color:#46464a;text-align:center;padding-bottom:5px;letter-spacing:.06em}
+.dow div.we{color:#5f5f66}
+
+.wk{position:relative;display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:3px}
+.dc{height:40px;background:#131315;border-right:1px solid #161617;border-bottom:1px solid #161617;
+  font-size:10px;color:#5a5a5e;padding:2px 0 0 4px;line-height:1.2}
+.dc:last-child{border-right:none}
+.dc.we{background:#0f0f11;color:#3f3f45}
+.dc.rot{background:#1d1d21}
+.dc.we.rot{background:#191a1d}
+.dc.out{background:#0e0e0f;color:transparent;border-color:#0e0e0f}
+.dc.hol{color:#6fae7c;font-weight:700}
+.dc.fx::after{content:'';position:absolute;width:4px;height:4px;border-radius:50%;
+  background:#5b7fae;margin:-11px 0 0 15px}
+.dc.tdy{box-shadow:inset 0 0 0 1px #55555a}
+
+.bars{position:absolute;left:0;right:0;top:17px;height:21px}
+.tb{position:absolute;height:20px;background:#c0272d;color:#fff;font-size:10.5px;font-weight:600;
+  display:flex;align-items:center;gap:4px;padding:0 5px;cursor:pointer;overflow:hidden;
+  white-space:nowrap;border:1px solid transparent}
+.tb:hover{filter:brightness(1.18)}
+.tb.maybe{background:#7a5220}
+.tb.dropped{background:#1f1f22;color:#525256;font-weight:400;text-decoration:line-through}
+.tb.open{background:none;border:1px dashed #4a4a50;color:#7a7a80;font-weight:500}
+.tb.sel{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+.tb .nm{overflow:hidden;text-overflow:ellipsis}
+.tb.s{border-top-left-radius:5px;border-bottom-left-radius:5px}
+.tb.e{border-top-right-radius:5px;border-bottom-right-radius:5px}
+.mrot{font-size:10px;color:#48484c;margin-top:6px;padding-top:6px;border-top:1px solid #212124}
 
 aside{width:322px;flex:none;position:sticky;top:26px;background:#161617;border:1px solid #232325;
   border-radius:8px;padding:16px;max-height:calc(100vh - 52px);overflow:auto}
@@ -63,15 +69,15 @@ aside .when{font-size:12px;color:#e0555a;margin-bottom:13px}
 .note{font-size:12px;color:#7a7a7d;margin-top:12px;line-height:1.55}
 .warn{font-size:12px;color:#e08a55;background:#241a13;border-left:2px solid #e08a55;padding:8px 10px;border-radius:0 4px 4px 0;margin-top:9px;line-height:1.5}
 .warn.bad{color:#e0555a;background:#241315;border-color:#e0555a}
-.warn.good{color:#6a9c74;background:#141d16;border-color:#4e7a58}
-.nudge{display:flex;gap:6px;align-items:center;margin-top:13px;font-size:11px;color:#55555a}
+.warn.good{color:#6fae7c;background:#141d16;border-color:#4e7a58}
+.nudge{display:flex;gap:6px;align-items:center;margin-top:13px;font-size:11px;color:#55555a;flex-wrap:wrap}
 .nudge button{padding:3px 9px}
 .empty{font-size:12px;color:#4a4a4c;line-height:1.6}
 
 .issues{margin-top:22px;background:#161617;border:1px solid #232325;border-radius:8px;padding:15px 17px}
 .issues h3{font-size:12px;color:#8a8a8c;letter-spacing:.06em;text-transform:uppercase;margin-bottom:9px}
-.issues div{font-size:12px;padding:4px 0;color:#8a8a8c;cursor:pointer}
-.issues div:hover{color:#ccc}
+.issues>div{font-size:12px;padding:4px 0;color:#8a8a8c;cursor:pointer}
+.issues>div:hover{color:#ccc}
 .issues b{color:#e0555a}
 .issues .ok{color:#4a7a52;cursor:default}
 .beenrow{cursor:default!important;padding:7px 0!important;border-top:1px solid #1e1e21}
@@ -81,11 +87,11 @@ aside .when{font-size:12px;color:#e0555a;margin-bottom:13px}
 .beenrow p{color:#7a7a7d;font-size:12px;margin-top:2px;line-height:1.5;max-width:78ch}
 .legend{margin-top:20px;font-size:11px;color:#46464a;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
 .sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:6px}
-@media(max-width:980px){.wrap{flex-direction:column}aside{width:100%;position:static}.mlab{width:60px}}
+@media(max-width:980px){.wrap{flex-direction:column}aside{width:100%;position:static}}
 </style></head><body>
 
 <h1>Trips <em>/ Aug 2026 – Jun 2027</em></h1>
-<div class="sub">One row per month, each trip a labelled bar. Click a bar to inspect, arrow keys to move it, shift+arrows to stretch it. Saved in this browser.</div>
+<div class="sub">Click a trip to inspect it. Arrow keys move it, shift+arrows stretch it. Saved in this browser.</div>
 
 <div class="stats" id="stats"></div>
 
@@ -99,7 +105,7 @@ aside .when{font-size:12px;color:#e0555a;margin-bottom:13px}
 </div>
 
 <div class="wrap">
-  <div class="tl" id="tl"></div>
+  <div class="cal" id="cal"></div>
   <aside id="panel"></aside>
 </div>
 
@@ -110,15 +116,16 @@ aside .when{font-size:12px;color:#e0555a;margin-bottom:13px}
   <span><span class="sw" style="background:#c0272d"></span>confirmed</span>
   <span><span class="sw" style="background:#7a5220"></span>maybe</span>
   <span><span class="sw" style="border:1px dashed #4a4a50"></span>open slot</span>
-  <span><span class="sw" style="background:#1c1c1f"></span>rotation</span>
-  <span><span class="sw" style="border-left:2px dashed #5b7fae;border-radius:0;width:2px"></span>fixed commitment</span>
+  <span><span class="sw" style="background:#1d1d21"></span>rotation</span>
+  <span style="color:#6fae7c"><span class="sw" style="background:none;border:1px solid #6fae7c"></span>student holiday</span>
+  <span><span class="sw" style="background:#5b7fae;border-radius:50%;width:6px;height:6px"></span>fixed commitment</span>
 </div>
 
 <script>
 const DEFAULTS = [
- {id:'sd',  flag:'\u{1F1FA}\u{1F1F8}', name:'San Diego',          s:'2026-08-28', e:'2026-09-01', who:'Dad',   status:'confirmed', intl:false, note:'Nothing booked. SAN is not a Delta hub, expect one stop each way. The weekend playbook killed Sunday returns; a Mon/Tue return was never tested. Buy at least the return, since Wed 9/2 and Thu 9/3 are working days.'},
- {id:'lab', flag:'\u{1F3D5}\u{FE0F}',  name:'Yellowstone',        s:'2026-09-04', e:'2026-09-07', who:'candidate', status:'maybe', intl:false, note:'Mon Sep 7 is a verified Duke student holiday (registrar, checked 8/18), so one day of leave (Fri Sep 4) buys a 4-day weekend inside MSK. This is the only fully-open Yellowstone window on the whole calendar: the park’s roads shut roughly Nov through April, and Feb 25–28 would only get you the North entrance by snowcoach. BZN (Bozeman) and JAC (Jackson Hole) are both Delta-served via SLC. Two catches: San Diego returns Sep 1, so only 2 days home, and Labor Day is the single busiest weekend of the park’s year. Alternative window is late May 2027, which currently holds Seattle.'},
- {id:'gap', flag:'\u{1F3D6}\u{FE0F}',  name:'MSK→Autopsy gap', s:'2026-09-19', e:'2026-09-20', who:'no destination', status:'open', intl:false, note:'MSK ends Fri Sep 18, Autopsy starts Mon Sep 21. Zero days off, zero permission needed. Two days is too thin for a one-stop, so Tier-1 only. Skippable, there is no shortage of slots this year.'},
+ {id:'sd',  flag:'\u{1F1FA}\u{1F1F8}', name:'San Diego',          s:'2026-08-28', e:'2026-09-01', who:'Dad',   status:'confirmed', intl:false, note:'Counts as 3 days of leave here (Fri 8/28, Mon 8/31, Tue 9/1). It drops to 2 if you work Friday and fly out that evening. Nothing booked. SAN is not a Delta hub, expect one stop each way. The weekend playbook killed Sunday returns; a Mon/Tue return was never tested. Buy at least the return, since Wed 9/2 and Thu 9/3 are working days.'},
+ {id:'yel', flag:'\u{1F3D5}\u{FE0F}',  name:'Yellowstone',        s:'2026-09-05', e:'2026-09-07', who:'candidate', status:'maybe', intl:false, note:'Pure holiday weekend, zero leave: Mon Sep 7 is a verified Duke student holiday (registrar, checked 8/18). Honest catch, since you should hear it before booking: 3 days is thin for Yellowstone specifically. BZN and JAC are Delta-served via SLC but neither is a hub, so it is two rolls each way plus a 1.5h drive to the park, and Labor Day is the busiest weekend of its year. The zero-leave alternative is the post-graduation block (May 10 – Jun 13, 2027), where you need no permission from anyone and can take the full 4–5 days.'},
+ {id:'gap', flag:'\u{1F5D3}\u{FE0F}',  name:'MSK→Autopsy gap',    s:'2026-09-19', e:'2026-09-20', who:'open slot', status:'open', intl:false, note:'MSK ends Fri Sep 18, Autopsy starts Mon Sep 21. Zero days off, zero permission needed. Two days is too thin for a one-stop, so Tier-1 only: ATL, NYC, BOS, DCA. Skippable, there is no shortage of slots this year.'},
  {id:'des', flag:'\u{1F1FA}\u{1F1F8}', name:'Destin',             s:'2026-10-09', e:'2026-10-12', who:'Dad',   status:'confirmed', intl:false, note:'VPS via ATL. RDU–ATL is the most resilient leg in the system at 9x daily, so a missed connection costs hours rather than the trip. Later weekend chosen for less hurricane risk.'},
  {id:'tok', flag:'\u{1F1EF}\u{1F1F5}', name:'Tokyo',              s:'2026-10-20', e:'2026-10-26', who:'Lars',  status:'confirmed', intl:true,  note:'Single base, no Kyoto. Listing on the same reservation as Lars moves you S3B→S3, above every other S3B and retiree. Gateway DTW. Buy the HND return refundable. 7 calendar days for about 5 on the ground.'},
  {id:'nol', flag:'\u{1F1FA}\u{1F1F8}', name:'New Orleans',        s:'2026-10-29', e:'2026-11-02', who:'',      status:'confirmed', intl:false, note:'Moved off Oct 28, since spring 2027 registration opens that day and you need to be home and awake for it. WWII Museum, Garden District, po-boys.'},
@@ -145,7 +152,9 @@ const ROTATIONS = [
  {s:'2027-03-01', e:'2027-03-26', name:'Capstone Live'}
 ];
 
-const HOLIDAYS = ['2026-09-07','2026-11-26','2026-12-25','2027-01-01','2027-01-18','2027-05-31'];
+// Duke School of Medicine approved student holidays, from the registrar (verified 2026-08-18).
+const HOLIDAYS = {'2026-09-07':'Labor Day','2026-11-26':'Thanksgiving','2026-12-25':'Christmas',
+  '2027-01-01':'New Year’s Day','2027-01-18':'MLK Day','2027-05-31':'Memorial Day'};
 
 const FIXED = [
  {d:'2026-08-24', name:'MSK day 1 + Dr. Martin 2pm', hard:true},
@@ -161,15 +170,12 @@ const FIXED = [
  {d:'2027-05-08', name:'Duke SoM graduation', hard:false}
 ];
 
-// Been-there ledger. One row per closed trip; canonical copy is claude dump/travel/BEEN.md.
 const BEEN = [
  {when:'Aug 14–18, 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'San Francisco', who:'Lars',
   did:'Golden Gate Park and the Conservatory of Flowers, USS Hornet, USS Pampanito, Hyde Street Pier, Swan Oyster Depot, mission burritos, dive bars over clubs. Car-free Sun through Tue.'},
- {when:'May 17–20, 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'Austin', who:'',
-  did:'ASNR 2026. Gave an oral presentation.'},
+ {when:'May 17–20, 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'Austin', who:'', did:'ASNR 2026. Gave an oral presentation.'},
  {when:'Apr 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'Princeton', who:'', did:''},
- {when:'Mar 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'Hawaii', who:'',
-  did:'Hikes only. The Feb 2027 return trip is the beach-and-snorkel version.'},
+ {when:'Mar 2026', flag:'\u{1F1FA}\u{1F1F8}', place:'Hawaii', who:'', did:'Hikes only. The Feb 2027 return trip is the beach-and-snorkel version.'},
  {when:'earlier', flag:'\u{1F1FA}\u{1F1F8}', place:'New York', who:'', did:''},
  {when:'earlier', flag:'\u{1F1FA}\u{1F1F8}', place:'Boston', who:'', did:'Been a while.'},
  {when:'earlier', flag:'\u{1F1FA}\u{1F1F8}', place:'Atlanta', who:'', did:'Also the default non-rev connecting hub.'},
@@ -178,7 +184,7 @@ const BEEN = [
 ];
 
 const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
-const KEY='trips-v2';
+const KEY='trips-v3';
 const D=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
 const S=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
@@ -206,12 +212,12 @@ const visible = t => filter==='all' ? t.status!=='dropped'
 
 const rotAt = k => ROTATIONS.find(r=>k>=r.s&&k<=r.e);
 
+// A weekday inside a rotation costs a day of leave. Weekends and student holidays are free.
 function daysOff(t){
-  if(t.status==='open'&&t.who==='no destination'&&t.id==='gap') return 0;
   let n=0;
   for(let d=D(t.s); d<=D(t.e); d=add(d,1)){
     const k=S(d), w=d.getDay();
-    if(w!==0&&w!==6&&rotAt(k)&&!HOLIDAYS.includes(k)) n++;
+    if(w!==0&&w!==6&&rotAt(k)&&!HOLIDAYS[k]) n++;
   }
   return n;
 }
@@ -220,9 +226,9 @@ function conflicts(t){
   const out=[];
   FIXED.forEach(f=>{ if(f.d>=t.s&&f.d<=t.e)
     out.push({lvl:f.hard?'bad':'warn', msg:(f.hard?'Away on ':'Overlaps ')+f.name}); });
-  const hol=[]; for(let d=D(t.s);d<=D(t.e);d=add(d,1)) if(HOLIDAYS.includes(S(d))) hol.push(fmt(d));
-  if(hol.length) out.push({lvl:'good', msg:'Free holiday inside the trip: '+hol.join(', ')});
+  const hol=[]; for(let d=D(t.s);d<=D(t.e);d=add(d,1)) if(HOLIDAYS[S(d)]) hol.push(HOLIDAYS[S(d)]);
   const n=daysOff(t);
+  if(hol.length) out.push({lvl:'good', msg:(n?'':'Free trip: ')+hol.join(' + ')+' falls inside it'+(n?'':', so no leave needed')});
   const rs=[...new Set(Array.from({length:days(t.s,t.e)},(_,i)=>rotAt(S(add(D(t.s),i)))).filter(Boolean).map(x=>x.name))];
   if(n) out.push({lvl:'warn', msg:n+' day'+(n>1?'s':'')+' off to ask for, from '+rs.join(' + ')});
   const len=days(t.s,t.e), ground=t.intl?len-2:len;
@@ -236,45 +242,54 @@ function conflicts(t){
 }
 
 function render(){
-  const today=S(new Date());
+  const today=S(new Date()), vis=trips.filter(visible);
   let h='';
   for(let i=0;i<11;i++){
     const y=2026+(i>4?1:0), m=(7+i)%12, nd=new Date(y,m+1,0).getDate();
-    const pc=100/nd, mS=S(new Date(y,m,1)), mE=S(new Date(y,m,nd));
-    h+='<div class="mo"><div class="mlab">'+MN[m].slice(0,3)+'<i>'+y+'</i></div><div class="track">';
+    const lead=new Date(y,m,1).getDay(), weeks=Math.ceil((lead+nd)/7);
+    h+='<div class="m"><div class="mh">'+MN[m]+' <span>'+y+'</span></div>'
+      +'<div class="dow"><div class="we">S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div class="we">S</div></div>';
 
-    h+='<div class="nums" style="grid-template-columns:repeat('+nd+',1fr)">';
-    for(let d=1;d<=nd;d++){
-      const dt=new Date(y,m,d), k=S(dt), w=dt.getDay();
-      h+='<div class="'+(k===today?'tdy':(w===0||w===6?'we':''))+'">'+d+'</div>';
+    for(let w=0; w<weeks; w++){
+      h+='<div class="wk">';
+      const cells=[];
+      for(let c=0;c<7;c++){
+        const dn=w*7+c-lead+1;
+        if(dn<1||dn>nd){ cells.push(null); h+='<div class="dc out">.</div>'; continue; }
+        const dt=new Date(y,m,dn), k=S(dt), cl=['dc'];
+        if(c===0||c===6) cl.push('we');
+        if(rotAt(k)) cl.push('rot');
+        if(HOLIDAYS[k]) cl.push('hol');
+        if(FIXED.some(f=>f.d===k)) cl.push('fx');
+        if(k===today) cl.push('tdy');
+        const tip=[k]; if(HOLIDAYS[k]) tip.push(HOLIDAYS[k]);
+        FIXED.filter(f=>f.d===k).forEach(f=>tip.push(f.name));
+        const r=rotAt(k); if(r) tip.push(r.name);
+        cells.push(k);
+        h+='<div class="'+cl.join(' ')+'" title="'+tip.join(' · ')+'">'+dn+'</div>';
+      }
+      // trip bars for this week
+      let bars='';
+      vis.forEach(t=>{
+        let c0=-1, c1=-1;
+        cells.forEach((k,c)=>{ if(k&&k>=t.s&&k<=t.e){ if(c0<0)c0=c; c1=c; } });
+        if(c0<0) return;
+        const cl=['tb',t.status];
+        if(sel===t.id) cl.push('sel');
+        if(cells[c0]===t.s) cl.push('s');
+        if(cells[c1]===t.e) cl.push('e');
+        bars+='<div class="'+cl.join(' ')+'" data-t="'+t.id+'" title="'+t.name+' · '+fmt(D(t.s))+'–'+fmt(D(t.e))+'"'
+          +' style="left:calc('+(c0*100/7)+'% + 2px);width:calc('+((c1-c0+1)*100/7)+'% - 4px)">'
+          +'<span>'+t.flag+'</span><span class="nm">'+t.name+'</span></div>';
+      });
+      h+='<div class="bars">'+bars+'</div></div>';
     }
-    h+='</div><div class="lane">';
 
-    const m1=new Date(y,m,1), mN=new Date(y,m,nd);
-    ROTATIONS.forEach(r=>{
-      if(r.e<mS||r.s>mE) return;
-      const a=D(r.s)>m1?D(r.s):m1, b=D(r.e)<mN?D(r.e):mN;
-      const L=(a.getDate()-1)*pc, W=(Math.round((b-a)/864e5)+1)*pc;
-      h+='<div class="rotband" style="left:'+L+'%;width:'+W+'%"><span>'+(r.s>=mS?r.name:'')+'</span></div>';
-    });
-
-    FIXED.forEach(f=>{ if(f.d>=mS&&f.d<=mE)
-      h+='<div class="fixtick'+(f.hard?' hard':'')+'" style="left:'+((D(f.d).getDate()-.5)*pc)+'%" title="'+f.name+'"></div>'; });
-
-    trips.filter(visible).forEach(t=>{
-      if(t.e<mS||t.s>mE) return;
-      const a=D(t.s)>m1?D(t.s):m1, b=D(t.e)<mN?D(t.e):mN;
-      const L=(a.getDate()-1)*pc, W=(Math.round((b-a)/864e5)+1)*pc;
-      const cls=['tripbar',t.status]; if(sel===t.id) cls.push('sel');
-      if(t.s<mS) cls.push('cont'); if(t.e>mE) cls.push('cont2');
-      h+='<div class="'+cls.join(' ')+'" data-t="'+t.id+'" style="left:'+L+'%;width:'+W+'%" '
-        +'title="'+t.name+' · '+fmt(D(t.s))+'–'+fmt(D(t.e))+'">'
-        +'<span>'+t.flag+'</span><span class="nm">'+t.name+'</span>'
-        +'<span class="dy">'+days(t.s,t.e)+'d</span></div>';
-    });
-    h+='</div></div></div>';
+    const mS=S(new Date(y,m,1)), mE=S(new Date(y,m,nd));
+    const rs=ROTATIONS.filter(r=>!(r.e<mS||r.s>mE)).map(r=>r.name);
+    h+='<div class="mrot">'+(rs.length?rs.join(' · '):'&nbsp;')+'</div></div>';
   }
-  document.getElementById('tl').innerHTML=h;
+  document.getElementById('cal').innerHTML=h;
 
   const live=trips.filter(t=>t.status!=='dropped'&&t.status!=='open');
   const away=live.reduce((n,t)=>n+days(t.s,t.e),0);
@@ -294,8 +309,7 @@ function render(){
     ? all.map(c=>'<div data-t="'+c.id+'"><b>'+c.name+'</b> — '+c.msg+'</div>').join('')
     : '<div class="ok">Nothing clashes. Every trip clears its fixed commitments.</div>');
 
-  document.getElementById('been').innerHTML =
-    '<h3>Been there — '+BEEN.length+' places</h3>'
+  document.getElementById('been').innerHTML='<h3>Been there — '+BEEN.length+' places</h3>'
     + BEEN.map(b=>'<div class="beenrow"><b>'+b.flag+' '+b.place+'</b>'
         +'<i>'+b.when+(b.who?' · with '+b.who:'')+'</i>'
         +(b.did?'<p>'+b.did+'</p>':'')+'</div>').join('');
@@ -304,13 +318,13 @@ function render(){
 
 function panel(){
   const p=document.getElementById('panel'), t=trips.find(x=>x.id===sel);
-  if(!t){ p.innerHTML='<div class="empty">Pick a bar.<br><br>Move it with ← →, stretch it with shift+← →. Day counts, leave needed and the conflict list all recompute live. Changes stay in this browser; Reset puts everything back.</div>'; return; }
+  if(!t){ p.innerHTML='<div class="empty">Pick a trip.<br><br>Move it with ← →, stretch it with shift+← →. Day counts, leave needed and the conflict list all recompute live. Changes stay in this browser; Reset puts everything back.</div>'; return; }
   const len=days(t.s,t.e), n=daysOff(t);
   p.innerHTML='<h2>'+t.flag+' '+t.name+'</h2>'
     +'<div class="when">'+fmt(D(t.s))+' – '+fmt(D(t.e))+', '+D(t.e).getFullYear()+'</div>'
     +'<div class="row"><span>Length</span><b>'+len+' days'+(t.intl?' ('+(len-2)+' on the ground)':'')+'</b></div>'
     +'<div class="row"><span>Days off needed</span><b>'+(n||'none')+'</b></div>'
-    +(t.who?'<div class="row"><span>'+(t.status==='open'?'Status':'With')+'</span><b>'+t.who+'</b></div>':'')
+    +(t.who?'<div class="row"><span>'+(t.status==='open'||t.status==='maybe'?'Status':'With')+'</span><b>'+t.who+'</b></div>':'')
     +conflicts(t).map(c=>'<div class="warn '+(c.lvl==='bad'?'bad':c.lvl==='good'?'good':'')+'">'+c.msg+'</div>').join('')
     +'<div class="note">'+t.note+'</div>'
     +'<div class="nudge">move <button data-mv="-1">‹</button><button data-mv="1">›</button>'
