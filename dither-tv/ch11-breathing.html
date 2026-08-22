@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ch11 — breathing</title>
 <style>
   html, body { margin: 0; padding: 0; background: #0a0a0c; overflow: hidden; height: 100%; }
@@ -17,6 +18,13 @@
 
   const canvas = document.getElementById('screen');
 
+  // Deterministic hooks for headless verification. Screenshot timing is not
+  // reproducible on its own, so ?t= freezes the breath at an exact point in
+  // the cycle and the rest select a starting state.
+  //   ?t=1.7&algo=atkinson&mode=1
+  const Q = new URLSearchParams(location.search);
+  const FROZEN_T = Q.has('t') ? parseFloat(Q.get('t')) : null;
+
   function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -24,110 +32,202 @@
   resize();
   window.addEventListener('resize', resize);
 
-  const D = Dither.create({ canvas, width: 480, height: 270, algo: 'bayer8' });
+  const D = Dither.create({
+    canvas, width: 480, height: 270,
+    algo: Q.get('algo') || 'bluenoise',
+    tooth: 0.05,
+  });
   const ctx = D.ctx;
   const W = D.width, H = D.height;
-  const cx = W / 2, cy = H / 2;
-  const baseRadius = Math.min(W, H) * 0.46;
+  const CX = W / 2, CY = H / 2;
+  const CORNER = Math.sqrt(CX * CX + CY * CY) * 1.06;
+  const ARC_R = Math.min(CX, CY) * 0.88;
 
-  function easeInOutSine(t) {
-    return -(Math.cos(Math.PI * t) - 1) / 2;
+  // --- easing ---------------------------------------------------------
+  // active inspiration ramps and plateaus; passive expiration is elastic
+  // recoil, so it decays exponentially rather than symmetrically
+  function smoother(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  const DECAY_K = 3;
+  const DECAY_E = Math.exp(-DECAY_K);
+  function passiveDecay(t) {
+    return (Math.exp(-DECAY_K * t) - DECAY_E) / (1 - DECAY_E);
   }
 
-  // resting respiratory rate: ~12 breaths/min, physiologic asymmetry
-  const NORMAL_PHASES = [
-    { name: 'inhale', dur: 2.0, from: 0, to: 1, ease: easeInOutSine },
-    { name: 'hold1', dur: 0.2, value: 1 },
-    { name: 'exhale', dur: 2.3, from: 1, to: 0, ease: easeInOutSine },
-    { name: 'hold2', dur: 0.5, value: 0 },
+  // --- breath modes ---------------------------------------------------
+  const MODES = [
+    {
+      name: 'natural  ~12/min',
+      phases: [
+        { dur: 1.7, v: smoother },
+        { dur: 0.2, v: function () { return 1; } },
+        { dur: 2.5, v: passiveDecay },
+        { dur: 0.6, v: function () { return 0; } },
+      ],
+    },
+    {
+      name: 'box  4-4-4-4',
+      phases: [
+        { dur: 4, v: smoother },
+        { dur: 4, v: function () { return 1; } },
+        { dur: 4, v: function (t) { return 1 - smoother(t); } },
+        { dur: 4, v: function () { return 0; } },
+      ],
+    },
+    {
+      name: '4-7-8',
+      phases: [
+        { dur: 4, v: smoother },
+        { dur: 7, v: function () { return 1; } },
+        { dur: 8, v: passiveDecay },
+      ],
+    },
+    {
+      name: 'coherent  5.5',
+      phases: [
+        { dur: 5.5, v: smoother },
+        { dur: 5.5, v: function (t) { return 1 - smoother(t); } },
+      ],
+    },
   ];
-  const BOX_PHASES = [
-    { name: 'inhale', dur: 4, from: 0, to: 1, ease: easeInOutSine },
-    { name: 'hold1', dur: 4, value: 1 },
-    { name: 'exhale', dur: 4, from: 1, to: 0, ease: easeInOutSine },
-    { name: 'hold2', dur: 4, value: 0 },
-  ];
 
-  function cycleTotal(phases) {
-    return phases.reduce((s, p) => s + p.dur, 0);
-  }
-  const NORMAL_TOTAL = cycleTotal(NORMAL_PHASES);
-  const BOX_TOTAL = cycleTotal(BOX_PHASES);
-
-  let boxMode = false;
-
-  function breathAt(tSec) {
-    const phases = boxMode ? BOX_PHASES : NORMAL_PHASES;
-    const total = boxMode ? BOX_TOTAL : NORMAL_TOTAL;
-    const tm = tSec % total;
+  MODES.forEach(function (m) {
+    m.total = m.phases.reduce(function (s, p) { return s + p.dur; }, 0);
     let acc = 0;
-    for (const p of phases) {
-      if (tm < acc + p.dur) {
-        const local = (tm - acc) / p.dur;
-        const b = p.value !== undefined ? p.value : p.from + (p.to - p.from) * p.ease(local);
-        return { b, cycleProgress: tm / total };
+    m.bounds = m.phases.map(function (p) {
+      acc += p.dur;
+      return acc / m.total;
+    });
+  });
+
+  let modeIndex = Math.min(MODES.length - 1, Math.max(0, parseInt(Q.get('mode') || '0', 10) || 0));
+  // breath runs off the wall clock, not accumulated frame deltas — a
+  // throttled or skipped frame must not slow the breath down. Switching
+  // modes restarts the cycle from its own epoch.
+  let phaseEpoch = performance.now();
+
+  function breathAt(t) {
+    const m = MODES[modeIndex];
+    const tm = ((t % m.total) + m.total) % m.total;
+    let acc = 0;
+    for (let i = 0; i < m.phases.length; i++) {
+      const p = m.phases[i];
+      if (tm < acc + p.dur || i === m.phases.length - 1) {
+        return { b: p.v((tm - acc) / p.dur), progress: tm / m.total };
       }
       acc += p.dur;
     }
-    return { b: 0, cycleProgress: 0 };
+    return { b: 0, progress: 0 };
   }
 
-  // idle tracking for the 10-minute fade to black (except the red arc)
-  const IDLE_FADE_START_MS = 10 * 60 * 1000;
-  const IDLE_FADE_DURATION_MS = 30 * 1000;
+  // --- idle fade ------------------------------------------------------
+  const FADE_START_MS = 10 * 60 * 1000;
+  const FADE_DUR_MS = 45 * 1000;
   let lastInteraction = performance.now();
 
+  const FORCED_FADE = Q.has('fade') ? parseFloat(Q.get('fade')) : null;
+
   function fadeFactor(now) {
+    if (FORCED_FADE !== null) return FORCED_FADE;
     const idle = now - lastInteraction;
-    if (idle <= IDLE_FADE_START_MS) return 1;
-    const t = (idle - IDLE_FADE_START_MS) / IDLE_FADE_DURATION_MS;
-    return Math.max(0, 1 - t);
+    if (idle <= FADE_START_MS) return 1;
+    return Math.max(0, 1 - (idle - FADE_START_MS) / FADE_DUR_MS);
   }
 
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'd' || e.key === 'D') {
+  // --- input ----------------------------------------------------------
+  window.addEventListener('keydown', function (e) {
+    const k = e.key.toLowerCase();
+    if (k === 'd') {
       D.cycleAlgo();
       lastInteraction = performance.now();
-    } else if (e.key === 'b' || e.key === 'B') {
-      boxMode = !boxMode;
-      D.flashLabel(boxMode ? 'box breathing 4-4-4-4' : 'natural breathing', 1500);
+    } else if (k === 'b') {
+      modeIndex = (modeIndex + 1) % MODES.length;
+      phaseEpoch = performance.now();
+      D.flashLabel(MODES[modeIndex].name, 1800);
       lastInteraction = performance.now();
     }
   });
 
-  const start = performance.now();
+  // --- render ---------------------------------------------------------
+  const RING_COUNT = 4.0;
+  const RING_AMP = 0.44;
+  const STOPS = 64;
 
   function frame(now) {
-    const tSec = (now - start) / 1000;
-    const { b, cycleProgress } = breathAt(tSec);
+    const tSec = FROZEN_T === null ? now / 1000 : FROZEN_T;
+    const breath = breathAt(FROZEN_T === null ? (now - phaseEpoch) / 1000 : FROZEN_T);
+    const b = breath.b;
     const fade = fadeFactor(now);
+
+    // the grain itself condenses on inhale and dissolves on exhale —
+    // this is on top of the luminance change, not instead of it
+    D.setBias(0.03 - 0.07 * b);
+    D.setTooth(0.012 * fade);
 
     ctx.save();
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
 
-    // whole scene scales 98% -> 100% with the breath
+    // slow Lissajous drift: imperceptible frame to frame, but keeps an
+    // unattended panel from burning a fixed image in over hours
+    const driftX = 5 * Math.sin(tSec * 0.017);
+    const driftY = 4 * Math.sin(tSec * 0.0113);
+    ctx.translate(driftX, driftY);
+
     const scale = 0.98 + 0.02 * b;
-    ctx.translate(cx, cy);
+    ctx.translate(CX, CY);
     ctx.scale(scale, scale);
-    ctx.translate(-cx, -cy);
+    ctx.translate(-CX, -CY);
 
-    // soft radial luminance field: brightens/expands on inhale, dims/contracts on exhale
-    const innerLum = Math.round((40 + 200 * b) * fade);
-    const radius = baseRadius * (0.55 + 0.55 * b);
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    grad.addColorStop(0, `rgb(${innerLum},${innerLum},${innerLum})`);
-    grad.addColorStop(0.6, `rgb(${Math.round(innerLum * 0.35)},${Math.round(innerLum * 0.35)},${Math.round(innerLum * 0.35)})`);
-    grad.addColorStop(1, 'rgb(0,0,0)');
+    // full-bleed luminance field: a soft core with a slow concentric
+    // standing wave, so the dither has structure to bite into instead of
+    // a featureless blur. Reaches the corners at peak inhale.
+    // density tops out well short of 1.0 on purpose — the field must always
+    // read as grain, never as a solid slab of ink
+    const spread = 0.30 + 0.45 * b;
+    const peak = (0.18 + 0.36 * b) * fade;
+    const ringPhase = b * 0.9 + tSec * 0.03;
+
+    const grad = ctx.createRadialGradient(CX, CY, 0, CX, CY, CORNER);
+    for (let i = 0; i <= STOPS; i++) {
+      const t = i / STOPS;
+      const core = Math.exp(-Math.pow(t / spread, 2) * 2.2);
+      const ring = 1 + RING_AMP * Math.sin(2 * Math.PI * (t * RING_COUNT - ringPhase));
+      let v = core * ring * peak;
+      v = Math.max(0, Math.min(1, v));
+      const g = Math.round(v * 255);
+      grad.addColorStop(t, 'rgb(' + g + ',' + g + ',' + g + ')');
+    }
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(-40, -40, W + 80, H + 80);
 
-    // thin red arc traces the screen edge, completing once per breath cycle
+    // --- red plate ---
+    const START = -Math.PI / 2;
+    const head = START + Math.PI * 2 * breath.progress;
     ctx.strokeStyle = '#ff3030';
+    ctx.fillStyle = '#ff3030';
+
+    // phase boundary ticks — silent guidance, no text needed
+    const bounds = MODES[modeIndex].bounds;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < bounds.length; i++) {
+      const a = START + Math.PI * 2 * bounds[i];
+      const ca = Math.cos(a), sa = Math.sin(a);
+      ctx.beginPath();
+      ctx.moveTo(CX + ca * (ARC_R - 5), CY + sa * (ARC_R - 5));
+      ctx.lineTo(CX + ca * (ARC_R + 5), CY + sa * (ARC_R + 5));
+      ctx.stroke();
+    }
+
+    // 3px so the screened red still reads as a line rather than a dashed gap
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(cx, cy, baseRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cycleProgress);
+    ctx.arc(CX, CY, ARC_R, START, head);
     ctx.stroke();
+
+    // leading head
+    ctx.beginPath();
+    ctx.arc(CX + Math.cos(head) * ARC_R, CY + Math.sin(head) * ARC_R, 3, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
 
