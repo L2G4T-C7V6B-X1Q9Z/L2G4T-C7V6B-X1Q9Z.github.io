@@ -250,11 +250,12 @@ function render(){
     }
     h+='</div><div class="lane">';
 
+    const m1=new Date(y,m,1), mN=new Date(y,m,nd);
     ROTATIONS.forEach(r=>{
       if(r.e<mS||r.s>mE) return;
-      const a=Math.max(D(r.s),D(new Date(y,m,1))), b=Math.min(D(r.e),D(new Date(y,m,nd)));
+      const a=D(r.s)>m1?D(r.s):m1, b=D(r.e)<mN?D(r.e):mN;
       const L=(a.getDate()-1)*pc, W=(Math.round((b-a)/864e5)+1)*pc;
-      h+='<div class="rotband" style="left:'+L+'%;width:'+W+'%"><span>'+(D(r.s)>=D(mS)?r.name:'')+'</span></div>';
+      h+='<div class="rotband" style="left:'+L+'%;width:'+W+'%"><span>'+(r.s>=mS?r.name:'')+'</span></div>';
     });
 
     FIXED.forEach(f=>{ if(f.d>=mS&&f.d<=mE)
@@ -262,10 +263,10 @@ function render(){
 
     trips.filter(visible).forEach(t=>{
       if(t.e<mS||t.s>mE) return;
-      const a=Math.max(D(t.s),D(new Date(y,m,1))), b=Math.min(D(t.e),D(new Date(y,m,nd)));
+      const a=D(t.s)>m1?D(t.s):m1, b=D(t.e)<mN?D(t.e):mN;
       const L=(a.getDate()-1)*pc, W=(Math.round((b-a)/864e5)+1)*pc;
       const cls=['tripbar',t.status]; if(sel===t.id) cls.push('sel');
-      if(D(t.s)<D(mS)) cls.push('cont'); if(D(t.e)>D(mE)) cls.push('cont2');
+      if(t.s<mS) cls.push('cont'); if(t.e>mE) cls.push('cont2');
       h+='<div class="'+cls.join(' ')+'" data-t="'+t.id+'" style="left:'+L+'%;width:'+W+'%" '
         +'title="'+t.name+' · '+fmt(D(t.s))+'–'+fmt(D(t.e))+'">'
         +'<span>'+t.flag+'</span><span class="nm">'+t.name+'</span>'
