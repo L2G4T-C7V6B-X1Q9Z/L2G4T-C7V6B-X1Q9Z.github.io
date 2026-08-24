@@ -1394,14 +1394,20 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
 const dayType = "Lower";
 
-// *** LOWER -- 15 SETS. Built Sun 8/23 ~20:30, right after the Upper export. ***
+// *** LOWER -- 18 SETS (was 15). Rebuilt Mon 8/24 00:10 on his call: "make the change". ***
+// *** LATERAL RAISES x3 ADDED TO LOWER -- side delts now train 2x/week (4 + 3 = 7 sets/wk). ***
+// The 8/23 physique read (his photos, his ask) put chest + side-delt width as the two
+// visible gaps, same as 6/27; width changes a silhouette fastest and 4 sets once a
+// week is a minimum dose, not a growth dose. Slot 4, after the face pulls, so the
+// shoulder work is contiguous; pair it with the leg curls if you want (non-competing).
+// Same load, same S1 cap at 12, same RIGHT-shoulder safety field as on Upper.
 // Rotation: Wed 8/19 L -> Thu 8/20 U -> Fri 8/21 L (UNLOGGED -- reported from the
 // gym floor 8/23, no export, reps unknown) -> Sun 8/23 U (done, 20 sets, 9,750 lb)
 // -> LOWER next. CONFIG SPLICE onto the live v8U engine; the workout array below
 // is VERBATIM from the previous LOWER BUILD (`git show 7533d9f:gym-timer.html`),
-// per Obs 435 -- never from a log table. *** SET TOTAL: 4+3+2+3+3 = 15. ***
+// per Obs 435 -- never from a log table, plus the LR block. *** SET TOTAL: 4+3+2+3+3+3 = 18. ***
 //
-// *** ALL FIVE WEIGHTS HOLD, BY DEFAULT RATHER THAN BY EVIDENCE. *** Friday's
+// *** ALL FIVE LEG/PULL WEIGHTS HOLD, BY DEFAULT RATHER THAN BY EVIDENCE. *** Friday's
 // Lower produced no numbers, so every "last time" in the notes below still
 // refers to 8/19. Nothing advances off a session nobody can read, and nothing
 // drops off it either. If he sends Friday's reps, the notes can be refreshed;
@@ -1485,6 +1491,26 @@ const workout = [
       "S1: elbows high, pull to the forehead, hard squeeze, slow return. 14 last time. Stop on a right-shoulder pinch.",
       "S2: strict form beats another rep. Need 20/20 with S1 at MOD or easier to earn 20 lb."
     ]
+  },
+  {
+    id: "db-lateral-raise",
+    muscles: ["side delts"],
+    name: "DB Lateral Raise",
+    short: "LAT RAISE",
+    sets: 3,
+    reps: "12-15",
+    weight: "15 lbs",
+    backoff: "10 lbs",
+    rest: 90,
+    safety: "RIGHT inner shoulder. Stop at the first pinch.",
+    note: "NEW ON LOWER (8/24, your call): second side-delt day, 3 SETS. Strict 15s, range 12-15. Lead with the elbows, raise to parallel and no higher -- the LEFT shoulder clicks above parallel, the RIGHT one is the live one. No swinging. STOP SET 1 AT 12. Sunday's Upper posted 27 total (7 at 15) -- if the shoulder said anything then, S1 here is the read.",
+    setNotes: [
+      "S1: *** STOP AT 12. *** Strict, to parallel. Opened at 7 on Sunday -- shoulder read first.",
+      "S2: no swing, slow negative. Backoff fires here if S1 fell short.",
+      "S3: last set. Strict form beats another rep."
+    ],
+    trigger: [15, 15, 15],
+    triggerWeight: "17.5 lbs"
   },
   {
     id: "lying-leg-curl",
@@ -7104,6 +7130,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-23 2B-lower v8U LOWER-FLIP2</div>
+<div class="build-stamp">prism &middot; 2026-08-24 2B-lower v8U LR-ADD</div>
 </body>
 </html>
