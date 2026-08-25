@@ -1392,164 +1392,163 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // ======================= CONFIG START =======================
 // The daily flip splices ONLY the fenced block (dayType + build note +
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
-const dayType = "Lower";
+const dayType = "Upper";
 
-// *** LOWER -- 18 SETS (was 15). Rebuilt Mon 8/24 00:10 on his call: "make the change". ***
-// *** LATERAL RAISES x3 ADDED TO LOWER -- side delts now train 2x/week (4 + 3 = 7 sets/wk). ***
-// The 8/23 physique read (his photos, his ask) put chest + side-delt width as the two
-// visible gaps, same as 6/27; width changes a silhouette fastest and 4 sets once a
-// week is a minimum dose, not a growth dose. Slot 4, after the face pulls, so the
-// shoulder work is contiguous; pair it with the leg curls if you want (non-competing).
-// Same load, same S1 cap at 12, same RIGHT-shoulder safety field as on Upper.
-// Rotation: Wed 8/19 L -> Thu 8/20 U -> Fri 8/21 L (UNLOGGED -- reported from the
-// gym floor 8/23, no export, reps unknown) -> Sun 8/23 U (done, 20 sets, 9,750 lb)
-// -> LOWER next. CONFIG SPLICE onto the live v8U engine; the workout array below
-// is VERBATIM from the previous LOWER BUILD (`git show 7533d9f:gym-timer.html`),
-// per Obs 435 -- never from a log table, plus the LR block. *** SET TOTAL: 4+3+2+3+3+3 = 18. ***
+// *** UPPER -- PHASE 2B VOLUME BLOCK, 21 SETS. Built Tue 8/25 00:50 at the Mon 8/24 close. ***
+// Rotation: Sun 8/23 U -> Mon 8/24 L (18 sets, 16,805 lb) -> UPPER next.
+// CONFIG SPLICE: engine is the LIVE v8U build from the 8/24 Lower (8b8ba63);
+// config read from the previous UPPER BUILD (`git show 13d6ab7:gym-timer.html`),
+// NOT from a log table -- Obs 435.
+// *** SET TOTAL: 4+5+2+3+4+3 = 21, asserted against the documented 21. ***
 //
-// *** ALL FIVE LEG/PULL WEIGHTS HOLD, BY DEFAULT RATHER THAN BY EVIDENCE. *** Friday's
-// Lower produced no numbers, so every "last time" in the notes below still
-// refers to 8/19. Nothing advances off a session nobody can read, and nothing
-// drops off it either. If he sends Friday's reps, the notes can be refreshed;
-// the weights would only move on a documented trigger, and none is on record.
+// *** ALL SIX WEIGHTS HOLD. *** 8/23 came back 20/20 MAX -- the THIRD consecutive
+// effort-saturated Upper. Nothing rebases off an all-MAX session.
+// 8/23: CP 10/6/7/7 (30) . Row 9/7/7/6/10 (39) . Incline 7 (one set) .
+// Pushdown 13/12/11 (36, best on record) . LR 7/7/7/6 (27) . Curls 10/8/6 (24).
 //
-// *** FACE PULLS STAY AT 15. *** The advance needs 20/20 with S1 <= MOD and no
-// shoulder signal, observed in an export. The last observed attempt (8/19) did
-// not meet it. Friday is unobserved. DO NOT BUILD THIS AT 20.
+// *** THE CHEST PRESS S1 RULE FIRED AND RESOLVED. 120 HOLDS, NO DROP TO 110. ***
+// Pre-registered 8/23 02:10: S1 >= 7 => the 8/20 five was a one-off, nothing changes.
+// 8/23 S1 = 10. Cleared it with margin. The rule is CLOSED; the warm-up cue stays
+// because it is cheap and it worked, not because the rule is still live.
 //
-// *** KNEE: the 90 degree cap is in the safety field AND all four leg-press
-// setNotes (Obs 389). It stays in every build. ***
+// *** NO TRUE-FAILURE ANCHOR THIS SESSION. It was TAKEN 8/23 after seven deferrals. ***
+// Next anchor = the FIRST UPPER OF SEPTEMBER. Do not take one tonight.
+// *** NEVER ASK HIM ABOUT SLEEP. The rest gate is first-set reps vs their median. ***
 //
-// *** SHOULDER WATCH carried from tonight's Upper: lateral raises fell 42 -> 27
-// with S1 opening at 7 against a 12 cap. Face pulls carry the RIGHT-shoulder
-// safety field -- if he reported a pinch tonight, treat the first pull set as
-// the read and stop on anything. ***
+// *** LATERAL RAISES ARE NOW ON BOTH DAYS -- 4 here + 3 on Lower = 7 sets/week. ***
+// 8/23 Upper posted 27 (7/7/7/6), down from 42 on 8/20, and that looked like a
+// shoulder problem. IT IS NOT. Mon 8/24 Lower ran LR S1 = 12 reps at 15 [MOD]
+// against 8/23's 7 at 15 [MAX] -- same load, +5 reps, two effort grades easier,
+// on fresh shoulders. The 8/23 collapse was POSITION (LR ran 5th behind CP, Row,
+// Incline and Pushdown), not the joint. Shoulder flag CLOSED. S1 cap of 12 stays.
 //
-// *** v8U PAIR FIX: still unconfirmed in the wild. Tonight's Upper reproduced
-// the orphan case (ROW5 after PRESS4, run next to INCLINE1) -- asked once. This
-// build reproduces it too: calf raises (3) drain before leg press (4). ***
-//
-// *** TRUE-FAILURE RIR ANCHOR: NOT eligible here (only machine compound is the
-// leg press, under an injury cap). Tonight's Upper gate PASSED for the first
-// time (CP S1 10, Row S1 9); whether S4 was actually taken to failure is asked
-// once. The gate is the rep log. NEVER ASK HIM ABOUT SLEEP. ***
+// *** WATCH: LR RUNS 5TH HERE AGAIN. *** If it posts under ~30 total while the
+// Lower-day LR stays near 29+, the fix is ORDER (move it earlier), not load.
+
 const workout = [
   {
-    id: "leg-press",
-    muscles: ["quads", "glutes"],
-    name: "Leg Press",
-    short: "LEG PRESS",
+    id: "chest-press",
+    muscles: ["chest", "front delts", "triceps"],
+    name: "Chest Press Machine",
+    short: "PRESS",
     sets: 4,
     reps: "8-12",
-    weight: "220 lbs",
-    backoff: "205 lbs",
+    weight: "120 lbs",
+    backoff: "100 lbs",
     rest: 150,
-    safety: "Stop at 90 degrees, never knees-to-chest. Sharp medial knee pain ENDS the session.",
-    note: "90° knee angle, NOT knees-to-chest. Stop the descent at 90°. Third session at 220 and it holds. 8/19 went 12 / 12 / 11 / 9 = 44, MOD/HARD/MAX/MAX -- S4 came back 7 -> 9, so the watch set is settled and the backoff stays where it is. Backoff is 205.",
+    note: "WARM UP FIRST: one easy set of ~8 at 80, then start the clock. Hold 120, run it FIRST while you are fresh. Full ROM, controlled descent to the chest, no elbow slam. Backoff is 100. *** The S1 rule CLEARED on 8/23 (S1 = 10, needed 7+). 120 holds, no drop to 110. NO failure anchor tonight -- it was taken 8/23; next one is the first Upper of September. ***",
     setNotes: [
-      "S1: 90° knee angle, NOT knees-to-chest. *** STOP AT 12 REPS *** -- 12 at MOD last time. Keep the cap.",
-      "S2: 90° knee angle, NOT knees-to-chest. Full rest first, same depth. 12 last time.",
-      "S3: 90° knee angle, NOT knees-to-chest. Stop at 90°. 11 last time -- the capped S1 buys this set.",
-      "S4: 90° knee angle, NOT knees-to-chest. Last one. 9 last time, up from 7. Do not chase depth for a rep."
+      "S1: after the 80 warm-up. Full ROM, controlled. Got 10 on 8/23 -- the S1 rule cleared, 120 holds.",
+      "S2: full 2.5-min rest first, same depth and tempo. 6 on 8/23 -- the drop fired here.",
+      "S3: drive through the mid-chest, no half reps. 7 on 8/23.",
+      "S4: last set, clean reps to a hard stop. 7 on 8/23. NO failure anchor tonight -- it was taken 8/23."
     ],
     trigger: [12, 12, 12, 12],
-    triggerWeight: "235 lbs"
+    triggerWeight: "130 lbs"
   },
   {
-    id: "leg-press-calf-raises",
-    muscles: ["calves"],
-    name: "Leg Press Calf Raises",
-    short: "CALF",
+    id: "cable-rope-row",
+    muscles: ["back", "biceps", "rear delts"],
+    name: "Cable Rope Row",
+    short: "ROW",
+    sets: 5,
+    reps: "8-12",
+    weight: "120 lbs",
+    backoff: "100 lbs",
+    rest: 150,
+    safety: "RIGHT inner shoulder. Stop at the first pinch.",
+    note: "Hold 120, 5 SETS (Phase 2B volume block). RUN THIS SECOND -- it is the pull that sits between your two presses. Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return, no jerking with the low back. Anchor gate half: S1 of 9+ passes.",
+    setNotes: [
+      "S1: pull to the waist, full stretch at the front. 9 on 8/23.",
+      "S2: elbows close, no torso heave. 7 on 8/23.",
+      "S3: controlled return, full stretch. 7 on 8/23.",
+      "S4: drive the elbows back, clean reps. 6 on 8/23 -- the drop fired here.",
+      "S5: last set, empty the tank. 10 at the backoff on 8/23."
+    ],
+    trigger: [12, 12, 12, 12, 12],
+    triggerWeight: "130 lbs"
+  },
+  {
+    id: "incline-press",
+    muscles: ["chest", "front delts", "triceps"],
+    name: "Incline Press",
+    short: "INCLINE",
+    sets: 2,
+    reps: "8-12",
+    weight: "70 lbs",
+    backoff: "60 lbs",
+    rest: 120,
+    safety: "STOP on ANY rotator-cuff pain. French-press history -- nothing gets pushed through.",
+    note: "Incline press MACHINE at 70. Seat at the incline setting, lower to the UPPER chest, elbows ~45 deg, press up and slightly back, controlled negative. Still staged at 2 sets until clean 12s. Best is 19 reps (8/20) vs 15 on 7/06 -- it is grooving. Only ONE set got logged 8/23 (7 reps); get both sets in tonight. DO NOT run this straight off the chest press.",
+    setNotes: [
+      "S1: lower to the UPPER chest, elbows ~45, controlled. 7 on 8/23 (only one set logged).",
+      "S2: same groove, controlled negative. 8/20 got 11 at the backoff -- beat that."
+    ],
+    trigger: [12, 12],
+    triggerWeight: "80 lbs"
+  },
+  {
+    id: "cable-tricep-pushdown",
+    muscles: ["triceps"],
+    name: "Cable Tricep Pushdown",
+    short: "PUSHDOWN",
     sets: 3,
     reps: "12-15",
-    weight: "145 lbs",
-    backoff: "130 lbs",
+    weight: "25 lbs",
+    backoff: "20 lbs",
     rest: 90,
-    safety: "Anything sharp in the knee is a KNEE signal. Stop, do not push through it.",
-    note: "Holds at 145. 8/19: 10 / 11@130 / 8@130 = 29, drop fired at S2 as designed. Same sled as the leg press, so stay on the machine. Ball of the foot, full stretch, no bounce.",
+    note: "Hold 25. Elbows pinned to the sides, full lockout at the bottom, control the negative -- no leaning into it or flaring the elbows. If the cable station is taken, FRENCH PRESS at 40 is the proven fallback (zero cuff pain).",
     setNotes: [
-      "S1: full stretch at the bottom, controlled all the way up. 10 last time, down from 12.",
-      "S2: ball of the foot, no bouncing out of the bottom. The drop has fired here three Lowers running.",
-      "S3: slow the negative, do not chase reps. 8 at 130 last time."
+      "S1: elbows pinned, full lockout. 13 on 8/23 -- best on record.",
+      "S2: control the negative, no body english. 12 on 8/23.",
+      "S3: last set, squeeze the lockout. 11 on 8/23. 36 total was the best pushdown session yet."
     ],
     trigger: [15, 15, 15],
-    triggerWeight: "160 lbs"
-  },
-  {
-    id: "cable-face-pulls",
-    muscles: ["rear-delts", "upper-back"],
-    name: "Cable Face Pulls",
-    short: "FACE PULL",
-    sets: 2,
-    reps: "15-20",
-    weight: "15 lbs",
-    backoff: "10 lbs",
-    rest: 90,
-    safety: "RIGHT shoulder is active. Stop at the first pinch -- do not push through it.",
-    note: "*** SLOT 3. TAKE THE CABLE WHILE IT IS FREE. *** Still holding 15 -- the advance did NOT trigger on 8/19 (14 @ 15 MAX, and the 20 only came after the drop). The bar is unchanged: 20/20 with S1 at MOD or easier and no shoulder signal, and it goes to 20 next build.",
-    setNotes: [
-      "S1: elbows high, pull to the forehead, hard squeeze, slow return. 14 last time. Stop on a right-shoulder pinch.",
-      "S2: strict form beats another rep. Need 20/20 with S1 at MOD or easier to earn 20 lb."
-    ]
+    triggerWeight: "30 lbs"
   },
   {
     id: "db-lateral-raise",
     muscles: ["side delts"],
     name: "DB Lateral Raise",
     short: "LAT RAISE",
-    sets: 3,
+    sets: 4,
     reps: "12-15",
     weight: "15 lbs",
     backoff: "10 lbs",
     rest: 90,
     safety: "RIGHT inner shoulder. Stop at the first pinch.",
-    note: "NEW ON LOWER (8/24, your call): second side-delt day, 3 SETS. Strict 15s, range 12-15. Lead with the elbows, raise to parallel and no higher -- the LEFT shoulder clicks above parallel, the RIGHT one is the live one. No swinging. STOP SET 1 AT 12. Sunday's Upper posted 27 total (7 at 15) -- if the shoulder said anything then, S1 here is the read.",
+    note: "Strict 15s, range 12-15, 4 SETS (Phase 2B). Lead with the elbows, raise to parallel and no higher -- the LEFT shoulder clicks above parallel, and the RIGHT one is the live one. No swinging. STOP SET 1 AT 12.",
     setNotes: [
-      "S1: *** STOP AT 12. *** Strict, to parallel. Opened at 7 on Sunday -- shoulder read first.",
-      "S2: no swing, slow negative. Backoff fires here if S1 fell short.",
-      "S3: last set. Strict form beats another rep."
+      "S1: *** STOP AT 12. *** Mon 8/24 hit the cap at 12 on fresh shoulders -- the joint is fine.",
+      "S2: no swing, slow negative. 7 on 8/23.",
+      "S3: keep it strict, stop at parallel. 7 on 8/23.",
+      "S4: last set. 27 total on 8/23 vs 29 on Mon 8/24 Lower -- beat 27, order is the variable."
     ],
-    trigger: [15, 15, 15],
+    trigger: [15, 15, 15, 15],
     triggerWeight: "17.5 lbs"
   },
   {
-    id: "lying-leg-curl",
-    muscles: ["hamstrings"],
-    name: "Lying Leg Curl",
-    short: "LEG CURL",
+    id: "db-curls",
+    muscles: ["biceps"],
+    name: "DB Curls (supinated)",
+    short: "CURLS",
     sets: 3,
     reps: "8-12",
-    weight: "40 lbs",
-    rest: 120,
-    noDropAdvice: true,
-    safety: "HARD STOP on ANY medial-thigh sensation -- not pain, ANY sensation. Rack it.",
-    note: "40 holds. SEVEN clean sessions running with ZERO medial-thigh sensation on the exercise with the recurrent nerve history. 8/19 gave 9 / 7 / 6 = 22, same as 8/13 -- it runs late, behind a heavy leg press, so read position before load. Volume-only growth here, never load.",
+    weight: "25 lbs",
+    backoff: "20 lbs",
+    rest: 90,
+    safety: "SUPINATED grip ONLY -- hammer twangs the nerve. Stop on a nerve twang, not a rep count.",
+    note: "Hold 25. Supinated is nerve-safe, so you CAN push these to failure -- the only stop is an actual twang, never a rep cap. Controlled, no swinging. NOT the anchor exercise -- the anchor is a machine compound.",
     setNotes: [
-      "S1: hips flat, pad low, slow negative. Any medial-thigh sensation and you rack it.",
-      "S2: same. 9 -> 7 last time. Slow the negative, take the reps you get.",
-      "S3: the set that earned its place. If anything reads medial, drop it rather than push."
-    ]
-  },
-  {
-    id: "leg-extension",
-    muscles: ["quads"],
-    name: "Leg Extension",
-    short: "LEG EXT",
-    sets: 3,
-    reps: "8-12",
-    weight: "60 lbs",
-    backoff: "50 lbs",
-    rest: 120,
-    note: "60 holds. 8/19: 8 / 10@50 / 7@50 = 25 with the drop firing at S2 -- and S2 came back to 10 after the 8/9 collapse to 5, so that watch is one clean session from closed. It runs late in the order, so 8-11 is the honest read at 60.",
-    setNotes: [
-      "S1: 8-11 is the honest read at 60. Opened 9 / 8 / 8 the last three Lowers.",
-      "S2: slow the negative rather than chasing an extra rep. The drop has fired here three Lowers running.",
-      "S3: form holds or the set ends. This one has stayed clean -- keep it that way."
+      "S1: controlled, no swing. 10 on 8/23.",
+      "S2: squeeze the top, slow negative. 8 on 8/23.",
+      "S3: last set, push it -- failure is fine supinated (never hammer). 6 on 8/23."
     ],
     trigger: [12, 12, 12],
-    triggerWeight: "70 lbs"
+    triggerWeight: "30 lbs"
   },
 ];
+// ======================== CONFIG END ========================
 // ======================== CONFIG END ========================
 
 // ============ §1.5 IDENTITY + PLAN HASH (v8) ============
@@ -7130,6 +7129,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-24 2B-lower v8U LR-ADD</div>
+<div class="build-stamp">prism &middot; 2026-08-25 2B-upper v8U UPPER-FLIP</div>
 </body>
 </html>
