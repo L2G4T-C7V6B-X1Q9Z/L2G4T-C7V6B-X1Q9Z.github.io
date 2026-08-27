@@ -1394,36 +1394,43 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // workout array). Everything below CONFIG END is the workout-agnostic engine.
 const dayType = "Upper";
 
-// *** UPPER -- PHASE 2B VOLUME BLOCK, 21 SETS. Built Tue 8/25 00:50 at the Mon 8/24 close. ***
-// Rotation: Sun 8/23 U -> Mon 8/24 L (18 sets, 16,805 lb) -> UPPER next.
-// CONFIG SPLICE: engine is the LIVE v8U build from the 8/24 Lower (8b8ba63);
-// config read from the previous UPPER BUILD (`git show 13d6ab7:gym-timer.html`),
-// NOT from a log table -- Obs 435.
+// *** UPPER -- PHASE 2B VOLUME BLOCK, 21 SETS. Built Thu 8/27 ~14:30, right after the 8/27 Upper. ***
+// Rotation: Wed 8/26 L ABORTED (knee, ep. 4) -> Thu 8/27 U DONE (29m05s, 21 sets, 12,195 lb).
+// Next in rotation is LOWER and it is BLOCKED by the knee re-entry gate (earliest Wed 9/2),
+// so the next session is UPPER again: at home Fri AM if he lifts before flying, otherwise
+// a hotel DB Upper in San Diego (Fri 8/28 pm -> Tue 9/1 pm) -- a TRAVEL build is owed for that.
+// CONFIG SPLICE: engine is the live v8U build (95351d3); config edited in place from that
+// build, NOT from a log table -- Obs 435.
 // *** SET TOTAL: 4+5+2+3+4+3 = 21, asserted against the documented 21. ***
 //
-// *** ALL SIX WEIGHTS HOLD. *** 8/23 came back 20/20 MAX -- the THIRD consecutive
-// effort-saturated Upper. Nothing rebases off an all-MAX session.
-// 8/23: CP 10/6/7/7 (30) . Row 9/7/7/6/10 (39) . Incline 7 (one set) .
-// Pushdown 13/12/11 (36, best on record) . LR 7/7/7/6 (27) . Curls 10/8/6 (24).
+// *** ALL SIX WEIGHTS HOLD. *** 8/27 came back 21/21 MAX -- effort-saturated again.
+// 8/27: CP 10/8/10@100/7@100 (35) . Row 12/11/8/9@100/8@100 (48, best row on record) .
+// Incline 11/7 at 70 (18, both at 70 -- best S1 at 70 on record) . Pushdown 11/12@20/11@20 (34) .
+// LR 12/12@10/6@10/6@10 (36) . Curls 10/6/5@20 (21).
 //
-// *** THE CHEST PRESS S1 RULE FIRED AND RESOLVED. 120 HOLDS, NO DROP TO 110. ***
-// Pre-registered 8/23 02:10: S1 >= 7 => the 8/20 five was a one-off, nothing changes.
-// 8/23 S1 = 10. Cleared it with margin. The rule is CLOSED; the warm-up cue stays
-// because it is cheap and it worked, not because the rule is still live.
+// *** LATERAL RAISE CAP FIX (8/27, Soren: "if you tell me to only do 12 then why is the ***
+// *** limit 15 and you drop me if I do 12?") -- HE WAS RIGHT. ***
+// The old note said STOP SET 1 AT 12. The range is 12-15, so 12 is the FLOOR, and
+// dropPredicate fires on (reps === floor && MAX). A set stopped at 12 by instruction and
+// rated MAX was indistinguishable from a set that FAILED at 12, so S2 dropped to 10 every
+// time he obeyed the note (8/24, 8/25, 8/27). The number 12 was transplanted from the LEG
+// PRESS cap, where the range is 8-12 and 12 is the TOP -- same number, opposite meaning.
+// FIX: the S1 stop is now 15 = the top of the range = the advance trigger. 12 at MAX now
+// means what the engine thinks it means. Decision table (changed rows marked *):
+//   S1 = 15               -> hold 15, counts toward the 17.5 trigger      * (was unreachable)
+//   S1 = 13-14 at MAX     -> hold 15, no drop                             * (was unreachable)
+//   S1 = 12 at MAX        -> drop to 10   (unchanged -- now a real failure read)
+//   S1 = 12 at MOD/HARD   -> hold 15      (unchanged)
+//   S1 < 12 at HARD/MAX   -> drop to 10   (unchanged)
+// The Lower-day LR carries the same defect ("S1 caps at 12") -- fix it in the next Lower build.
 //
-// *** NO TRUE-FAILURE ANCHOR THIS SESSION. It was TAKEN 8/23 after seven deferrals. ***
-// Next anchor = the FIRST UPPER OF SEPTEMBER. Do not take one tonight.
+// *** NO TRUE-FAILURE ANCHOR. Next anchor = the FIRST UPPER OF SEPTEMBER. ***
 // *** NEVER ASK HIM ABOUT SLEEP. The rest gate is first-set reps vs their median. ***
 //
-// *** LATERAL RAISES ARE NOW ON BOTH DAYS -- 4 here + 3 on Lower = 7 sets/week. ***
-// 8/23 Upper posted 27 (7/7/7/6), down from 42 on 8/20, and that looked like a
-// shoulder problem. IT IS NOT. Mon 8/24 Lower ran LR S1 = 12 reps at 15 [MOD]
-// against 8/23's 7 at 15 [MAX] -- same load, +5 reps, two effort grades easier,
-// on fresh shoulders. The 8/23 collapse was POSITION (LR ran 5th behind CP, Row,
-// Incline and Pushdown), not the joint. Shoulder flag CLOSED. S1 cap of 12 stays.
-//
-// *** WATCH: LR RUNS 5TH HERE AGAIN. *** If it posts under ~30 total while the
-// Lower-day LR stays near 29+, the fix is ORDER (move it earlier), not load.
+// *** ORDER QUESTION -- the evidence now says KEEP THIS ORDER. *** 8/25 ran isolation-first
+// and CP S1 fell 10 -> 7. 8/27 ran as built: CP S1 back to 10, Row 12/11/8 (best on record),
+// and LR STILL hit its cap in the 5th slot. The 8/23 LR collapse (7 in the 5th slot) did not
+// reproduce in the same slot, so position does not explain it. CP first stays.
 
 const workout = [
   {
@@ -1436,12 +1443,12 @@ const workout = [
     weight: "120 lbs",
     backoff: "100 lbs",
     rest: 150,
-    note: "WARM UP FIRST: one easy set of ~8 at 80, then start the clock. Hold 120, run it FIRST while you are fresh. Full ROM, controlled descent to the chest, no elbow slam. Backoff is 100. *** The S1 rule CLEARED on 8/23 (S1 = 10, needed 7+). 120 holds, no drop to 110. NO failure anchor tonight -- it was taken 8/23; next one is the first Upper of September. ***",
+    note: "WARM UP FIRST: one easy set of ~8 at 80, then start the clock. Hold 120, run it FIRST while fresh (1st = 10 on 8/27, 8th = 7 on 8/25). Full ROM, controlled descent, no elbow slam. Backoff is 100. NO failure anchor -- next is the first Upper of September.",
     setNotes: [
-      "S1: after the 80 warm-up. Full ROM, controlled. Got 10 on 8/23 -- the S1 rule cleared, 120 holds.",
-      "S2: full 2.5-min rest first, same depth and tempo. 6 on 8/23 -- the drop fired here.",
-      "S3: drive through the mid-chest, no half reps. 7 on 8/23.",
-      "S4: last set, clean reps to a hard stop. 7 on 8/23. NO failure anchor tonight -- it was taken 8/23."
+      "S1: after the 80 warm-up. Full ROM, controlled. 10 on 8/27 -- 120 holds.",
+      "S2: full 2.5-min rest first, same depth and tempo. 8 on 8/27 (up from 6) -- a 9 here keeps 120 for S3.",
+      "S3: drive through the mid-chest, no half reps. 10 at the backoff on 8/27.",
+      "S4: last set, clean reps to a hard stop. 7 at the backoff on 8/27. NO failure anchor."
     ],
     trigger: [12, 12, 12, 12],
     triggerWeight: "130 lbs"
@@ -1457,13 +1464,13 @@ const workout = [
     backoff: "100 lbs",
     rest: 150,
     safety: "RIGHT inner shoulder. Stop at the first pinch.",
-    note: "Hold 120, 5 SETS (Phase 2B volume block). RUN THIS SECOND -- it is the pull that sits between your two presses. Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return, no jerking with the low back. Anchor gate half: S1 of 9+ passes.",
+    note: "Hold 120, 5 SETS (Phase 2B volume block). RUN THIS SECOND -- it is the pull that sits between your two presses. Pull to the waist, elbows close, squeeze the shoulder blades, slow controlled return, no jerking with the low back. 8/27 = 12/11/8 at 120, best on record. 130 needs 12 on all five.",
     setNotes: [
-      "S1: pull to the waist, full stretch at the front. 9 on 8/23.",
-      "S2: elbows close, no torso heave. 7 on 8/23.",
-      "S3: controlled return, full stretch. 7 on 8/23.",
-      "S4: drive the elbows back, clean reps. 6 on 8/23 -- the drop fired here.",
-      "S5: last set, empty the tank. 10 at the backoff on 8/23."
+      "S1: pull to the waist, full stretch at the front. 12 on 8/27 -- the trigger top. Match it.",
+      "S2: elbows close, no torso heave. 11 on 8/27 -- one short of the trigger.",
+      "S3: controlled return, full stretch. 8 on 8/27 -- the drop fired here. A 9 holds 120.",
+      "S4: drive the elbows back, clean reps. 9 at the backoff on 8/27.",
+      "S5: last set, empty the tank. 8 at the backoff on 8/27. 48 total = best row on record."
     ],
     trigger: [12, 12, 12, 12, 12],
     triggerWeight: "130 lbs"
@@ -1479,10 +1486,10 @@ const workout = [
     backoff: "60 lbs",
     rest: 120,
     safety: "STOP on ANY rotator-cuff pain. French-press history -- nothing gets pushed through.",
-    note: "Incline press MACHINE at 70. Seat at the incline setting, lower to the UPPER chest, elbows ~45 deg, press up and slightly back, controlled negative. Still staged at 2 sets until clean 12s. Best is 19 reps (8/20) vs 15 on 7/06 -- it is grooving. Only ONE set got logged 8/23 (7 reps); get both sets in tonight. DO NOT run this straight off the chest press.",
+    note: "Incline press MACHINE at 70. Seat at the incline setting, lower to the UPPER chest, elbows ~45 deg, press up and slightly back, controlled negative. Still staged at 2 sets until clean 12s. 8/27 = 11/7, both at 70 -- best S1 at 70 on record, one short of the trigger. DO NOT run this straight off the chest press.",
     setNotes: [
-      "S1: lower to the UPPER chest, elbows ~45, controlled. 7 on 8/23 (only one set logged).",
-      "S2: same groove, controlled negative. 8/20 got 11 at the backoff -- beat that."
+      "S1: lower to the UPPER chest, elbows ~45, controlled. 11 on 8/27 -- a 12 here is half the trigger.",
+      "S2: same groove, controlled negative. 7 on 8/27 at 70."
     ],
     trigger: [12, 12],
     triggerWeight: "80 lbs"
@@ -1499,9 +1506,9 @@ const workout = [
     rest: 90,
     note: "Hold 25. Elbows pinned to the sides, full lockout at the bottom, control the negative -- no leaning into it or flaring the elbows. If the cable station is taken, FRENCH PRESS at 40 is the proven fallback (zero cuff pain).",
     setNotes: [
-      "S1: elbows pinned, full lockout. 13 on 8/23 -- best on record.",
-      "S2: control the negative, no body english. 12 on 8/23.",
-      "S3: last set, squeeze the lockout. 11 on 8/23. 36 total was the best pushdown session yet."
+      "S1: elbows pinned, full lockout. 11 on 8/27, 13 on 8/23 -- a 12 here holds 25 for S2.",
+      "S2: control the negative, no body english. 12 at the backoff on 8/27.",
+      "S3: last set, squeeze the lockout. 11 at the backoff on 8/27. Best session is still 8/23's 36."
     ],
     trigger: [15, 15, 15],
     triggerWeight: "30 lbs"
@@ -1517,12 +1524,12 @@ const workout = [
     backoff: "10 lbs",
     rest: 90,
     safety: "RIGHT inner shoulder. Stop at the first pinch.",
-    note: "Strict 15s, range 12-15, 4 SETS (Phase 2B). Lead with the elbows, raise to parallel and no higher -- the LEFT shoulder clicks above parallel, and the RIGHT one is the live one. No swinging. STOP SET 1 AT 12.",
+    note: "Strict 15s, range 12-15, 4 SETS (Phase 2B). Lead with the elbows, raise to parallel and no higher -- the LEFT shoulder clicks above parallel, and the RIGHT one is the live one. No swinging. STOP SET 1 AT 15, the TOP of the range -- not 12. (8/27 fix: 12 was the range FLOOR, so stopping there at MAX dropped you to 10. You were right.)",
     setNotes: [
-      "S1: *** STOP AT 12. *** Mon 8/24 hit the cap at 12 on fresh shoulders -- the joint is fine.",
-      "S2: no swing, slow negative. 7 on 8/23.",
-      "S3: keep it strict, stop at parallel. 7 on 8/23.",
-      "S4: last set. 27 total on 8/23 vs 29 on Mon 8/24 Lower -- beat 27, order is the variable."
+      "S1: *** STOP AT 15, not 12. *** 12 was the old cap and it sat on the range floor. 13-15 holds 15 for S2; 12 at MAX drops to 10.",
+      "S2: no swing, slow negative. 12 at the backoff on 8/27.",
+      "S3: keep it strict, stop at parallel. 6 at the backoff on 8/27.",
+      "S4: last set. 6 at the backoff on 8/27. 36 total on 8/27 vs 27 on 8/23."
     ],
     trigger: [15, 15, 15, 15],
     triggerWeight: "17.5 lbs"
@@ -1540,9 +1547,9 @@ const workout = [
     safety: "SUPINATED grip ONLY -- hammer twangs the nerve. Stop on a nerve twang, not a rep count.",
     note: "Hold 25. Supinated is nerve-safe, so you CAN push these to failure -- the only stop is an actual twang, never a rep cap. Controlled, no swinging. NOT the anchor exercise -- the anchor is a machine compound.",
     setNotes: [
-      "S1: controlled, no swing. 10 on 8/23.",
-      "S2: squeeze the top, slow negative. 8 on 8/23.",
-      "S3: last set, push it -- failure is fine supinated (never hammer). 6 on 8/23."
+      "S1: controlled, no swing. 10 on 8/27 and 8/23.",
+      "S2: squeeze the top, slow negative. 6 on 8/27 (8 on 8/23) -- the drop fired here.",
+      "S3: last set, push it -- failure is fine supinated (never hammer). 5 at the backoff on 8/27."
     ],
     trigger: [12, 12, 12],
     triggerWeight: "30 lbs"
@@ -3674,6 +3681,14 @@ function fitNoteToBox() {
   }
   elNote.style.fontSize = '8px';
   elNote.style.lineHeight = '1.15';
+}
+// JetBrains Mono arrives via Google Fonts with display=swap, so the first fit can
+// run against FALLBACK metrics and the real glyphs then reflow the card -- a note
+// fitted to the fallback overflows by a line once the font lands (8/27: the CP S1
+// note measured 66px in a 64px card, 700 ms after load, on text that had fit).
+// Refit once the font set settles. Guarded: no fonts API, no-op.
+if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(function () { try { fitNoteToBox(); } catch (e) {} });
 }
 
 function formatTime(seconds) {
@@ -7127,6 +7142,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-08-26 2B-upper v8U KNEE-HOLD</div>
+<div class="build-stamp">prism &middot; 2026-08-27 2B-upper v8U LR-CAP-FIX</div>
 </body>
 </html>
