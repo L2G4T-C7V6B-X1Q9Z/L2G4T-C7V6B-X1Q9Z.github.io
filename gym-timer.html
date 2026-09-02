@@ -1394,15 +1394,21 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // workout array). Everything below the end fence is the workout-agnostic engine.
 const dayType = "Upper";
 
-// *** UPPER -- PHASE 2B VOLUME BLOCK, 21 SETS. Built Tue 9/1 ~18:2x, right after the Lower re-entry. ***
+// *** UPPER -- PHASE 2B VOLUME BLOCK, NOW 25 SETS. Rebuilt Wed 9/2 ~19:3x on Soren's call ***
+// *** ("yeah build them in") off the jpshuru volume comparison: upper chest ran 5 sets/wk ***
+// *** vs his 14, and a stretch-loaded fly was the one thing his chest day had that this ***
+// *** one did not. TWO CHANGES, nothing else moves: INCLINE 2 -> 3 sets, + CHEST FLY x3 ***
+// *** (new slot 4, discovery). Abs go on the LOWER build (cable crunch, no ab bench).   ***
 // Rotation: Thu 8/27 U DONE (21 sets, 12,195 lb) -> SD trip 8/28-9/1, no lifts -> Tue 9/1
 // LOWER RE-ENTRY DONE (12m15s, 9 sets -- KNEE CLEAN: leg curl 12/10, leg ext 12/10, zero
 // medial signal; performed at 30/50 on 10-lb-increment machines while the timer logged the
 // configured 25/45, so the displayed 2,390 lb underreports ~2,610 actual). Next LOWER
-// re-adds LEG PRESS at 190 with the 90-degree cap, leg curl 30, leg ext 50.
-// CONFIG SPLICE: from the e7ed9e8 home Upper BUILD (Obs 435: prior build, never log tables),
-// onto the live engine (which carries the 9/1 selftest ledger-reset fix).
-// *** SET TOTAL: 4+5+2+3+4+3 = 21, asserted against the documented 21. ***
+// re-adds LEG PRESS at 190 with the 90-degree cap, leg curl 30, leg ext 50, + cable crunch x3.
+// CONFIG BASE: the live 2bc695c Upper build (Obs 435: prior build, never log tables); the
+// engine is untouched except SAFETY_REQUIRED gaining "chest-fly" (cuff + R shoulder history).
+// AUDIO: no fly clip exists in the ElevenLabs bank; "Chest Fly" is announced with
+// ex-rear-delt-flyes (the selftest refuses a silent exercise). Open item in the clip TODO.
+// *** SET TOTAL: 4+5+3+3+3+4+3 = 25, asserted against the documented 25. ***
 //
 // *** ALL SIX WEIGHTS HOLD (8/27 read: 21/21 MAX). ***
 // 8/27: CP 10/8/10@100/7@100 (35) . Row 12/11/8/9@100/8@100 (48, best row on record) .
@@ -1470,19 +1476,39 @@ const workout = [
     muscles: ["chest", "front delts", "triceps"],
     name: "Incline Press",
     short: "INCLINE",
-    sets: 2,
+    sets: 3,
     reps: "8-12",
     weight: "70 lbs",
     backoff: "60 lbs",
     rest: 120,
     safety: "STOP on ANY rotator-cuff pain. French-press history -- nothing gets pushed through.",
-    note: "Incline press MACHINE at 70. Seat at the incline setting, lower to the UPPER chest, elbows ~45 deg, press up and slightly back, controlled negative. Still staged at 2 sets until clean 12s. 8/27 = 11/7, both at 70 -- best S1 at 70 on record, one short of the trigger. DO NOT run this straight off the chest press.",
+    note: "Incline press MACHINE at 70. Seat at the incline setting, lower to the UPPER chest, elbows ~45 deg, press up and slightly back, controlled negative. NOW 3 SETS (your call 9/2 -- upper chest was running 5 sets/wk against jpshuru's 14; this is the cheapest of the gaps to close). 8/27 = 11/7 at 70, best S1 on record. DO NOT run this straight off the chest press.",
     setNotes: [
-      "S1: lower to the UPPER chest, elbows ~45, controlled. 11 on 8/27 -- a 12 here is half the trigger.",
-      "S2: same groove, controlled negative. 7 on 8/27 at 70."
+      "S1: lower to the UPPER chest, elbows ~45, controlled. 11 on 8/27 -- a 12 here is a third of the trigger.",
+      "S2: same groove, controlled negative. 7 on 8/27 at 70. Under 8 here means S3 runs at the 60 backoff.",
+      "S3: NEW third set. Whatever is left at 70 -- 5+ clean reps is a win on day one of 3 sets. Cuff rule still applies."
     ],
-    trigger: [12, 12],
+    trigger: [12, 12, 12],
     triggerWeight: "80 lbs"
+  },
+  {
+    id: "chest-fly",
+    muscles: ["chest"],
+    name: "Chest Fly",
+    short: "FLY",
+    sets: 3,
+    reps: "10-15",
+    weight: "15 lbs",
+    rest: 90,
+    noDropAdvice: true,
+    clip: "ex-rear-delt-flyes",
+    safety: "Cuff + RIGHT inner shoulder. Stop at the first pinch -- the bottom of the arc is where it loads.",
+    note: "NEW -- DISCOVERY SESSION (9/2). The stretch-loaded fly is the one thing jpshuru's chest day does that yours did not. 3 sets, 10-15. Confirmed kit: single-arm CABLE FLY on the row stack at 15/side -- slight forward lean, arm long with a soft elbow, let the cable pull the hand back past the body line, 3-sec negative, squeeze across the front. If the gym has a PEC DECK, use that instead at ~50 and log which. No backoff and no trigger tonight: move 5 either way off S1 and log what you settled on. The timer announces this one as rear delt flyes -- no fly clip exists yet.",
+    setNotes: [
+      "S1: find the weight. 15/side on the cable, or ~50 on a pec deck. Slow negative, feel the stretch, nothing through the cuff.",
+      "S2: at the weight S1 settled on. Long arm, hand past the body line at the bottom, 3-sec negative.",
+      "S3: last set, same weight. Log the number you used -- the next build carries it as the prescription."
+    ]
   },
   {
     id: "cable-tricep-pushdown",
@@ -5774,7 +5800,7 @@ window.addEventListener("orientationchange", () => setTimeout(centerMainButton, 
 // firing, and reads back what is on the screen.
 //
 // It restores whatever it disturbed and never writes localStorage.
-const SAFETY_REQUIRED = ["leg-press", "lying-leg-curl", "leg-press-calf-raises", "cable-rope-row", "db-lateral-raise", "cable-face-pulls"];
+const SAFETY_REQUIRED = ["leg-press", "lying-leg-curl", "leg-press-calf-raises", "cable-rope-row", "db-lateral-raise", "cable-face-pulls", "chest-fly"];
 
 // Latched ON for the whole page life, never cleared. The selftest drives the
 // REAL setDone()/skipRest(), which persist -- and those calls are also queued
@@ -7137,6 +7163,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-09-01 2B-upper v8U SEPT-ANCHOR</div>
+<div class="build-stamp">prism &middot; 2026-09-02 2B-upper v8U INC3+FLY</div>
 </body>
 </html>
