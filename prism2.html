@@ -263,7 +263,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02b';
+var BUILD = 'Prism II · 2026-09-02c';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -502,7 +502,7 @@ function renderSet(){
     else if(S.anchor.eligible===false){ adv.textContent='anchor deferred · '+S.anchor.why; }
   }
   var cue=$('set-cue'); cue.textContent=x.cue||''; cue.classList.toggle('show', cueOpen); $('set-cuebtn').classList.toggle('on', cueOpen);
-  repVal=(g&&g[d])?g[d].r:target(i); if(e.dropped&&g&&g[d]&&g[d].w!==w) repVal=target(i);
+  repVal=target(i);   // the stepper opens at the range top; he taps down from the max, never up to it
   $('rep-val').textContent=repVal;
   $('set-undo').disabled=!S.order.length;
   var pb=$('set-pair'); pb.textContent=partnerOf(i)!=null?'superset on':'superset ›'; pb.classList.toggle('on', partnerOf(i)!=null);
