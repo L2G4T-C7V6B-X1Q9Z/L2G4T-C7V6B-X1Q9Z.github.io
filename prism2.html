@@ -28,7 +28,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cu
 button:focus-visible,[tabindex]:focus-visible,textarea:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
 .num{font-variant-numeric:tabular-nums}
 
-.screen{position:fixed;inset:0;display:none;flex-direction:column;padding:calc(var(--sat) + 14px) 20px calc(var(--sab) + 14px);z-index:2}
+.screen{position:fixed;inset:0;display:none;flex-direction:column;padding:calc(var(--sat) + 14px) 20px max(var(--sab),14px);z-index:2}
 body[data-screen="launch"] #s-launch,body[data-screen="set"] #s-set,body[data-screen="rest"] #s-rest,body[data-screen="done"] #s-done{display:flex}
 #tank{position:fixed;inset:0;width:100vw;height:100dvh;z-index:1;image-rendering:pixelated;image-rendering:crisp-edges;opacity:0;transition:opacity .25s}
 body[data-screen="rest"] #tank{opacity:1}
@@ -164,7 +164,7 @@ textarea::placeholder{color:var(--ink3)}
 
 <section class="screen" id="s-launch" aria-label="Start">
   <div>
-    <div class="row"><span class="brand">Prism II</span><button class="eyebrow" id="menu-btn" aria-label="Menu">···</button></div>
+    <div class="row"><span class="brand">Prism II</span><button class="eyebrow" id="menu-btn">settings ›</button></div>
     <div class="day-hero">
       <div class="disp" id="l-day">UPPER</div>
       <div class="meta eyebrow" id="l-meta"></div>
@@ -263,7 +263,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02c';
+var BUILD = 'Prism II · 2026-09-02d';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -352,54 +352,87 @@ function reduced(){ return window.matchMedia && window.matchMedia('(prefers-redu
 /* ---------- the cue bank: the same clips the live timer plays, from audio/ ---------- */
 var WGT_CLIPS = ['10','12-5','15','17-5','20','22-5','25','27-5','30','32-5','35','40','45','50','55','60','65','70','75','80','85','90','95','100','105','110','115','120','125','130','135','140','145','150','200','215','220','235','250','265','280','295','310'];
 var Bank = (function(){
-  var AC=null, buf={}, pending={}, failed={}, cur=null, seqToken=0;
-  function ctx(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return AC; }
+  /* Ported from the live timer's VoiceCue, which is the only audio path proven on his phone:
+     fetch the bytes at load, but DECODE ONLY AFTER A REAL TAP on the context that tap created or
+     resumed; recover a closed/interrupted context on every gesture; keep the session 'ambient' so
+     the cues mix with his music instead of pausing it. A missing clip skips gap-free. */
+  var AC=null, gen=0, raw={}, buf={}, failed={}, fetching={}, unlocked=false, cur=[], sched=[], seqToken=0;
   function url(name){ return /\.wav$/.test(name) ? 'audio/'+name : 'audio/'+name+'.mp3'; }
-  function load(name){
-    if(buf[name]||pending[name]||failed[name]) return pending[name]||Promise.resolve();
-    var c=ctx(); if(!c){ failed[name]=1; return Promise.resolve(); }
-    pending[name]=fetch(url(name)).then(function(r){ if(!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-      .then(function(ab){ return new Promise(function(res,rej){ c.decodeAudioData(ab, res, rej); }); })
-      .then(function(b){ buf[name]=b; delete pending[name]; })
-      .catch(function(){ failed[name]=1; delete pending[name]; });
-    return pending[name];
-  }
-  function preload(names){ names.forEach(load); }
-  function unlock(){ var c=ctx(); if(c&&c.state==='suspended'){ try{ c.resume(); }catch(e){} } }
-  function play(name){
-    return new Promise(function(res){
-      if(!prefs.voice) return res();
-      var c=ctx(); if(!c) return res();
-      var go=function(){
-        var b=buf[name]; if(!b) return res();          // a missing clip skips gap-free
-        try{ var s=c.createBufferSource(); s.buffer=b; s.connect(c.destination); cur=s; s.onended=function(){ if(cur===s) cur=null; res(); }; s.start(); }
-        catch(e){ res(); }
-      };
-      if(buf[name]) go(); else if(pending[name]) pending[name].then(go); else { load(name).then(go); }
+  function prefetch(names){
+    names.forEach(function(n){
+      if(!n||raw[n]||fetching[n]||failed[n]) return; fetching[n]=1;
+      fetch(url(n)).then(function(r){ if(!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then(function(ab){ raw[n]=ab; delete fetching[n]; decodeOne(n); })
+        .catch(function(){ failed[n]=1; delete fetching[n]; });
     });
   }
-  function cancel(){ seqToken++; if(cur){ try{ cur.onended=null; cur.stop(); }catch(e){} cur=null; } }
+  function decodeOne(n){
+    if(!unlocked||!AC||buf[n]||!raw[n]) return;
+    var g=gen;
+    function attempt(retry){
+      try{ AC.decodeAudioData(raw[n].slice(0), function(b){ if(g===gen) buf[n]=b; }, function(){ if(retry && g===gen) attempt(false); }); }catch(e){}
+    }
+    attempt(true);
+  }
+  function recover(){
+    if(!AC || AC.state==='closed'){
+      if(AC){ try{ AC.close(); }catch(e){} }
+      AC=null;
+      try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+      gen++; buf={}; sched=[];
+      if(unlocked) Object.keys(raw).forEach(decodeOne);
+    }
+    if(AC.state==='suspended'||AC.state==='interrupted'){ try{ AC.resume().catch(function(){}); }catch(e){} }
+    try{ if('audioSession' in navigator) navigator.audioSession.type='ambient'; }catch(e){}
+  }
+  function unlock(){ recover(); if(!AC) return; if(!unlocked){ unlocked=true; Object.keys(raw).forEach(decodeOne); } }
+  function waitFor(n, ms){ return new Promise(function(res){ var t0=Date.now(); (function poll(){ if(buf[n]||failed[n]||Date.now()-t0>ms) return res(!!buf[n]); setTimeout(poll,50); })(); }); }
+  function play(n){
+    return new Promise(function(res){
+      if(!prefs.voice||!n) return res();
+      recover(); if(!AC||!unlocked) return res();
+      var my=seqToken;
+      waitFor(n,3000).then(function(ok){
+        if(!ok||my!==seqToken) return res();
+        try{ var s=AC.createBufferSource(); s.buffer=buf[n]; s.connect(AC.destination); cur.push(s);
+          s.onended=function(){ cur=cur.filter(function(x){ return x!==s; }); res(); }; s.start(); }
+        catch(e){ res(); }
+      });
+    });
+  }
+  function playAt(n, when){   // tones on the audio clock; false if the buffer is not ready yet
+    if(!prefs.voice||!AC||!buf[n]) return false;
+    try{ var s=AC.createBufferSource(); s.buffer=buf[n]; s.connect(AC.destination); s.start(when); sched.push(s); return true; }catch(e){ return false; }
+  }
+  function cancel(){ seqToken++; cur.forEach(function(s){ try{ s.onended=null; s.stop(); }catch(e){} }); cur=[]; }
+  function cancelScheduled(){ sched.forEach(function(s){ try{ s.stop(); }catch(e){} }); sched=[]; }
   function seq(names, gapMs){
-    cancel(); var my=++seqToken, gap=gapMs==null?80:gapMs;
-    var list=names.filter(Boolean), i=0;
+    cancel(); var my=++seqToken, gap=gapMs==null?80:gapMs, list=names.filter(Boolean), i=0;
     function step(){ if(my!==seqToken||i>=list.length) return; var n=list[i++]; play(n).then(function(){ if(my!==seqToken) return; setTimeout(step, gap); }); }
     step();
   }
-  function state(){ var n=Object.keys(buf).length, f=Object.keys(failed).length, p=Object.keys(pending).length; return {loaded:n, failed:f, pending:p}; }
-  return {load:load, preload:preload, unlock:unlock, play:play, seq:seq, cancel:cancel, state:state, has:function(n){ return !!buf[n]; }};
+  function stateInfo(){ return {raw:Object.keys(raw).length, decoded:Object.keys(buf).length, failed:Object.keys(failed).length, pending:Object.keys(fetching).length, unlocked:unlocked, ctx:AC?AC.state:'none'}; }
+  return {prefetch:prefetch, unlock:unlock, recover:recover, play:play, playAt:playAt, seq:seq, cancel:cancel, cancelScheduled:cancelScheduled,
+    now:function(){ return AC?AC.currentTime:0; }, state:function(){ return AC?AC.state:'none'; }, info:stateInfo};
 })();
 function wgtClip(w){ var slug=String(w).replace('.','-'); return WGT_CLIPS.indexOf(slug)>=0 ? 'wgt-'+slug : null; }
 function restClip(sec){ return ({180:'rest-3min',120:'rest-2min',90:'rest-90sec',60:'rest-60sec'})[sec]||null; }
 function setClip(idx, sets){ if(idx===0) return null; if(idx===sets-1) return 'final-set'; return ({1:'set-2',2:'set-3',3:'set-4'})[idx]||null; }
+function aimClip(x){ return ({'6-10':'cue-aim-6-10','8-12':'cue-aim-8-12','10-12':'cue-aim-10-12','12-15':'cue-aim-12-15','15-20':'cue-aim-15-20'})[x.lo+'-'+x.hi]||null; }
 function neededClips(){
   var names=['start-upper','start-lower','received','up-next','exercise-complete','final-exercise','final-set','set-2','set-3','set-4',
-    'rest-3min','rest-2min','rest-90sec','rest-60sec','30sec-remaining','10sec-remaining','countdown-5','countdown-4','countdown-3','countdown-2','countdown-1',
-    'rest-complete','workout-complete','sfx/go.wav'];
-  Object.keys(PLANS).forEach(function(d){ PLANS[d].forEach(function(x){ names.push(x.clip); [x.weight,x.backoff,x.next].forEach(function(w){ var c=w&&wgtClip(w); if(c&&names.indexOf(c)<0) names.push(c); }); }); });
+    'rest-3min','rest-2min','rest-90sec','rest-60sec','1min-remaining','30sec-remaining','workout-complete',
+    'cue-trigger-hit','cue-personal-record','cue-aim-6-10','cue-aim-8-12','cue-aim-10-12','cue-aim-12-15','cue-aim-15-20',
+    'sfx/tick.wav','sfx/go.wav'];
+  Object.keys(PLANS).forEach(function(d){ PLANS[d].forEach(function(x){ if(names.indexOf(x.clip)<0) names.push(x.clip); [x.weight,x.backoff,x.next].forEach(function(w){ var c=w&&wgtClip(w); if(c&&names.indexOf(c)<0) names.push(c); }); }); });
   return names;
 }
-Bank.preload(neededClips());
-function audioLabel(){ var s=Bank.state(); return s.pending? 'loading '+s.loaded+'/'+(s.loaded+s.pending+s.failed) : (s.failed? s.loaded+' clips · '+s.failed+' missing' : s.loaded+' clips ready'); }
+Bank.prefetch(neededClips());
+function audioLabel(){
+  var s=Bank.info();
+  if(!s.unlocked) return s.pending ? 'fetching '+s.raw+' · tap start for sound' : s.raw+' fetched · tap start for sound';
+  return s.decoded+' ready'+(s.pending?' · '+s.pending+' loading':'')+(s.failed?' · '+s.failed+' missing':'')+' · '+s.ctx;
+}
 
 /* ---------- wake lock ---------- */
 function wake(){ if(!('wakeLock' in navigator)) return; try{ navigator.wakeLock.request('screen').catch(function(){}); }catch(e){} }
@@ -525,8 +558,10 @@ function logSet(){
   var nxEx=ex(nx), switching=nx!==i, isFinalEx=true; for(var k=0;k<planFor(S.day).length;k++){ if(k!==nx && remaining(k)>0) isFinalEx=false; }
   /* the cue sequence, in the live timer's own order */
   var cues=['received'];
+  if(entry.pr) cues.push('cue-personal-record');
+  var lx=S.logs[x.id]; if(switching && lx.length===x.sets && lx.every(function(e){ return e.r>=x.hi && e.w>=S.exs[i].w; })) cues.push('cue-trigger-hit');
   if(paired){ cues.push('up-next', nxEx.clip); if(S.exs[nx].dropped&&S.exs[nx].droppedAt===doneCount(nx)) cues.push(wgtClip(nxEx.backoff)); }
-  else if(switching){ cues.push('exercise-complete', isFinalEx?'final-exercise':'up-next', nxEx.clip, wgtClip(curWeight(nx))); }
+  else if(switching){ cues.push('exercise-complete', isFinalEx?'final-exercise':'up-next', nxEx.clip, wgtClip(curWeight(nx)), aimClip(nxEx)); }
   else if(dropFired){ cues.push(wgtClip(x.backoff)); }
   cues.push(restClip(rest));
   S.cur.ex=nx; startRest(rest); Bank.seq(cues);
@@ -534,7 +569,7 @@ function logSet(){
 function undo(){
   if(!S.order.length) return;
   if(S.phase==='rest') endRest(false);
-  Bank.cancel();
+  Bank.cancel(); Bank.cancelScheduled();
   var i=S.order.pop(), x=ex(i), l=S.logs[x.id]; l.pop();
   if(S.exs[i].dropped && S.exs[i].droppedAt===l.length+1) S.exs[i].dropped=false;
   if(S.anchorTakenOn===x.id && l.length<x.sets){ S.anchor.taken=false; S.anchorTakenOn=null; }
@@ -560,22 +595,29 @@ function startRest(sec){
 function endRest(auto){
   if(tickTimer){ clearInterval(tickTimer); tickTimer=null; }
   S.phase='set'; save();
-  if(auto){ flash(); var i=S.cur.ex; Bank.seq(['sfx/go.wav','rest-complete', setClip(doneCount(i), ex(i).sets)], 60); }
-  else Bank.cancel();   // he tapped it; he knows
+  if(auto){ flash(); var i=S.cur.ex; var sc=setClip(doneCount(i), ex(i).sets); if(sc) Bank.seq([sc]); }   // the GO tone is already on the audio clock
+  else { Bank.cancel(); Bank.cancelScheduled(); }   // he tapped it; he knows
   renderSet();
 }
+var tailKey=null;
 function tick(){
   if(!S||S.phase!=='rest') return;
   var left=S.restEndsAt-Date.now(), c=$('count'); c.textContent=fmtClock(left);
   var hot=left<=10000; c.classList.toggle('hot',hot); document.body.classList.toggle('hot',hot);
   drawTank(Math.max(0,left)/S.restTotal, hot);
   var s=Math.ceil(left/1000);
+  if(s===60&&!spoke.t60&&S.restTotal>=120000){ spoke.t60=1; Bank.seq(['1min-remaining']); }
   if(s===30&&!spoke.t30&&S.restTotal>=60000){ spoke.t30=1; Bank.seq(['30sec-remaining']); }
-  if(s===10&&!spoke.t10){ spoke.t10=1; Bank.seq(['10sec-remaining']); }
-  if(s>=1&&s<=5&&!spoke['c'+s]){ spoke['c'+s]=1; Bank.seq(['countdown-'+s]); }
+  /* the live timer's countdown: three ticks and a GO tone on the audio clock, no voice */
+  if(left>0 && left<=4600 && tailKey!==S.restEndsAt && Bank.state()==='running'){
+    var t0=Bank.now()+left/1000, ok=true;
+    [3,2,1].forEach(function(n){ var when=t0-n; if(when<Bank.now()-0.05) return; if(!Bank.playAt('sfx/tick.wav', when)) ok=false; });
+    if(!Bank.playAt('sfx/go.wav', t0)) ok=false;
+    if(ok) tailKey=S.restEndsAt; else Bank.cancelScheduled();
+  }
   if(left<=0) endRest(true);
 }
-function plus30(){ S.restEndsAt+=30000; S.restTotal+=30000; delete spoke.t30; delete spoke.t10; for(var s=1;s<=5;s++) delete spoke['c'+s]; save(); tick(); toast('+30'); }
+function plus30(){ Bank.cancelScheduled(); tailKey=null; S.restEndsAt+=30000; S.restTotal+=30000; delete spoke.t60; delete spoke.t30; save(); tick(); toast('+30'); }
 function flash(){ if(reduced()) return; var f=$('flash'); f.classList.add('on'); setTimeout(function(){ f.classList.remove('on'); }, 60); }
 
 var tank=$('tank'), tctx=tank.getContext('2d'), CELL=4, BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
@@ -648,8 +690,10 @@ function start(){
   var fresh=!S; if(fresh) newSession(launchDay);
   if(S.phase==='rest'){ setScreen('rest'); sizeTank(); if(tickTimer) clearInterval(tickTimer); tickTimer=setInterval(tick,250); tick(); }
   else if(S.phase==='done'){ finish(); }
-  else { var nx=nextSlot(); if(nx==null){ finish(); return; } S.cur.ex=nx; renderSet(); if(fresh) Bank.seq([S.day==='Upper'?'start-upper':'start-lower', ex(nx).clip, wgtClip(curWeight(nx))]); }
+  else { var nx=nextSlot(); if(nx==null){ finish(); return; } S.cur.ex=nx; renderSet(); if(fresh) Bank.seq([S.day==='Upper'?'start-upper':'start-lower', ex(nx).clip, wgtClip(curWeight(nx)), aimClip(ex(nx))]); }
 }
+/* every tap is a gesture iOS will honour: recover the context on all of them */
+document.addEventListener('click', function(){ Bank.recover(); }, true);
 
 /* ---------- sheet ---------- */
 function openSheet(html){ $('sheet').innerHTML=html; $('sheet').classList.add('open'); $('scrim').classList.add('on'); }
@@ -660,14 +704,15 @@ function listSheet(){
   for(var i=0;i<p.length;i++){ var d=doneCount(i), dots=''; for(var s=0;s<p[i].sets;s++) dots+='<i class="'+(s<d?'done':(i===S.cur.ex&&s===d?'cur':''))+'"></i>';
     html+='<div class="li'+(i===S.cur.ex?' cur':'')+'"><span><b>'+p[i].name+'</b><br><span class="faint">'+fmtW(curWeight(i))+' lb · '+p[i].lo+'–'+p[i].hi+(partnerOf(i)!=null?' · ⇄ '+ex(partnerOf(i)).short:'')+'</span></span><span class="dots">'+dots+'</span>'+(remaining(i)>0&&i!==S.cur.ex?'<button data-act="jump" data-i="'+i+'">go</button>':'<span></span>')+'</div>'; }
   html+='<div style="margin-top:12px"><textarea class="note" id="sheet-note" placeholder="Note for the log (goes into the summary)">'+esc(S.note||'')+'</textarea></div>';
-  html+='<div class="row" style="margin-top:12px"><button class="act" data-act="finish">finish early</button><span class="faint">'+BUILD+'</span></div>';
+  html+='<div class="row" style="margin-top:12px"><button class="act" data-act="finish">finish early</button><button class="act" data-act="settings">settings</button></div>';
   openSheet(html);
 }
 function menuSheet(){
   var st=Bank.state();
   var html='<div class="row" style="margin-bottom:6px"><span class="eyebrow">Prism II</span><button class="eyebrow" data-act="close">close</button></div>';
   html+='<div class="tog"><span class="eyebrow">Voice cues</span><button class="pill '+(prefs.voice?'on':'')+'" data-act="voice">'+(prefs.voice?'ON':'OFF')+'</button></div>';
-  html+='<div class="tog"><span class="eyebrow">Clips</span><span class="num">'+st.loaded+' ready'+(st.failed?' · '+st.failed+' missing':'')+'</span></div>';
+  html+='<div class="tog"><span class="eyebrow">Clips</span><span class="num">'+audioLabel()+'</span></div>';
+  html+='<div class="tog"><span class="eyebrow">Test sound</span><button class="pill" data-act="testsound">play</button></div>';
   html+='<div class="tog"><span class="eyebrow">Sessions in history</span><span class="num">'+history.length+'</span></div>';
   html+='<div class="tog"><span class="eyebrow">Abandon current session</span><button class="pill" data-act="abandon">'+(S&&!S.finished?'abandon':'none')+'</button></div>';
   html+='<div class="tog"><span class="eyebrow">Clear history</span><button class="pill" data-act="clear">tap twice</button></div>';
@@ -679,9 +724,11 @@ $('sheet').addEventListener('input', function(ev){ if(ev.target&&ev.target.id===
 $('sheet').addEventListener('click', function(ev){
   var b=ev.target.closest('button'); if(!b) return; var act=b.getAttribute('data-act');
   if(act==='close') closeSheet();
+  else if(act==='settings'){ menuSheet(); }
   else if(act==='jump'){ var i=+b.getAttribute('data-i'); if(S.phase==='rest') endRest(false); S.cur.ex=i; S.phase='set'; save(); renderSet(); closeSheet(); }
   else if(act==='finish'){ closeSheet(); finish(); }
   else if(act==='voice'){ prefs.voice=!prefs.voice; lsSet(K.prefs,prefs); if(!prefs.voice) Bank.cancel(); menuSheet(); if(document.body.getAttribute('data-screen')==='launch') renderLaunch(launchDay); }
+  else if(act==='testsound'){ Bank.unlock(); Bank.seq(['received','sfx/go.wav']); toast(Bank.state()); }
   else if(act==='abandon'){ if(S&&!S.finished){ Bank.cancel(); lsDel(K.session); S=null; closeSheet(); renderLaunch(); toast('session abandoned'); } }
   else if(act==='clear'){ if(!clearArmed){ clearArmed=true; b.textContent='sure?'; setTimeout(function(){clearArmed=false;},2500); } else { history=SEED.slice(); lsSet(K.history,history); clearArmed=false; menuSheet(); toast('history reset to the seed'); } }
 });
