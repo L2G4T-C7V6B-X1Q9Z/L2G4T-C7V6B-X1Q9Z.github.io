@@ -138,6 +138,9 @@ body.hot .go{background:var(--red);border-color:var(--red);color:#fff}
 textarea{width:100%;background:var(--bg2);color:var(--ink);border:1px solid var(--line);border-radius:6px;font:13px/1.45 var(--mono);padding:10px;resize:none;-webkit-user-select:text;user-select:text}
 textarea.export{height:110px;color:var(--ink2);font-size:12px}
 textarea.note{height:72px}
+textarea.inline{flex:1 1 auto;min-height:64px;margin:10px 0 8px;background:rgba(23,24,27,.78);color:var(--ink);font-size:14px;line-height:1.45}
+.set-head{flex:0 0 auto}
+.rest-top{flex:0 0 auto}
 textarea::placeholder{color:var(--ink3)}
 
 /* sheet */
@@ -202,6 +205,7 @@ textarea::placeholder{color:var(--ink3)}
       <div class="cue" id="set-cue"></div>
     </div>
   </div>
+  <textarea class="inline" id="set-note" placeholder="notes for the log: what you actually loaded, order changes, anything for Claude"></textarea>
   <div class="controls">
     <div class="minor">
       <button id="set-undo">‹ undo last</button>
@@ -218,14 +222,15 @@ textarea::placeholder{color:var(--ink3)}
 </section>
 
 <section class="screen" id="s-rest" aria-label="Rest">
-  <div>
+  <div class="rest-top">
     <div class="rest-head">
       <span class="eyebrow" id="rest-lbl">Rest</span>
       <span style="display:flex;gap:18px"><button class="eyebrow" id="rest-menubtn">settings</button><button class="eyebrow" id="rest-listbtn">list ›</button></span>
     </div>
+    <div class="strip" id="rest-strip" style="margin-top:10px"></div>
     <div class="count num" id="count">2:30</div>
   </div>
-  <div class="next">
+  <div class="next rest-top">
     <div class="nl"><span class="n" id="rest-exname">Chest Press</span><span class="eyebrow num" id="rest-idx"></span></div>
     <div class="big">
       <span class="disp num" id="rest-weight">120</span><span class="unit">lb</span>
@@ -233,6 +238,7 @@ textarea::placeholder{color:var(--ink3)}
     </div>
     <div class="advice num" id="rest-advice"></div>
   </div>
+  <textarea class="inline" id="rest-note" placeholder="notes for the log: what you actually loaded, order changes, anything for Claude"></textarea>
   <div class="controls">
     <div class="minor"><button id="rest-undo">‹ undo last</button><span id="rest-logged"></span></div>
     <div class="rest-ctl">
@@ -269,7 +275,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02g';
+var BUILD = 'Prism II · 2026-09-02h';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -548,8 +554,11 @@ function renderSet(){
   $('rep-val').textContent=repVal;
   $('set-undo').disabled=!S.order.length;
   var pb=$('set-pair'); pb.textContent=partnerOf(i)!=null?'⇄ '+ex(partnerOf(i)).short:'superset ›'; pb.classList.toggle('on', partnerOf(i)!=null);
-  setScreen('set'); clockTick();
+  syncNotes(); setScreen('set'); clockTick();
 }
+/* one session note, editable from the set screen, the rest screen, the list sheet and the finish screen */
+function syncNotes(){ var v=(S&&S.note)||''; ['set-note','rest-note','d-note','sheet-note'].forEach(function(id){ var el=$(id); if(el && el.value!==v && document.activeElement!==el) el.value=v; }); }
+['set-note','rest-note'].forEach(function(id){ $(id).addEventListener('input', function(){ if(S){ S.note=$(id).value; save(); } }); });
 /* session clock in the header, and a weight override sheet for the current exercise */
 function clockTick(){ if(!S||S.finished) return; var t=fmtClock(Date.now()-S.startedAt); $('set-daylbl').innerHTML='<b>'+S.day.toUpperCase()+'</b> · '+todayLbl()+' · '+t; if(S.phase==='rest') $('rest-lbl').textContent='rest · '+fmtClock(S.restTotal)+' · '+t; }
 setInterval(clockTick, 1000);
@@ -584,7 +593,12 @@ function logSet(){
   if(entry.pr) cues.push('cue-personal-record');
   var lx=S.logs[x.id]; if(switching && lx.length===x.sets && lx.every(function(e){ return e.r>=x.hi && e.w>=S.exs[i].w; })) cues.push('cue-trigger-hit');
   if(paired){ cues.push('up-next', nxEx.clip); if(S.exs[nx].dropped&&S.exs[nx].droppedAt===doneCount(nx)) cues.push(wgtClip(nxEx.backoff)); }
-  else if(switching){ cues.push('exercise-complete', isFinalEx?'final-exercise':'up-next', nxEx.clip, wgtClip(curWeight(nx)), aimClip(nxEx)); }
+  else if(switching){
+    /* no rest timer on an exercise change (his call 9/2: the walk to the next station is the rest) --
+       straight to the next exercise's first set, with the arrival cues */
+    cues.push('exercise-complete', isFinalEx?'final-exercise':'up-next', nxEx.clip, wgtClip(curWeight(nx)), aimClip(nxEx));
+    S.cur.ex=nx; S.phase='set'; save(); renderSet(); toast('logged '+r+' @ '+fmtW(w)); Bank.seq(cues); return;
+  }
   else if(dropFired){ cues.push(wgtClip(x.backoff)); }
   cues.push(restClip(rest));
   S.cur.ex=nx; startRest(rest); Bank.seq(cues);
@@ -612,6 +626,7 @@ function startRest(sec){
   if(S.exs[i].dropped&&d>0){ adv.classList.add('drop'); adv.textContent='↓ '+fmtW(x.backoff)+' · set '+S.exs[i].droppedAt+' was '+S.exs[i].droppedReps; }
   else { var g=ghost(i); adv.textContent=(g&&g[d])?('last time '+g[d].r+(g[d].w!==x.weight?' at '+fmtW(g[d].w):'')):(x.discovery?'find the weight':''); }
   document.body.classList.remove('hot');
+  renderStrip($('rest-strip')); syncNotes();
   setScreen('rest'); sizeTank(); tick();
   if(tickTimer) clearInterval(tickTimer); tickTimer=setInterval(tick, 250);
 }
@@ -745,7 +760,7 @@ function menuSheet(){
   html+='<div class="faint" style="margin-top:12px;font-size:11px;line-height:1.5">'+BUILD+'. Same cue bank as the live timer, played from audio/. Tap Start once so the phone allows sound. The app asks for a wake lock so the clock keeps running with the phone in your pocket.</div>';
   openSheet(html);
 }
-$('sheet').addEventListener('input', function(ev){ if(ev.target&&ev.target.id==='sheet-note'&&S){ S.note=ev.target.value; save(); } });
+$('sheet').addEventListener('input', function(ev){ if(ev.target&&ev.target.id==='sheet-note'&&S){ S.note=ev.target.value; save(); syncNotes(); } });
 $('sheet').addEventListener('click', function(ev){
   var b=ev.target.closest('button'); if(!b) return; var act=b.getAttribute('data-act');
   if(act==='close') closeSheet();
@@ -782,7 +797,7 @@ $('set-weight').addEventListener('click', weightSheet);
 $('rest-undo').addEventListener('click', undo);
 $('rest-plus').addEventListener('click', plus30);
 $('rest-go').addEventListener('click', function(){ endRest(false); });
-$('d-note').addEventListener('input', function(){ if(S){ S.note=$('d-note').value; $('d-export').value=buildExport().text; if(S.committed&&!DEMO){ history[history.length-1].note=S.note; lsSet(K.history,history); } } });
+$('d-note').addEventListener('input', function(){ if(S){ S.note=$('d-note').value; syncNotes(); $('d-export').value=buildExport().text; if(S.committed&&!DEMO){ history[history.length-1].note=S.note; lsSet(K.history,history); } } });
 $('d-copy').addEventListener('click', function(){ var t=$('d-export').value; if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){toast('copied');}).catch(function(){ $('d-export').select(); toast('select + copy'); }); } else { $('d-export').select(); toast('select + copy'); } });
 $('d-new').addEventListener('click', function(){ S=null; renderLaunch(); });
 window.addEventListener('resize', function(){ if(S&&S.phase==='rest'){ sizeTank(); tick(); } });
