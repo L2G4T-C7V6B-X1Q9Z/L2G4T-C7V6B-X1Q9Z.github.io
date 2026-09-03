@@ -182,7 +182,7 @@ textarea::placeholder{color:var(--ink3)}
   <div class="set-head">
     <div class="row">
       <button class="eyebrow" id="set-daylbl"><b>UPPER</b></button>
-      <button class="eyebrow" id="set-listbtn">list ›</button>
+      <span style="display:flex;gap:18px"><button class="eyebrow" id="set-menubtn">settings</button><button class="eyebrow" id="set-listbtn">list ›</button></span>
     </div>
     <div class="strip" id="set-strip"></div>
     <div class="exname">
@@ -218,7 +218,7 @@ textarea::placeholder{color:var(--ink3)}
   <div>
     <div class="rest-head">
       <span class="eyebrow" id="rest-lbl">Rest</span>
-      <button class="eyebrow" id="rest-listbtn">list ›</button>
+      <span style="display:flex;gap:18px"><button class="eyebrow" id="rest-menubtn">settings</button><button class="eyebrow" id="rest-listbtn">list ›</button></span>
     </div>
     <div class="count num" id="count">2:30</div>
   </div>
@@ -263,7 +263,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02d';
+var BUILD = 'Prism II · 2026-09-02e';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -738,7 +738,7 @@ $('scrim').addEventListener('click', closeSheet);
 $('l-start').addEventListener('click', start);
 $('l-switch').addEventListener('click', function(){ renderLaunch(launchDay==='Upper'?'Lower':'Upper'); });
 $('l-voice').addEventListener('click', function(){ prefs.voice=!prefs.voice; lsSet(K.prefs,prefs); if(!prefs.voice) Bank.cancel(); renderLaunch(launchDay); });
-$('menu-btn').addEventListener('click', menuSheet);
+$('menu-btn').addEventListener('click', menuSheet); $('set-menubtn').addEventListener('click', menuSheet); $('rest-menubtn').addEventListener('click', menuSheet);
 $('set-listbtn').addEventListener('click', listSheet); $('rest-listbtn').addEventListener('click', listSheet);
 $('set-daylbl').addEventListener('click', listSheet); $('set-exname').addEventListener('click', listSheet);
 $('set-tag').addEventListener('click', function(){ safetyOpen=!safetyOpen; renderSet(); });
