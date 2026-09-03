@@ -269,7 +269,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02f';
+var BUILD = 'Prism II · 2026-09-02g';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -731,7 +731,7 @@ function listSheet(){
   for(var i=0;i<p.length;i++){ var d=doneCount(i), dots=''; for(var s=0;s<p[i].sets;s++) dots+='<i class="'+(s<d?'done':(i===S.cur.ex&&s===d?'cur':''))+'"></i>';
     html+='<div class="li'+(i===S.cur.ex?' cur':'')+'"><span><b>'+p[i].name+'</b><br><span class="faint">'+fmtW(curWeight(i))+' lb · '+p[i].lo+'–'+p[i].hi+(partnerOf(i)!=null?' · ⇄ '+ex(partnerOf(i)).short:'')+'</span></span><span class="dots">'+dots+'</span>'+(remaining(i)>0&&i!==S.cur.ex?'<button data-act="jump" data-i="'+i+'">go</button>':'<span></span>')+'</div>'; }
   html+='<div style="margin-top:12px"><textarea class="note" id="sheet-note" placeholder="Note for the log (goes into the summary)">'+esc(S.note||'')+'</textarea></div>';
-  html+='<div class="row" style="margin-top:12px"><button class="act" data-act="finish">finish early</button><button class="act" data-act="settings">settings</button></div>';
+  html+='<div class="row" style="margin-top:12px"><button class="act" data-act="finish">finish early · saves</button><button class="act" data-act="settings">settings</button></div>';
   openSheet(html);
 }
 function menuSheet(){
@@ -741,12 +741,10 @@ function menuSheet(){
   html+='<div class="tog"><span class="eyebrow">Clips</span><span class="num">'+audioLabel()+'</span></div>';
   html+='<div class="tog"><span class="eyebrow">Test sound</span><button class="pill" data-act="testsound">play</button></div>';
   html+='<div class="tog"><span class="eyebrow">Sessions in history</span><span class="num">'+history.length+'</span></div>';
-  html+='<div class="tog"><span class="eyebrow">Abandon current session</span><button class="pill" data-act="abandon">'+(S&&!S.finished?'abandon':'none')+'</button></div>';
-  html+='<div class="tog"><span class="eyebrow">Clear history</span><button class="pill" data-act="clear">tap twice</button></div>';
+  html+='<div class="tog"><span class="eyebrow">Discard this workout<br><span class="faint" style="text-transform:none;letter-spacing:0">nothing saved · past sessions untouched</span></span><button class="pill" data-act="abandon">'+(S&&!S.finished?'discard':'none')+'</button></div>';
   html+='<div class="faint" style="margin-top:12px;font-size:11px;line-height:1.5">'+BUILD+'. Same cue bank as the live timer, played from audio/. Tap Start once so the phone allows sound. The app asks for a wake lock so the clock keeps running with the phone in your pocket.</div>';
   openSheet(html);
 }
-var clearArmed=false;
 $('sheet').addEventListener('input', function(ev){ if(ev.target&&ev.target.id==='sheet-note'&&S){ S.note=ev.target.value; save(); } });
 $('sheet').addEventListener('click', function(ev){
   var b=ev.target.closest('button'); if(!b) return; var act=b.getAttribute('data-act');
@@ -760,8 +758,9 @@ $('sheet').addEventListener('click', function(ev){
   else if(act==='voice'){ prefs.voice=!prefs.voice; lsSet(K.prefs,prefs); if(!prefs.voice) Bank.cancel(); menuSheet(); if(document.body.getAttribute('data-screen')==='launch') renderLaunch(launchDay); }
   else if(act==='testsound'){ Bank.unlock(); Bank.seq(['received','sfx/go.wav']); toast(Bank.state()); }
   else if(act==='abandon'){ if(S&&!S.finished){ Bank.cancel(); lsDel(K.session); S=null; closeSheet(); renderLaunch(); toast('session abandoned'); } }
-  else if(act==='clear'){ if(!clearArmed){ clearArmed=true; b.textContent='sure?'; setTimeout(function(){clearArmed=false;},2500); } else { history=SEED.slice(); lsSet(K.history,history); clearArmed=false; menuSheet(); toast('history reset to the seed'); } }
 });
+/* maintenance only, never a button: ?reset=history puts past sessions back to the seed */
+if(/[?&]reset=history/.test(location.search) && !DEMO){ history=SEED.slice(); lsSet(K.history,history); lsDel(K.session); setTimeout(function(){ toast('past sessions reset to the seed'); }, 300); }
 $('scrim').addEventListener('click', closeSheet);
 
 /* ---------- wiring ---------- */
