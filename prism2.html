@@ -211,11 +211,11 @@ textarea::placeholder{color:var(--ink3)}
       <div class="cue" id="set-cue"></div>
     </div>
   </div>
-  <textarea class="inline" id="set-note" placeholder="notes for the log: what you actually loaded, order changes, anything for Claude"></textarea>
   <div class="controls">
     <div class="minor">
       <button id="set-undo">‹ undo last</button>
       <button id="set-cuebtn">cue</button>
+      <button id="set-notebtn">note</button>
       <button id="set-pair">superset ›</button>
     </div>
     <div class="stepper">
@@ -244,9 +244,8 @@ textarea::placeholder{color:var(--ink3)}
     </div>
     <div class="advice num" id="rest-advice"></div>
   </div>
-  <textarea class="inline" id="rest-note" placeholder="notes for the log: what you actually loaded, order changes, anything for Claude"></textarea>
   <div class="controls">
-    <div class="minor"><button id="rest-undo">‹ undo last</button><span id="rest-logged"></span></div>
+    <div class="minor"><button id="rest-undo">‹ undo last</button><button id="rest-notebtn">note</button><span id="rest-logged"></span></div>
     <div class="rest-ctl">
       <button class="btn quiet" id="rest-plus">+30</button>
       <button class="btn go" id="rest-go">Go now</button>
@@ -281,7 +280,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02i';
+var BUILD = 'Prism II · 2026-09-02j';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -577,8 +576,13 @@ repScroll.addEventListener('scroll', function(){
   clearTimeout(repTimer); repTimer=setTimeout(function(){ var j=Math.round(repScroll.scrollLeft/REP_W); if(j!==repVal){ repVal=Math.max(0,Math.min(REP_MAX,j)); paintRep(); } }, 120);
 }, {passive:true});
 /* one session note, editable from the set screen, the rest screen, the list sheet and the finish screen */
-function syncNotes(){ var v=(S&&S.note)||''; ['set-note','rest-note','d-note','sheet-note'].forEach(function(id){ var el=$(id); if(el && el.value!==v && document.activeElement!==el) el.value=v; }); }
-['set-note','rest-note'].forEach(function(id){ $(id).addEventListener('input', function(){ if(S){ S.note=$(id).value; save(); } }); });
+function syncNotes(){ var v=(S&&S.note)||''; ['d-note','sheet-note'].forEach(function(id){ var el=$(id); if(el && el.value!==v && document.activeElement!==el) el.value=v; }); var has=!!(S&&S.note&&S.note.trim()); ['set-notebtn','rest-notebtn'].forEach(function(id){ var b=$(id); if(b){ b.textContent=has?'note ●':'note'; b.classList.toggle('on', has); } }); }
+function noteSheet(){
+  var html='<div class="row" style="margin-bottom:8px"><span class="eyebrow">Note for the log</span><button class="eyebrow" data-act="close">done</button></div>';
+  html+='<textarea class="note" id="sheet-note" style="height:120px" placeholder="what you actually loaded, order changes, anything for Claude">'+esc((S&&S.note)||'')+'</textarea>';
+  openSheet(html); setTimeout(function(){ var t=$('sheet-note'); if(t){ t.focus(); t.setSelectionRange(t.value.length,t.value.length); } }, 60);
+}
+$('set-notebtn').addEventListener('click', noteSheet); $('rest-notebtn').addEventListener('click', noteSheet);
 /* session clock in the header, and a weight override sheet for the current exercise */
 function clockTick(){ if(!S||S.finished) return; var t=fmtClock(Date.now()-S.startedAt); $('set-daylbl').innerHTML='<b>'+S.day.toUpperCase()+'</b> · '+todayLbl()+' · '+t; if(S.phase==='rest') $('rest-lbl').textContent='rest · '+fmtClock(S.restTotal)+' · '+t; }
 setInterval(clockTick, 1000);
