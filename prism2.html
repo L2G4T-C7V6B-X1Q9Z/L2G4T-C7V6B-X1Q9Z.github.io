@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Prism II">
 <meta name="theme-color" content="#111214">
+<link rel="apple-touch-icon" href="prism2-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
@@ -168,6 +169,7 @@ textarea::placeholder{color:var(--ink3)}
     <div class="day-hero">
       <div class="disp" id="l-day">UPPER</div>
       <div class="meta eyebrow" id="l-meta"></div>
+      <div class="ghost num" id="l-last"></div>
     </div>
     <div class="exlist" id="l-list"></div>
   </div>
@@ -192,9 +194,10 @@ textarea::placeholder{color:var(--ink3)}
     </div>
     <div class="safety" id="set-safety"></div>
     <div class="hero">
-      <div class="w"><span class="disp num" id="set-weight">120</span><span class="unit">lb</span><span class="from" id="set-from"></span></div>
+      <div class="w"><button class="disp num" id="set-weight" aria-label="Change weight">120</button><span class="unit">lb</span><span class="from" id="set-from"></span></div>
       <div class="t"><span class="arrow">→</span><span class="disp num" id="set-target">12</span><span class="range num" id="set-range"></span></div>
       <div class="ghost num" id="set-ghost"></div>
+      <div class="ghost num" id="set-now"></div>
       <div class="advice" id="set-advice"></div>
       <div class="cue" id="set-cue"></div>
     </div>
@@ -230,9 +233,12 @@ textarea::placeholder{color:var(--ink3)}
     </div>
     <div class="advice num" id="rest-advice"></div>
   </div>
-  <div class="rest-ctl">
-    <button class="btn quiet" id="rest-plus">+30</button>
-    <button class="btn go" id="rest-go">Go now</button>
+  <div class="controls">
+    <div class="minor"><button id="rest-undo">‹ undo last</button><span id="rest-logged"></span></div>
+    <div class="rest-ctl">
+      <button class="btn quiet" id="rest-plus">+30</button>
+      <button class="btn go" id="rest-go">Go now</button>
+    </div>
   </div>
 </section>
 
@@ -263,7 +269,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02e';
+var BUILD = 'Prism II · 2026-09-02f';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -525,6 +531,9 @@ function renderSet(){
   var g=ghost(i), gEl=$('set-ghost');
   if(g&&g.length){ var parts=[]; for(var k=0;k<g.length;k++){ parts.push((k===d?'<b>':'')+g[k].r+(g[k].w!==x.weight?'@'+fmtW(g[k].w):'')+(k===d?'</b>':'')); } gEl.innerHTML='last time  '+parts.join(' · '); }
   else gEl.innerHTML=x.discovery?'first time at this one':'no history yet';
+  var lg=logsOf(i), np=[]; for(var q=0;q<x.sets;q++){ np.push(q<lg.length ? '<b>'+lg[q].r+(lg[q].w!==e.w?'@'+fmtW(lg[q].w):'')+'</b>' : (q===d?'<span class="red">▸</span>':'–')); }
+  $('set-now').innerHTML='this time  '+np.join(' · ');
+  if(e.manual) from.textContent='set by you'+(e.w!==x.weight?' (plan '+fmtW(x.weight)+')':'');
   var adv=$('set-advice'); adv.className='advice'; adv.textContent='';
   var l=logsOf(i);
   if(e.dropped&&d>0){ adv.classList.add('drop'); adv.textContent='dropped to '+fmtW(x.backoff)+' · set '+e.droppedAt+' was '+e.droppedReps; }
@@ -538,8 +547,22 @@ function renderSet(){
   repVal=target(i);   // the stepper opens at the range top; he taps down from the max, never up to it
   $('rep-val').textContent=repVal;
   $('set-undo').disabled=!S.order.length;
-  var pb=$('set-pair'); pb.textContent=partnerOf(i)!=null?'superset on':'superset ›'; pb.classList.toggle('on', partnerOf(i)!=null);
-  setScreen('set');
+  var pb=$('set-pair'); pb.textContent=partnerOf(i)!=null?'⇄ '+ex(partnerOf(i)).short:'superset ›'; pb.classList.toggle('on', partnerOf(i)!=null);
+  setScreen('set'); clockTick();
+}
+/* session clock in the header, and a weight override sheet for the current exercise */
+function clockTick(){ if(!S||S.finished) return; var t=fmtClock(Date.now()-S.startedAt); $('set-daylbl').innerHTML='<b>'+S.day.toUpperCase()+'</b> · '+todayLbl()+' · '+t; if(S.phase==='rest') $('rest-lbl').textContent='rest · '+fmtClock(S.restTotal)+' · '+t; }
+setInterval(clockTick, 1000);
+var wTmp=0;
+function weightSheet(){
+  var i=S.cur.ex, x=ex(i); wTmp=S.exs[i].w;
+  var html='<div class="row" style="margin-bottom:6px"><span class="eyebrow">'+x.name+' · this session</span><button class="eyebrow" data-act="close">close</button></div>';
+  html+='<div class="disp num" id="wsheet-val" style="font-size:96px;margin:10px 0 14px">'+fmtW(wTmp)+'</div>';
+  html+='<div class="effort" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px"><button data-act="wadj" data-d="-10">−10</button><button data-act="wadj" data-d="-5">−5</button><button data-act="wadj" data-d="-2.5">−2.5</button></div>';
+  html+='<div class="effort" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px"><button data-act="wadj" data-d="2.5">+2.5</button><button data-act="wadj" data-d="5">+5</button><button data-act="wadj" data-d="10">+10</button></div>';
+  html+='<div class="stack"><button class="btn primary" data-act="wuse">Use this weight</button><button class="btn quiet" data-act="wreset">Back to the plan · '+fmtW(startingWeight(S.day,x).w)+'</button></div>';
+  html+='<div class="faint" style="margin-top:12px;font-size:11px;line-height:1.5">Changes only this session. Sets already logged keep the weight they were done at.</div>';
+  openSheet(html);
 }
 
 /* ---------- logging ---------- */
@@ -679,6 +702,10 @@ function renderLaunch(day){
   var html=''; for(var j=0;j<p.length;j++){ var sw=S?{w:S.exs[j].w,from:S.exs[j].from}:startingWeight(launchDay,p[j]); html+='<div class="li"><span><b>'+p[j].name+'</b></span><span>'+p[j].sets+' × '+p[j].lo+'–'+p[j].hi+'</span><span class="w">'+fmtW(sw.w)+(sw.from!=null?' ↑':'')+'</span></div>'; }
   $('l-list').innerHTML=html;
   $('l-start').textContent=S?'Resume · '+loggedSets()+' of '+totalSets()+' done':'Start '+launchDay;
+  var ls=lastSession(launchDay), lEl=$('l-last');
+  if(ls){ var lt=ls.ton, lsets=ls.sets; if(lt==null){ lt=0; lsets=0; Object.keys(ls.logs).forEach(function(id){ ls.logs[id].forEach(function(e){ lt+=e.w*e.r; lsets++; }); }); }
+    lEl.textContent='last '+launchDay.toLowerCase()+'  '+ls.date.slice(5).replace('-','/')+' · '+lsets+' sets · '+commas(lt)+' lb'+(ls.dur?' · '+fmtDur(ls.dur):''); }
+  else lEl.textContent='';
   $('l-switch').textContent='Switch to '+(launchDay==='Upper'?'Lower':'Upper'); $('l-switch').classList.toggle('hidden', !!S);
   $('l-voice').textContent=prefs.voice?'ON':'OFF'; $('l-voice').classList.toggle('on', prefs.voice);
   $('l-audio').textContent=audioLabel();
@@ -725,6 +752,9 @@ $('sheet').addEventListener('click', function(ev){
   var b=ev.target.closest('button'); if(!b) return; var act=b.getAttribute('data-act');
   if(act==='close') closeSheet();
   else if(act==='settings'){ menuSheet(); }
+  else if(act==='wadj'){ wTmp=Math.max(0, Math.round((wTmp+parseFloat(b.getAttribute('data-d')))*10)/10); $('wsheet-val').textContent=fmtW(wTmp); }
+  else if(act==='wuse'){ var ci=S.cur.ex; S.exs[ci].w=wTmp; S.exs[ci].manual=true; S.exs[ci].dropped=false; S.exs[ci].from=null; save(); closeSheet(); renderSet(); toast(ex(ci).short+' · '+fmtW(wTmp)); }
+  else if(act==='wreset'){ var ri=S.cur.ex, sw=startingWeight(S.day, ex(ri)); S.exs[ri].w=sw.w; S.exs[ri].from=sw.from; S.exs[ri].manual=false; S.exs[ri].dropped=false; save(); closeSheet(); renderSet(); }
   else if(act==='jump'){ var i=+b.getAttribute('data-i'); if(S.phase==='rest') endRest(false); S.cur.ex=i; S.phase='set'; save(); renderSet(); closeSheet(); }
   else if(act==='finish'){ closeSheet(); finish(); }
   else if(act==='voice'){ prefs.voice=!prefs.voice; lsSet(K.prefs,prefs); if(!prefs.voice) Bank.cancel(); menuSheet(); if(document.body.getAttribute('data-screen')==='launch') renderLaunch(launchDay); }
@@ -747,7 +777,10 @@ $('set-pair').addEventListener('click', togglePair);
 $('set-undo').addEventListener('click', undo);
 $('rep-minus').addEventListener('click', function(){ repVal=Math.max(0,repVal-1); $('rep-val').textContent=repVal; });
 $('rep-plus').addEventListener('click', function(){ repVal=Math.min(50,repVal+1); $('rep-val').textContent=repVal; });
-$('set-done').addEventListener('click', function(){ Bank.unlock(); logSet(); });
+var lastDone=0;
+$('set-done').addEventListener('click', function(){ if(Date.now()-lastDone<700) return; lastDone=Date.now(); Bank.unlock(); var i=S.cur.ex, w=curWeight(i), r=repVal; logSet(); $('rest-logged').textContent='logged '+r+' @ '+fmtW(w); });
+$('set-weight').addEventListener('click', weightSheet);
+$('rest-undo').addEventListener('click', undo);
 $('rest-plus').addEventListener('click', plus30);
 $('rest-go').addEventListener('click', function(){ endRest(false); });
 $('d-note').addEventListener('input', function(){ if(S){ S.note=$('d-note').value; $('d-export').value=buildExport().text; if(S.committed&&!DEMO){ history[history.length-1].note=S.note; lsSet(K.history,history); } } });
