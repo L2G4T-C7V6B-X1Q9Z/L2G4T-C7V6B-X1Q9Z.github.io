@@ -125,7 +125,7 @@ const WCHART_PAD_T = 8;
 const WCHART_PAD_B = 8;
 // v4.5: tokenized so the light theme can darken them (light grays vanish on white).
 const WCHART_OTHER_COLORS = ['var(--wc-o1)', 'var(--wc-o2)', 'var(--wc-o3)', 'var(--wc-o4)', 'var(--wc-o5)'];
-let wchartRange = 30; // selected window in days (30d default; 90d via the toggle)
+let wchartRange = 90; // selected window in days (90d default since 2026-09-02, Soren's call; 30d via the toggle)
 // v9.2 (Soren 7/4): chart mode. 'rel' (default) = Robinhood re-based deltas (everyone starts
 // at 0, y = +/- lbs change); 'abs' = absolute weight (y = real lbs, no re-basing).
 let wchartMode = 'rel';
