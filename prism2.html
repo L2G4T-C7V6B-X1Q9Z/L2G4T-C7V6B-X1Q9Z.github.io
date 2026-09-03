@@ -280,7 +280,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02j';
+var BUILD = 'Prism II · 2026-09-02k';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -293,10 +293,10 @@ var PLANS = {
     {id:'incline-press', name:'Incline Press', short:'INCLINE', clip:'ex-incline-press', sets:3, lo:8, hi:12, weight:70, backoff:60, next:80, rest:120,
       tag:'cuff', safety:'Stop on any rotator-cuff pain. Nothing gets pushed through.',
       cue:'Seat at the incline setting. Lower to the upper chest, elbows ~45°, press up and slightly back. Third set is new.'},
-    {id:'chest-fly', name:'Chest Fly', short:'FLY', clip:'ex-rear-delt-flyes', sets:3, lo:10, hi:15, weight:15, rest:90, noDrop:true, discovery:true,
+    {id:'chest-fly', name:'Chest Fly', short:'FLY', clip:'ex-rear-delt-flyes', sets:3, lo:10, hi:15, weight:15, next:20, rest:90, noDrop:true,
       tag:'cuff', safety:'Cuff and right inner shoulder. The bottom of the arc is where it loads.',
       cue:'Discovery. Single-arm cable fly, 15 a side: arm long, soft elbow, hand past the body line, 3-sec negative. Pec deck ~50 if there is one.'},
-    {id:'pushdown', name:'Tricep Pushdown', short:'PUSHDOWN', clip:'ex-tricep-pushdown', sets:3, lo:12, hi:15, weight:25, backoff:20, next:30, rest:90,
+    {id:'pushdown', name:'Tricep Pushdown', short:'PUSHDOWN', clip:'ex-tricep-pushdown', sets:3, lo:12, hi:15, weight:30, backoff:25, next:35, rest:90,
       cue:'Elbows pinned, full lockout, control the negative. French press at 40 if the station is taken.'},
     {id:'lateral-raise', name:'DB Lateral Raise', short:'LAT RAISE', clip:'ex-db-lat-raise', sets:4, lo:12, hi:15, weight:15, backoff:10, next:17.5, rest:90,
       tag:'R shoulder', safety:'Right inner shoulder. Stop at the first pinch. Left clicks above parallel.',
@@ -709,9 +709,9 @@ function buildExport(){
   exp.push('Order: '+ord.join(' '));
   for(var i=0;i<p.length;i++){
     var x=p[i], l=logsOf(i); if(!l.length) continue;
-    var parts=[], tot=0, allTop=l.length===x.sets, pr=false;
-    for(var j=0;j<l.length;j++){ ton+=l[j].w*l[j].r; tot+=l[j].r; sets++; parts.push(l[j].r+(l[j].w!==S.exs[i].w?'@'+fmtW(l[j].w):'')+(l[j].pr?'*':'')); if(l[j].r<x.hi||l[j].w<S.exs[i].w) allTop=false; if(l[j].pr) pr=true; }
-    exp.push(x.name+' '+fmtW(S.exs[i].w)+': '+parts.join(' / ')+' = '+tot+(pr?'  PR':''));
+    var parts=[], tot=0, allTop=l.length===x.sets, pr=false, base=l[0].w;   // the header weight is what set 1 was done at, never the current override
+    for(var j=0;j<l.length;j++){ ton+=l[j].w*l[j].r; tot+=l[j].r; sets++; parts.push(l[j].r+(l[j].w!==base?'@'+fmtW(l[j].w):'')+(l[j].pr?'*':'')); if(l[j].r<x.hi||l[j].w<x.weight) allTop=false; if(l[j].pr) pr=true; }
+    exp.push(x.name+' '+fmtW(base)+': '+parts.join(' / ')+' = '+tot+(pr?'  PR':''));
     if(allTop&&x.next) adv.push(x.short+' → '+fmtW(x.next)); if(pr) prs.push(x.short);
   }
   exp.push('All sets to failure. Tonnage '+commas(ton)+' lb'+(adv.length?' · Advance: '+adv.join(', '):'')+(S.anchor.taken?' · anchor taken on '+S.anchorTakenOn:''));
@@ -725,8 +725,8 @@ function finish(){
   $('done-day').textContent=S.day+' · '+todayLbl();
   $('d-ton').textContent=commas(b.ton); $('d-sets').textContent=b.sets; $('d-time').textContent=fmtDur(S.endedAt-S.startedAt);
   var L=$('d-lines'); L.innerHTML='';
-  for(var i=0;i<p.length;i++){ var x=p[i], l=logsOf(i); if(!l.length) continue; var parts=[],tot=0,pr=false; for(var j=0;j<l.length;j++){ tot+=l[j].r; parts.push(l[j].r+(l[j].w!==S.exs[i].w?'@'+fmtW(l[j].w):'')); if(l[j].pr) pr=true; }
-    var el=document.createElement('div'); el.className='l'; el.innerHTML='<span><b>'+x.name+'</b> '+fmtW(S.exs[i].w)+' · '+parts.join(' / ')+'</span><span>'+(pr?'<span class="pr">PR</span> ':'')+'<b>'+tot+'</b></span>'; L.appendChild(el); }
+  for(var i=0;i<p.length;i++){ var x=p[i], l=logsOf(i); if(!l.length) continue; var parts=[],tot=0,pr=false,base=l[0].w; for(var j=0;j<l.length;j++){ tot+=l[j].r; parts.push(l[j].r+(l[j].w!==base?'@'+fmtW(l[j].w):'')); if(l[j].pr) pr=true; }
+    var el=document.createElement('div'); el.className='l'; el.innerHTML='<span><b>'+x.name+'</b> '+fmtW(base)+' · '+parts.join(' / ')+'</span><span>'+(pr?'<span class="pr">PR</span> ':'')+'<b>'+tot+'</b></span>'; L.appendChild(el); }
   $('d-adv').textContent=b.adv.length?('Next session: '+b.adv.join(' · ')):'Every weight holds.';
   $('d-note').value=S.note||''; $('d-export').value=b.text;
   if(!S.committed){ S.committed=true; var rec={day:S.day, date:S.date, logs:S.logs, ton:b.ton, sets:b.sets, dur:S.endedAt-S.startedAt, anchorTaken:S.anchor.taken, note:S.note||''};
