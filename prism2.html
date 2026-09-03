@@ -92,12 +92,18 @@ body[data-screen="rest"] #tank{opacity:1}
 .cue{font-size:12px;color:var(--ink3);line-height:1.4;display:none}
 .cue.show{display:block}
 .controls{display:flex;flex-direction:column;gap:10px}
-.stepper{display:grid;grid-template-columns:84px 1fr 84px;align-items:center;background:var(--bg2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.stepper button{height:96px;font-family:var(--disp);font-weight:500;font-size:48px;color:var(--ink2);background:var(--bg3)}
+.stepper{display:grid;grid-template-columns:64px 1fr 64px;align-items:center;background:var(--bg2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.stepper button{height:104px;font-family:var(--disp);font-weight:500;font-size:44px;color:var(--ink2);background:var(--bg3)}
 .stepper button:active{background:var(--line);color:var(--ink)}
-.stepper .val{display:flex;flex-direction:column;align-items:center;justify-content:center}
-.stepper .val .disp{font-size:72px;font-weight:700}
-.stepper .val .lbl{font-size:10px;letter-spacing:.2em;color:var(--ink3);text-transform:uppercase;margin-top:-2px}
+.stepper .val{display:flex;flex-direction:column;align-items:stretch;justify-content:center;min-width:0}
+.stepper .val .lbl{font-size:10px;letter-spacing:.2em;color:var(--ink3);text-transform:uppercase;text-align:center;margin-top:-4px;padding-bottom:6px}
+/* the rep picker: a horizontal snap strip, swipe to the number, the centred one is the value */
+#rep-scroll{height:84px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;display:flex;align-items:center;touch-action:pan-x;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#rep-scroll::-webkit-scrollbar{display:none}
+#rep-scroll .rn{flex:0 0 56px;scroll-snap-align:center;text-align:center;font-family:var(--disp);font-weight:700;font-size:36px;color:var(--ink3);line-height:1;transition:font-size .08s,color .08s}
+#rep-scroll .rn.on{color:var(--ink);font-size:72px}
+#rep-scroll .pad{flex:0 0 calc(50% - 28px)}
+@media (prefers-reduced-motion:reduce){#rep-scroll .rn{transition:none}}
 .minor{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:.08em;color:var(--ink3);text-transform:uppercase}
 .minor button{color:var(--ink2);padding:8px 0}
 .minor button.on{color:var(--red-ink)}
@@ -214,7 +220,7 @@ textarea::placeholder{color:var(--ink3)}
     </div>
     <div class="stepper">
       <button id="rep-minus" aria-label="Fewer reps">−</button>
-      <div class="val"><span class="disp num" id="rep-val">12</span><span class="lbl">reps, to failure</span></div>
+      <div class="val"><div id="rep-scroll" aria-label="Reps"></div><span class="lbl">reps, to failure · swipe</span></div>
       <button id="rep-plus" aria-label="More reps">+</button>
     </div>
     <button class="btn primary" id="set-done">Set done</button>
@@ -275,7 +281,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02h';
+var BUILD = 'Prism II · 2026-09-02i';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -550,12 +556,26 @@ function renderSet(){
     else if(S.anchor.eligible===false){ adv.textContent='anchor deferred · '+S.anchor.why; }
   }
   var cue=$('set-cue'); cue.textContent=x.cue||''; cue.classList.toggle('show', cueOpen); $('set-cuebtn').classList.toggle('on', cueOpen);
-  repVal=target(i);   // the stepper opens at the range top; he taps down from the max, never up to it
-  $('rep-val').textContent=repVal;
+  repVal=target(i);   // the picker opens at the range top; he swipes down from the max, never up to it
   $('set-undo').disabled=!S.order.length;
   var pb=$('set-pair'); pb.textContent=partnerOf(i)!=null?'⇄ '+ex(partnerOf(i)).short:'superset ›'; pb.classList.toggle('on', partnerOf(i)!=null);
   syncNotes(); setScreen('set'); clockTick();
+  requestAnimationFrame(function(){ setRep(repVal); });   // the strip can only scroll once the screen is visible
 }
+/* rep picker */
+var REP_MAX=40, REP_W=56, repScroll=$('rep-scroll'), repProg=0, repTimer=null;
+(function buildRepStrip(){
+  var html='<span class="pad"></span>'; for(var n=0;n<=REP_MAX;n++) html+='<span class="rn num" data-n="'+n+'">'+n+'</span>'; html+='<span class="pad"></span>';
+  repScroll.innerHTML=html;
+})();
+function paintRep(){ var items=repScroll.querySelectorAll('.rn'); for(var k=0;k<items.length;k++) items[k].classList.toggle('on', k===repVal); }
+function setRep(v){ repVal=Math.max(0,Math.min(REP_MAX,v)); repProg=Date.now(); repScroll.scrollLeft=repVal*REP_W; paintRep(); }
+repScroll.addEventListener('scroll', function(){
+  if(Date.now()-repProg<200) return;           // a programmatic scroll, not his thumb
+  var idx=Math.max(0,Math.min(REP_MAX,Math.round(repScroll.scrollLeft/REP_W)));
+  if(idx!==repVal){ repVal=idx; paintRep(); }
+  clearTimeout(repTimer); repTimer=setTimeout(function(){ var j=Math.round(repScroll.scrollLeft/REP_W); if(j!==repVal){ repVal=Math.max(0,Math.min(REP_MAX,j)); paintRep(); } }, 120);
+}, {passive:true});
 /* one session note, editable from the set screen, the rest screen, the list sheet and the finish screen */
 function syncNotes(){ var v=(S&&S.note)||''; ['set-note','rest-note','d-note','sheet-note'].forEach(function(id){ var el=$(id); if(el && el.value!==v && document.activeElement!==el) el.value=v; }); }
 ['set-note','rest-note'].forEach(function(id){ $(id).addEventListener('input', function(){ if(S){ S.note=$(id).value; save(); } }); });
@@ -592,7 +612,12 @@ function logSet(){
   var cues=['received'];
   if(entry.pr) cues.push('cue-personal-record');
   var lx=S.logs[x.id]; if(switching && lx.length===x.sets && lx.every(function(e){ return e.r>=x.hi && e.w>=S.exs[i].w; })) cues.push('cue-trigger-hit');
-  if(paired){ cues.push('up-next', nxEx.clip); if(S.exs[nx].dropped&&S.exs[nx].droppedAt===doneCount(nx)) cues.push(wgtClip(nxEx.backoff)); }
+  if(paired && i<nx){
+    /* A -> B inside a superset: no transition timer either (his call 9/2, different muscle groups) */
+    cues.push('up-next', nxEx.clip); if(S.exs[nx].dropped&&S.exs[nx].droppedAt===doneCount(nx)) cues.push(wgtClip(nxEx.backoff));
+    S.cur.ex=nx; S.phase='set'; save(); renderSet(); toast('logged '+r+' @ '+fmtW(w)); Bank.seq(cues); return;
+  }
+  else if(paired){ cues.push('up-next', nxEx.clip); if(S.exs[nx].dropped&&S.exs[nx].droppedAt===doneCount(nx)) cues.push(wgtClip(nxEx.backoff)); }
   else if(switching){
     /* no rest timer on an exercise change (his call 9/2: the walk to the next station is the rest) --
        straight to the next exercise's first set, with the arrival cues */
@@ -789,8 +814,9 @@ $('set-tag').addEventListener('click', function(){ safetyOpen=!safetyOpen; rende
 $('set-cuebtn').addEventListener('click', function(){ cueOpen=!cueOpen; renderSet(); });
 $('set-pair').addEventListener('click', togglePair);
 $('set-undo').addEventListener('click', undo);
-$('rep-minus').addEventListener('click', function(){ repVal=Math.max(0,repVal-1); $('rep-val').textContent=repVal; });
-$('rep-plus').addEventListener('click', function(){ repVal=Math.min(50,repVal+1); $('rep-val').textContent=repVal; });
+$('rep-minus').addEventListener('click', function(){ setRep(repVal-1); });
+$('rep-plus').addEventListener('click', function(){ setRep(repVal+1); });
+window.addEventListener('resize', function(){ if(document.body.getAttribute('data-screen')==='set') setRep(repVal); });
 var lastDone=0;
 $('set-done').addEventListener('click', function(){ if(Date.now()-lastDone<700) return; lastDone=Date.now(); Bank.unlock(); var i=S.cur.ex, w=curWeight(i), r=repVal; logSet(); $('rest-logged').textContent='logged '+r+' @ '+fmtW(w); });
 $('set-weight').addEventListener('click', weightSheet);
