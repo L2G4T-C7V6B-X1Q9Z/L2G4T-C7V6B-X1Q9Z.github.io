@@ -1392,7 +1392,7 @@ body.alert-flashing #timer-display { animation: alert-nudge 280ms var(--ease) bo
 // ======================= CONFIG START =======================
 // The daily flip splices ONLY the fenced block (dayType + build note +
 // workout array). Everything below the end fence is the workout-agnostic engine.
-const dayType = "Lower";
+const dayType = "Upper";
 
 // *** LOWER -- PHASE 2B, FIRST FULL LOWER BACK AFTER KNEE EPISODE 4, NOW 21 SETS. Built Wed 9/2 ***
 // *** ~21:3x at the close of the Upper. Rotation: Tue 9/1 LOWER RE-ENTRY DONE (9 sets, knee clean: ***
@@ -1411,7 +1411,7 @@ const dayType = "Lower";
 // 10-lb-representable. Order: LP -> Calf (same sled) -> Face Pulls -> LR -> Leg Curl -> Leg Ext -> Crunch.
 // *** NEVER ASK HIM ABOUT SLEEP. ***
 
-const workout = [
+let workout = [
   {
     id: "leg-press",
     muscles: ["quads", "glutes"],
@@ -1546,6 +1546,25 @@ const workout = [
       "S3: last set. Log the number you used; the next build carries it as the prescription."
     ]
   },
+];
+
+// Upper rebuilt at 2026-09-03 day close from the 9/2 Upper results and carry-ins.
+// 25 sets: 4+5+3+3+3+4+3. Every set is to failure; notes preserve last-session reps.
+workout = [
+  { id: "chest-press", muscles: ["chest", "front delts", "triceps"], name: "Chest Press Machine", short: "PRESS", sets: 4, reps: "8-12", weight: "120 lbs", backoff: "100 lbs", rest: 150,
+    note: "Warm up at 80. Hold 120; 9/2 was 10/6 then 9/6 at 100.", setNotes: ["S1: 10@120 on 9/2.", "S2: 6@120 on 9/2.", "S3: 9@100 on 9/2.", "S4: 6@100 on 9/2."], trigger: [12,12,12,12], triggerWeight: "130 lbs" },
+  { id: "cable-rope-row", muscles: ["back", "biceps", "rear delts"], name: "Cable Rope Row", short: "ROW", sets: 5, reps: "8-12", weight: "120 lbs", backoff: "100 lbs", rest: 150, safety: "RIGHT inner shoulder. Stop at the first pinch.",
+    note: "Hold 120. Pull to waist, no torso heave. 130 needs 12 on all five.", setNotes: ["S1: 9@120 on 9/2.", "S2: 9@120 on 9/2.", "S3: 6@120 on 9/2.", "S4: 9@100 on 9/2.", "S5: 8@100 on 9/2."], trigger: [12,12,12,12,12], triggerWeight: "130 lbs" },
+  { id: "incline-press", muscles: ["chest", "front delts", "triceps"], name: "Incline Press", short: "INCLINE", sets: 3, reps: "8-12", weight: "70 lbs", backoff: "60 lbs", rest: 120, safety: "STOP on ANY rotator-cuff pain.",
+    note: "Hold 70. 80 requires 12 on all three sets.", setNotes: ["S1: 12@70 on 9/2.", "S2: 12@70 on 9/2.", "S3: 10@70 on 9/2."], trigger: [12,12,12], triggerWeight: "80 lbs" },
+  { id: "chest-fly", muscles: ["chest"], name: "Chest Fly", short: "FLY", sets: 3, reps: "10-15", weight: "15 lbs", rest: 90, noDropAdvice: true, clip: "ex-rear-delt-flyes", safety: "Cuff + RIGHT inner shoulder. Stop at the first pinch.",
+    note: "Hold 15. Cable or pec deck remains unrecorded; log which machine you use.", setNotes: ["S1: 12@15 on 9/2.", "S2: 12@15 on 9/2.", "S3: 11@15 on 9/2."], trigger: [15,15,15], triggerWeight: "20 lbs" },
+  { id: "cable-tricep-pushdown", muscles: ["triceps"], name: "Cable Tricep Pushdown", short: "PUSHDOWN", sets: 3, reps: "12-15", weight: "30 lbs", backoff: "25 lbs", rest: 90,
+    note: "Advance to 30 with 25 backoff after 15/15/14 at 25.", setNotes: ["S1: first set at 30; 15@25 on 9/2.", "S2: 15@25 on 9/2.", "S3: 14@25 on 9/2."], trigger: [15,15,15], triggerWeight: "35 lbs" },
+  { id: "cable-lateral-raise", muscles: ["side delts"], name: "Cable Lateral Raise", short: "LAT RAISE", sets: 4, reps: "12-15", weight: "10 lbs", rest: 90, noDropAdvice: true, clip: "ex-db-lat-raise", safety: "RIGHT inner shoulder. Stop at the first pinch.",
+    note: "Cable replaces DB lateral raise. Use 10-lb cable going forward.", setNotes: ["S1: 7@15 DB then changed modality 9/3.", "S2: 9@10 cable on 9/3.", "S3: 8@10 cable on 9/3.", "S4: new 4th cable set; log reps."], trigger: [15,15,15,15], triggerWeight: "15 lbs" },
+  { id: "db-curls", muscles: ["biceps"], name: "DB Curls (supinated)", short: "CURLS", sets: 3, reps: "8-12", weight: "25 lbs", backoff: "20 lbs", rest: 90, safety: "SUPINATED grip ONLY. Stop on a nerve twang.",
+    note: "Hold 25; 9/2 was 7@25 then 8/9@20.", setNotes: ["S1: 7@25 on 9/2.", "S2: 8@20 on 9/2.", "S3: 9@20 on 9/2."], trigger: [12,12,12], triggerWeight: "30 lbs" }
 ];
 // ======================== CONFIG END ========================
 // ============ §1.5 IDENTITY + PLAN HASH (v8) ============
@@ -7139,6 +7158,6 @@ try {
 }());
 </script>
 
-<div class="build-stamp">prism &middot; 2026-09-02 2B-lower v8U CRUNCH-ADD</div>
+<div class="build-stamp">prism &middot; 2026-09-03 2B-upper v8U CABLE-LR</div>
 </body>
 </html>
