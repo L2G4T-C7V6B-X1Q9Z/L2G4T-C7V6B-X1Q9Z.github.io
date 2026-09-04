@@ -103,9 +103,8 @@ body[data-screen="rest"] .strip i.gap{background:transparent}
 .cue{font-size:12px;color:var(--ink3);line-height:1.4;display:none}
 .cue.show{display:block}
 .controls{display:flex;flex-direction:column;gap:10px}
-.stepper{display:grid;grid-template-columns:64px 1fr 64px;align-items:center;background:var(--bg2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.stepper button{height:104px;font-family:var(--disp);font-weight:500;font-size:44px;color:var(--ink2);background:var(--bg3)}
-.stepper button:active{background:var(--line);color:var(--ink)}
+/* the rep picker is swipe-only (his call 9/4: "I can just swipe and scroll") */
+.stepper{display:grid;grid-template-columns:1fr;align-items:center;background:var(--bg2);border:1px solid var(--line);border-radius:8px;overflow:hidden;padding:8px 0 0}
 .stepper .val{display:flex;flex-direction:column;align-items:stretch;justify-content:center;min-width:0}
 .stepper .val .lbl{font-size:10px;letter-spacing:.2em;color:var(--ink3);text-transform:uppercase;text-align:center;margin-top:-4px;padding-bottom:6px}
 /* the rep picker: a horizontal snap strip, swipe to the number, the centred one is the value */
@@ -246,9 +245,7 @@ textarea::placeholder{color:var(--ink3)}
       <button id="set-pair">superset ›</button>
     </div>
     <div class="stepper">
-      <button id="rep-minus" aria-label="Fewer reps">−</button>
       <div class="val"><div id="rep-scroll" aria-label="Reps"></div><span class="lbl">reps, to failure · swipe</span></div>
-      <button id="rep-plus" aria-label="More reps">+</button>
     </div>
     <button class="btn primary" id="set-done">Set done</button>
   </div>
@@ -307,7 +304,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-04b FADE';
+var BUILD = 'Prism II · 2026-09-04c HALFTONE';
 var DEMO = /[?&]demo=/.test(location.search);
 /* query hooks (demo only): ?demo=rest&t=SEC pins the rest clock for a deterministic screenshot,
    &mid=MS paints one mid-fade frame MS after a level change, &dither=NAME picks a tank style,
@@ -383,7 +380,9 @@ function lsSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){
 function lsDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
 var prefs = lsGet(K.prefs, {voice:true});
 var ditherOverride = Q.dither||null;   // a URL pick is for looking, never saved unless he taps it in settings
-function curDither(){ return ditherOverride||prefs.dither||'bayer'; }
+/* halftone is his pick (9/4: "I kind of like halftone the best in terms of a gradient"); the one-time reset below moves any demo-cycled leftover onto it */
+if(!prefs.ditherV2){ prefs.dither='halftone'; prefs.ditherV2=1; lsSet(K.prefs,prefs); }
+function curDither(){ return ditherOverride||prefs.dither||'halftone'; }
 var history = lsGet(K.history, null);
 if(!history){ history=SEED.slice(); lsSet(K.history, history); }
 var S=null, tickTimer=null, spoke={};
@@ -760,7 +759,7 @@ var DITHERS=[
   {id:'atkinson', label:'Atkinson', band:.24, diffuse:true},
   {id:'dissolve', label:'Dissolve', band:0,   th:function(x,y){ return hash(x,y); }, flat:true}
 ];
-function ditherById(id){ for(var k=0;k<DITHERS.length;k++) if(DITHERS[k].id===id) return DITHERS[k]; return DITHERS[0]; }
+function ditherById(id){ for(var k=0;k<DITHERS.length;k++) if(DITHERS[k].id===id) return DITHERS[k]; return ditherById('halftone'); }
 var TK={w:0,h:0,cur:null,tgt:null,err:null,img:null,hot:0};
 function sizeTank(){
   /* size off the canvas's own box, never the window: the box is what is painted to the screen */
@@ -936,8 +935,6 @@ $('set-tag').addEventListener('click', function(){ safetyOpen=!safetyOpen; rende
 $('set-cuebtn').addEventListener('click', function(){ cueOpen=!cueOpen; renderSet(); });
 $('set-pair').addEventListener('click', togglePair);
 $('set-undo').addEventListener('click', undo);
-$('rep-minus').addEventListener('click', function(){ setRep(repVal-1); });
-$('rep-plus').addEventListener('click', function(){ setRep(repVal+1); });
 window.addEventListener('resize', function(){ if(document.body.getAttribute('data-screen')==='set') setRep(repVal); });
 var lastDone=0;
 $('set-done').addEventListener('click', function(){ if(Date.now()-lastDone<700) return; lastDone=Date.now(); Bank.unlock(); var i=S.cur.ex, w=curWeight(i), r=repVal; logSet(); $('rest-logged').textContent='logged '+r+' @ '+fmtW(w); });
