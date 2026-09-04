@@ -68,10 +68,14 @@ body[data-screen="rest"] .strip i.gap{background:transparent}
 .tog .pill.on{border-color:var(--ink);color:var(--ink)}
 /* the list takes whatever the hero leaves; rows are tall enough that seven of them fill an iPhone 15 without a void above the buttons */
 .exlist{display:flex;flex-direction:column;margin-top:18px;flex:1 1 auto;min-height:0;overflow:auto}
-.exlist .li{display:grid;grid-template-columns:1fr auto auto;gap:14px;font-size:14px;color:var(--ink2);padding:8px 0;border-bottom:1px solid var(--line);align-items:center;flex:1 0 auto;min-height:44px}
+.exlist .li{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;font-size:14px;color:var(--ink2);padding:8px 0;border-bottom:1px solid var(--line);align-items:center;flex:1 0 auto;min-height:44px}
 .exlist .li:first-child{border-top:1px solid var(--line)}
 .exlist .li b{color:var(--ink);font-weight:600}
 .exlist .li .w{color:var(--ink);font-weight:600;text-align:right}
+/* drag-to-reorder: the handle owns the touch (touch-action:none) so the list does not scroll under it */
+.grab{font-size:18px;line-height:1;color:var(--ink3);padding:6px 10px 6px 0;touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none}
+.li.dragging{opacity:.55;background:var(--bg3)}
+.li.dragging .grab{color:var(--red-ink)}
 .audio-state{font-size:11px;letter-spacing:.12em;color:var(--ink3);text-transform:uppercase}
 
 /* set */
@@ -166,17 +170,13 @@ textarea::placeholder{color:var(--ink3)}
 .sheet.open{transform:none}
 .scrim{position:fixed;inset:0;z-index:5;background:rgba(0,0,0,.55);display:none}
 .scrim.on{display:block}
-.sheet .li{display:grid;grid-template-columns:1fr auto auto auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
-.sheet .li .mv{display:grid;grid-template-columns:36px 36px;gap:4px}
-.sheet .li .mv button{padding:8px 0;font-size:15px;line-height:1;text-align:center}
+.sheet .li{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
 .sheet .li .dots{display:flex;gap:3px}
 .sheet .li .dots i{width:8px;height:8px;border-radius:1px;background:var(--dot);display:block}
 .sheet .li .dots i.done{background:var(--ink2)}
 .sheet .li .dots i.cur{background:var(--red)}
 .sheet .li button,.sheet .act{font-size:12px;letter-spacing:.12em;color:var(--ink2);padding:8px 10px;border:1px solid var(--line);border-radius:6px}
 .sheet .li.cur b{color:var(--red-ink)}
-.sheet .li .mv button{border:0;padding:6px 0;color:var(--ink2)}
-.sheet .li .mv button:active{color:var(--ink)}
 .sheet .li .faint{font-size:12px;line-height:1.5}
 .effort{display:grid;gap:8px}
 .effort button{min-height:52px;border:1px solid var(--line);border-radius:8px;background:var(--bg3);font-family:var(--disp);font-weight:700;font-size:24px;color:var(--ink)}
@@ -304,7 +304,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-04c HALFTONE';
+var BUILD = 'Prism II · 2026-09-04d DRAG';
 var DEMO = /[?&]demo=/.test(location.search);
 /* query hooks (demo only): ?demo=rest&t=SEC pins the rest clock for a deterministic screenshot,
    &mid=MS paints one mid-fade frame MS after a level change, &dither=NAME picks a tank style,
@@ -381,7 +381,7 @@ function lsDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
 var prefs = lsGet(K.prefs, {voice:true});
 var ditherOverride = Q.dither||null;   // a URL pick is for looking, never saved unless he taps it in settings
 /* halftone is his pick (9/4: "I kind of like halftone the best in terms of a gradient"); the one-time reset below moves any demo-cycled leftover onto it */
-if(!prefs.ditherV2){ prefs.dither='halftone'; prefs.ditherV2=1; lsSet(K.prefs,prefs); }
+if(prefs.dither!=='halftone'&&prefs.dither!=='bayer8'){ prefs.dither='halftone'; lsSet(K.prefs,prefs); }   // his cut 9/4: halftone and Bayer 8 only
 function curDither(){ return ditherOverride||prefs.dither||'halftone'; }
 var history = lsGet(K.history, null);
 if(!history){ history=SEED.slice(); lsSet(K.history, history); }
@@ -502,7 +502,7 @@ function startingWeight(day, ex){
 function newSession(day){
   var plan=planFor(day), exs=[];
   for(var i=0;i<plan.length;i++){ var sw=startingWeight(day, plan[i]); exs.push({id:plan[i].id, w:sw.w, from:sw.from, dropped:false, pair:null}); }
-  var bd=[]; for(var b=0;b<plan.length;b++) bd.push(b);
+  var bd=savedBoard(day); if(!bd){ bd=[]; for(var b=0;b<plan.length;b++) bd.push(b); }
   S={day:day, date:isoDate(), startedAt:Date.now(), phase:'set', exs:exs, logs:{}, cur:{ex:0}, order:[], board:bd, note:'', anchor:{armed:anchorArmed(day), taken:false, eligible:null, why:''}, finished:false, restEndsAt:0, restTotal:0};
   save();
 }
@@ -519,7 +519,31 @@ function board(){ var n=planFor(S.day).length;
   return S.board; }
 function moveEx(i, dir){ var b=board(), from=b.indexOf(i), to=from+dir;
   if(from<0||to<0||to>=b.length) return false;
-  b.splice(from,1); b.splice(to,0,i); save(); return true; }
+  b.splice(from,1); b.splice(to,0,i); save(); rememberBoard(); return true; }
+/* a permutation is valid only if it is exactly the plan's index set; anything else is ignored */
+function validBoard(arr, n){ if(!arr||arr.length!==n) return false; var seen={}; for(var k=0;k<n;k++){ var v=arr[k]; if(typeof v!=='number'||v<0||v>=n||seen[v]) return false; seen[v]=1; } return true; }
+function setBoard(arr){ if(!S||!validBoard(arr, planFor(S.day).length)) return false; S.board=arr.slice(); save(); rememberBoard(); return true; }
+/* the order he last used for a day type is the order the next one opens in (his standing rule: the order he sends back is data) */
+function savedBoard(day){ var b=prefs.boards&&prefs.boards[day]; return validBoard(b, planFor(day).length)?b.slice():null; }
+function rememberBoard(){ if(!S) return; prefs.boards=prefs.boards||{}; prefs.boards[S.day]=board().slice(); lsSet(K.prefs,prefs); }
+function launchBoard(day){ if(S&&S.day===day) return board(); var b=savedBoard(day); if(b) return b; var n=planFor(day).length, o=[]; for(var k=0;k<n;k++) o.push(k); return o; }
+/* drag-to-reorder for any list of .li rows carrying data-i: the handle takes pointer capture, the row follows the pointer
+   through the DOM (insert before/after whichever neighbour's midpoint it crosses), and the drop hands back the data-i order */
+function dragList(list, onDrop){
+  var it=null, order=null;
+  list.addEventListener('pointerdown', function(ev){
+    var h=ev.target.closest('.grab'); if(!h||!list.contains(h)) return; it=h.closest('.li'); if(!it) return;
+    ev.preventDefault(); try{ h.setPointerCapture(ev.pointerId); }catch(e){} it.classList.add('dragging');
+  });
+  list.addEventListener('pointermove', function(ev){
+    if(!it) return; ev.preventDefault(); var y=ev.clientY, rows=list.querySelectorAll('.li');
+    for(var k=0;k<rows.length;k++){ var r=rows[k]; if(r===it) continue; var rc=r.getBoundingClientRect(), mid=rc.top+rc.height/2;
+      var after=!!(it.compareDocumentPosition(r)&Node.DOCUMENT_POSITION_FOLLOWING);
+      if(after&&y>mid){ list.insertBefore(it, r.nextSibling); } else if(!after&&y<mid){ list.insertBefore(it, r); } }
+  });
+  function end(ev){ if(!it) return; it.classList.remove('dragging'); var rows=list.querySelectorAll('.li'), o=[]; for(var k=0;k<rows.length;k++){ var v=rows[k].getAttribute('data-i'); if(v!=null) o.push(+v); } it=null; onDrop(o); }
+  list.addEventListener('pointerup', end); list.addEventListener('pointercancel', end);
+}
 function logsOf(i){ return S.logs[ex(i).id]||[]; }
 function doneCount(i){ return logsOf(i).length; }
 function remaining(i){ return ex(i).sets-doneCount(i); }
@@ -748,16 +772,10 @@ function hash(x,y){ var h=(Math.imul(x,374761393)+Math.imul(y,668265263))|0; h=M
 var DOT8=(function(){   // clustered-dot screen: cells rank by distance from the centre of an 8x8 block, so dots grow
   var c=[]; for(var y=0;y<8;y++) for(var x=0;x<8;x++){ var dx=x-3.5, dy=y-3.5; c.push({i:y*8+x, d:dx*dx+dy*dy+hash(x,y)*.01}); }
   c.sort(function(a,b){ return a.d-b.d; }); var m=new Float32Array(64); for(var k=0;k<64;k++) m[c[k].i]=(k+.5)/64; return m; })();
+/* two styles survive his 9/4 cut: halftone (his pick) and Bayer 8. The others (noise, lines, drip, atkinson, dissolve, bayer 4) are in git history at 7ac8127. */
 var DITHERS=[
-  {id:'bayer',    label:'Bayer',    band:.10, th:function(x,y){ return (B4[y&3][x&3]+.5)/16; }},
-  {id:'bayer8',   label:'Bayer 8',  band:.18, th:function(x,y){ return (B8[y&7][x&7]+.5)/64; }},
-  {id:'noise',    label:'Noise',    band:.16, th:function(x,y){ return hash(x,y); }},
   {id:'halftone', label:'Halftone', band:.16, th:function(x,y){ return DOT8[(y&7)*8+(x&7)]; }},
-  {id:'lines',    label:'Lines',    band:.14, th:function(x,y){ return ([0,2,1,3][y&3]+.5)/4; }},
-  {id:'drip',     label:'Drip',     band:.10, th:function(x,y){ return (B4[y&3][x&3]+.5)/16; },
-    edge:function(x,t){ return .55*Math.sin(x*.31+t*.9)+.35*Math.sin(x*.83-t*1.3+1.7)+.2*(hash(x,99)-.5); }},
-  {id:'atkinson', label:'Atkinson', band:.24, diffuse:true},
-  {id:'dissolve', label:'Dissolve', band:0,   th:function(x,y){ return hash(x,y); }, flat:true}
+  {id:'bayer8',   label:'Bayer 8',  band:.18, th:function(x,y){ return (B8[y&7][x&7]+.5)/64; }}
 ];
 function ditherById(id){ for(var k=0;k<DITHERS.length;k++) if(DITHERS[k].id===id) return DITHERS[k]; return ditherById('halftone'); }
 var TK={w:0,h:0,cur:null,tgt:null,err:null,img:null,hot:0};
@@ -843,7 +861,7 @@ function finish(){
   $('d-note').value=S.note||''; $('d-export').value=b.text;
   if(!S.committed){ S.committed=true; var rec={day:S.day, date:S.date, logs:S.logs, ton:b.ton, sets:b.sets, dur:S.endedAt-S.startedAt, anchorTaken:S.anchor.taken, note:S.note||''};
     if(!DEMO){ history.push(rec); lsSet(K.history, history); lsDel(K.session); } }
-  setScreen('done'); Bank.seq(['workout-complete']);
+  rememberBoard(); setScreen('done'); Bank.seq(['workout-complete']);
 }
 
 /* ---------- launch ---------- */
@@ -855,7 +873,8 @@ function renderLaunch(day){
   var p=planFor(launchDay), sets=0; for(var i=0;i<p.length;i++) sets+=p[i].sets;
   $('l-day').textContent=launchDay.toUpperCase();
   $('l-meta').textContent=sets+' sets · '+p.length+' exercises · about '+Math.round(sets*secPerSet(launchDay)/60/5)*5+' min';
-  var html=''; for(var j=0;j<p.length;j++){ var sw=S?{w:S.exs[j].w,from:S.exs[j].from}:startingWeight(launchDay,p[j]); html+='<div class="li"><span><b>'+p[j].name+'</b></span><span>'+p[j].sets+' × '+p[j].lo+'–'+p[j].hi+'</span><span class="w">'+fmtW(sw.w)+(sw.from!=null?' ↑':'')+'</span></div>'; }
+  var html='', lb=launchBoard(launchDay);
+  for(var q=0;q<lb.length;q++){ var j=lb[q], sw=S?{w:S.exs[j].w,from:S.exs[j].from}:startingWeight(launchDay,p[j]); html+='<div class="li" data-i="'+j+'"><span class="grab" aria-label="Drag to reorder">≡</span><span><b>'+p[j].name+'</b></span><span>'+p[j].sets+' × '+p[j].lo+'–'+p[j].hi+'</span><span class="w">'+fmtW(sw.w)+(sw.from!=null?' ↑':'')+'</span></div>'; }
   $('l-list').innerHTML=html;
   $('l-start').textContent=S?'Resume · '+loggedSets()+' of '+totalSets()+' done':'Start '+launchDay;
   var ls=lastSession(launchDay), lEl=$('l-last');
@@ -868,6 +887,10 @@ function renderLaunch(day){
   setScreen('launch');
 }
 setInterval(function(){ if(document.body.getAttribute('data-screen')==='launch') $('l-audio').textContent=audioLabel(); }, 700);
+dragList($('l-list'), function(o){
+  if(S){ setBoard(o); } else if(validBoard(o, planFor(launchDay).length)){ prefs.boards=prefs.boards||{}; prefs.boards[launchDay]=o; lsSet(K.prefs,prefs); }
+  renderLaunch(launchDay);
+});
 function start(){
   Bank.unlock(); wake();
   var fresh=!S; if(fresh) newSession(launchDay);
@@ -885,8 +908,7 @@ function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&a
 function listSheet(){
   var p=planFor(S.day), b=board(), html='<div class="row" style="margin-bottom:6px"><span class="eyebrow">'+S.day+' · '+loggedSets()+' of '+totalSets()+'</span><button class="eyebrow" data-act="close">close</button></div>';
   for(var q=0;q<b.length;q++){ var i=b[q], d=doneCount(i), dots=''; for(var s=0;s<p[i].sets;s++) dots+='<i class="'+(s<d?'done':(i===S.cur.ex&&s===d?'cur':''))+'"></i>';
-    var mv='<span class="mv">'+(q>0?'<button data-act="mvup" data-i="'+i+'">&uarr;</button>':'<span></span>')+(q<b.length-1?'<button data-act="mvdn" data-i="'+i+'">&darr;</button>':'<span></span>')+'</span>';
-    html+='<div class="li'+(i===S.cur.ex?' cur':'')+'"><span><b>'+p[i].name+'</b><br><span class="faint">'+fmtW(curWeight(i))+' lb · '+p[i].lo+'–'+p[i].hi+(partnerOf(i)!=null?' · ⇄ '+ex(partnerOf(i)).short:'')+'</span></span><span class="dots">'+dots+'</span>'+mv+(remaining(i)>0&&i!==S.cur.ex?'<button data-act="jump" data-i="'+i+'">go</button>':'<span></span>')+'</div>'; }
+    html+='<div class="li'+(i===S.cur.ex?' cur':'')+'" data-i="'+i+'"><span class="grab" aria-label="Drag to reorder">≡</span><span><b>'+p[i].name+'</b><br><span class="faint">'+fmtW(curWeight(i))+' lb · '+p[i].lo+'–'+p[i].hi+(partnerOf(i)!=null?' · ⇄ '+ex(partnerOf(i)).short:'')+'</span></span><span class="dots">'+dots+'</span>'+(remaining(i)>0&&i!==S.cur.ex?'<button data-act="jump" data-i="'+i+'">go</button>':'<span></span>')+'</div>'; }
   html+='<div style="margin-top:12px"><textarea class="note" id="sheet-note" placeholder="Note for the log (goes into the summary)">'+esc(S.note||'')+'</textarea></div>';
   html+='<div class="row" style="margin-top:12px"><button class="act" data-act="finish">finish early · saves</button><button class="act" data-act="settings">settings</button></div>';
   openSheet(html);
@@ -911,7 +933,6 @@ $('sheet').addEventListener('click', function(ev){
   else if(act==='wadj'){ wTmp=Math.max(0, Math.round((wTmp+parseFloat(b.getAttribute('data-d')))*10)/10); $('wsheet-val').textContent=fmtW(wTmp); }
   else if(act==='wuse'){ var ci=S.cur.ex; S.exs[ci].w=wTmp; S.exs[ci].manual=true; S.exs[ci].dropped=false; S.exs[ci].from=null; save(); closeSheet(); renderSet(); toast(ex(ci).short+' · '+fmtW(wTmp)); }
   else if(act==='wreset'){ var ri=S.cur.ex, sw=startingWeight(S.day, ex(ri)); S.exs[ri].w=sw.w; S.exs[ri].from=sw.from; S.exs[ri].manual=false; S.exs[ri].dropped=false; save(); closeSheet(); renderSet(); }
-  else if(act==='mvup'||act==='mvdn'){ moveEx(+b.getAttribute('data-i'), act==='mvup'?-1:1); listSheet(); }
   else if(act==='jump'){ var i=+b.getAttribute('data-i'); if(S.phase==='rest') endRest(false); S.cur.ex=i; S.phase='set'; save(); renderSet(); closeSheet(); }
   else if(act==='finish'){ closeSheet(); finish(); }
   else if(act==='voice'){ prefs.voice=!prefs.voice; lsSet(K.prefs,prefs); if(!prefs.voice) Bank.cancel(); menuSheet(); if(document.body.getAttribute('data-screen')==='launch') renderLaunch(launchDay); }
@@ -923,6 +944,7 @@ $('sheet').addEventListener('click', function(ev){
 /* maintenance only, never a button: ?reset=history puts past sessions back to the seed */
 if(/[?&]reset=history/.test(location.search) && !DEMO){ history=SEED.slice(); lsSet(K.history,history); lsDel(K.session); setTimeout(function(){ toast('past sessions reset to the seed'); }, 300); }
 $('scrim').addEventListener('click', closeSheet);
+dragList($('sheet'), function(o){ if(S&&o.length) setBoard(o); listSheet(); });
 
 /* ---------- wiring ---------- */
 $('l-start').addEventListener('click', start);
@@ -950,11 +972,20 @@ $('d-new').addEventListener('click', function(){ S=null; renderLaunch(); });
 window.addEventListener('resize', function(){ if(S&&S.phase==='rest'){ tankStart(); tick(); } });
 
 /* ---------- demo states for screenshots: ?demo=set | rest | done (storage untouched) ---------- */
+/* ?drag=FROM,TO (demo only): synthetic pointer drag of row FROM to position TO on whichever list is showing */
+function demoDrag(){
+  var m=/^(\d+),(\d+)$/.exec(Q.drag||''); if(!m) return;
+  var list=$('sheet').classList.contains('open')?$('sheet'):$('l-list'), rows=list.querySelectorAll('.li'), from=+m[1], to=+m[2];
+  if(!rows[from]||!rows[to]) return; var h=rows[from].querySelector('.grab'), r0=h.getBoundingClientRect(), r1=rows[to].getBoundingClientRect();
+  function pe(type, el, y){ el.dispatchEvent(new PointerEvent(type, {bubbles:true, clientX:r0.left+4, clientY:y, pointerId:1, pointerType:'touch'})); }
+  var y0=r0.top+r0.height/2, y1=r1.top+(to>from?r1.height-2:2);
+  pe('pointerdown', h, y0); for(var k=1;k<=8;k++) pe('pointermove', h, y0+(y1-y0)*k/8); pe('pointerup', h, y1);
+}
 (function demo(){
   var m=/[?&]demo=(set|rest|done)/.exec(location.search); if(!m) return;
   newSession('Upper');
   S.logs['chest-press']=[{r:10,w:120,t:Date.now()-400000},{r:8,w:120,t:Date.now()-200000}]; S.order=[0,0]; S.cur.ex=0;
-  function demoSheet(){ var s=Q.sheet; if(s==='list') listSheet(); else if(s==='menu') menuSheet(); else if(s==='weight') weightSheet(); else if(s==='note') noteSheet(); }
+  function demoSheet(){ var s=Q.sheet; if(s==='list') listSheet(); else if(s==='menu') menuSheet(); else if(s==='weight') weightSheet(); else if(s==='note') noteSheet(); if(Q.drag) setTimeout(demoDrag, 50); }
   if(m[1]==='set'){ renderSet(); demoSheet(); return; }
   if(m[1]==='rest'){
     var total=+Q.total||150, left=Q.t!=null?+Q.t:107;
@@ -973,6 +1004,7 @@ window.addEventListener('resize', function(){ if(S&&S.phase==='rest'){ tankStart
   S.order=[0,0,0,0,1,1,1,1,1,2,2,2]; S.startedAt=Date.now()-1710000; S.note='pec deck exists, used 50'; finish();
 })();
 if(!DEMO) renderLaunch();
+if(/[?&]demo=launch/.test(location.search)){ renderLaunch(Q.day||'Upper'); if(Q.drag) setTimeout(demoDrag, 50); }
 })();
 </script>
 </body>
