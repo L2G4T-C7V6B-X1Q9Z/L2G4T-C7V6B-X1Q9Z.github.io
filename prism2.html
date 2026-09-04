@@ -154,7 +154,9 @@ textarea::placeholder{color:var(--ink3)}
 .sheet.open{transform:none}
 .scrim{position:fixed;inset:0;z-index:5;background:rgba(0,0,0,.55);display:none}
 .scrim.on{display:block}
-.sheet .li{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.sheet .li{display:grid;grid-template-columns:1fr auto auto auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.sheet .li .mv{display:grid;grid-template-columns:36px 36px;gap:4px}
+.sheet .li .mv button{padding:8px 0;font-size:15px;line-height:1;text-align:center}
 .sheet .li .dots{display:flex;gap:3px}
 .sheet .li .dots i{width:8px;height:8px;border-radius:1px;background:var(--dot);display:block}
 .sheet .li .dots i.done{background:var(--ink2)}
@@ -280,7 +282,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-02k';
+var BUILD = 'Prism II · 2026-09-04a REORDER';
 var DEMO = /[?&]demo=/.test(location.search);
 
 var PLANS = {
@@ -469,11 +471,24 @@ function startingWeight(day, ex){
 function newSession(day){
   var plan=planFor(day), exs=[];
   for(var i=0;i<plan.length;i++){ var sw=startingWeight(day, plan[i]); exs.push({id:plan[i].id, w:sw.w, from:sw.from, dropped:false, pair:null}); }
-  S={day:day, date:isoDate(), startedAt:Date.now(), phase:'set', exs:exs, logs:{}, cur:{ex:0}, order:[], note:'', anchor:{armed:anchorArmed(day), taken:false, eligible:null, why:''}, finished:false, restEndsAt:0, restTotal:0};
+  var bd=[]; for(var b=0;b<plan.length;b++) bd.push(b);
+  S={day:day, date:isoDate(), startedAt:Date.now(), phase:'set', exs:exs, logs:{}, cur:{ex:0}, order:[], board:bd, note:'', anchor:{armed:anchorArmed(day), taken:false, eligible:null, why:''}, finished:false, restEndsAt:0, restTotal:0};
   save();
 }
 function save(){ if(S && !DEMO) lsSet(K.session, S); }
 function ex(i){ return planFor(S.day)[i]; }
+/* ---------- board order ----------
+   Reordering moves DISPLAY order and nothing else. S.order, S.exs[].pair and
+   S.cur.ex are all plan INDICES, so splicing the plan would make every logged
+   set claim a different exercise. The board is a permutation of indices laid
+   over a frozen plan, so a reorder cannot strand or mis-attribute a set.
+   Self-heals: a session saved before this feature existed has no board. */
+function board(){ var n=planFor(S.day).length;
+  if(!S.board||S.board.length!==n){ S.board=[]; for(var i=0;i<n;i++) S.board.push(i); }
+  return S.board; }
+function moveEx(i, dir){ var b=board(), from=b.indexOf(i), to=from+dir;
+  if(from<0||to<0||to>=b.length) return false;
+  b.splice(from,1); b.splice(to,0,i); save(); return true; }
 function logsOf(i){ return S.logs[ex(i).id]||[]; }
 function doneCount(i){ return logsOf(i).length; }
 function remaining(i){ return ex(i).sets-doneCount(i); }
@@ -489,10 +504,15 @@ function nextSlot(){
   var p=planFor(S.day), i=S.cur.ex, last=S.order.length?S.order[S.order.length-1]:null;
   if(last!=null){ var pl=partnerOf(last); if(pl!=null && remaining(pl)>0) return pl; }
   if(remaining(i)>0) return i;
-  for(var k=0;k<p.length;k++){ if(remaining(k)>0) return k; }
+  var b=board(); for(var k=0;k<b.length;k++){ if(remaining(b[k])>0) return b[k]; }
   return null;
 }
-function canPair(i){ var p=planFor(S.day); if(partnerOf(i)!=null) return null; for(var k=i+1;k<p.length;k++){ if(remaining(k)>0 && partnerOf(k)==null) return k; } return null; }
+/* "the next one" means the next one ON THE BOARD, so a reorder actually changes
+   what a superset pairs with — otherwise reordering would move the list and
+   leave the pairing logic reading the old sequence. */
+function canPair(i){ var b=board(), pos=b.indexOf(i); if(partnerOf(i)!=null) return null;
+  for(var k=pos+1;k<b.length;k++){ if(remaining(b[k])>0 && partnerOf(b[k])==null) return b[k]; }
+  return null; }
 function togglePair(){
   var i=S.cur.ex, pr=partnerOf(i);
   if(pr!=null){ S.exs[i].pair=null; S.exs[pr].pair=null; toast('superset off'); }
@@ -707,8 +727,9 @@ function buildExport(){
   exp.push(S.day.toUpperCase()+' · '+todayLbl()+' · '+fmtDur((S.endedAt||Date.now())-S.startedAt)+' · '+loggedSets()+' sets');
   var ord=[],seen={}; for(var k=0;k<S.order.length;k++){ var id=ex(S.order[k]).short; if(!seen[id]){ seen[id]=1; ord.push(id); } }
   exp.push('Order: '+ord.join(' '));
-  for(var i=0;i<p.length;i++){
-    var x=p[i], l=logsOf(i); if(!l.length) continue;
+  var bd=board();
+  for(var q=0;q<bd.length;q++){
+    var i=bd[q], x=p[i], l=logsOf(i); if(!l.length) continue;
     var parts=[], tot=0, allTop=l.length===x.sets, pr=false, base=l[0].w;   // the header weight is what set 1 was done at, never the current override
     for(var j=0;j<l.length;j++){ ton+=l[j].w*l[j].r; tot+=l[j].r; sets++; parts.push(l[j].r+(l[j].w!==base?'@'+fmtW(l[j].w):'')+(l[j].pr?'*':'')); if(l[j].r<x.hi||l[j].w<x.weight) allTop=false; if(l[j].pr) pr=true; }
     exp.push(x.name+' '+fmtW(base)+': '+parts.join(' / ')+' = '+tot+(pr?'  PR':''));
@@ -725,7 +746,8 @@ function finish(){
   $('done-day').textContent=S.day+' · '+todayLbl();
   $('d-ton').textContent=commas(b.ton); $('d-sets').textContent=b.sets; $('d-time').textContent=fmtDur(S.endedAt-S.startedAt);
   var L=$('d-lines'); L.innerHTML='';
-  for(var i=0;i<p.length;i++){ var x=p[i], l=logsOf(i); if(!l.length) continue; var parts=[],tot=0,pr=false,base=l[0].w; for(var j=0;j<l.length;j++){ tot+=l[j].r; parts.push(l[j].r+(l[j].w!==base?'@'+fmtW(l[j].w):'')); if(l[j].pr) pr=true; }
+  var bd=board();
+  for(var q=0;q<bd.length;q++){ var i=bd[q], x=p[i], l=logsOf(i); if(!l.length) continue; var parts=[],tot=0,pr=false,base=l[0].w; for(var j=0;j<l.length;j++){ tot+=l[j].r; parts.push(l[j].r+(l[j].w!==base?'@'+fmtW(l[j].w):'')); if(l[j].pr) pr=true; }
     var el=document.createElement('div'); el.className='l'; el.innerHTML='<span><b>'+x.name+'</b> '+fmtW(base)+' · '+parts.join(' / ')+'</span><span>'+(pr?'<span class="pr">PR</span> ':'')+'<b>'+tot+'</b></span>'; L.appendChild(el); }
   $('d-adv').textContent=b.adv.length?('Next session: '+b.adv.join(' · ')):'Every weight holds.';
   $('d-note').value=S.note||''; $('d-export').value=b.text;
@@ -771,9 +793,10 @@ function openSheet(html){ $('sheet').innerHTML=html; $('sheet').classList.add('o
 function closeSheet(){ $('sheet').classList.remove('open'); $('scrim').classList.remove('on'); }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 function listSheet(){
-  var p=planFor(S.day), html='<div class="row" style="margin-bottom:6px"><span class="eyebrow">'+S.day+' · '+loggedSets()+' of '+totalSets()+'</span><button class="eyebrow" data-act="close">close</button></div>';
-  for(var i=0;i<p.length;i++){ var d=doneCount(i), dots=''; for(var s=0;s<p[i].sets;s++) dots+='<i class="'+(s<d?'done':(i===S.cur.ex&&s===d?'cur':''))+'"></i>';
-    html+='<div class="li'+(i===S.cur.ex?' cur':'')+'"><span><b>'+p[i].name+'</b><br><span class="faint">'+fmtW(curWeight(i))+' lb · '+p[i].lo+'–'+p[i].hi+(partnerOf(i)!=null?' · ⇄ '+ex(partnerOf(i)).short:'')+'</span></span><span class="dots">'+dots+'</span>'+(remaining(i)>0&&i!==S.cur.ex?'<button data-act="jump" data-i="'+i+'">go</button>':'<span></span>')+'</div>'; }
+  var p=planFor(S.day), b=board(), html='<div class="row" style="margin-bottom:6px"><span class="eyebrow">'+S.day+' · '+loggedSets()+' of '+totalSets()+'</span><button class="eyebrow" data-act="close">close</button></div>';
+  for(var q=0;q<b.length;q++){ var i=b[q], d=doneCount(i), dots=''; for(var s=0;s<p[i].sets;s++) dots+='<i class="'+(s<d?'done':(i===S.cur.ex&&s===d?'cur':''))+'"></i>';
+    var mv='<span class="mv">'+(q>0?'<button data-act="mvup" data-i="'+i+'">&uarr;</button>':'<span></span>')+(q<b.length-1?'<button data-act="mvdn" data-i="'+i+'">&darr;</button>':'<span></span>')+'</span>';
+    html+='<div class="li'+(i===S.cur.ex?' cur':'')+'"><span><b>'+p[i].name+'</b><br><span class="faint">'+fmtW(curWeight(i))+' lb · '+p[i].lo+'–'+p[i].hi+(partnerOf(i)!=null?' · ⇄ '+ex(partnerOf(i)).short:'')+'</span></span><span class="dots">'+dots+'</span>'+mv+(remaining(i)>0&&i!==S.cur.ex?'<button data-act="jump" data-i="'+i+'">go</button>':'<span></span>')+'</div>'; }
   html+='<div style="margin-top:12px"><textarea class="note" id="sheet-note" placeholder="Note for the log (goes into the summary)">'+esc(S.note||'')+'</textarea></div>';
   html+='<div class="row" style="margin-top:12px"><button class="act" data-act="finish">finish early · saves</button><button class="act" data-act="settings">settings</button></div>';
   openSheet(html);
@@ -797,6 +820,7 @@ $('sheet').addEventListener('click', function(ev){
   else if(act==='wadj'){ wTmp=Math.max(0, Math.round((wTmp+parseFloat(b.getAttribute('data-d')))*10)/10); $('wsheet-val').textContent=fmtW(wTmp); }
   else if(act==='wuse'){ var ci=S.cur.ex; S.exs[ci].w=wTmp; S.exs[ci].manual=true; S.exs[ci].dropped=false; S.exs[ci].from=null; save(); closeSheet(); renderSet(); toast(ex(ci).short+' · '+fmtW(wTmp)); }
   else if(act==='wreset'){ var ri=S.cur.ex, sw=startingWeight(S.day, ex(ri)); S.exs[ri].w=sw.w; S.exs[ri].from=sw.from; S.exs[ri].manual=false; S.exs[ri].dropped=false; save(); closeSheet(); renderSet(); }
+  else if(act==='mvup'||act==='mvdn'){ moveEx(+b.getAttribute('data-i'), act==='mvup'?-1:1); listSheet(); }
   else if(act==='jump'){ var i=+b.getAttribute('data-i'); if(S.phase==='rest') endRest(false); S.cur.ex=i; S.phase='set'; save(); renderSet(); closeSheet(); }
   else if(act==='finish'){ closeSheet(); finish(); }
   else if(act==='voice'){ prefs.voice=!prefs.voice; lsSet(K.prefs,prefs); if(!prefs.voice) Bank.cancel(); menuSheet(); if(document.body.getAttribute('data-screen')==='launch') renderLaunch(launchDay); }
