@@ -128,7 +128,8 @@ body[data-screen="rest"] .strip i.gap{background:transparent}
 #s-rest{justify-content:flex-start;gap:14px}
 #s-rest .controls{margin-top:auto}
 .rest-head{display:flex;justify-content:space-between;align-items:baseline}
-.count{font-family:var(--mono);font-weight:600;font-size:clamp(96px,36vw,141px);line-height:1;letter-spacing:-.04em;margin-top:14px;text-align:center}
+/* the countdown is the red accent, always (his call 9/4: hard to read in white over the tank) */
+.count{font-family:var(--mono);font-weight:600;font-size:clamp(96px,36vw,141px);line-height:1;letter-spacing:-.04em;margin-top:14px;text-align:center;color:var(--red-ink)}
 .count.hot{color:var(--red-ink)}
 .next{display:flex;flex-direction:column;gap:4px;margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
 .next .nl{display:flex;justify-content:space-between;align-items:baseline}
@@ -265,7 +266,7 @@ textarea::placeholder{color:var(--ink3)}
   <div class="next rest-top">
     <div class="nl"><span class="n" id="rest-exname">Chest Press</span><span class="eyebrow num" id="rest-idx"></span></div>
     <div class="big">
-      <span class="disp num" id="rest-weight">120</span><span class="unit">lb</span>
+      <button class="disp num" id="rest-weight" aria-label="Change weight for the next set">120</button><span class="unit">lb</span>
       <span class="tgt"><span class="arrow">→</span><span class="disp num" id="rest-target">12</span></span>
     </div>
     <div class="advice num" id="rest-advice"></div>
@@ -306,7 +307,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-04g SFX';
+var BUILD = 'Prism II · 2026-09-04h CASCADE';
 var DEMO = /[?&]demo=/.test(location.search);
 /* query hooks (demo only): ?demo=rest&t=SEC pins the rest clock for a deterministic screenshot,
    &mid=MS paints one mid-fade frame MS after a level change, &dither=NAME picks a tank style,
@@ -397,6 +398,9 @@ function fetchPlan(){
 var ditherOverride = Q.dither||null;   // a URL pick is for looking, never saved unless he taps it in settings
 /* halftone is his pick (9/4: "I kind of like halftone the best in terms of a gradient"); the one-time reset below moves any demo-cycled leftover onto it */
 if(prefs.dither!=='halftone'&&prefs.dither!=='bayer8'){ prefs.dither='halftone'; lsSet(K.prefs,prefs); }   // his cut 9/4: halftone and Bayer 8 only
+if(prefs.knockout==null) prefs.knockout=true;   // clear a feathered window in the tank behind the countdown
+var koOverride = Q.ko!=null ? Q.ko==='1' : null;
+function koOn(){ return koOverride!=null ? koOverride : !!prefs.knockout; }
 function curDither(){ return ditherOverride||prefs.dither||'halftone'; }
 var history = lsGet(K.history, null);
 if(!history){ history=SEED.slice(); lsSet(K.history, history); }
@@ -520,7 +524,7 @@ function startingWeight(day, ex){
 }
 function newSession(day){
   var plan=PLANS[day], exs=[];
-  for(var i=0;i<plan.length;i++){ var sw=startingWeight(day, plan[i]); exs.push({id:plan[i].id, w:sw.w, from:sw.from, dropped:false, pair:null}); }
+  for(var i=0;i<plan.length;i++){ var sw=startingWeight(day, plan[i]); exs.push({id:plan[i].id, w:sw.w, from:sw.from, dropLog:[], pair:null}); }
   var bd=savedBoard(day); if(!bd){ bd=[]; for(var b=0;b<plan.length;b++) bd.push(b); }
   S={day:day, date:isoDate(), startedAt:Date.now(), phase:'set', exs:exs, logs:{}, cur:{ex:0}, order:[], board:bd, plan:{Upper:PLANS.Upper, Lower:PLANS.Lower, version:PLANS.version||null}, note:'', anchor:{armed:anchorArmed(day), taken:false, eligible:null, why:''}, finished:false, restEndsAt:0, restTotal:0};
   save();
@@ -568,7 +572,19 @@ function doneCount(i){ return logsOf(i).length; }
 function remaining(i){ return ex(i).sets-doneCount(i); }
 function totalSets(){ var t=0,p=planFor(S.day); for(var i=0;i<p.length;i++) t+=p[i].sets; return t; }
 function loggedSets(){ var t=0,p=planFor(S.day); for(var i=0;i<p.length;i++) t+=doneCount(i); return t; }
-function curWeight(i){ var e=S.exs[i], x=ex(i); return (e.dropped&&x.backoff)?x.backoff:e.w; }
+/* ---------- the drop rule: every floor hit drops the SAME delta again (his call 9/4: 120 -> 100 -> 80 -> 60 on the row) ----------
+   dropLog is the list of drops taken this session ({at: set index it fired on, reps}); its length is the level. A session saved
+   under the old boolean self-heals (dropped:true reads as one level). Floor: never below 40% of the plan weight, never below one delta. */
+function dropsOf(e){ return e.dropLog ? e.dropLog.length : (e.dropped ? 1 : 0); }
+function dropDelta(x){ return (x.backoff!=null && x.weight>x.backoff) ? x.weight-x.backoff : 0; }
+function dropFloor(x){ return Math.max(dropDelta(x), Math.round(x.weight*0.4)); }
+function curWeight(i){ var e=S.exs[i], x=ex(i), d=dropDelta(x); if(!d) return e.w; return Math.max(dropFloor(x), e.w - dropsOf(e)*d); }
+function canDropMore(i){ var e=S.exs[i], x=ex(i), d=dropDelta(x); if(!d||x.noDrop) return false; return curWeight(i)-d >= dropFloor(x); }
+/* pure: decide + record a drop after a set of r reps on exercise i. Returns true if the weight came down. */
+function applyDrop(i, r){ var x=ex(i), e=S.exs[i]; if(!e.dropLog) e.dropLog=dropsOf(e)?[{at:e.droppedAt||doneCount(i), reps:e.droppedReps||r}]:[]; delete e.dropped;
+  if(!shouldDrop(x,r) || doneCount(i)>=x.sets || !canDropMore(i)) return false; e.dropLog.push({at:doneCount(i), reps:r}); return true; }
+function revertDrop(i, setIndex){ var e=S.exs[i]; if(!e.dropLog||!e.dropLog.length) return false; var last=e.dropLog[e.dropLog.length-1]; if(last.at!==setIndex) return false; e.dropLog.pop(); return true; }
+function lastDrop(i){ var e=S.exs[i]; return (e.dropLog&&e.dropLog.length)?e.dropLog[e.dropLog.length-1]:null; }
 function target(i){ return ex(i).hi; }
 /* every set is to failure, so the floor is the whole rule: at or under it, the weight was too heavy */
 function shouldDrop(x, r){ if(x.noDrop||!x.backoff) return false; return r<=x.lo; }
@@ -643,7 +659,7 @@ function renderSetNow(){
   sf.classList.toggle('show', showSafety); tag.classList.toggle('open', showSafety);
   $('set-weight').textContent=fmtW(w);
   var from=$('set-from');
-  if(e.dropped&&x.backoff) from.textContent='↓ from '+fmtW(e.w); else if(e.from!=null) from.textContent='↑ from '+fmtW(e.from); else if(x.discovery) from.textContent='discovery'; else from.textContent='';
+  if(dropsOf(e)&&dropDelta(x)) from.textContent='↓ from '+fmtW(e.w)+(dropsOf(e)>1?' · drop '+dropsOf(e):''); else if(e.from!=null) from.textContent='↑ from '+fmtW(e.from); else if(x.discovery) from.textContent='discovery'; else from.textContent='';
   $('set-target').textContent=target(i);
   $('set-range').innerHTML='range <b>'+x.lo+'–'+x.hi+'</b>';
   var g=ghost(i), gEl=$('set-ghost');
@@ -654,7 +670,7 @@ function renderSetNow(){
   if(e.manual) from.textContent='set by you'+(e.w!==x.weight?' (plan '+fmtW(x.weight)+')':'');
   var adv=$('set-advice'); adv.className='advice'; adv.textContent='';
   var l=logsOf(i);
-  if(e.dropped&&d>0){ adv.classList.add('drop'); adv.textContent='dropped to '+fmtW(x.backoff)+' · set '+e.droppedAt+' was '+e.droppedReps; }
+  var ld=lastDrop(i); if(ld&&d>0){ adv.classList.add('drop'); adv.textContent='dropped to '+fmtW(w)+' · set '+ld.at+' was '+ld.reps; }
   else if(l.length && l[l.length-1].r>=x.hi){ adv.textContent='on pace for '+(x.next?fmtW(x.next):'the top')+' · '+l.length+' of '+x.sets+' at the top'; }
   anchorGate();
   if(S.anchor.armed&&!S.anchor.taken&&x.anchor&&d===x.sets-1){
@@ -696,7 +712,7 @@ setInterval(clockTick, 1000);
 var wTmp=0;
 function weightSheet(){
   var i=S.cur.ex, x=ex(i); wTmp=S.exs[i].w;
-  var html='<div class="row" style="margin-bottom:6px"><span class="eyebrow">'+x.name+' · this session</span><button class="eyebrow" data-act="close">close</button></div>';
+  var html='<div class="row" style="margin-bottom:6px"><span class="eyebrow">'+x.name+' · from set '+(doneCount(i)+1)+' on</span><button class="eyebrow" data-act="close">close</button></div>';
   html+='<div class="disp num" id="wsheet-val" style="font-size:96px;margin:10px 0 14px">'+fmtW(wTmp)+'</div>';
   html+='<div class="effort" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px"><button data-act="wadj" data-d="-10">−10</button><button data-act="wadj" data-d="-5">−5</button><button data-act="wadj" data-d="-2.5">−2.5</button></div>';
   html+='<div class="effort" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px"><button data-act="wadj" data-d="2.5">+2.5</button><button data-act="wadj" data-d="5">+5</button><button data-act="wadj" data-d="10">+10</button></div>';
@@ -713,7 +729,7 @@ function logSet(){
   S.logs[x.id].push(entry); S.order.push(i);
   if(S.anchor.armed&&!S.anchor.taken&&x.anchor&&S.logs[x.id].length===x.sets&&S.anchor.eligible===true){ S.anchor.taken=true; S.anchorTakenOn=x.id; }
   var dropFired=false;
-  if(!S.exs[i].dropped && shouldDrop(x,r) && doneCount(i)<x.sets){ S.exs[i].dropped=true; S.exs[i].droppedAt=doneCount(i); S.exs[i].droppedReps=r; dropFired=true; }
+  if(applyDrop(i, r)) dropFired=true;
   reapPairs(); save();
   var nx=nextSlot(); if(nx==null){ finish(); return; }
   var paired=partnerOf(i)!=null && nx===partnerOf(i);
@@ -725,17 +741,17 @@ function logSet(){
   var lx=S.logs[x.id]; if(switching && lx.length===x.sets && lx.every(function(e){ return e.r>=x.hi && e.w>=S.exs[i].w; })) cues.push('cue-trigger-hit');
   if(paired && i<nx){
     /* A -> B inside a superset: no transition timer either (his call 9/2, different muscle groups) */
-    cues.push('up-next', nxEx.clip); if(S.exs[nx].dropped&&S.exs[nx].droppedAt===doneCount(nx)) cues.push(wgtClip(nxEx.backoff));
+    cues.push('up-next', nxEx.clip); var ldA=lastDrop(nx); if(ldA&&ldA.at===doneCount(nx)) cues.push(wgtClip(curWeight(nx)));
     S.cur.ex=nx; S.phase='set'; save(); renderSet(); toast('logged '+r+' @ '+fmtW(w)); Bank.seq(cues); return;
   }
-  else if(paired){ cues.push('up-next', nxEx.clip); if(S.exs[nx].dropped&&S.exs[nx].droppedAt===doneCount(nx)) cues.push(wgtClip(nxEx.backoff)); }
+  else if(paired){ cues.push('up-next', nxEx.clip); var ldB=lastDrop(nx); if(ldB&&ldB.at===doneCount(nx)) cues.push(wgtClip(curWeight(nx))); }
   else if(switching){
     /* no rest timer on an exercise change (his call 9/2: the walk to the next station is the rest) --
        straight to the next exercise's first set, with the arrival cues */
     cues.push('exercise-complete', isFinalEx?'final-exercise':'up-next', nxEx.clip, wgtClip(curWeight(nx)), aimClip(nxEx));
     S.cur.ex=nx; S.phase='set'; save(); renderSet(); toast('logged '+r+' @ '+fmtW(w)); Bank.seq(cues); return;
   }
-  else if(dropFired){ cues.push(wgtClip(x.backoff)); }
+  else if(dropFired){ cues.push(wgtClip(curWeight(i))); }
   cues.push(restClip(rest));
   S.cur.ex=nx; startRest(rest); Bank.seq(cues);
 }
@@ -744,7 +760,7 @@ function undo(){
   if(S.phase==='rest') endRest(false);
   Bank.cancel(); Bank.cancelScheduled();
   var i=S.order.pop(), x=ex(i), l=S.logs[x.id]; l.pop();
-  if(S.exs[i].dropped && S.exs[i].droppedAt===l.length+1) S.exs[i].dropped=false;
+  revertDrop(i, l.length+1);
   if(S.anchorTakenOn===x.id && l.length<x.sets){ S.anchor.taken=false; S.anchorTakenOn=null; }
   S.cur.ex=i; S.phase='set'; save(); renderSet(); toast('undone');
 }
@@ -752,6 +768,15 @@ function undo(){
 /* ---------- REST + tank ---------- */
 function startRest(sec){
   S.phase='rest'; S.restTotal=sec*1000; S.restEndsAt=Date.now()+S.restTotal; spoke={}; save();
+  renderRestInfo();
+  document.body.classList.remove('hot');
+  renderStrip($('rest-strip')); syncNotes();
+  setScreen('rest'); tankStart(); tick();
+  if(tickTimer) clearInterval(tickTimer); tickTimer=setInterval(tick, 250);
+}
+/* during rest S.cur.ex is already the NEXT slot (logSet advanced it before startRest), so this is the exercise he walks to next --
+   in a superset that is the partner, which is exactly what a weight edit on the rest screen should target */
+function renderRestInfo(){
   var i=S.cur.ex, x=ex(i), d=doneCount(i);
   $('rest-lbl').textContent='rest · '+fmtClock(S.restTotal);
   $('rest-exname').textContent=x.name;
@@ -759,13 +784,11 @@ function startRest(sec){
   $('rest-weight').textContent=fmtW(curWeight(i));
   $('rest-target').textContent=target(i);
   var adv=$('rest-advice'); adv.className='advice num';
-  if(S.exs[i].dropped&&d>0){ adv.classList.add('drop'); adv.textContent='↓ '+fmtW(x.backoff)+' · set '+S.exs[i].droppedAt+' was '+S.exs[i].droppedReps; }
+  var ld=lastDrop(i); if(ld&&d>0){ adv.classList.add('drop'); adv.textContent='↓ '+fmtW(curWeight(i))+' · set '+ld.at+' was '+ld.reps; }
   else { var g=ghost(i); adv.textContent=(g&&g[d])?('last time '+g[d].r+(g[d].w!==x.weight?' at '+fmtW(g[d].w):'')):(x.discovery?'find the weight':''); }
-  document.body.classList.remove('hot');
-  renderStrip($('rest-strip')); syncNotes();
-  setScreen('rest'); tankStart(); tick();
-  if(tickTimer) clearInterval(tickTimer); tickTimer=setInterval(tick, 250);
+  if(S.exs[i].manual) adv.textContent='set by you · '+fmtW(curWeight(i))+(adv.textContent?' · '+adv.textContent:'');
 }
+function afterWeightEdit(ci){ if(S.phase==='rest'){ renderRestInfo(); } else renderSet(); }
 function endRest(auto){
   if(tickTimer){ clearInterval(tickTimer); tickTimer=null; }
   S.phase='set'; save();
@@ -861,7 +884,12 @@ var DITHERS=[
   {id:'bayer8',   label:'Bayer 8',  band:.18, th:function(x,y){ return (B8[y&7][x&7]+.5)/64; }}
 ];
 function ditherById(id){ for(var k=0;k<DITHERS.length;k++) if(DITHERS[k].id===id) return DITHERS[k]; return ditherById('halftone'); }
-var TK={w:0,h:0,cur:null,tgt:null,err:null,img:null,hot:0};
+var TK={w:0,h:0,cur:null,tgt:null,err:null,img:null,hot:0,ko:null};
+/* the knockout window: the countdown's box in cell units, padded; density fades to 0 inside it over a KO_FEATHER-cell ramp */
+var KO_PAD=3, KO_FEATHER=9;
+function koRect(){ if(!koOn()){ TK.ko=null; return; } var r=$('count').getBoundingClientRect(); if(!r.width){ TK.ko=null; return; }
+  TK.ko={x0:r.left/CELL-KO_PAD, y0:r.top/CELL-KO_PAD, x1:r.right/CELL+KO_PAD, y1:r.bottom/CELL+KO_PAD}; }
+function koMask(x,y){ var k=TK.ko; if(!k) return 1; var dx=Math.max(k.x0-x, 0, x-k.x1), dy=Math.max(k.y0-y, 0, y-k.y1); var d=Math.max(dx,dy); return d>=KO_FEATHER?1:d/KO_FEATHER; }
 function sizeTank(){
   /* size off the canvas's own box, never the window: the box is what is painted to the screen */
   var cw=tank.clientWidth||window.innerWidth, ch=tank.clientHeight||window.innerHeight;
@@ -883,7 +911,10 @@ function tankTargets(frac, now){
   for(y=0;y<h;y++){ var fb2=h-y; row=y*w;
     if(D.edge){ for(x=0;x<w;x++){ var lv=level+D.edge(x,t)*band*1.4, d3=fb2<=lv-band?1:(fb2>=lv?0:(lv-fb2)/band); tgt[row+x]=(d3>0&&D.th(x,y)<d3)?1:0; } continue; }
     var d2=fb2<=level-band?1:(fb2>=level?0:(level-fb2)/band);
-    if(d2<=0){ for(x=0;x<w;x++) tgt[row+x]=0; } else if(d2>=1){ for(x=0;x<w;x++) tgt[row+x]=1; } else { for(x=0;x<w;x++) tgt[row+x]=D.th(x,y)<d2?1:0; }
+    if(d2<=0){ for(x=0;x<w;x++) tgt[row+x]=0; continue; }
+    var k=TK.ko, inKo=k&&y>=k.y0-KO_FEATHER&&y<=k.y1+KO_FEATHER;
+    if(inKo){ for(x=0;x<w;x++){ var dm=d2*koMask(x,y); tgt[row+x]=(dm>0&&D.th(x,y)<dm)?1:0; } }
+    else if(d2>=1){ for(x=0;x<w;x++) tgt[row+x]=1; } else { for(x=0;x<w;x++) tgt[row+x]=D.th(x,y)<d2?1:0; }
   }
 }
 var TAU_IN=160, TAU_OUT=420, TAU_HOT=300;   // ms; a cell fades in faster than it fades out
@@ -909,7 +940,7 @@ function tankFrame(ts){
   drawTank(Math.max(0,left)/S.restTotal, left<=10000, dt, false);
   tankRaf=requestAnimationFrame(tankFrame);
 }
-function tankStart(){ tankLast=0; sizeTank(); if(!tankRaf&&!FREEZE) tankRaf=requestAnimationFrame(tankFrame); }
+function tankStart(){ tankLast=0; sizeTank(); koRect(); if(!tankRaf&&!FREEZE) tankRaf=requestAnimationFrame(tankFrame); }
 function cycleDither(){ var ids=DITHERS.map(function(d){ return d.id; }), k=(ids.indexOf(curDither())+1)%ids.length; prefs.dither=ids[k]; ditherOverride=null; lsSet(K.prefs,prefs); return ditherById(ids[k]).label; }
 
 /* ---------- finish ---------- */
@@ -1002,6 +1033,7 @@ function menuSheet(){
   html+='<div class="tog"><span class="eyebrow">Voice cues</span><button class="pill '+(prefs.voice?'on':'')+'" data-act="voice">'+(prefs.voice?'ON':'OFF')+'</button></div>';
   html+='<div class="tog"><span class="eyebrow">Clips</span><span class="num">'+audioLabel()+'</span></div>';
   html+='<div class="tog"><span class="eyebrow">Test sound</span><button class="pill" data-act="testsound">play</button></div>';
+  html+='<div class="tog"><span class="eyebrow">Clear the tank behind the timer</span><button class="pill '+(prefs.knockout?'on':'')+'" data-act="knockout">'+(prefs.knockout?'ON':'OFF')+'</button></div>';
   html+='<div class="tog col"><span class="eyebrow">Rest tank</span><div class="pills">'+DITHERS.map(function(d){ return '<button class="pill'+(d.id===curDither()?' on':'')+'" data-act="dither" data-id="'+d.id+'">'+d.label+'</button>'; }).join('')+'</div></div>';
   html+='<div class="tog"><span class="eyebrow">Sessions in history</span><span class="num">'+history.length+'</span></div>';
   html+='<div class="tog"><span class="eyebrow">Discard this workout<br><span class="faint" style="text-transform:none;letter-spacing:0">nothing saved · past sessions untouched</span></span><button class="pill" data-act="abandon">'+(S&&!S.finished?'discard':'none')+'</button></div>';
@@ -1014,12 +1046,13 @@ $('sheet').addEventListener('click', function(ev){
   if(act==='close') closeSheet();
   else if(act==='settings'){ menuSheet(); }
   else if(act==='wadj'){ wTmp=Math.max(0, Math.round((wTmp+parseFloat(b.getAttribute('data-d')))*10)/10); $('wsheet-val').textContent=fmtW(wTmp); }
-  else if(act==='wuse'){ var ci=S.cur.ex; S.exs[ci].w=wTmp; S.exs[ci].manual=true; S.exs[ci].dropped=false; S.exs[ci].from=null; save(); closeSheet(); renderSet(); toast(ex(ci).short+' · '+fmtW(wTmp)); }
-  else if(act==='wreset'){ var ri=S.cur.ex, sw=startingWeight(S.day, ex(ri)); S.exs[ri].w=sw.w; S.exs[ri].from=sw.from; S.exs[ri].manual=false; S.exs[ri].dropped=false; save(); closeSheet(); renderSet(); }
+  else if(act==='wuse'){ var ci=S.cur.ex; S.exs[ci].w=wTmp; S.exs[ci].manual=true; S.exs[ci].dropLog=[]; delete S.exs[ci].dropped; S.exs[ci].from=null; save(); closeSheet(); afterWeightEdit(ci); toast(ex(ci).short+' · '+fmtW(wTmp)); }
+  else if(act==='wreset'){ var ri=S.cur.ex, sw=startingWeight(S.day, ex(ri)); S.exs[ri].w=sw.w; S.exs[ri].from=sw.from; S.exs[ri].manual=false; S.exs[ri].dropLog=[]; delete S.exs[ri].dropped; save(); closeSheet(); afterWeightEdit(ri); }
   else if(act==='jump'){ var i=+b.getAttribute('data-i'); if(S.phase==='rest') endRest(false); S.cur.ex=i; S.phase='set'; save(); renderSet(); closeSheet(); }
   else if(act==='finish'){ closeSheet(); finish(); }
   else if(act==='voice'){ prefs.voice=!prefs.voice; lsSet(K.prefs,prefs); if(!prefs.voice) Bank.cancel(); menuSheet(); if(document.body.getAttribute('data-screen')==='launch') renderLaunch(launchDay); }
   else if(act==='testsound'){ Bank.unlock(); Bank.seq(['received','sfx/go.wav']); toast(Bank.state()); }
+  else if(act==='knockout'){ prefs.knockout=!prefs.knockout; koOverride=null; lsSet(K.prefs,prefs); koRect(); menuSheet(); }
   else if(act==='dither'){ prefs.dither=b.getAttribute('data-id'); ditherOverride=null; lsSet(K.prefs,prefs);
     if(DEMO&&S&&S.phase==='rest'){ S.restEndsAt=Date.now()+S.restTotal; closeSheet(); toast('tank · '+ditherById(prefs.dither).label); } else menuSheet(); }
   else if(act==='abandon'){ if(S&&!S.finished){ Bank.cancel(); lsDel(K.session); S=null; closeSheet(); renderLaunch(); toast('session abandoned'); } }
@@ -1044,6 +1077,7 @@ window.addEventListener('resize', function(){ if(document.body.getAttribute('dat
 var lastDone=0;
 $('set-done').addEventListener('click', function(){ if(Date.now()-lastDone<700) return; lastDone=Date.now(); Bank.unlock(); var i=S.cur.ex, w=curWeight(i), r=repVal; logSet(); $('rest-logged').textContent='logged '+r+' @ '+fmtW(w); });
 $('set-weight').addEventListener('click', weightSheet);
+$('rest-weight').addEventListener('click', weightSheet);
 $('rest-undo').addEventListener('click', undo);
 $('rest-plus').addEventListener('click', plus30);
 $('rest-go').addEventListener('click', function(){ endRest(false); });
