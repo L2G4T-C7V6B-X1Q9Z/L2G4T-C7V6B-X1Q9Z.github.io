@@ -142,9 +142,10 @@ body[data-screen="rest"] .strip i.gap{background:transparent}
 .rest-ctl{display:grid;grid-template-columns:1fr 2fr;gap:10px}
 .go{background:var(--bg3);border:1px solid var(--line)}
 body.hot .go{background:var(--red);border-color:var(--red);color:#fff}
-.flash{position:fixed;inset:0;background:var(--red);z-index:5;opacity:0;pointer-events:none;transition:opacity .35s}
-.flash.on{opacity:.9;transition:none}
-@media (prefers-reduced-motion:reduce){.flash{transition:none}}
+/* halftone FX layers: the screen wipe (black dots) sits above the screens, the GO burst (red dots) above that; sheets stay above both */
+#wipe,#burst{position:fixed;inset:0;width:100%;height:100%;display:block;pointer-events:none;image-rendering:pixelated;image-rendering:crisp-edges;opacity:0}
+#wipe{z-index:4}
+#burst{z-index:5}
 
 /* done */
 #s-done{gap:14px;overflow:auto}
@@ -194,7 +195,8 @@ textarea::placeholder{color:var(--ink3)}
 <body data-screen="launch">
 
 <canvas id="tank" aria-hidden="true"></canvas>
-<div class="flash" id="flash" aria-hidden="true"></div>
+<canvas id="wipe" aria-hidden="true"></canvas>
+<canvas id="burst" aria-hidden="true"></canvas>
 
 <section class="screen" id="s-launch" aria-label="Start">
   <div class="top">
@@ -304,7 +306,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-04d DRAG';
+var BUILD = 'Prism II · 2026-09-04e WIPE';
 var DEMO = /[?&]demo=/.test(location.search);
 /* query hooks (demo only): ?demo=rest&t=SEC pins the rest clock for a deterministic screenshot,
    &mid=MS paints one mid-fade frame MS after a level change, &dither=NAME picks a tank style,
@@ -312,7 +314,9 @@ var DEMO = /[?&]demo=/.test(location.search);
 var Q=(function(){ var o={}; location.search.replace(/^\?/,'').split('&').forEach(function(p){ if(!p) return; var i=p.indexOf('='); try{ o[decodeURIComponent(i<0?p:p.slice(0,i))]=i<0?'':decodeURIComponent(p.slice(i+1)); }catch(e){} }); return o; })();
 var FREEZE = DEMO && Q.t!=null;
 
-var PLANS = {
+/* prism2-plan.json is the source of truth for exercises and weights; this embedded copy only bootstraps a first load with no network.
+   Change weights by editing the JSON (keep ids stable - history is keyed on them), bump its version, push. */
+var EMBEDDED_PLANS = {
   Upper: [
     {id:'chest-press', name:'Chest Press', short:'PRESS', clip:'ex-chest-press', sets:4, lo:8, hi:12, weight:120, backoff:100, next:130, rest:150, anchor:true,
       cue:'Warm up first: one easy set of ~8 at 80. Full ROM, controlled descent, no elbow slam.'},
@@ -374,11 +378,22 @@ var SEED = [
 ];
 
 /* ---------- storage ---------- */
-var K = {session:'prism2.session', history:'prism2.history', prefs:'prism2.prefs'};
+var K = {session:'prism2.session', history:'prism2.history', prefs:'prism2.prefs', plan:'prism2.plan'};
 function lsGet(k,d){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
 function lsSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 function lsDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
 var prefs = lsGet(K.prefs, {voice:true});
+function validPlan(p){ return !!(p&&typeof p==='object'&&Array.isArray(p.Upper)&&Array.isArray(p.Lower)&&p.Upper.length&&p.Lower.length&&p.Upper.every(function(x){ return x&&x.id&&x.sets; })); }
+var PLANS = (function(){ var c=lsGet(K.plan,null); return validPlan(c)?c:EMBEDDED_PLANS; })();   // last fetched plan, else the bootstrap
+function fetchPlan(){
+  var u=(DEMO&&Q.plan)||'prism2-plan.json';
+  fetch(u,{cache:'no-cache'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }).then(function(p){
+    if(!validPlan(p)||JSON.stringify(p)===JSON.stringify(PLANS)) return;
+    PLANS=p; if(!DEMO) lsSet(K.plan,p); Bank.prefetch(neededClips());
+    /* a running session keeps the plan it started with (S.plan); the new one applies at the next launch render */
+    if(!S&&document.body.getAttribute('data-screen')==='launch') renderLaunch(launchDay);
+  }).catch(function(){});
+}
 var ditherOverride = Q.dither||null;   // a URL pick is for looking, never saved unless he taps it in settings
 /* halftone is his pick (9/4: "I kind of like halftone the best in terms of a gradient"); the one-time reset below moves any demo-cycled leftover onto it */
 if(prefs.dither!=='halftone'&&prefs.dither!=='bayer8'){ prefs.dither='halftone'; lsSet(K.prefs,prefs); }   // his cut 9/4: halftone and Bayer 8 only
@@ -474,10 +489,12 @@ function neededClips(){
     'rest-3min','rest-2min','rest-90sec','rest-60sec','1min-remaining','30sec-remaining','workout-complete',
     'cue-trigger-hit','cue-personal-record','cue-aim-6-10','cue-aim-8-12','cue-aim-10-12','cue-aim-12-15','cue-aim-15-20',
     'sfx/tick.wav','sfx/go.wav'];
-  Object.keys(PLANS).forEach(function(d){ PLANS[d].forEach(function(x){ if(names.indexOf(x.clip)<0) names.push(x.clip); [x.weight,x.backoff,x.next].forEach(function(w){ var c=w&&wgtClip(w); if(c&&names.indexOf(c)<0) names.push(c); }); }); });
+  /* never Object.keys(PLANS): the JSON carries version/note too */
+  ['Upper','Lower'].forEach(function(d){ (PLANS[d]||[]).forEach(function(x){ if(names.indexOf(x.clip)<0) names.push(x.clip); [x.weight,x.backoff,x.next].forEach(function(w){ var c=w&&wgtClip(w); if(c&&names.indexOf(c)<0) names.push(c); }); }); });
   return names;
 }
 Bank.prefetch(neededClips());
+fetchPlan();
 function audioLabel(){
   var s=Bank.info();
   if(!s.unlocked) return s.pending ? 'fetching '+s.raw+' · tap start for sound' : s.raw+' fetched · tap start for sound';
@@ -489,7 +506,8 @@ function wake(){ if(!('wakeLock' in navigator)) return; try{ navigator.wakeLock.
 document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible'){ if(S&&!S.finished) wake(); if(S&&S.phase==='rest'){ tick(); tankStart(); } } });
 
 /* ---------- session ---------- */
-function planFor(day){ return PLANS[day]; }
+/* a session freezes the plan it started with: S.order, S.exs[].pair, S.cur.ex and the board are all indices into it */
+function planFor(day){ return (S&&S.plan&&S.plan[day])?S.plan[day]:PLANS[day]; }
 function lastSession(day){ for(var i=history.length-1;i>=0;i--){ if(history[i].day===day && !history[i].aborted) return history[i]; } return null; }
 function proposeDay(){ for(var i=history.length-1;i>=0;i--){ if(!history[i].aborted) return history[i].day==='Upper'?'Lower':'Upper'; } return 'Upper'; }
 function startingWeight(day, ex){
@@ -500,10 +518,10 @@ function startingWeight(day, ex){
   return {w:ex.next, from:ex.weight};
 }
 function newSession(day){
-  var plan=planFor(day), exs=[];
+  var plan=PLANS[day], exs=[];
   for(var i=0;i<plan.length;i++){ var sw=startingWeight(day, plan[i]); exs.push({id:plan[i].id, w:sw.w, from:sw.from, dropped:false, pair:null}); }
   var bd=savedBoard(day); if(!bd){ bd=[]; for(var b=0;b<plan.length;b++) bd.push(b); }
-  S={day:day, date:isoDate(), startedAt:Date.now(), phase:'set', exs:exs, logs:{}, cur:{ex:0}, order:[], board:bd, note:'', anchor:{armed:anchorArmed(day), taken:false, eligible:null, why:''}, finished:false, restEndsAt:0, restTotal:0};
+  S={day:day, date:isoDate(), startedAt:Date.now(), phase:'set', exs:exs, logs:{}, cur:{ex:0}, order:[], board:bd, plan:{Upper:PLANS.Upper, Lower:PLANS.Lower, version:PLANS.version||null}, note:'', anchor:{armed:anchorArmed(day), taken:false, eligible:null, why:''}, finished:false, restEndsAt:0, restTotal:0};
   save();
 }
 function save(){ if(S && !DEMO) lsSet(K.session, S); }
@@ -593,13 +611,26 @@ function bestAt(id,w){ var best=0; for(var k=0;k<history.length;k++){ var l=hist
 
 /* ---------- SET screen ---------- */
 var repVal=12, cueOpen=false, safetyOpen=false;
-function setScreen(name){ document.body.setAttribute('data-screen', name); }
+function setScreen(name){
+  if(document.body.getAttribute('data-screen')===name) return;
+  var apply=function(){ document.body.setAttribute('data-screen', name); if(name==='set') requestAnimationFrame(function(){ setRep(repVal); }); };
+  if(fxOff()){ apply(); return; }
+  if(FX.burst&&!FX.burst.done){ FX.burst.swap=apply; return; }   // the GO burst carries the rest -> set swap at its peak
+  wipe(apply);
+}
+var shownEx=null;
 function renderStrip(el){
   var p=planFor(S.day), html='';
   for(var i=0;i<p.length;i++){ var d=doneCount(i); for(var s=0;s<p[i].sets;s++){ html+='<i class="'+(s<d?'done':(i===S.cur.ex&&s===d&&S.phase==='set')?'cur':'')+'"></i>'; } if(i<p.length-1) html+='<i class="gap"></i>'; }
   el.innerHTML=html;
 }
 function renderSet(){
+  /* an exercise change while already on the set screen (no rest between stations) gets the same wipe as a screen change */
+  var i0=S.cur.ex, onSet=document.body.getAttribute('data-screen')==='set';
+  if(onSet&&shownEx!==null&&shownEx!==i0&&!fxOff()){ shownEx=i0; wipe(renderSetNow); return; }
+  shownEx=i0; renderSetNow();
+}
+function renderSetNow(){
   var i=S.cur.ex, x=ex(i), d=doneCount(i), w=curWeight(i), e=S.exs[i];
   $('set-daylbl').innerHTML='<b>'+S.day.toUpperCase()+'</b> · '+todayLbl();
   renderStrip($('set-strip'));
@@ -737,7 +768,7 @@ function startRest(sec){
 function endRest(auto){
   if(tickTimer){ clearInterval(tickTimer); tickTimer=null; }
   S.phase='set'; save();
-  if(auto){ flash(); var i=S.cur.ex; var sc=setClip(doneCount(i), ex(i).sets); if(sc) Bank.seq([sc]); }   // the GO tone is already on the audio clock
+  if(auto){ burst(); var i=S.cur.ex; var sc=setClip(doneCount(i), ex(i).sets); if(sc) Bank.seq([sc]); }   // the GO tone is already on the audio clock
   else { Bank.cancel(); Bank.cancelScheduled(); }   // he tapped it; he knows
   renderSet();
 }
@@ -759,7 +790,39 @@ function tick(){
   if(left<=0) endRest(true);
 }
 function plus30(){ Bank.cancelScheduled(); tailKey=null; S.restEndsAt+=30000; S.restTotal+=30000; delete spoke.t60; delete spoke.t30; save(); tick(); toast('+30'); }
-function flash(){ if(reduced()) return; var f=$('flash'); f.classList.add('on'); setTimeout(function(){ f.classList.remove('on'); }, 60); }
+/* ---------- halftone FX: screen wipes and the GO burst, on the same DOT8 screen as the tank ----------
+   wipe(swap): the screen dithers down to black over WIPE_MS, swap() runs at full cover, then it dithers back up.
+   burst(): red halftone blooms from the centre (density falling off outward) and dissolves; a pending screen swap rides its peak. */
+var wipeC=$('wipe'), wctx=wipeC.getContext('2d'), burstC=$('burst'), bctx=burstC.getContext('2d');
+var FX={wipe:null, burst:null, raf:null}, WIPE_MS=170, BURST_MS=520;
+function sizeFx(c){ var cw=c.clientWidth||window.innerWidth, ch=c.clientHeight||window.innerHeight, w=Math.max(1,Math.round(cw/CELL)), h=Math.max(1,Math.round(ch/CELL)); if(c.width!==w||c.height!==h){ c.width=w; c.height=h; } return {w:w,h:h}; }
+function paintField(c, ctx, fn, r, g, b){
+  var d=sizeFx(c), w=d.w, h=d.h, img=ctx.createImageData(w,h), px=img.data;
+  for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var dn=fn(x,y); if(dn<=0) continue; if(DOT8[(y&7)*8+(x&7)]<dn){ var o=(y*w+x)*4; px[o]=r; px[o+1]=g; px[o+2]=b; px[o+3]=255; } } }
+  ctx.putImageData(img,0,0);
+}
+function fxOff(){ return DEMO||reduced(); }
+function wipe(swap){ if(fxOff()){ swap(); return; } if(FX.wipe){ if(FX.wipe.done) swap(); else { var prev=FX.wipe.swap; FX.wipe.swap=function(){ prev(); swap(); }; } return; }
+  FX.wipe={t0:performance.now(), swap:swap, done:false}; wipeC.style.opacity=1; fxStart(); }
+function burst(){ if(fxOff()||FX.burst) return; FX.burst={t0:performance.now(), swap:null, done:false}; burstC.style.opacity=1; fxStart(); }
+function fxStart(){ if(!FX.raf) FX.raf=requestAnimationFrame(fxFrame); }
+function wipeCover(t){ var c=t<1?t:Math.max(0,2-t); return c*c*(3-2*c)*1.06; }   // smoothstep out and back, a hair over 1 so full cover is solid
+function burstField(u, d){   // u in 0..1; returns fn(x,y)
+  var cx=d.w/2, cy=d.h/2, Rmax=Math.sqrt(cx*cx+cy*cy)*1.05, g=Math.min(1,u/.4), R=Rmax*(g*g*(3-2*g)), fade=u<.45?0:Math.min(1,(u-.45)/.55);
+  return function(x,y){ var dx=x-cx, dy=y-cy, dd=Math.sqrt(dx*dx+dy*dy); if(dd>R) return 0; return (1-.55*dd/Rmax)*(1-fade)*1.05; };
+}
+function fxFrame(){
+  FX.raf=null; var now=performance.now(), busy=false;
+  if(FX.wipe){ var W=FX.wipe, t=(now-W.t0)/WIPE_MS;
+    if(t>=1&&!W.done){ W.done=true; W.swap(); }
+    var cov=wipeCover(t); paintField(wipeC, wctx, function(){ return cov; }, 0,0,0);
+    if(t>=2){ FX.wipe=null; wctx.clearRect(0,0,wipeC.width,wipeC.height); wipeC.style.opacity=0; } else busy=true; }
+  if(FX.burst){ var B=FX.burst, u=(now-B.t0)/BURST_MS;
+    if(u>=.4&&!B.done){ B.done=true; if(B.swap) B.swap(); }
+    paintField(burstC, bctx, burstField(Math.min(1,u), sizeFx(burstC)), 0xe5,0x31,0x2b);
+    if(u>=1){ FX.burst=null; bctx.clearRect(0,0,burstC.width,burstC.height); burstC.style.opacity=0; } else busy=true; }
+  if(busy) FX.raf=requestAnimationFrame(fxFrame);
+}
 
 /* The tank is a 1-bit field over the whole screen: full at the start of a rest, draining from the
    top edge down. Each cell holds a TARGET (on/off, from the dither) and a BRIGHTNESS that chases it,
@@ -893,7 +956,7 @@ dragList($('l-list'), function(o){
 });
 function start(){
   Bank.unlock(); wake();
-  var fresh=!S; if(fresh) newSession(launchDay);
+  var fresh=!S; if(fresh) newSession(launchDay); shownEx=null;
   if(S.phase==='rest'){ setScreen('rest'); tankStart(); if(tickTimer) clearInterval(tickTimer); tickTimer=setInterval(tick,250); tick(); }
   else if(S.phase==='done'){ finish(); }
   else { var nx=nextSlot(); if(nx==null){ finish(); return; } S.cur.ex=nx; renderSet(); if(fresh) Bank.seq([S.day==='Upper'?'start-upper':'start-lower', ex(nx).clip, wgtClip(curWeight(nx)), aimClip(ex(nx))]); }
@@ -922,7 +985,7 @@ function menuSheet(){
   html+='<div class="tog col"><span class="eyebrow">Rest tank</span><div class="pills">'+DITHERS.map(function(d){ return '<button class="pill'+(d.id===curDither()?' on':'')+'" data-act="dither" data-id="'+d.id+'">'+d.label+'</button>'; }).join('')+'</div></div>';
   html+='<div class="tog"><span class="eyebrow">Sessions in history</span><span class="num">'+history.length+'</span></div>';
   html+='<div class="tog"><span class="eyebrow">Discard this workout<br><span class="faint" style="text-transform:none;letter-spacing:0">nothing saved · past sessions untouched</span></span><button class="pill" data-act="abandon">'+(S&&!S.finished?'discard':'none')+'</button></div>';
-  html+='<div class="faint" style="margin-top:12px;font-size:11px;line-height:1.5">'+BUILD+'. Same cue bank as the live timer, played from audio/. Tap Start once so the phone allows sound. The app asks for a wake lock so the clock keeps running with the phone in your pocket.</div>';
+  html+='<div class="faint" style="margin-top:12px;font-size:11px;line-height:1.5">'+BUILD+' · plan '+((S&&S.plan&&S.plan.version)||PLANS.version||'embedded')+'. Same cue bank as the live timer, played from audio/. Tap Start once so the phone allows sound. The app asks for a wake lock so the clock keeps running with the phone in your pocket.</div>';
   openSheet(html);
 }
 $('sheet').addEventListener('input', function(ev){ if(ev.target&&ev.target.id==='sheet-note'&&S){ S.note=ev.target.value; save(); syncNotes(); } });
@@ -985,7 +1048,11 @@ function demoDrag(){
   var m=/[?&]demo=(set|rest|done)/.exec(location.search); if(!m) return;
   newSession('Upper');
   S.logs['chest-press']=[{r:10,w:120,t:Date.now()-400000},{r:8,w:120,t:Date.now()-200000}]; S.order=[0,0]; S.cur.ex=0;
-  function demoSheet(){ var s=Q.sheet; if(s==='list') listSheet(); else if(s==='menu') menuSheet(); else if(s==='weight') weightSheet(); else if(s==='note') noteSheet(); if(Q.drag) setTimeout(demoDrag, 50); }
+  function demoFx(){
+    if(Q.wipe!=null){ wipeC.style.opacity=1; var cov=wipeCover(+Q.wipe); paintField(wipeC, wctx, function(){ return cov; }, 0,0,0); }
+    if(Q.burst!=null){ burstC.style.opacity=1; paintField(burstC, bctx, burstField(+Q.burst, sizeFx(burstC)), 0xe5,0x31,0x2b); }
+  }
+  function demoSheet(){ demoFx(); var s=Q.sheet; if(s==='list') listSheet(); else if(s==='menu') menuSheet(); else if(s==='weight') weightSheet(); else if(s==='note') noteSheet(); if(Q.drag) setTimeout(demoDrag, 50); }
   if(m[1]==='set'){ renderSet(); demoSheet(); return; }
   if(m[1]==='rest'){
     var total=+Q.total||150, left=Q.t!=null?+Q.t:107;
