@@ -306,7 +306,7 @@ textarea::placeholder{color:var(--ink3)}
 /* PRISM II - the weight and the target rep, a draining rest tank, and the
    ElevenLabs cue bank this site already carries under audio/. Every set is
    taken to failure, so there is no effort meter: the rep count is the signal. */
-var BUILD = 'Prism II · 2026-09-04e WIPE';
+var BUILD = 'Prism II · 2026-09-04g SFX';
 var DEMO = /[?&]demo=/.test(location.search);
 /* query hooks (demo only): ?demo=rest&t=SEC pins the rest clock for a deterministic screenshot,
    &mid=MS paints one mid-fade frame MS after a level change, &dither=NAME picks a tank style,
@@ -478,7 +478,8 @@ var Bank = (function(){
   }
   function stateInfo(){ return {raw:Object.keys(raw).length, decoded:Object.keys(buf).length, failed:Object.keys(failed).length, pending:Object.keys(fetching).length, unlocked:unlocked, ctx:AC?AC.state:'none'}; }
   return {prefetch:prefetch, unlock:unlock, recover:recover, play:play, playAt:playAt, seq:seq, cancel:cancel, cancelScheduled:cancelScheduled,
-    now:function(){ return AC?AC.currentTime:0; }, state:function(){ return AC?AC.state:'none'; }, info:stateInfo};
+    now:function(){ return AC?AC.currentTime:0; }, state:function(){ return AC?AC.state:'none'; }, info:stateInfo,
+    ctx:function(){ return (AC&&unlocked&&AC.state==='running')?AC:null; }};
 })();
 function wgtClip(w){ var slug=String(w).replace('.','-'); return WGT_CLIPS.indexOf(slug)>=0 ? 'wgt-'+slug : null; }
 function restClip(sec){ return ({180:'rest-3min',120:'rest-2min',90:'rest-90sec',60:'rest-60sec'})[sec]||null; }
@@ -794,7 +795,7 @@ function plus30(){ Bank.cancelScheduled(); tailKey=null; S.restEndsAt+=30000; S.
    wipe(swap): the screen dithers down to black over WIPE_MS, swap() runs at full cover, then it dithers back up.
    burst(): red halftone blooms from the centre (density falling off outward) and dissolves; a pending screen swap rides its peak. */
 var wipeC=$('wipe'), wctx=wipeC.getContext('2d'), burstC=$('burst'), bctx=burstC.getContext('2d');
-var FX={wipe:null, burst:null, raf:null}, WIPE_MS=170, BURST_MS=520;
+var FX={wipe:null, burst:null, raf:null}, WIPE_MS=110, BURST_MS=150;   // per phase: cover, then uncover
 function sizeFx(c){ var cw=c.clientWidth||window.innerWidth, ch=c.clientHeight||window.innerHeight, w=Math.max(1,Math.round(cw/CELL)), h=Math.max(1,Math.round(ch/CELL)); if(c.width!==w||c.height!==h){ c.width=w; c.height=h; } return {w:w,h:h}; }
 function paintField(c, ctx, fn, r, g, b){
   var d=sizeFx(c), w=d.w, h=d.h, img=ctx.createImageData(w,h), px=img.data;
@@ -802,25 +803,44 @@ function paintField(c, ctx, fn, r, g, b){
   ctx.putImageData(img,0,0);
 }
 function fxOff(){ return DEMO||reduced(); }
+/* synthesized sweep sfx on the Bank's own context: filtered noise whose band rides up with the curtain and back down as it leaves.
+   No file, no decode, nothing before the Start tap; gated on the voice switch like every other sound. Quiet under the GO tone. */
+function sfxSweep(ms, peak, lo, hi){
+  try{
+    var ac=Bank.ctx(); if(!ac||!prefs.voice) return;
+    var n=Math.floor(ac.sampleRate*ms/1000), buf=ac.createBuffer(1,n,ac.sampleRate), d=buf.getChannelData(0);
+    for(var i=0;i<n;i++) d[i]=Math.random()*2-1;
+    var src=ac.createBufferSource(); src.buffer=buf;
+    var bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=1.4;
+    var t=ac.currentTime, half=ms/2000;
+    bp.frequency.setValueAtTime(lo,t); bp.frequency.exponentialRampToValueAtTime(hi,t+half); bp.frequency.exponentialRampToValueAtTime(lo,t+2*half);
+    var g=ac.createGain(); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+.015); g.gain.setValueAtTime(peak,t+half); g.gain.exponentialRampToValueAtTime(.0001,t+2*half);
+    src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start(t); src.stop(t+2*half+.02);
+  }catch(e){}
+}
 function wipe(swap){ if(fxOff()){ swap(); return; } if(FX.wipe){ if(FX.wipe.done) swap(); else { var prev=FX.wipe.swap; FX.wipe.swap=function(){ prev(); swap(); }; } return; }
-  FX.wipe={t0:performance.now(), swap:swap, done:false}; wipeC.style.opacity=1; fxStart(); }
-function burst(){ if(fxOff()||FX.burst) return; FX.burst={t0:performance.now(), swap:null, done:false}; burstC.style.opacity=1; fxStart(); }
+  FX.wipe={t0:performance.now(), swap:swap, done:false}; wipeC.style.opacity=1; sfxSweep(WIPE_MS*2, .22, 420, 3200); fxStart(); }
+function burst(){ if(fxOff()||FX.burst) return; FX.burst={t0:performance.now(), swap:null, done:false}; burstC.style.opacity=1; sfxSweep(BURST_MS*2, .3, 300, 5200); fxStart(); }
 function fxStart(){ if(!FX.raf) FX.raf=requestAnimationFrame(fxFrame); }
-function wipeCover(t){ var c=t<1?t:Math.max(0,2-t); return c*c*(3-2*c)*1.06; }   // smoothstep out and back, a hair over 1 so full cover is solid
-function burstField(u, d){   // u in 0..1; returns fn(x,y)
-  var cx=d.w/2, cy=d.h/2, Rmax=Math.sqrt(cx*cx+cy*cy)*1.05, g=Math.min(1,u/.4), R=Rmax*(g*g*(3-2*g)), fade=u<.45?0:Math.min(1,(u-.45)/.55);
-  return function(x,y){ var dx=x-cx, dy=y-cy, dd=Math.sqrt(dx*dx+dy*dy); if(dd>R) return 0; return (1-.55*dd/Rmax)*(1-fade)*1.05; };
+/* the sweep: a skewed halftone curtain crosses the screen along a ~33° axis. t in 0..2: the leading edge covers (0..1),
+   the trailing edge follows it off the far side (1..2), so the curtain passes through rather than blooming and fading.
+   Its edge is a halftone ramp SWEEP_BAND wide along the axis; the swap happens under full cover at t=1. */
+var SWEEP_BAND=.38, SWEEP_SKEW=.65;
+function sweepField(t, d, rev){
+  var W=d.w+d.h*SWEEP_SKEW, B=SWEEP_BAND, tt=Math.max(0,Math.min(2,t));
+  var f=tt<1 ? tt*(1+B) : (tt-1)*(1+B)-B;
+  return function(x,y){ var u=(x+y*SWEEP_SKEW)/W; if(rev) u=1-u; var dn=tt<1 ? (f-u)/B : (u-f)/B; return dn>=1?1.06:(dn<=0?0:dn); };
 }
 function fxFrame(){
   FX.raf=null; var now=performance.now(), busy=false;
   if(FX.wipe){ var W=FX.wipe, t=(now-W.t0)/WIPE_MS;
     if(t>=1&&!W.done){ W.done=true; W.swap(); }
-    var cov=wipeCover(t); paintField(wipeC, wctx, function(){ return cov; }, 0,0,0);
+    paintField(wipeC, wctx, sweepField(t, sizeFx(wipeC), false), 0,0,0);
     if(t>=2){ FX.wipe=null; wctx.clearRect(0,0,wipeC.width,wipeC.height); wipeC.style.opacity=0; } else busy=true; }
-  if(FX.burst){ var B=FX.burst, u=(now-B.t0)/BURST_MS;
-    if(u>=.4&&!B.done){ B.done=true; if(B.swap) B.swap(); }
-    paintField(burstC, bctx, burstField(Math.min(1,u), sizeFx(burstC)), 0xe5,0x31,0x2b);
-    if(u>=1){ FX.burst=null; bctx.clearRect(0,0,burstC.width,burstC.height); burstC.style.opacity=0; } else busy=true; }
+  if(FX.burst){ var B=FX.burst, u=(now-B.t0)/BURST_MS;   // red curtain, opposite direction to the wipe
+    if(u>=1&&!B.done){ B.done=true; if(B.swap) B.swap(); }
+    paintField(burstC, bctx, sweepField(u, sizeFx(burstC), true), 0xe5,0x31,0x2b);
+    if(u>=2){ FX.burst=null; bctx.clearRect(0,0,burstC.width,burstC.height); burstC.style.opacity=0; } else busy=true; }
   if(busy) FX.raf=requestAnimationFrame(fxFrame);
 }
 
@@ -1049,8 +1069,8 @@ function demoDrag(){
   newSession('Upper');
   S.logs['chest-press']=[{r:10,w:120,t:Date.now()-400000},{r:8,w:120,t:Date.now()-200000}]; S.order=[0,0]; S.cur.ex=0;
   function demoFx(){
-    if(Q.wipe!=null){ wipeC.style.opacity=1; var cov=wipeCover(+Q.wipe); paintField(wipeC, wctx, function(){ return cov; }, 0,0,0); }
-    if(Q.burst!=null){ burstC.style.opacity=1; paintField(burstC, bctx, burstField(+Q.burst, sizeFx(burstC)), 0xe5,0x31,0x2b); }
+    if(Q.wipe!=null){ wipeC.style.opacity=1; paintField(wipeC, wctx, sweepField(+Q.wipe, sizeFx(wipeC), false), 0,0,0); }
+    if(Q.burst!=null){ burstC.style.opacity=1; paintField(burstC, bctx, sweepField(+Q.burst, sizeFx(burstC), true), 0xe5,0x31,0x2b); }
   }
   function demoSheet(){ demoFx(); var s=Q.sheet; if(s==='list') listSheet(); else if(s==='menu') menuSheet(); else if(s==='weight') weightSheet(); else if(s==='note') noteSheet(); if(Q.drag) setTimeout(demoDrag, 50); }
   if(m[1]==='set'){ renderSet(); demoSheet(); return; }
