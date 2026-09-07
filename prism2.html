@@ -319,15 +319,15 @@ var FREEZE = DEMO && Q.t!=null;
    Change weights by editing the JSON (keep ids stable - history is keyed on them), bump its version, push. */
 var EMBEDDED_PLANS = {
   Upper: [
-    {id:'chest-press', name:'Chest Press', short:'PRESS', clip:'ex-chest-press', sets:4, lo:8, hi:12, weight:120, backoff:100, next:130, rest:150, anchor:true,
+    {id:'chest-press', group:'chest', name:'Chest Press', short:'PRESS', clip:'ex-chest-press', sets:4, lo:8, hi:12, weight:120, backoff:100, next:130, rest:150, anchor:true,
       cue:'Warm up first: one easy set of ~8 at 80. Full ROM, controlled descent, no elbow slam.'},
     {id:'cable-row', name:'Cable Rope Row', short:'ROW', clip:'ex-cable-row', sets:5, lo:8, hi:12, weight:120, backoff:100, next:130, rest:150, anchor:true,
-      tag:'R shoulder', safety:'Right inner shoulder. Stop at the first pinch.',
+      tag:'R shoulder + nerve', safety:'Right inner shoulder, stop at the first pinch. Any right-forearm nerve buzz ends the set - that took set 5 on 9/07.',
       cue:'Pull to the waist, elbows close, squeeze the blades, slow return. 130 needs 12 on all five.'},
-    {id:'incline-press', name:'Incline Press', short:'INCLINE', clip:'ex-incline-press', sets:3, lo:8, hi:12, weight:70, backoff:60, next:80, rest:120,
+    {id:'incline-press', group:'chest', name:'Incline Press', short:'INCLINE', clip:'ex-incline-press', sets:3, lo:8, hi:12, weight:70, backoff:60, next:80, rest:120,
       tag:'cuff', safety:'Stop on any rotator-cuff pain. Nothing gets pushed through.',
       cue:'Seat at the incline setting. Lower to the upper chest, elbows ~45°, press up and slightly back. Third set is new.'},
-    {id:'chest-fly', name:'Chest Fly', short:'FLY', clip:'ex-rear-delt-flyes', sets:3, lo:10, hi:15, weight:15, next:20, rest:90, noDrop:true,
+    {id:'chest-fly', group:'chest', name:'Chest Fly', short:'FLY', clip:'ex-rear-delt-flyes', sets:3, lo:10, hi:15, weight:15, next:20, rest:90, noDrop:true,
       tag:'cuff', safety:'Cuff and right inner shoulder. The bottom of the arc is where it loads.',
       cue:'Discovery. Single-arm cable fly, 15 a side: arm long, soft elbow, hand past the body line, 3-sec negative. Pec deck ~50 if there is one.'},
     {id:'pushdown', name:'Tricep Pushdown', short:'PUSHDOWN', clip:'ex-tricep-pushdown', sets:3, lo:12, hi:15, weight:30, backoff:25, next:35, rest:90,
@@ -340,7 +340,7 @@ var EMBEDDED_PLANS = {
       cue:'Supinated is nerve-safe, so failure is fine. Controlled, no swinging.'}
   ],
   Lower: [
-    {id:'leg-press', name:'Leg Press', short:'LEG PRESS', clip:'ex-leg-press', sets:4, lo:8, hi:12, weight:205, backoff:190, next:220, rest:150,
+    {id:'leg-press', group:'quad', name:'Leg Press', short:'LEG PRESS', clip:'ex-leg-press', sets:4, lo:8, hi:12, weight:205, backoff:190, next:220, rest:150,
       tag:'90°', safety:'Stop the descent at 90°. Never knees-to-chest. Sharp medial knee pain ends the session.',
       cue:'Controlled descent to 90°, drive through the heels. 205 cleared 12x4 on 9/06.'},
     {id:'calf-raise', name:'Leg Press Calf Raise', short:'CALF', clip:'ex-calf-raises', sets:3, lo:12, hi:15, weight:145, backoff:130, next:160, rest:90,
@@ -355,7 +355,7 @@ var EMBEDDED_PLANS = {
     {id:'leg-curl', name:'Lying Leg Curl', short:'LEG CURL', clip:'ex-leg-curl', sets:3, lo:8, hi:12, weight:30, next:40, rest:120, noDrop:true,
       tag:'medial thigh', safety:'Hard stop on ANY medial-thigh sensation. Not pain, any sensation. Rack it.',
       cue:'The canary. 10-lb stack. Slow, full curl, no hip lift. Now on the ladder - any medial-thigh sensation still ends it.'},
-    {id:'leg-ext', name:'Leg Extension', short:'LEG EXT', clip:'ex-leg-extension', sets:3, lo:8, hi:12, weight:50, backoff:40, next:60, rest:120,
+    {id:'leg-ext', group:'quad', name:'Leg Extension', short:'LEG EXT', clip:'ex-leg-extension', sets:3, lo:8, hi:12, weight:50, backoff:40, next:60, rest:120,
       cue:'10-lb stack. Squeeze at the top, control the way down, no bouncing off the stop.'},
     {id:'cable-crunch', name:'Lying Crunch (bodyweight)', short:'CRUNCH', clip:'ex-tricep-pushdown', sets:3, lo:15, hi:25, weight:0, rest:90, noDrop:true,
       tag:'R rib', safety:'Right rib pain ends the set. Bodyweight only now, no machine. Crunch from the ribs with the hips fixed. Never hinge. Stop on any low-back signal.',
@@ -758,10 +758,18 @@ function logSet(){
   }
   else if(paired){ cues.push('up-next', nxEx.clip); var ldB=lastDrop(nx); if(ldB&&ldB.at===doneCount(nx)) cues.push(wgtClip(curWeight(nx))); }
   else if(switching){
-    /* no rest timer on an exercise change (his call 9/2: the walk to the next station is the rest) --
-       straight to the next exercise's first set, with the arrival cues */
+    /* An exercise change normally gets NO rest timer (his call 9/2: "the walk to the next station is
+       the rest"). That rule silently assumes TWO things - a walk, and a different muscle. Chest press
+       -> incline press has neither, and it cost him the same ~11 reps of incline twice before he named
+       it: 9/04 and 9/07 both ran PRESS -> INCLINE back to back and both landed incline on exactly 23,
+       against 34 on 9/02 when the row sat between them. His words 9/07: "If there's a transition
+       between something like chest press to incline chest press then of course there should be a rest."
+       So: matching `group` on both sides => rest as if it were another set. No group, or different
+       groups => unchanged, straight through. */
+    var sameGroup = !!(x.group && nxEx.group && x.group===nxEx.group);
     cues.push('exercise-complete', isFinalEx?'final-exercise':'up-next', nxEx.clip, wgtClip(curWeight(nx)), aimClip(nxEx));
-    S.cur.ex=nx; S.phase='set'; save(); renderSet(); toast('logged '+r+' @ '+fmtW(w)); Bank.seq(cues); return;
+    if(!sameGroup){ S.cur.ex=nx; S.phase='set'; save(); renderSet(); toast('logged '+r+' @ '+fmtW(w)); Bank.seq(cues); return; }
+    rest=Math.max(x.rest, nxEx.rest);
   }
   else if(dropFired){ cues.push(wgtClip(curWeight(i))); }
   cues.push(restClip(rest));

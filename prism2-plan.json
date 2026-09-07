@@ -1,9 +1,10 @@
 {
- "version": "2026-09-07",
+ "version": "2026-09-07b",
  "note": "Source of truth for Prism II exercises + weights. Keep ids stable (history is keyed on them). Bump version on every edit.",
  "Upper": [
   {
    "id": "chest-press",
+   "group": "chest",
    "name": "Chest Press",
    "short": "PRESS",
    "clip": "ex-chest-press",
@@ -30,12 +31,13 @@
    "next": 130,
    "rest": 150,
    "anchor": true,
-   "tag": "R shoulder",
-   "safety": "Right inner shoulder. Stop at the first pinch.",
+   "tag": "R shoulder + nerve",
+   "safety": "Right inner shoulder, stop at the first pinch. Any right-forearm nerve buzz ends the set - that took set 5 on 9/07.",
    "cue": "Pull to the waist, elbows close, squeeze the blades, slow return. 130 needs 12 on all five."
   },
   {
    "id": "incline-press",
+   "group": "chest",
    "name": "Incline Press",
    "short": "INCLINE",
    "clip": "ex-incline-press",
@@ -52,6 +54,7 @@
   },
   {
    "id": "chest-fly",
+   "group": "chest",
    "name": "Chest Fly",
    "short": "FLY",
    "clip": "ex-rear-delt-flyes",
@@ -116,6 +119,7 @@
  "Lower": [
   {
    "id": "leg-press",
+   "group": "quad",
    "name": "Leg Press",
    "short": "LEG PRESS",
    "clip": "ex-leg-press",
@@ -196,6 +200,7 @@
   },
   {
    "id": "leg-ext",
+   "group": "quad",
    "name": "Leg Extension",
    "short": "LEG EXT",
    "clip": "ex-leg-extension",
