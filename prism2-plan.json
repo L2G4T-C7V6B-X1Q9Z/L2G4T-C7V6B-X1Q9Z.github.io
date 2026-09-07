@@ -1,5 +1,5 @@
 {
- "version": "2026-09-06",
+ "version": "2026-09-07",
  "note": "Source of truth for Prism II exercises + weights. Keep ids stable (history is keyed on them). Bump version on every edit.",
  "Upper": [
   {
