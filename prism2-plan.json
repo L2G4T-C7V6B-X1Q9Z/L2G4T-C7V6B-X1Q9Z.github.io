@@ -1,5 +1,5 @@
 {
- "version": "2026-09-04",
+ "version": "2026-09-06",
  "note": "Source of truth for Prism II exercises + weights. Keep ids stable (history is keyed on them). Bump version on every edit.",
  "Upper": [
   {
@@ -122,13 +122,13 @@
    "sets": 4,
    "lo": 8,
    "hi": 12,
-   "weight": 190,
-   "backoff": 175,
-   "next": 205,
+   "weight": 205,
+   "backoff": 190,
+   "next": 220,
    "rest": 150,
    "tag": "90°",
    "safety": "Stop the descent at 90°. Never knees-to-chest. Sharp medial knee pain ends the session.",
-   "cue": "Re-entry at 190, not 220. Controlled descent to 90°, drive through the heels."
+   "cue": "Controlled descent to 90°, drive through the heels. 205 cleared 12x4 on 9/06."
   },
   {
    "id": "calf-raise",
@@ -159,23 +159,24 @@
    "rest": 90,
    "tag": "R shoulder",
    "safety": "Right shoulder is active. Stop at the first pinch.",
-   "cue": "Rope to the face, elbows high, pull apart at the end. Shoulder health, not a size lift."
+   "cue": "Rope to the face, elbows high, pull apart at the end. Shoulder health, not a size lift.",
+   "next": 20
   },
   {
    "id": "lateral-raise",
-   "name": "DB Lateral Raise",
+   "name": "Cable Lateral Raise",
    "short": "LAT RAISE",
    "clip": "ex-db-lat-raise",
    "sets": 3,
    "lo": 12,
    "hi": 15,
-   "weight": 15,
-   "backoff": 10,
-   "next": 17.5,
+   "weight": 10,
+   "backoff": 5,
+   "next": 15,
    "rest": 90,
    "tag": "R shoulder",
    "safety": "Right inner shoulder. Stop at the first pinch.",
-   "cue": "Lead with the elbows, to parallel and no higher, no swing."
+   "cue": "Cable, not dumbbells. Lead with the elbow, to parallel and no higher, no swing."
   },
   {
    "id": "leg-curl",
@@ -208,19 +209,18 @@
   },
   {
    "id": "cable-crunch",
-   "name": "Cable Crunch",
+   "name": "Lying Crunch (bodyweight)",
    "short": "CRUNCH",
    "clip": "ex-tricep-pushdown",
    "sets": 3,
-   "lo": 10,
-   "hi": 15,
-   "weight": 40,
+   "lo": 15,
+   "hi": 25,
+   "weight": 0,
    "rest": 90,
    "noDrop": true,
-   "discovery": true,
-   "tag": "lumbar",
-   "safety": "Crunch from the ribs with the hips fixed. Never hinge. Stop on any low-back signal.",
-   "cue": "Discovery. Kneeling, rope behind the head, curl the ribs toward the pelvis, 2-sec squeeze. Move 10 either way off set 1."
+   "tag": "R rib",
+   "safety": "Right rib pain ends the set. Bodyweight only now, no machine. Crunch from the ribs with the hips fixed. Never hinge. Stop on any low-back signal.",
+   "cue": "Lying on the floor, knees bent, curl the ribs toward the pelvis, 2-sec squeeze. Bodyweight to failure. The machine gave right rib pain 9/06 - do not go back to it."
   }
  ]
 }

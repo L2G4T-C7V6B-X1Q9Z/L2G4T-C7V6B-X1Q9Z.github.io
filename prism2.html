@@ -131,7 +131,7 @@ body[data-screen="rest"] .strip i.gap{background:transparent}
 /* the countdown is the red accent, always (his call 9/4: hard to read in white over the tank) */
 .count{font-family:var(--mono);font-weight:600;font-size:clamp(96px,36vw,141px);line-height:1;letter-spacing:-.04em;margin-top:14px;text-align:center;color:var(--red-ink)}
 .count.hot{color:var(--red-ink)}
-.next{display:flex;flex-direction:column;gap:4px;margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+.next{display:flex;flex-direction:column;gap:4px;margin-top:22px;padding-top:16px}
 .next .nl{display:flex;justify-content:space-between;align-items:baseline}
 .next .nl .n{font-family:var(--disp);font-weight:700;font-size:28px;text-transform:uppercase;letter-spacing:.02em}
 .next .big{display:flex;align-items:baseline;gap:18px}
@@ -340,26 +340,26 @@ var EMBEDDED_PLANS = {
       cue:'Supinated is nerve-safe, so failure is fine. Controlled, no swinging.'}
   ],
   Lower: [
-    {id:'leg-press', name:'Leg Press', short:'LEG PRESS', clip:'ex-leg-press', sets:4, lo:8, hi:12, weight:190, backoff:175, next:205, rest:150,
+    {id:'leg-press', name:'Leg Press', short:'LEG PRESS', clip:'ex-leg-press', sets:4, lo:8, hi:12, weight:205, backoff:190, next:220, rest:150,
       tag:'90°', safety:'Stop the descent at 90°. Never knees-to-chest. Sharp medial knee pain ends the session.',
-      cue:'Re-entry at 190, not 220. Controlled descent to 90°, drive through the heels.'},
+      cue:'Controlled descent to 90°, drive through the heels. 205 cleared 12x4 on 9/06.'},
     {id:'calf-raise', name:'Leg Press Calf Raise', short:'CALF', clip:'ex-calf-raises', sets:3, lo:12, hi:15, weight:145, backoff:130, next:160, rest:90,
       tag:'knee', safety:'Anything sharp in the knee is a knee signal. Stop.',
       cue:'Full stretch at the bottom, pause at the top.'},
-    {id:'face-pull', name:'Cable Face Pull', short:'FACE PULL', clip:'ex-face-pulls', sets:2, lo:15, hi:20, weight:15, backoff:10, rest:90,
+    {id:'face-pull', name:'Cable Face Pull', short:'FACE PULL', clip:'ex-face-pulls', sets:2, lo:15, hi:20, weight:15, backoff:10, next:20, rest:90,
       tag:'R shoulder', safety:'Right shoulder is active. Stop at the first pinch.',
       cue:'Rope to the face, elbows high, pull apart at the end. Shoulder health, not a size lift.'},
-    {id:'lateral-raise', name:'DB Lateral Raise', short:'LAT RAISE', clip:'ex-db-lat-raise', sets:3, lo:12, hi:15, weight:15, backoff:10, next:17.5, rest:90,
+    {id:'lateral-raise', name:'Cable Lateral Raise', short:'LAT RAISE', clip:'ex-db-lat-raise', sets:3, lo:12, hi:15, weight:10, backoff:5, next:15, rest:90,
       tag:'R shoulder', safety:'Right inner shoulder. Stop at the first pinch.',
-      cue:'Lead with the elbows, to parallel and no higher, no swing.'},
+      cue:'Cable, not dumbbells. Lead with the elbow, to parallel and no higher, no swing.'},
     {id:'leg-curl', name:'Lying Leg Curl', short:'LEG CURL', clip:'ex-leg-curl', sets:3, lo:8, hi:12, weight:30, rest:120, noDrop:true,
       tag:'medial thigh', safety:'Hard stop on ANY medial-thigh sensation. Not pain, any sensation. Rack it.',
       cue:'The canary. 10-lb stack, 30 is the real number. Slow, full curl, no hip lift.'},
     {id:'leg-ext', name:'Leg Extension', short:'LEG EXT', clip:'ex-leg-extension', sets:3, lo:8, hi:12, weight:50, backoff:40, next:60, rest:120,
       cue:'10-lb stack. Squeeze at the top, control the way down, no bouncing off the stop.'},
-    {id:'cable-crunch', name:'Cable Crunch', short:'CRUNCH', clip:'ex-tricep-pushdown', sets:3, lo:10, hi:15, weight:40, rest:90, noDrop:true, discovery:true,
-      tag:'lumbar', safety:'Crunch from the ribs with the hips fixed. Never hinge. Stop on any low-back signal.',
-      cue:'Discovery. Kneeling, rope behind the head, curl the ribs toward the pelvis, 2-sec squeeze. Move 10 either way off set 1.'}
+    {id:'cable-crunch', name:'Lying Crunch (bodyweight)', short:'CRUNCH', clip:'ex-tricep-pushdown', sets:3, lo:15, hi:25, weight:0, rest:90, noDrop:true,
+      tag:'R rib', safety:'Right rib pain ends the set. Bodyweight only now, no machine. Crunch from the ribs with the hips fixed. Never hinge. Stop on any low-back signal.',
+      cue:'Lying on the floor, knees bent, curl the ribs toward the pelvis, 2-sec squeeze. Bodyweight to failure. The machine gave right rib pain 9/06 - do not go back to it.'}
   ]
 };
 
