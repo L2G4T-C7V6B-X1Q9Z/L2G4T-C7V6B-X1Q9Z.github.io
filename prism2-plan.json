@@ -191,7 +191,8 @@
    "noDrop": true,
    "tag": "medial thigh",
    "safety": "Hard stop on ANY medial-thigh sensation. Not pain, any sensation. Rack it.",
-   "cue": "The canary. 10-lb stack, 30 is the real number. Slow, full curl, no hip lift."
+   "cue": "The canary. 10-lb stack. Slow, full curl, no hip lift. Now on the ladder - any medial-thigh sensation still ends it.",
+   "next": 40
   },
   {
    "id": "leg-ext",

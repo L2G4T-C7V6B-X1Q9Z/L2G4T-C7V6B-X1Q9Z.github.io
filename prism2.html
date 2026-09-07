@@ -352,9 +352,9 @@ var EMBEDDED_PLANS = {
     {id:'lateral-raise', name:'Cable Lateral Raise', short:'LAT RAISE', clip:'ex-db-lat-raise', sets:3, lo:12, hi:15, weight:10, backoff:5, next:15, rest:90,
       tag:'R shoulder', safety:'Right inner shoulder. Stop at the first pinch.',
       cue:'Cable, not dumbbells. Lead with the elbow, to parallel and no higher, no swing.'},
-    {id:'leg-curl', name:'Lying Leg Curl', short:'LEG CURL', clip:'ex-leg-curl', sets:3, lo:8, hi:12, weight:30, rest:120, noDrop:true,
+    {id:'leg-curl', name:'Lying Leg Curl', short:'LEG CURL', clip:'ex-leg-curl', sets:3, lo:8, hi:12, weight:30, next:40, rest:120, noDrop:true,
       tag:'medial thigh', safety:'Hard stop on ANY medial-thigh sensation. Not pain, any sensation. Rack it.',
-      cue:'The canary. 10-lb stack, 30 is the real number. Slow, full curl, no hip lift.'},
+      cue:'The canary. 10-lb stack. Slow, full curl, no hip lift. Now on the ladder - any medial-thigh sensation still ends it.'},
     {id:'leg-ext', name:'Leg Extension', short:'LEG EXT', clip:'ex-leg-extension', sets:3, lo:8, hi:12, weight:50, backoff:40, next:60, rest:120,
       cue:'10-lb stack. Squeeze at the top, control the way down, no bouncing off the stop.'},
     {id:'cable-crunch', name:'Lying Crunch (bodyweight)', short:'CRUNCH', clip:'ex-tricep-pushdown', sets:3, lo:15, hi:25, weight:0, rest:90, noDrop:true,
@@ -515,12 +515,24 @@ document.addEventListener('visibilitychange', function(){ if(document.visibility
 function planFor(day){ return (S&&S.plan&&S.plan[day])?S.plan[day]:PLANS[day]; }
 function lastSession(day){ for(var i=history.length-1;i>=0;i--){ if(history[i].day===day && !history[i].aborted) return history[i]; } return null; }
 function proposeDay(){ for(var i=history.length-1;i>=0;i--){ if(!history[i].aborted) return history[i].day==='Upper'?'Lower':'Upper'; } return 'Upper'; }
+/* The ladder. `next` is read as ONE STEP SIZE (next - weight) applied to the weight he
+   ACTUALLY worked at last session, not as a single destination.
+   Reading ex.weight as the baseline every time produced two bugs, both live until 9/06:
+     (1) STALL - once he advanced 190 -> 205 and cleared 12x4 AT 205, the comparison still
+         ran against 190, so it returned ex.next = 205 again, forever. Every exercise hit
+         this the first time it advanced; leg press just got there first.
+     (2) REGRESSION - after advancing to 205, ONE sub-par session returned ex.weight = 190,
+         silently dropping him two steps. Nobody had noticed this one yet.
+   Both vanish once the baseline is the observed working weight. */
 function startingWeight(day, ex){
-  var last=lastSession(day); if(!last||!last.logs[ex.id]||!ex.next) return {w:ex.weight, from:null};
+  var last=lastSession(day); if(!last||!last.logs[ex.id]) return {w:ex.weight, from:null};
   var l=last.logs[ex.id]; if(l.length<ex.sets) return {w:ex.weight, from:null};
-  for(var i=0;i<l.length;i++){ if(l[i].r<ex.hi || l[i].w<ex.weight) return {w:ex.weight, from:null}; }
-  if(last.date===isoDate()) return {w:ex.weight, from:null};
-  return {w:ex.next, from:ex.weight};
+  var base=l[0].w; if(!(base>ex.weight)) base=ex.weight;   // plan weight is a floor, never regress below it
+  if(ex.next==null) return {w:base, from:null};            // no next = deliberately not on a ladder
+  var step=ex.next-ex.weight; if(!(step>0)) return {w:base, from:null};
+  for(var i=0;i<l.length;i++){ if(l[i].r<ex.hi || l[i].w<base) return {w:base, from:null}; }
+  if(last.date===isoDate()) return {w:base, from:null};
+  return {w:base+step, from:base};
 }
 function newSession(day){
   var plan=PLANS[day], exs=[];
