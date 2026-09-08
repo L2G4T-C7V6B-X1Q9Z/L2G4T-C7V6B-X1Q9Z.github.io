@@ -1,5 +1,5 @@
 {
- "version": "2026-09-08",
+ "version": "2026-09-08b",
  "note": "Source of truth for Prism II exercises + weights. Keep ids stable (history is keyed on them). Bump version on every edit.",
  "Upper": [
   {
@@ -168,7 +168,7 @@
   },
   {
    "id": "lateral-raise",
-   "name": "Cable Lateral Raise",
+   "name": "DB Lateral Raise",
    "short": "LAT RAISE",
    "clip": "ex-db-lat-raise",
    "sets": 3,
@@ -180,8 +180,8 @@
    "rest": 90,
    "resetAfter": "2026-09-06",
    "tag": "R shoulder",
-   "safety": "Right inner shoulder. Stop at the first pinch.",
-   "cue": "Cable, not dumbbells. Lead with the elbow, to parallel and no higher, no swing."
+   "safety": "Right inner shoulder. Stop at the first pinch. Dumbbells only - the cable version aggravated it.",
+   "cue": "Dumbbells, not the cable - his call 9/08, the cable hurt. Lead with the elbow, to parallel and no higher, no swing. 10, not 15: 15 gave 8 reps against a lo of 12 twice."
   },
   {
    "id": "leg-curl",
