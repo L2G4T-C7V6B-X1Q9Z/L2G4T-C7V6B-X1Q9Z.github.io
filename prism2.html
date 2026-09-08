@@ -349,7 +349,7 @@ var EMBEDDED_PLANS = {
     {id:'face-pull', name:'Cable Face Pull', short:'FACE PULL', clip:'ex-face-pulls', sets:2, lo:15, hi:20, weight:15, backoff:10, next:20, rest:90,
       tag:'R shoulder', safety:'Right shoulder is active. Stop at the first pinch.',
       cue:'Rope to the face, elbows high, pull apart at the end. Shoulder health, not a size lift.'},
-    {id:'lateral-raise', name:'Cable Lateral Raise', short:'LAT RAISE', clip:'ex-db-lat-raise', sets:3, lo:12, hi:15, weight:10, backoff:5, next:15, rest:90,
+    {id:'lateral-raise', name:'Cable Lateral Raise', short:'LAT RAISE', clip:'ex-db-lat-raise', sets:3, lo:12, hi:15, weight:10, backoff:5, next:15, rest:90, resetAfter:'2026-09-06',
       tag:'R shoulder', safety:'Right inner shoulder. Stop at the first pinch.',
       cue:'Cable, not dumbbells. Lead with the elbow, to parallel and no higher, no swing.'},
     {id:'leg-curl', name:'Lying Leg Curl', short:'LEG CURL', clip:'ex-leg-curl', sets:3, lo:8, hi:12, weight:30, next:40, rest:120, noDrop:true,
@@ -357,7 +357,7 @@ var EMBEDDED_PLANS = {
       cue:'The canary. 10-lb stack. Slow, full curl, no hip lift. Now on the ladder - any medial-thigh sensation still ends it.'},
     {id:'leg-ext', group:'quad', name:'Leg Extension', short:'LEG EXT', clip:'ex-leg-extension', sets:3, lo:8, hi:12, weight:50, backoff:40, next:60, rest:120,
       cue:'10-lb stack. Squeeze at the top, control the way down, no bouncing off the stop.'},
-    {id:'cable-crunch', name:'Lying Crunch (bodyweight)', short:'CRUNCH', clip:'ex-tricep-pushdown', sets:3, lo:15, hi:25, weight:0, rest:90, noDrop:true,
+    {id:'cable-crunch', name:'Lying Crunch (bodyweight)', short:'CRUNCH', clip:'ex-tricep-pushdown', sets:3, lo:15, hi:25, weight:0, rest:90, noDrop:true, resetAfter:'2026-09-06',
       tag:'R rib', safety:'Right rib pain ends the set. Bodyweight only now, no machine. Crunch from the ribs with the hips fixed. Never hinge. Stop on any low-back signal.',
       cue:'Lying on the floor, knees bent, curl the ribs toward the pelvis, 2-sec squeeze. Bodyweight to failure. The machine gave right rib pain 9/06 - do not go back to it.'}
   ]
@@ -526,6 +526,15 @@ function proposeDay(){ for(var i=history.length-1;i>=0;i--){ if(!history[i].abor
    Both vanish once the baseline is the observed working weight. */
 function startingWeight(day, ex){
   var last=lastSession(day); if(!last||!last.logs[ex.id]) return {w:ex.weight, from:null};
+  /* A deliberate DOWNGRADE - machine to bodyweight, DB to cable, an injury cap - LOWERS
+     ex.weight. The floor below reads the heavier weight he actually worked and would serve
+     that forever, silently undoing the change. `resetAfter` says "the plan for this exercise
+     changed after this date; ignore any session on or before it." Self-expiring: the first
+     session past the date restores normal ladder behaviour. Absent on an entry = no effect.
+     Added 2026-09-08 after the 9/06 crunch (machine 85 -> bodyweight) and Lower lateral raise
+     (DB 15 -> cable 10) were both about to be served at the OLD weight - the crunch at the
+     exact 85 lb that produced the right-rib pain the change was made for. */
+  if(ex.resetAfter && last.date<=ex.resetAfter) return {w:ex.weight, from:null};
   var l=last.logs[ex.id]; if(l.length<ex.sets) return {w:ex.weight, from:null};
   var base=l[0].w; if(!(base>ex.weight)) base=ex.weight;   // plan weight is a floor, never regress below it
   if(ex.next==null) return {w:base, from:null};            // no next = deliberately not on a ladder

@@ -1,5 +1,5 @@
 {
- "version": "2026-09-07b",
+ "version": "2026-09-08",
  "note": "Source of truth for Prism II exercises + weights. Keep ids stable (history is keyed on them). Bump version on every edit.",
  "Upper": [
   {
@@ -178,6 +178,7 @@
    "backoff": 5,
    "next": 15,
    "rest": 90,
+   "resetAfter": "2026-09-06",
    "tag": "R shoulder",
    "safety": "Right inner shoulder. Stop at the first pinch.",
    "cue": "Cable, not dumbbells. Lead with the elbow, to parallel and no higher, no swing."
@@ -224,6 +225,7 @@
    "weight": 0,
    "rest": 90,
    "noDrop": true,
+   "resetAfter": "2026-09-06",
    "tag": "R rib",
    "safety": "Right rib pain ends the set. Bodyweight only now, no machine. Crunch from the ribs with the hips fixed. Never hinge. Stop on any low-back signal.",
    "cue": "Lying on the floor, knees bent, curl the ribs toward the pelvis, 2-sec squeeze. Bodyweight to failure. The machine gave right rib pain 9/06 - do not go back to it."
