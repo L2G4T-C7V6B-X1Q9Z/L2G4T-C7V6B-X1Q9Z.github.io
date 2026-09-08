@@ -1,5 +1,5 @@
 {
- "version": "2026-09-08b",
+ "version": "2026-09-08c",
  "note": "Source of truth for Prism II exercises + weights. Keep ids stable (history is keyed on them). Bump version on every edit.",
  "Upper": [
   {
@@ -132,7 +132,8 @@
    "rest": 150,
    "tag": "90°",
    "safety": "Stop the descent at 90°. Never knees-to-chest. Sharp medial knee pain ends the session.",
-   "cue": "Controlled descent to 90°, drive through the heels. 205 cleared 12x4 on 9/06."
+   "cue": "Controlled descent to 90°, drive through the heels. 205 cleared 12x4 on 9/06.",
+   "resetAfter": "2026-09-08"
   },
   {
    "id": "calf-raise",
@@ -148,7 +149,8 @@
    "rest": 90,
    "tag": "knee",
    "safety": "Anything sharp in the knee is a knee signal. Stop.",
-   "cue": "Full stretch at the bottom, pause at the top."
+   "cue": "Full stretch at the bottom, pause at the top.",
+   "resetAfter": "2026-09-08"
   },
   {
    "id": "face-pull",
@@ -197,7 +199,8 @@
    "tag": "medial thigh",
    "safety": "Hard stop on ANY medial-thigh sensation. Not pain, any sensation. Rack it.",
    "cue": "The canary. 10-lb stack. Slow, full curl, no hip lift. Now on the ladder - any medial-thigh sensation still ends it.",
-   "next": 40
+   "next": 40,
+   "resetAfter": "2026-09-08"
   },
   {
    "id": "leg-ext",
@@ -212,7 +215,8 @@
    "backoff": 40,
    "next": 60,
    "rest": 120,
-   "cue": "10-lb stack. Squeeze at the top, control the way down, no bouncing off the stop."
+   "cue": "10-lb stack. Squeeze at the top, control the way down, no bouncing off the stop.",
+   "resetAfter": "2026-09-08"
   },
   {
    "id": "cable-crunch",
