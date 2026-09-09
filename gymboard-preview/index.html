@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111417">
+  <title>Gym Board</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="masthead">
+      <a class="wordmark" href="#today" data-action="navigate" data-view-target="today" aria-label="Gym Board home"><span class="brand-symbol" aria-hidden="true"></span>gymboard</a>
+      <nav class="desktop-nav" aria-label="Main navigation"><button class="nav-item active" data-action="navigate" data-view-target="today" aria-current="page">Today</button><button class="nav-item" data-action="navigate" data-view-target="board">Board</button><button class="nav-item" data-action="navigate" data-view-target="history">History</button><button class="nav-item" data-action="navigate" data-view-target="weight">Weight</button><button class="nav-item" data-action="navigate" data-view-target="overview">Overview</button><button class="nav-item" data-action="open-settings">Settings</button></nav>
+      <div class="masthead-right"><span class="connection-state" id="connection-state"><i></i><span>Saved</span></span><button class="icon-button theme-button" data-action="toggle-theme" aria-label="Toggle light and dark theme"></button><button class="avatar-button" data-action="open-settings" aria-label="Open settings" id="profile-avatar">S</button></div>
+    </header>
+    <aside id="save-recovery" class="save-recovery" aria-label="Retained save drafts" aria-live="polite" hidden></aside>
+    <main id="main-content" tabindex="-1">
+      <section class="workspace active" data-view="today" id="today-view" aria-label="Today"></section>
+      <section class="workspace" data-view="board" id="board-view" aria-label="Group board" hidden></section>
+      <section class="workspace" data-view="history" id="history-view" aria-label="History" hidden></section>
+      <section class="workspace" data-view="weight" id="weight-view" aria-label="Weight trends" hidden></section>
+    </main>
+    <div class="dock-wrap"><nav class="workspace-dock" aria-label="Mobile navigation"><button class="dock-item active" data-action="navigate" data-view-target="today" aria-current="page"><span data-icon="today"></span><span>Today</span></button><button class="dock-item" data-action="navigate" data-view-target="board"><span data-icon="board"></span><span>Board</span></button><button class="dock-item" data-action="navigate" data-view-target="history"><span data-icon="history"></span><span>History</span></button><button class="dock-item" data-action="navigate" data-view-target="weight"><span data-icon="weight"></span><span>Weight</span></button><button class="dock-item" data-action="open-settings"><span data-icon="settings"></span><span>Settings</span></button></nav></div>
+  </div>
+  <dialog id="action-sheet" class="action-sheet" aria-labelledby="sheet-title"><div id="sheet-content"></div></dialog>
+  <dialog id="settings-drawer" class="settings-drawer" aria-labelledby="settings-title"><div id="settings-content"></div></dialog>
+  <div id="day-hover-preview" class="day-hover-preview" role="tooltip" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./chart.js"></script>
+  <script src="./interactions.js"></script>
+  <script type="module" src="./integration.js"></script>
+</body>
+</html>
