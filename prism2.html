@@ -30,7 +30,15 @@ button:focus-visible,[tabindex]:focus-visible,textarea:focus-visible{outline:2px
 .num{font-variant-numeric:tabular-nums}
 
 .screen{position:fixed;inset:0;display:none;flex-direction:column;padding:calc(var(--sat) + 14px) 20px max(var(--sab),14px);z-index:2}
-body[data-screen="launch"] #s-launch,body[data-screen="set"] #s-set,body[data-screen="rest"] #s-rest,body[data-screen="done"] #s-done{display:flex}
+body[data-screen="launch"] #s-launch,body[data-screen="set"] #s-set,body[data-screen="rest"] #s-rest,body[data-screen="done"] #s-done,body[data-screen="list"] #s-list{display:flex}
+/* LIST MODE: away gyms. No timer, no weight entry, no rest. Tap a row to check it off.
+   Rows are big because this is used standing at a machine, one-handed. */
+.exlist .li.lrow{grid-template-columns:auto 1fr auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.exlist .li.lrow .bx{width:26px;height:26px;border:2px solid var(--ink3);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:16px;color:transparent;flex:0 0 auto}
+.exlist .li.lrow.on .bx{border-color:var(--red);background:var(--red);color:#fff}
+.exlist .li.lrow.on b{color:var(--ink3);text-decoration:line-through}
+.exlist .li.lrow .sub{display:block;font-size:12px;color:var(--ink3);margin-top:2px}
+.exlist .li.lrow .rr{color:var(--ink2);font-size:13px;text-align:right;white-space:nowrap}
 /* 100% of the fixed containing block: the same box the screens get from inset:0, so the tank reaches the bottom edge wherever they do.
    (A canvas is a replaced element, so inset alone would leave it at its bitmap size; vw/dvh units were what left a gap on the phone.) */
 #tank{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:1;image-rendering:pixelated;image-rendering:crisp-edges;opacity:0;transition:opacity .25s}
@@ -211,8 +219,26 @@ textarea::placeholder{color:var(--ink3)}
   </div>
   <div class="stack">
     <button class="btn primary" id="l-start">Start</button>
+    <button class="btn quiet" id="l-list-mode">List mode · away gym</button>
     <button class="btn quiet" id="l-switch">Switch to Lower</button>
     <div class="tog"><span class="eyebrow">Voice</span><span class="audio-state" id="l-audio"></span><button class="pill on" id="l-voice">ON</button></div>
+  </div>
+</section>
+
+<!-- LIST MODE: the away-gym screen. Exercises, sets x reps, a rough equipment/weight
+     guide, and a checkbox. No timer, no rest, no weight entry, nothing to wait for. -->
+<section class="screen" id="s-list" aria-label="List mode">
+  <div class="top">
+    <div class="row"><span class="brand">Prism II · list</span><button class="eyebrow" id="li-back">‹ back</button></div>
+    <div class="day-hero">
+      <div class="disp" id="li-day">LOWER</div>
+      <div class="meta eyebrow" id="li-meta"></div>
+      <div class="ghost num">weights are a guide, not a target · go to failure</div>
+    </div>
+    <div class="exlist" id="li-list"></div>
+  </div>
+  <div class="stack">
+    <button class="btn primary" id="li-finish">Finish</button>
   </div>
 </section>
 
@@ -524,8 +550,25 @@ function proposeDay(){ for(var i=history.length-1;i>=0;i--){ if(!history[i].abor
      (2) REGRESSION - after advancing to 205, ONE sub-par session returned ex.weight = 190,
          silently dropping him two steps. Nobody had noticed this one yet.
    Both vanish once the baseline is the observed working weight. */
+/* The most recent session that actually LOGGED this exercise at home.
+   `lastSession` is the wrong baseline for the ladder, and it cost an earned advance twice:
+     SKIP  - if the last session simply did not include leg press, `!last.logs[id]` returned
+             ex.weight, so earning 220 and then skipping the exercise once served 205 again.
+     AWAY  - a session at another gym has no weights worth laddering off (different machine,
+             different lever arm), and a LIST-MODE session commits with logs:{} by design.
+   Both are now transparent: the ladder walks back to the last home session that logged the
+   exercise, so it serves what he actually earned. Rotation, streaks and the launch ghost
+   line still read every session - only the progression engine skips these. */
+function lastLogged(day, id){
+  for(var i=history.length-1;i>=0;i--){
+    var h=history[i];
+    if(h.day!==day || h.aborted || h.away) continue;
+    if(h.logs && h.logs[id] && h.logs[id].length) return h;
+  }
+  return null;
+}
 function startingWeight(day, ex){
-  var last=lastSession(day); if(!last||!last.logs[ex.id]) return {w:ex.weight, from:null};
+  var last=lastLogged(day, ex.id); if(!last) return {w:ex.weight, from:null};
   /* A deliberate DOWNGRADE - machine to bodyweight, DB to cable, an injury cap - LOWERS
      ex.weight. The floor below reads the heavier weight he actually worked and would serve
      that forever, silently undoing the change. `resetAfter` says "the plan for this exercise
@@ -1021,7 +1064,9 @@ function renderLaunch(day){
   $('l-list').innerHTML=html;
   $('l-start').textContent=S?'Resume · '+loggedSets()+' of '+totalSets()+' done':'Start '+launchDay;
   var ls=lastSession(launchDay), lEl=$('l-last');
-  if(ls){ var lt=ls.ton, lsets=ls.sets; if(lt==null){ lt=0; lsets=0; Object.keys(ls.logs).forEach(function(id){ ls.logs[id].forEach(function(e){ lt+=e.w*e.r; lsets++; }); }); }
+  if(ls&&ls.away){ /* no weights were recorded, so a "0 sets · 0 lb" line would read as a failed session */
+    lEl.textContent='last '+launchDay.toLowerCase()+'  '+ls.date.slice(5).replace('-','/')+' · away gym · '+((ls.done&&ls.done.length)||0)+' exercises'; }
+  else if(ls){ var lt=ls.ton, lsets=ls.sets; if(lt==null){ lt=0; lsets=0; Object.keys(ls.logs).forEach(function(id){ ls.logs[id].forEach(function(e){ lt+=e.w*e.r; lsets++; }); }); }
     lEl.textContent='last '+launchDay.toLowerCase()+'  '+ls.date.slice(5).replace('-','/')+' · '+lsets+' sets · '+commas(lt)+' lb'+(ls.dur?' · '+fmtDur(ls.dur):''); }
   else lEl.textContent='';
   $('l-switch').textContent='Switch to '+(launchDay==='Upper'?'Lower':'Upper'); $('l-switch').classList.toggle('hidden', !!S);
@@ -1041,6 +1086,59 @@ function start(){
   else if(S.phase==='done'){ finish(); }
   else { var nx=nextSlot(); if(nx==null){ finish(); return; } S.cur.ex=nx; renderSet(); if(fresh) Bank.seq([S.day==='Upper'?'start-upper':'start-lower', ex(nx).clip, wgtClip(curWeight(nx)), aimClip(ex(nx))]); }
 }
+/* ---------- LIST MODE: away gyms ----------
+   Wilson and anywhere else: three different machines for the same movement, only one
+   free, everything out of order, and he will not wait for a rest timer. So this screen
+   has no timer, no rest, and no weight entry - just what to do, roughly what it is, and
+   a checkbox. The CHECK ORDER is recorded as the performed order, which is the standing
+   "the order he sends back is data" rule getting satisfied for free. */
+var listDay='Upper', listOrder=[];
+function listIdx(id){ return listOrder.indexOf(id); }
+function equipHint(x){
+  if(x.weight===0) return 'bodyweight';
+  var n=(x.name||'').toLowerCase();
+  if(/\bdb\b|dumbbell/.test(n)) return 'dumbbells · ~'+fmtW(x.weight)+' lb';
+  if(/cable|face pull|pushdown|rope/.test(n)) return 'cable · ~'+fmtW(x.weight)+' lb';
+  return 'machine · ~'+fmtW(x.weight)+' lb';
+}
+function drawListRows(){
+  var p=planFor(listDay), lb=launchBoard(listDay), html='';
+  for(var q=0;q<lb.length;q++){ var x=p[lb[q]], k=listIdx(x.id), on=k>=0;
+    html+='<div class="li lrow'+(on?' on':'')+'" data-id="'+x.id+'">'
+      +'<span class="bx">'+(on?(k+1):'✓')+'</span>'
+      +'<span><b>'+x.name+'</b><span class="sub">'+equipHint(x)+(x.tag?' · '+x.tag:'')+'</span></span>'
+      +'<span class="rr">'+x.sets+' × '+x.lo+'–'+x.hi+'</span></div>'; }
+  $('li-list').innerHTML=html;
+  $('li-finish').textContent=listOrder.length?('Finish · '+listOrder.length+' of '+p.length):'Finish';
+}
+function renderListMode(day){
+  listDay=day||launchDay; listOrder=[];
+  var p=planFor(listDay), sets=0; for(var i=0;i<p.length;i++) sets+=p[i].sets;
+  $('li-day').textContent=listDay.toUpperCase();
+  $('li-meta').textContent=sets+' sets · '+p.length+' exercises · any order, no timer';
+  drawListRows(); setScreen('list');
+}
+$('li-list').addEventListener('click', function(e){
+  var row=e.target.closest?e.target.closest('.lrow'):null; if(!row) return;
+  var id=row.getAttribute('data-id'), k=listIdx(id);
+  if(k>=0) listOrder.splice(k,1); else listOrder.push(id);
+  drawListRows();
+});
+$('li-back').addEventListener('click', function(){ renderLaunch(listDay); });
+$('l-list-mode').addEventListener('click', function(){ renderListMode(launchDay); });
+$('li-finish').addEventListener('click', function(){
+  if(!listOrder.length){ toast('check at least one exercise first'); return; }
+  /* Commits with NO logs on purpose. There are no weights worth laddering off a gym whose
+     machines differ, so `away:true` makes this session transparent to startingWeight (via
+     lastLogged) while rotation, streaks and the launch ghost line still count it. */
+  var rec={day:listDay, date:isoDate(), away:true, logs:{}, done:listOrder.slice(),
+           sets:0, ton:0, note:'list mode · away gym · '+listOrder.length+' exercises'};
+  if(!DEMO){ history.push(rec); lsSet(K.history, history); lsDel(K.session); }
+  S=null; var n=listOrder.length; listOrder=[];
+  toast(n+' logged · '+listDay.toLowerCase()+' done');
+  renderLaunch();
+});
+
 /* every tap is a gesture iOS will honour: recover the context on all of them */
 document.addEventListener('click', function(){ Bank.recover(); }, true);
 
