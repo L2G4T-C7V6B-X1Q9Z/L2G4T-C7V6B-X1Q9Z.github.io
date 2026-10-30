@@ -6,7 +6,7 @@
 <meta name="darkreader-lock">
 <meta name="theme-color" content="#151515">
 <title>Arayes</title>
-<!-- build: arayes-2-oven -->
+<!-- build: arayes-3-garlic-powder -->
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { color-scheme: dark only; }
@@ -135,10 +135,10 @@
 
 <script>
 const BATCH = {
-  8:  { beef: '1 lb', pita: '4 rounds', onion: '1 small', yog: '8 oz cup', sauceYog: '1 cup', sauceGar: '1 clove', lemon: '1/2 lemon', sauceSalt: '1/4 tsp',
-        meatOnion: '1 small', gar: '2 cloves', spice: '1 tsp', pep: '1/4 tsp', pars: 'small handful', balls: 8, mine: 4, total: '~35 min', pans: 1 },
-  16: { beef: '2 lb', pita: '8 rounds', onion: '1 big', yog: '16 oz tub', sauceYog: 'whole tub', sauceGar: '2 cloves', lemon: '1 lemon', sauceSalt: '1/2 tsp',
-        meatOnion: '1 big', gar: '4 cloves', spice: '2 tsp', pep: '1/2 tsp', pars: 'a handful', balls: 16, mine: 8, total: '~40 min', pans: 2 }
+  8:  { beef: '1 lb', pita: '4 rounds', onion: '1 small', yog: '8 oz cup', sauceYog: '1 cup', sauceGar: 'a pinch', lemon: '1/2 lemon', sauceSalt: '1/4 tsp',
+        meatOnion: '1 small', gar: '1/4 tsp', spice: '1 tsp', pep: '1/4 tsp', pars: 'small handful', balls: 8, mine: 4, total: '~35 min', pans: 1 },
+  16: { beef: '2 lb', pita: '8 rounds', onion: '1 big', yog: '16 oz tub', sauceYog: 'whole tub', sauceGar: '1/4 tsp', lemon: '1 lemon', sauceSalt: '1/2 tsp',
+        meatOnion: '1 big', gar: '1/2 tsp', spice: '2 tsp', pep: '1/2 tsp', pars: 'a handful', balls: 16, mine: 8, total: '~40 min', pans: 2 }
 };
 
 const KEY = 'arayes-v1', STEPS_V = 2;  // STEPS_V: bump when step numbering changes, so old step checks don't land on the wrong steps
@@ -154,12 +154,12 @@ function buyHTML(b) {
     ${row('beef', '🥩', 'Ground beef', b.beef, '80/20')}
     ${row('pita', '🫓', 'Pita', b.pita, 'Pocket kind, not naan')}
     ${row('onion', '🧅', 'Onion', b.onion, 'Yellow or white')}
-    ${row('garlic', '🧄', 'Garlic', '1 head', '')}
     ${row('yogurt', '🥣', 'Plain yogurt', b.yog, 'Plain, not vanilla')}
     ${row('lemon', '🍋', 'Lemon', '1', '')}
     <h2>Spices · check the cabinet</h2>
     ${row('cumin', '🫙', 'Ground cumin', '', 'The main flavor')}
     ${row('paprika', '🌶️', 'Paprika', '', 'Any kind, not spicy')}
+    ${row('garlic', '🧄', 'Garlic powder', '', 'Instead of fresh garlic')}
     <h2>Probably have</h2>
     ${row('salt', '🧂', 'Salt + pepper', '', '')}
     ${row('oil', '🫒', 'Cooking oil', '', 'Canola is fine')}
@@ -176,9 +176,9 @@ function cookHTML(b) {
   return `
     <p class="fine" style="margin:10px 0 2px">Tap a step's title to mark it done.</p>
     ${step(0, '🔥 Preheat oven to 425°F', 'now', `Do it first, it takes ~15 min. ${b.pans === 1 ? 'Rack in the <b>middle</b>.' : 'Racks in the <b>upper and lower thirds</b>.'}`)}
-    ${step(1, '🥣 Sauce', '5 min', `Stir together, then into the <b>fridge</b>.` + ing([['Plain yogurt', b.sauceYog], ['Garlic, grated', b.sauceGar], ['Lemon juice', b.lemon], ['Salt', b.sauceSalt]]))}
+    ${step(1, '🥣 Sauce', '5 min', `Stir together, then into the <b>fridge</b>. Do it early so the garlic powder softens.` + ing([['Plain yogurt', b.sauceYog], ['Garlic powder', b.sauceGar], ['Lemon juice', b.lemon], ['Salt', b.sauceSalt]]))}
     ${step(2, '🧅 Grate + squeeze onion', '5 min', `Grate on the big holes, then <b>squeeze the juice out</b> over the sink. Skip it and the bread goes soggy.`)}
-    ${step(3, '🥩 Mix the meat', '5 min', `One bowl, hands, <b>just until combined</b>.` + ing([['Ground beef', b.beef], ['Squeezed onion', b.meatOnion], ['Garlic, minced', b.gar], ['Cumin', b.spice], ['Paprika', b.spice], ['Salt', b.spice], ['Black pepper', b.pep], ['Parsley (opt.)', b.pars]]))}
+    ${step(3, '🥩 Mix the meat', '5 min', `One bowl, hands, <b>just until combined</b>.` + ing([['Ground beef', b.beef], ['Squeezed onion', b.meatOnion], ['Garlic powder', b.gar], ['Cumin', b.spice], ['Paprika', b.spice], ['Salt', b.spice], ['Black pepper', b.pep], ['Parsley (opt.)', b.pars]]))}
     ${step(4, '⚪ Roll ' + b.balls + ' equal balls', '', `Halve, halve again, until ${b.balls}. Each about a <b>golf ball</b>.<div class="balls">${balls}</div><div class="fine">red = you · gray = your brother</div>`)}
     ${step(5, '🔪 Cut + stuff pitas', '10 min', `Halve each pita, open the pocket, push in a ball and <b>press it flat to the edges</b>.
       <div class="viz"><svg viewBox="0 0 320 84" xmlns="http://www.w3.org/2000/svg" font-family="monospace">
