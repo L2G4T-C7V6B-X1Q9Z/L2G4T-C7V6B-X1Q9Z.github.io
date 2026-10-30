@@ -6,7 +6,7 @@
 <meta name="darkreader-lock">
 <meta name="theme-color" content="#151515">
 <title>Arayes</title>
-<!-- build: arayes-1 -->
+<!-- build: arayes-2-oven -->
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { color-scheme: dark only; }
@@ -136,13 +136,14 @@
 <script>
 const BATCH = {
   8:  { beef: '1 lb', pita: '4 rounds', onion: '1 small', yog: '8 oz cup', sauceYog: '1 cup', sauceGar: '1 clove', lemon: '1/2 lemon', sauceSalt: '1/4 tsp',
-        meatOnion: '1 small', gar: '2 cloves', spice: '1 tsp', pep: '1/4 tsp', pars: 'small handful', balls: 8, mine: 4, total: '~35 min', batches: 2 },
+        meatOnion: '1 small', gar: '2 cloves', spice: '1 tsp', pep: '1/4 tsp', pars: 'small handful', balls: 8, mine: 4, total: '~35 min', pans: 1 },
   16: { beef: '2 lb', pita: '8 rounds', onion: '1 big', yog: '16 oz tub', sauceYog: 'whole tub', sauceGar: '2 cloves', lemon: '1 lemon', sauceSalt: '1/2 tsp',
-        meatOnion: '1 big', gar: '4 cloves', spice: '2 tsp', pep: '1/2 tsp', pars: 'a handful', balls: 16, mine: 8, total: '~45 min', batches: 4 }
+        meatOnion: '1 big', gar: '4 cloves', spice: '2 tsp', pep: '1/2 tsp', pars: 'a handful', balls: 16, mine: 8, total: '~40 min', pans: 2 }
 };
 
-const KEY = 'arayes-v1';
+const KEY = 'arayes-v1', STEPS_V = 2;  // STEPS_V: bump when step numbering changes, so old step checks don't land on the wrong steps
 const S = Object.assign({ batch: 16, tab: 'buy', buy: [], steps: [] }, JSON.parse(localStorage.getItem(KEY) || '{}'));
+if (S.sv !== STEPS_V) { S.steps = []; S.sv = STEPS_V; }
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
 const $ = s => document.querySelector(s);
 
@@ -162,17 +163,20 @@ function buyHTML(b) {
     <h2>Probably have</h2>
     ${row('salt', '🧂', 'Salt + pepper', '', '')}
     ${row('oil', '🫒', 'Cooking oil', '', 'Canola is fine')}
+    ${row('sheet', '🍪', b.pans === 1 ? 'Sheet pan' : '2 sheet pans', '', 'Plus foil or parchment')}
     ${row('box', '📦', 'Container with lid', '', 'For your brother')}
     ${row('parsley', '🌿', 'Parsley', 'optional', '')}`;
 }
 
 function cookHTML(b) {
   const ing = rows => `<div class="ing">${rows.map(([a, c]) => `<div><span>${a}</span><span>${c}</span></div>`).join('')}</div>`;
-  const step = (i, title, tm, body) => `<div class="step" data-step="${i}"><div class="sh"><span class="num">${i}</span><span class="st">${title}</span><span class="tm">${tm}</span></div><div class="sb">${body}</div></div>`;
+  let n = 0;
+  const step = (_, title, tm, body, i = ++n) => `<div class="step" data-step="${i}"><div class="sh"><span class="num">${i}</span><span class="st">${title}</span><span class="tm">${tm}</span></div><div class="sb">${body}</div></div>`;
   const balls = Array.from({ length: b.balls }, (_, i) => `<i class="${i >= b.mine ? 'b' : ''}"></i>`).join('');
   return `
     <p class="fine" style="margin:10px 0 2px">Tap a step's title to mark it done.</p>
-    ${step(1, '🥣 Sauce first', '5 min', `Stir together, then into the <b>fridge</b>.` + ing([['Plain yogurt', b.sauceYog], ['Garlic, grated', b.sauceGar], ['Lemon juice', b.lemon], ['Salt', b.sauceSalt]]))}
+    ${step(0, '🔥 Preheat oven to 425°F', 'now', `Do it first, it takes ~15 min. ${b.pans === 1 ? 'Rack in the <b>middle</b>.' : 'Racks in the <b>upper and lower thirds</b>.'}`)}
+    ${step(1, '🥣 Sauce', '5 min', `Stir together, then into the <b>fridge</b>.` + ing([['Plain yogurt', b.sauceYog], ['Garlic, grated', b.sauceGar], ['Lemon juice', b.lemon], ['Salt', b.sauceSalt]]))}
     ${step(2, '🧅 Grate + squeeze onion', '5 min', `Grate on the big holes, then <b>squeeze the juice out</b> over the sink. Skip it and the bread goes soggy.`)}
     ${step(3, '🥩 Mix the meat', '5 min', `One bowl, hands, <b>just until combined</b>.` + ing([['Ground beef', b.beef], ['Squeezed onion', b.meatOnion], ['Garlic, minced', b.gar], ['Cumin', b.spice], ['Paprika', b.spice], ['Salt', b.spice], ['Black pepper', b.pep], ['Parsley (opt.)', b.pars]]))}
     ${step(4, '⚪ Roll ' + b.balls + ' equal balls', '', `Halve, halve again, until ${b.balls}. Each about a <b>golf ball</b>.<div class="balls">${balls}</div><div class="fine">red = you · gray = your brother</div>`)}
@@ -184,13 +188,12 @@ function cookHTML(b) {
         <rect x="180" y="20" width="120" height="9" fill="#8a8a8a"/><rect x="194" y="29" width="92" height="30" fill="#c41e1e"/><rect x="180" y="59" width="120" height="9" fill="#8a8a8a"/>
         <text x="240" y="82" fill="#777" font-size="10" text-anchor="middle">bread burns, middle raw</text>
       </svg></div>`)}
-    ${step(6, '🫒 Oil the outside', '', `A little oil on <b>both sides</b> of the bread. None in the pan.`)}
-    ${step(7, '🍳 Fry on MEDIUM', b.batches + ' batches', `3-4 at a time, <b>5 min per side</b>, pressing with a spatula until deep golden. Then stand each on its cut edge for 30 sec.
-      <div class="timer"><button class="tbtn" data-sec="300">▶ 5:00</button><button class="treset" data-reset>reset</button></div>
-      <div class="thint">Beeps at 0. Flip, tap again for side 2.</div>`)}
+    ${step(6, '🫒 Oil + onto the pan', '', `Line ${b.pans === 1 ? 'the sheet pan' : 'both sheet pans'} with foil. Rub a little oil on <b>both sides</b> of each pita and lay them flat, <b>not touching</b>.`)}
+    ${step(7, '♨️ Bake', '15 min', `<b>8 min</b>, then flip every one${b.pans === 2 ? ' and <b>swap the pans</b> top/bottom' : ''}. Then <b>7-8 min</b> more, until deep golden and crispy.
+      <div class="timer"><button class="tbtn" data-sec="480" data-end="FLIP">▶ 8:00</button><button class="tbtn" data-sec="450" data-end="DONE">▶ 7:30</button></div>
+      <div class="thint">Beeps at 0. Tap the first, flip when it beeps, then tap the second. Tap a running timer to stop it.</div>
+      <div class="thint">Want extra crunch? Broil 1-2 min at the end and watch it.</div>`)}
     ${step(8, '✅ Check + eat', '', `Cut edge shows <b>no pink</b> (160°F if you have a thermometer). Cut into triangles, dip in the sauce.`)}
-    <div class="note"><b>Oven shortcut:</b> all on a sheet pan at <b>425°F</b>, 8 min, flip, 7-8 min more.
-      <div class="timer"><button class="tbtn" data-sec="480">▶ 8:00</button><button class="treset" data-reset>reset</button></div></div>
     <div class="macro"><div><b>~225</b>cal / half</div><div><b>~12 g</b>protein / half</div></div>
     <p class="fine">Estimate with 80/20 beef + typical pita. Sauce not included.</p>`;
 }
@@ -295,11 +298,12 @@ function wireTimers() {
       const tick = () => {
         const left = Math.max(0, Math.round((t.end - Date.now()) / 1000));
         btn.textContent = '■ ' + fmt(left);
-        if (left === 0) { clearInterval(t.iv); t.end = 0; btn.className = 'tbtn ring'; btn.textContent = 'FLIP / DONE'; beep(); }
+        if (left === 0) { clearInterval(t.iv); t.end = 0; btn.className = 'tbtn ring'; btn.textContent = btn.dataset.end || 'DONE'; beep(); }
       };
       tick(); t.iv = setInterval(tick, 250);
     };
-    btn.nextElementSibling.onclick = idle;
+    const rs = btn.nextElementSibling;
+    if (rs && rs.hasAttribute('data-reset')) rs.onclick = idle;
   });
 }
 
